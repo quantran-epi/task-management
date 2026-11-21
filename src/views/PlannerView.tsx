@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented, theme } from 'antd';
-import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented, useAntdToken } from '../components/ui';
+import { PlusOutlined, ThunderboltOutlined } from '../components/ui/icon';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -52,7 +52,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   const screens = Grid.useBreakpoint();
   const isMobile = screens.md === false;
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   const weeklyState = useWeeklyPlanner(currentDate, db);
 

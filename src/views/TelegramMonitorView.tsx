@@ -1,42 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Card,
-  Tabs,
-  Table,
-  Switch,
-  Badge,
-  Tag,
-  Modal,
-  Form,
-  Input,
-  Select,
-  InputNumber,
-  Progress,
-  Space,
-  Button,
-  Alert,
-  Typography,
-  Tooltip,
-  Popconfirm,
-  Radio,
-  Checkbox,
-  message,
-} from 'antd';
-import {
-  SendOutlined,
-  CheckCircleOutlined,
-  StopOutlined,
-  UnlockOutlined,
-  PlusOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  ReloadOutlined,
-  SafetyCertificateOutlined,
-  SettingOutlined,
-  ClockCircleOutlined,
-  NotificationOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { Card, Tabs, Table, Switch, Badge, Tag, Modal, Form, Input, Select, InputNumber, Progress, Space, Button, Alert, Typography, Tooltip, Popconfirm, Checkbox, useMessage, FormItem, InputPassword, InputSearch, RadioButton, RadioGroup, TextArea, useForm } from '../components/ui';
+import { SendOutlined, CheckCircleOutlined, StopOutlined, UnlockOutlined, PlusOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, SafetyCertificateOutlined, SettingOutlined, ClockCircleOutlined, NotificationOutlined, UserOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import {
@@ -62,6 +26,7 @@ const { Text, Title } = Typography;
 
 export const TelegramMonitorView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'monitor' | 'whitelist' | 'settings'>('monitor');
+  const message = useMessage();
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [botError, setBotError] = useState<string | null>(null);
   const [conflictInfo, setConflictInfo] = useState<TelegramConflictEvent | null>(null);
@@ -77,7 +42,7 @@ export const TelegramMonitorView: React.FC = () => {
   // Whitelist Modal State
   const [userModalOpen, setUserModalOpen] = useState<boolean>(false);
   const [editingUser, setEditingUser] = useState<TelegramWhitelistUser | null>(null);
-  const [userForm] = Form.useForm();
+  const [userForm] = useForm();
 
   // Search/Filter state
   const [logSearch, setLogSearch] = useState<string>('');
@@ -366,15 +331,15 @@ export const TelegramMonitorView: React.FC = () => {
     if (conflictInfo) {
       return (
         <Badge
-          status="error"
+          status="danger"
           text={<Text strong type="danger">409 Conflict (Bị ngắt do thiết bị khác)</Text>}
         />
       );
     }
     if (isRunning) {
-      return <Badge status="processing" text={<Text strong style={{ color: '#10b981' }}>Đang lắng nghe (Running)</Text>} />;
+      return <Badge status="accent" text={<Text strong style={{ color: '#10b981' }}>Đang lắng nghe (Running)</Text>} />;
     }
-    return <Badge status="default" text={<Text type="secondary">Đã dừng (Stopped)</Text>} />;
+    return <Badge status="info" text={<Text type="secondary">Đã dừng (Stopped)</Text>} />;
   };
 
   return (
@@ -482,7 +447,7 @@ export const TelegramMonitorView: React.FC = () => {
                     }}
                   >
                     <Space>
-                      <Input.Search
+                      <InputSearch
                         placeholder="Tìm kiếm nội dung tin nhắn..."
                         allowClear
                         value={logSearch}
@@ -1010,18 +975,18 @@ export const TelegramMonitorView: React.FC = () => {
               children: (
                 <div style={{ maxWidth: 640 }}>
                   <Form layout="vertical">
-                    <Form.Item
+                    <FormItem
                       label={<strong>Telegram Bot Token</strong>}
                       extra="Lấy từ @BotFather trên Telegram. Token được lưu cục bộ trên máy và không bao giờ đồng bộ ra ngoài."
                     >
-                      <Input.Password
+                      <InputPassword
                         value={botToken}
                         onChange={(e) => setBotToken(e.target.value)}
                         placeholder="123456789:ABCDefGhIJKlmNoPQRsTUVwxyZ..."
                       />
-                    </Form.Item>
+                    </FormItem>
 
-                    <Form.Item label={<strong>Phạm vi dữ liệu mặc định cho User mới</strong>}>
+                    <FormItem label={<strong>Phạm vi dữ liệu mặc định cho User mới</strong>}>
                       <Select
                         value={defaultScope}
                         onChange={(v) => setDefaultScope(v)}
@@ -1032,9 +997,9 @@ export const TelegramMonitorView: React.FC = () => {
                           { value: 'pure_llm', label: 'Chỉ LLM (Không chia sẻ dữ liệu TaskMate)' },
                         ]}
                       />
-                    </Form.Item>
+                    </FormItem>
 
-                    <Form.Item
+                    <FormItem
                       label={<strong>Số lượt nhớ hội thoại mặc định (Turns)</strong>}
                       extra="Số câu hỏi - trả lời gần nhất bot ghi nhớ làm ngữ cảnh trước khi trả lời. 0 = Single-turn."
                     >
@@ -1045,7 +1010,7 @@ export const TelegramMonitorView: React.FC = () => {
                         onChange={(v) => setDefaultMaxHistoryTurns(v ?? 5)}
                         style={{ width: '100%' }}
                       />
-                    </Form.Item>
+                    </FormItem>
 
                     <Space size="middle" style={{ marginTop: 12 }}>
                       <Button
@@ -1077,24 +1042,24 @@ export const TelegramMonitorView: React.FC = () => {
         cancelText="Huỷ"
       >
         <Form form={userForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item
+          <FormItem
             name="chatId"
             label="Telegram Chat ID"
             rules={[{ required: true, message: 'Vui lòng nhập Chat ID' }]}
             extra="Người dùng có thể lấy Chat ID bằng cách nhắn /start cho bot hoặc qua @userinfobot"
           >
             <Input disabled={Boolean(editingUser)} placeholder="Ví dụ: 123456789" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên gợi nhớ"
             rules={[{ required: true, message: 'Vui lòng nhập tên' }]}
           >
             <Input placeholder="Ví dụ: Duc Quan (Work)" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item name="status" label="Trạng thái">
+          <FormItem name="status" label="Trạng thái">
             <Select
               options={[
                 { value: 'active', label: 'Hoạt động (Active)' },
@@ -1102,9 +1067,9 @@ export const TelegramMonitorView: React.FC = () => {
                 { value: 'blocked', label: 'Tạm khoá (Blocked)' },
               ]}
             />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="isAdmin"
             valuePropName="checked"
             extra="Cho phép thực hiện các lệnh quản trị bot (/list_users, /list_pending, /approve_user, /adjust_quota, /block_user)"
@@ -1112,9 +1077,9 @@ export const TelegramMonitorView: React.FC = () => {
             <Checkbox>
               <strong>👑 Phân quyền Quản trị viên (Admin)</strong>
             </Checkbox>
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item name="dataScope" label="Phạm vi dữ liệu được truy cập">
+          <FormItem name="dataScope" label="Phạm vi dữ liệu được truy cập">
             <Select
               options={[
                 { value: 'full', label: 'Toàn bộ (Tasks + Projects + Knowledge Docs)' },
@@ -1123,31 +1088,31 @@ export const TelegramMonitorView: React.FC = () => {
                 { value: 'pure_llm', label: 'Chỉ LLM (Không chia sẻ dữ liệu TaskMate)' },
               ]}
             />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="dailyLimit"
             label="Hạn mức tin nhắn / ngày"
             rules={[{ required: true, message: 'Nhập số hạn mức' }]}
           >
             <InputNumber min={1} max={500} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="maxHistoryTurns"
             label="Số lượt nhớ hội thoại (Turns)"
             tooltip="0 = Single-turn không nhớ ngữ cảnh trước; 5 = nhớ 5 câu hỏi gần nhất"
           >
             <InputNumber min={0} max={20} style={{ width: '100%' }} placeholder="Mặc định: 5" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="aiModel"
             label="AI Model riêng cho người dùng"
             tooltip="Tùy chọn ghi đè model cho riêng người dùng này. Để trống để sử dụng model AI mặc định của hệ thống."
           >
             <Input placeholder="Mặc định (theo cài đặt AI chung)" allowClear />
-          </Form.Item>
+          </FormItem>
         </Form>
       </Modal>
 
@@ -1169,23 +1134,23 @@ export const TelegramMonitorView: React.FC = () => {
       >
         <div style={{ marginTop: 16 }}>
           <Form layout="vertical">
-            <Form.Item label={<strong>Chế độ gửi</strong>}>
-              <Radio.Group
+            <FormItem label={<strong>Chế độ gửi</strong>}>
+              <RadioGroup
                 value={sendMode}
                 onChange={(e) => setSendMode(e.target.value)}
                 buttonStyle="solid"
               >
-                <Radio.Button value="direct">
+                <RadioButton value="direct">
                   <UserOutlined /> Gửi trực tiếp
-                </Radio.Button>
-                <Radio.Button value="broadcast">
+                </RadioButton>
+                <RadioButton value="broadcast">
                   <NotificationOutlined /> Gửi tất cả (Broadcast)
-                </Radio.Button>
-              </Radio.Group>
-            </Form.Item>
+                </RadioButton>
+              </RadioGroup>
+            </FormItem>
 
             {sendMode === 'direct' ? (
-              <Form.Item
+              <FormItem
                 label={<strong>Người nhận (Chat ID)</strong>}
                 required
                 extra="Chọn từ danh sách Whitelist hoặc tự nhập Chat ID của người nhận"
@@ -1213,30 +1178,30 @@ export const TelegramMonitorView: React.FC = () => {
                     (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                   }
                 />
-              </Form.Item>
+              </FormItem>
             ) : (
-              <Form.Item label={<strong>Phạm vi Broadcast</strong>}>
+              <FormItem label={<strong>Phạm vi Broadcast</strong>}>
                 <Alert
                   type="info"
                   showIcon
                   message={`Gửi đồng loạt đến ${whitelist.filter((u) => u.status === 'active').length} người dùng đang hoạt động`}
                   description="Tin nhắn sẽ được định dạng Markdown và gửi tuần tự đến từng Chat ID trong danh sách Whitelist có trạng thái Hoạt động."
                 />
-              </Form.Item>
+              </FormItem>
             )}
 
-            <Form.Item
+            <FormItem
               label={<strong>Nội dung tin nhắn</strong>}
               required
               extra="Hỗ trợ Markdown: **in đậm**, *nghiêng*, `mã lệnh`, [liên kết](url)..."
             >
-              <Input.TextArea
+              <TextArea
                 rows={5}
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 placeholder="Nhập nội dung cần gửi cho người dùng..."
               />
-            </Form.Item>
+            </FormItem>
           </Form>
         </div>
       </Modal>

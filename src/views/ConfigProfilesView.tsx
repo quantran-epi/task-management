@@ -1,29 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Collapse,
-  Col,
-  Input,
-  Modal,
-  Row,
-  Select,
-  Space,
-  theme,
-  Switch,
-  Tooltip,
-  Typography,
-  notification,
-} from 'antd';
-import {
-  ArrowLeftOutlined,
-  DeleteOutlined,
-  ExclamationCircleOutlined,
-  PlusOutlined,
-  SaveOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
+import { Alert, Button, Card, Collapse, Col, Input, Row, Select, Space, Switch, Tooltip, Typography, useAntdToken, useNotification, useTaskMateModal, TextArea } from '../components/ui';
+import { ArrowLeftOutlined, DeleteOutlined, ExclamationCircleOutlined, PlusOutlined, SaveOutlined, WarningOutlined } from '../components/ui/icon';
 import { PageHeader } from '../components/common/PageHeader';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
@@ -278,7 +255,9 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   db = defaultDb,
   onNavigate,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
+  const notification = useNotification();
+  const { modal, contextHolder } = useTaskMateModal();
   const [profiles, setProfiles] = useState<ConfigurationProfile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -404,7 +383,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
 
   const handleDelete = () => {
     if (!selectedProfile) return;
-    Modal.confirm({
+    modal.confirm({
       title: 'Xóa profile này?',
       icon: <ExclamationCircleOutlined />,
       content: `Profile "${selectedProfile.name}" sẽ bị xóa khỏi danh sách.`,
@@ -453,7 +432,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
       return (
         <div key={key}>
           <Text strong>{label}</Text>
-          <Input.TextArea
+          <TextArea
             aria-label={label}
             rows={6}
             value={structuredText[key] ?? ''}
@@ -485,7 +464,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
         onChange={(text) => setSetting(key, text === '' ? '' : Number(text))}
       />
     ) : TEXTAREA_SETTINGS.has(key) ? (
-      <Input.TextArea
+      <TextArea
         aria-label={label}
         value={fieldValue(value)}
         rows={4}
@@ -509,6 +488,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px' }}>
+      {contextHolder}
       <PageHeader
         title="Cấu hình cho người khác (Settings for Others)"
         subtitle="Soạn profile mới từ cấu hình mặc định, đặt tên và xuất ra tệp JSON. Không đọc cấu hình hiện tại của bạn."

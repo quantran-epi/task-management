@@ -1,28 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Input,
-  Button,
-  Space,
-  Tag,
-  Typography,
-  Empty,
-  Popconfirm,
-  Tooltip,
-  message,
-  Card,
-  theme,
-} from 'antd';
-import {
-  SearchOutlined,
-  PlusOutlined,
-  PushpinFilled,
-  PushpinOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  PaperClipOutlined,
-  CloseCircleOutlined,
-  CloseOutlined,
-} from '@ant-design/icons';
+import { Input, Button, Space, Tag, Empty, Popconfirm, Tooltip, Card, useAntdToken, useMessage, EmptyImageSimple, Text } from '../components/ui';
+import { SearchOutlined, PlusOutlined, PushpinFilled, PushpinOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined, CloseCircleOutlined, CloseOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, NoteEntityType } from '../types/models';
@@ -49,7 +27,8 @@ export interface NotesPopoutViewProps {
 }
 
 export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
+  const message = useMessage();
   const [searchText, setSearchText] = useState<string>('');
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());
@@ -308,9 +287,9 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography.Text strong style={{ fontSize: 14 }}>
+          <Text strong style={{ fontSize: 14 }}>
             Ghi chú nhanh ({filteredNotes.length})
-          </Typography.Text>
+          </Text>
           <Space size={4}>
             {isTauri && (
               <Tooltip title={pinned ? 'Bỏ ghim cửa sổ trên cùng' : 'Ghim cửa sổ luôn trên cùng'}>
@@ -397,7 +376,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
       >
         {filteredNotes.length === 0 ? (
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description="Không có ghi chú nào"
             style={{ marginTop: 40 }}
           />
@@ -436,13 +415,13 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                       </Tag>
                     )}
                     {note.title ? (
-                      <Typography.Text strong style={{ fontSize: 13 }}>
+                      <Text strong style={{ fontSize: 13 }}>
                         {note.title}
-                      </Typography.Text>
+                      </Text>
                     ) : (
-                      <Typography.Text type="secondary" italic style={{ fontSize: 12 }}>
+                      <Text type="secondary" italic style={{ fontSize: 12 }}>
                         (Không tiêu đề)
-                      </Typography.Text>
+                      </Text>
                     )}
                     {entityLabel && (
                       <Tag color="purple" style={{ fontSize: 10 }}>

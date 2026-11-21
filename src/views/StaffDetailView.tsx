@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Input, Select, Space, message } from 'antd';
-import { SaveOutlined, UserOutlined } from '@ant-design/icons';
+import { Alert, Button, Input, Select, Space, useMessage, TextArea } from '../components/ui';
+import { SaveOutlined, UserOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -71,6 +71,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
   role,
 }) => {
   const isEmployee = role === 'employee';
+  const message = useMessage();
 
   const staffRecord = useLiveQuery(async () => {
     if (isEmployee) {
@@ -247,7 +248,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
           <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
             Mô tả năng lực (lead nhìn thấy để giao việc)
           </div>
-          <Input.TextArea
+          <TextArea
             rows={2}
             maxLength={300}
             value={form.capability}
@@ -259,7 +260,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
 
         <div>
           <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Persona (Prompt hệ thống)</div>
-          <Input.TextArea
+          <TextArea
             rows={8}
             value={form.persona}
             onChange={(e) => setField('persona', e.target.value)}

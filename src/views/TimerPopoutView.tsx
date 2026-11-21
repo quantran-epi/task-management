@@ -1,14 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Space, Typography, Tooltip, Button, theme, Badge } from 'antd';
-import {
-  PauseCircleOutlined,
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  PushpinOutlined,
-  PushpinFilled,
-  ClockCircleOutlined,
-  CloseOutlined,
-} from '@ant-design/icons';
+import { Space, Tooltip, Button, Badge, useAntdToken, Text } from '../components/ui';
+import { PauseCircleOutlined, PlayCircleOutlined, CheckCircleOutlined, PushpinOutlined, PushpinFilled, ClockCircleOutlined, CloseOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../db';
 import { useTimer } from '../hooks/useTimer';
@@ -28,7 +20,7 @@ export interface TimerPopoutViewProps {
 export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
   database = db,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const {
     activeTimers,
     getElapsedSeconds,
@@ -137,9 +129,9 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
       >
         <Space orientation="horizontal" size={6} style={{ alignItems: 'center' }}>
           <ClockCircleOutlined style={{ color: token.colorPrimary, fontSize: 14 }} />
-          <Typography.Text strong style={{ fontSize: 13 }}>
+          <Text strong style={{ fontSize: 13 }}>
             Bộ đếm thời gian
-          </Typography.Text>
+          </Text>
           {activeTimers.length > 0 && (
             <Badge
               count={activeTimers.length}
@@ -207,9 +199,9 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
               color: token.colorTextSecondary,
             }}
           >
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
               Không có bộ đếm nào đang chạy
-            </Typography.Text>
+            </Text>
           </div>
         ) : activeTimers.length === 1 ? (
           /* Single Timer Prominent Layout */
@@ -248,7 +240,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: 130 }}>
                     <Tooltip title={taskTitle}>
-                      <Typography.Text
+                      <Text
                         ellipsis
                         style={{
                           fontSize: 13,
@@ -257,10 +249,10 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                         }}
                       >
                         {taskTitle}
-                      </Typography.Text>
+                      </Text>
                     </Tooltip>
                     {subtitle && (
-                      <Typography.Text
+                      <Text
                         ellipsis
                         type="secondary"
                         data-testid="popout-hierarchy-subtitle"
@@ -270,12 +262,12 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                         }}
                       >
                         {subtitle}
-                      </Typography.Text>
+                      </Text>
                     )}
                   </div>
                 </div>
 
-                <Typography.Text
+                <Text
                   data-testid="popout-elapsed-ticker"
                   style={{
                     fontVariantNumeric: 'tabular-nums',
@@ -286,7 +278,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                   }}
                 >
                   {formatElapsedTicker(elapsedSec)}
-                </Typography.Text>
+                </Text>
 
                 <Space orientation="horizontal" size={2} style={{ flexShrink: 0 }}>
                   {isRunning ? (
@@ -364,7 +356,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                     />
                     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: 110 }}>
                       <Tooltip title={taskTitle}>
-                        <Typography.Text
+                        <Text
                           ellipsis
                           style={{
                             fontSize: 12,
@@ -373,10 +365,10 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                           }}
                         >
                           {taskTitle}
-                        </Typography.Text>
+                        </Text>
                       </Tooltip>
                       {subtitle && (
-                        <Typography.Text
+                        <Text
                           ellipsis
                           type="secondary"
                           data-testid={`popout-multi-hierarchy-subtitle-${timer.taskId}`}
@@ -386,12 +378,12 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                           }}
                         >
                           {subtitle}
-                        </Typography.Text>
+                        </Text>
                       )}
                     </div>
                   </div>
 
-                  <Typography.Text
+                  <Text
                     style={{
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: 13,
@@ -401,7 +393,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                     }}
                   >
                     {formatElapsedTicker(elapsedSec)}
-                  </Typography.Text>
+                  </Text>
 
                   <Space orientation="horizontal" size={2} style={{ flexShrink: 0 }}>
                     {isRunning ? (

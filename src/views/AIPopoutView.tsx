@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { theme } from 'antd';
+import { useAntdToken } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { AIChatDrawer, type ActiveScope } from '../components/ai/AIChatDrawer';
 import {
@@ -22,7 +22,7 @@ export interface AIPopoutViewProps {
 }
 
 export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const { setPendingDraft } = useAIChat();
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());

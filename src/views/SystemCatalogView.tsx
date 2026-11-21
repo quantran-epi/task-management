@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Input, Select, Space, Empty, message } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Button, Input, Select, Space, Empty, useMessage, EmptyImageSimple } from '../components/ui';
+import { PlusOutlined, SearchOutlined, ReloadOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems, createSystem, updateSystem, deleteSystem } from '../db/repositories/systemRepo';
@@ -17,6 +17,7 @@ export interface SystemCatalogViewProps {
 
 export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defaultDb }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const message = useMessage();
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -173,7 +174,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
           }}
         >
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description={
               <div>
                 <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>

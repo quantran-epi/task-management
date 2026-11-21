@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
-import { Button, Modal, Select, Typography, message, type InputRef } from 'antd';
-import { ThunderboltOutlined } from '@ant-design/icons';
+import { Button, Modal, Select, Typography, useMessage, useTaskMateModal } from '../components/ui';
+import type { InputRef } from 'antd';
+import { ThunderboltOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb } from '../db';
 import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
@@ -31,6 +32,8 @@ export interface TasksViewProps {
 
 export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrId, quickAddRequest }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [feasibilityTask, setFeasibilityTask] = useState<Task | null>(null);
@@ -220,7 +223,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
 
   const handleDeleteTask = () => {
     if (!activeSelectedTask) return;
-    Modal.confirm({
+    modal.confirm({
       title: 'Xóa tác vụ',
       content: `Bạn có chắc muốn xóa tác vụ "${activeSelectedTask.name}" không?`,
       okText: 'Xóa',
@@ -284,6 +287,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {contextHolder}
       {/* 1. Page Header */}
       <PageHeader
         title="Danh sách tác vụ"

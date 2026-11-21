@@ -1,18 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  Splitter,
-  Empty,
-  theme,
-  Drawer,
-  Descriptions,
-  Tag,
-  Typography,
-  Button,
-  Space,
-  Card,
-  message,
-} from 'antd';
-import { HistoryOutlined, CopyOutlined, UserOutlined, RobotOutlined } from '@ant-design/icons';
+import { Splitter, Empty, Drawer, Descriptions, Tag, Button, Space, Card, useAntdToken, useMessage, DescriptionsItem, EmptyImageSimple, Paragraph, SplitterPanel, Text, Title } from '../components/ui';
+import { HistoryOutlined, CopyOutlined, UserOutlined, RobotOutlined } from '../components/ui/icon';
 import { AgentSessionList, getStatusBadge } from '../components/agents/AgentSessionList';
 import { AgentTerminalLog } from '../components/agents/AgentTerminalLog';
 import { AgentDiffReviewer } from '../components/agents/AgentDiffReviewer';
@@ -26,7 +14,8 @@ import { agentLogStore } from '../services/agents/agentLogStore';
 import type { AgentSession, GhostDevSessionAuditRecord } from '../types/agent';
 
 export const AgentControlView: React.FC = () => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
+  const message = useMessage();
   const {
     sessions,
     activeSessionId,
@@ -155,7 +144,7 @@ export const AgentControlView: React.FC = () => {
         }}
       >
         {/* Panel 1: Sessions List & History (Left, 22%, min 220px) */}
-        <Splitter.Panel defaultSize="22%" min="220px">
+        <SplitterPanel defaultSize="22%" min="220px">
           <AgentSessionList
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -167,10 +156,10 @@ export const AgentControlView: React.FC = () => {
             onDeleteAuditSession={handleDeleteAuditSession}
             onClearAllAuditHistory={handleClearAllAudit}
           />
-        </Splitter.Panel>
+        </SplitterPanel>
 
         {/* Panel 2: Terminal Stream Log (Center, 45%, min 400px) */}
-        <Splitter.Panel defaultSize="45%" min="400px">
+        <SplitterPanel defaultSize="45%" min="400px">
           {activeSession ? (
             <AgentTerminalLog
               logs={logs}
@@ -199,7 +188,7 @@ export const AgentControlView: React.FC = () => {
               }}
             >
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description={
                   <span style={{ color: '#888' }}>
                     Chưa có phiên Ghost Dev nào được chọn
@@ -208,10 +197,10 @@ export const AgentControlView: React.FC = () => {
               />
             </div>
           )}
-        </Splitter.Panel>
+        </SplitterPanel>
 
         {/* Panel 3: Live Git Diff Reviewer (Right, 33%, min 320px) */}
-        <Splitter.Panel defaultSize="33%" min="320px">
+        <SplitterPanel defaultSize="33%" min="320px">
           <AgentDiffReviewer
             diffFiles={diffFiles}
             allWorktreeFiles={allWorktreeFiles}
@@ -236,7 +225,7 @@ export const AgentControlView: React.FC = () => {
             onMentionFile={(filePath) => setMentionedFilePath(filePath)}
             worktreePath={activeSession ? activeSession.worktreePath : null}
           />
-        </Splitter.Panel>
+        </SplitterPanel>
       </Splitter>
 
       {/* Global Shell Permission Modal interceptor */}
@@ -258,36 +247,36 @@ export const AgentControlView: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Session Summary Metadata */}
             <Descriptions size="small" bordered column={1}>
-              <Descriptions.Item label="Trạng thái">
+              <DescriptionsItem label="Trạng thái">
                 {getStatusBadge(selectedAuditRecord.status)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Tác vụ">
+              </DescriptionsItem>
+              <DescriptionsItem label="Tác vụ">
                 {selectedAuditRecord.taskTitle} (ID: {selectedAuditRecord.taskId})
-              </Descriptions.Item>
-              <Descriptions.Item label="Nhánh Git">
+              </DescriptionsItem>
+              <DescriptionsItem label="Nhánh Git">
                 <code>{selectedAuditRecord.branchName}</code>
-              </Descriptions.Item>
-              <Descriptions.Item label="Thư mục Repo">
+              </DescriptionsItem>
+              <DescriptionsItem label="Thư mục Repo">
                 <code>{selectedAuditRecord.repoPath}</code>
-              </Descriptions.Item>
-              <Descriptions.Item label="Models">
+              </DescriptionsItem>
+              <DescriptionsItem label="Models">
                 <Space>
                   <Tag color="#722ed1">Master: {selectedAuditRecord.masterModel}</Tag>
                   <Tag color="#1677ff">Worker: {selectedAuditRecord.workerModel}</Tag>
                 </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="Thời gian bắt đầu">
+              </DescriptionsItem>
+              <DescriptionsItem label="Thời gian bắt đầu">
                 {new Date(selectedAuditRecord.startedAt).toLocaleString()}
-              </Descriptions.Item>
-              <Descriptions.Item label="Thời gian kết thúc">
+              </DescriptionsItem>
+              <DescriptionsItem label="Thời gian kết thúc">
                 {selectedAuditRecord.finishedAt
                   ? new Date(selectedAuditRecord.finishedAt).toLocaleString()
                   : 'Đang chạy / Chưa kết thúc'}
-              </Descriptions.Item>
+              </DescriptionsItem>
               {selectedAuditRecord.error && (
-                <Descriptions.Item label="Lỗi ghi nhận">
-                  <Typography.Text type="danger">{selectedAuditRecord.error}</Typography.Text>
-                </Descriptions.Item>
+                <DescriptionsItem label="Lỗi ghi nhận">
+                  <Text type="danger">{selectedAuditRecord.error}</Text>
+                </DescriptionsItem>
               )}
             </Descriptions>
 
@@ -301,9 +290,9 @@ export const AgentControlView: React.FC = () => {
                   marginBottom: 8,
                 }}
               >
-                <Typography.Title level={5} style={{ margin: 0 }}>
+                <Title level={5} style={{ margin: 0 }}>
                   Master Prompt ban đầu
-                </Typography.Title>
+                </Title>
                 <Button
                   size="small"
                   icon={<CopyOutlined />}
@@ -334,10 +323,10 @@ export const AgentControlView: React.FC = () => {
 
             {/* User Feedback History */}
             <div>
-              <Typography.Title level={5} style={{ marginBottom: 8 }}>
+              <Title level={5} style={{ marginBottom: 8 }}>
                 Lịch sử phản hồi từ người dùng (
                 {selectedAuditRecord.userFeedbackHistory?.length || 0})
-              </Typography.Title>
+              </Title>
               {selectedAuditRecord.userFeedbackHistory &&
               selectedAuditRecord.userFeedbackHistory.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -369,19 +358,19 @@ export const AgentControlView: React.FC = () => {
                         >
                           <Space size={4}>
                             <UserOutlined style={{ color: '#0369a1', fontSize: 12 }} />
-                            <Typography.Text strong style={{ fontSize: 12, color: '#0369a1' }}>
+                            <Text strong style={{ fontSize: 12, color: '#0369a1' }}>
                               Chỉ đạo #{idx + 1}
-                            </Typography.Text>
+                            </Text>
                           </Space>
-                          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                          <Text type="secondary" style={{ fontSize: 11 }}>
                             {new Date(fb.timestamp).toLocaleTimeString()}
-                          </Typography.Text>
+                          </Text>
                         </div>
-                        <Typography.Paragraph
+                        <Paragraph
                           style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}
                         >
                           {fb.feedback}
-                        </Typography.Paragraph>
+                        </Paragraph>
                       </Card>
 
                       {/* AI Response Bubble */}
@@ -404,16 +393,16 @@ export const AgentControlView: React.FC = () => {
                           >
                             <Space size={4}>
                               <RobotOutlined style={{ color: '#7e22ce', fontSize: 12 }} />
-                              <Typography.Text strong style={{ fontSize: 12, color: '#7e22ce' }}>
+                              <Text strong style={{ fontSize: 12, color: '#7e22ce' }}>
                                 Phản hồi từ AI
-                              </Typography.Text>
+                              </Text>
                             </Space>
                           </div>
-                          <Typography.Paragraph
+                          <Paragraph
                             style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', color: '#374151' }}
                           >
                             {fb.aiResponse}
-                          </Typography.Paragraph>
+                          </Paragraph>
                         </Card>
                       ) : (
                         <div style={{ marginLeft: 20, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
@@ -425,7 +414,7 @@ export const AgentControlView: React.FC = () => {
                 </div>
               ) : (
                 <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  image={EmptyImageSimple}
                   description="Chưa có phản hồi nào trong phiên này"
                 />
               )}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Row, Col } from 'antd';
+import { Row, Col } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { useDashboardForecast } from '../hooks/useDashboardForecast';
 import { TodaySummaryCard } from '../components/dashboard/TodaySummaryCard';

@@ -158,6 +158,7 @@ export interface WrappedIconProps {
   onClick?: MouseEventHandler<HTMLSpanElement>;
   'aria-label'?: string;
   role?: string;
+  tabIndex?: number;
 }
 
 export type WrappedIcon = (props: WrappedIconProps) => ReactNode;

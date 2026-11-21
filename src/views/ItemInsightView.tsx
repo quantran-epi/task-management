@@ -1,39 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Card,
-  Row,
-  Col,
-  Statistic,
-  Tag,
-  Button,
-  Space,
-  Typography,
-  Divider,
-  List,
-  Checkbox,
-  Alert,
-  Tooltip,
-  Breadcrumb,
-  Empty,
-  message,
-} from 'antd';
-import {
-  ArrowLeftOutlined,
-  PlayCircleOutlined,
-  PauseCircleOutlined,
-  CheckCircleOutlined,
-  EditOutlined,
-  CalendarOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  LinkOutlined,
-  FolderOpenOutlined,
-  ProjectOutlined,
-  PlusOutlined,
-  FileTextOutlined,
-  RobotOutlined,
-  ApartmentOutlined,
-} from '@ant-design/icons';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem } from '../components/ui';
+import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note } from '../types/models';
@@ -105,6 +72,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   const { activeTimers, startTimer, pauseTimer } = useTimer();
 
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+  const message = useMessage();
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
 
@@ -323,7 +291,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       <Card style={{ margin: 16 }}>
         <Empty
           description={`Không tìm thấy mục ${itemType} với ID: ${itemId}`}
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
         >
           <Button type="primary" onClick={() => onNavigate('dashboard')}>
             Quay lại Tổng quan
@@ -769,7 +737,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <List
             dataSource={currentTask.checklist}
             renderItem={(item, index) => (
-              <List.Item key={item.id}>
+              <ListItem key={item.id}>
                 <Checkbox
                   checked={item.done}
                   onChange={() => void handleToggleChecklistItem(index)}
@@ -778,7 +746,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                     {item.text}
                   </span>
                 </Checkbox>
-              </List.Item>
+              </ListItem>
             )}
           />
         </Card>
@@ -791,7 +759,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           style={{ marginBottom: 16 }}
         >
           {relatedTasks.length === 0 ? (
-            <Empty description="Chưa có tác vụ nào" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            <Empty description="Chưa có tác vụ nào" image={EmptyImageSimple} />
           ) : (
             <List
               dataSource={relatedTasks}
@@ -799,7 +767,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 const cr = crMap.get(t.crId);
                 const system = t.systemId ? systemMap.get(t.systemId) : undefined;
                 return (
-                  <List.Item
+                  <ListItem
                     key={t.id}
                     actions={[
                       <Button
@@ -811,7 +779,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                       </Button>,
                     ]}
                   >
-                    <List.Item.Meta
+                    <ListItem.Meta
                       title={
                         <Space>
                           <Tag color={STATUS_TAG_COLORS[t.status] ?? 'default'}>
@@ -833,7 +801,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                       }
                       description={`Ước tính: ${formatMinutes(t.estimateMinutes)} | Hạn chót: ${t.deadline || 'Không'}`}
                     />
-                  </List.Item>
+                  </ListItem>
                 );
               }}
             />
@@ -872,12 +840,12 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         style={{ marginBottom: 16 }}
       >
         {relatedNotes.length === 0 ? (
-          <Empty description="Chưa có ghi chú nào" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="Chưa có ghi chú nào" image={EmptyImageSimple} />
         ) : (
           <List
             dataSource={relatedNotes}
             renderItem={(note) => (
-              <List.Item
+              <ListItem
                 key={note.id}
                 actions={[
                   <Button key="view" type="link" onClick={() => setInspectingNote(note)}>
@@ -888,11 +856,11 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                   </Button>,
                 ]}
               >
-                <List.Item.Meta
+                <ListItem.Meta
                   title={note.title || 'Ghi chú không tiêu đề'}
                   description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`}
                 />
-              </List.Item>
+              </ListItem>
             )}
           />
         )}

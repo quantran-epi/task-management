@@ -1,19 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-  Button,
-  Space,
-  Typography,
-  Empty,
-  Tooltip,
-  message,
-  Modal,
-  Select,
-} from 'antd';
-import {
-  PlusOutlined,
-  ExportOutlined,
-  FileTextOutlined,
-} from '@ant-design/icons';
+import { Button, Space, Typography, Empty, Tooltip, Modal, Select, useMessage, useTaskMateModal } from '../components/ui';
+import { PlusOutlined, ExportOutlined, FileTextOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note } from '../types/models';
@@ -104,6 +91,8 @@ export const NotesView: React.FC<NotesViewProps> = ({
   initialDocId,
   hideFolderTree = false,
 }) => {
+  const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const [treeWidth, setTreeWidth] = useState<number>(() => {
     try {
       const stored = localStorage.getItem(TREE_WIDTH_PREF_KEY);
@@ -326,7 +315,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
       (n) => n.type !== 'folder' && folderIdsToDelete.includes(n.parentId || '') && !n.deletedAt
     );
 
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa thư mục "${folder.title || 'Không tên'}"?`,
       content:
         affectedDocs.length > 0
@@ -369,7 +358,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     const totalItems = folderIdsToDelete.length + affectedDocs.length;
     const subfolderCount = folderIdsToDelete.length - 1;
 
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa vĩnh viễn toàn bộ thư mục "${folder.title || 'Không tên'}"?`,
       content: (
         <div>
@@ -413,7 +402,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
     const trashItems = (allNotes || []).filter((n) => Boolean(n.deletedAt));
     if (trashItems.length === 0) return;
 
-    Modal.confirm({
+    modal.confirm({
       title: 'Dọn sạch thùng rác?',
       content: `Sẽ xóa vĩnh viễn ${trashItems.length} mục trong thùng rác. Hành động này không thể hoàn tác!`,
       okText: `Xóa vĩnh viễn (${trashItems.length})`,
@@ -451,7 +440,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
 
     if (targetNotes.length === 0) return;
 
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa tất cả trong "${title}"?`,
       content: `Chuyển toàn bộ ${targetNotes.length} tài liệu vào thùng rác?`,
       okText: 'Chuyển vào thùng rác',
@@ -577,7 +566,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         const backlinkCount = backlinks.tasks.length + backlinks.changeRequests.length + backlinks.referencingNotes.length;
 
         if (backlinkCount > 0) {
-          Modal.confirm({
+          modal.confirm({
             title: 'Cảnh báo xóa vĩnh viễn',
             content: `Tài liệu "${note.title || 'Không tiêu đề'}" đang được ${backlinkCount} mục liên kết (Tasks/CRs). Vẫn tiếp tục xóa vĩnh viễn?`,
             okText: 'Xóa vĩnh viễn',
@@ -638,6 +627,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
         overflow: 'hidden',
       }}
     >
+      {contextHolder}
       {/* 1. Page Header (Hidden when embedded in workbench editor where tree is moved to left explorer) */}
       {!hideFolderTree && (
         <PageHeader

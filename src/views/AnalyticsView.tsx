@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Col, Row, Radio, Spin } from 'antd';
+import { Card, Col, Row, Spin, RadioButton, RadioGroup } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AnalyticsPeriod } from '../types/analytics';
@@ -47,16 +47,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ db = defaultDb }) 
         title="Thống kê hiệu suất & Thời gian làm việc"
         subtitle="Phân tích thời gian ước tính, thời gian thực tế và nhịp độ năng suất"
         extra={
-          <Radio.Group
+          <RadioGroup
             value={period}
             onChange={(e) => setPeriod(e.target.value as AnalyticsPeriod)}
             buttonStyle="solid"
           >
-            <Radio.Button value="7d">7 ngày qua</Radio.Button>
-            <Radio.Button value="14d">14 ngày qua</Radio.Button>
-            <Radio.Button value="30d">30 ngày qua</Radio.Button>
-            <Radio.Button value="all">Tất cả</Radio.Button>
-          </Radio.Group>
+            <RadioButton value="7d">7 ngày qua</RadioButton>
+            <RadioButton value="14d">14 ngày qua</RadioButton>
+            <RadioButton value="30d">30 ngày qua</RadioButton>
+            <RadioButton value="all">Tất cả</RadioButton>
+          </RadioGroup>
         }
       />
 

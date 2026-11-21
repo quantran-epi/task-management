@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Button, Empty, Input, Segmented, Space, theme } from 'antd';
-import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { Alert, Button, Empty, Input, Segmented, Space, useAntdToken, EmptyImageSimple } from '../components/ui';
+import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -67,7 +67,7 @@ const SEGMENT_COPY: Record<
  */
 
 export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [segment, setSegment] = useState<OfficeSegment>('employees');
   const [search, setSearch] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -162,7 +162,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
       }}
     >
       <Empty
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        image={EmptyImageSimple}
         description={
           <div>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>{copy.emptyTitle}</div>

@@ -1,17 +1,6 @@
 import React, { useState } from 'react';
-import { Button, Tabs, Space, Card, Modal, Typography, notification } from 'antd';
-import {
-  ArrowLeftOutlined,
-  ScheduleOutlined,
-  DatabaseOutlined,
-  CloudSyncOutlined,
-  WarningOutlined,
-  ExclamationCircleOutlined,
-  EditOutlined,
-  BellOutlined,
-  RobotOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { Button, Tabs, Space, Card, Typography, useNotification, useTaskMateModal, Text } from '../components/ui';
+import { ArrowLeftOutlined, ScheduleOutlined, DatabaseOutlined, CloudSyncOutlined, WarningOutlined, ExclamationCircleOutlined, EditOutlined, BellOutlined, RobotOutlined, CloudServerOutlined } from '../components/ui/icon';
 import { WeeklyCapacityForm } from '../components/settings/WeeklyCapacityForm';
 import { OverridesTable } from '../components/settings/OverridesTable';
 import { BackupExportCard } from '../components/settings/BackupExportCard';
@@ -63,6 +52,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   defaultActiveTab = 'capacity',
 }) => {
   const [activeTab, setActiveTab] = useState<'capacity' | 'data' | 'jira' | 'notifications' | 'ai' | 'ssh'>(defaultActiveTab);
+  const notification = useNotification();
+  const { modal, contextHolder } = useTaskMateModal();
   const [resetModalOpen, setResetModalOpen] = useState(false);
 
   React.useEffect(() => {
@@ -92,7 +83,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleBannerRollback = () => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Xác nhận hoàn tác dữ liệu về bản Snapshot?',
       icon: <ExclamationCircleOutlined />,
       content: 'Hành động này sẽ thay thế dữ liệu hiện tại bằng dữ liệu đã lưu trong bản snapshot trước khi nhập.',
@@ -184,7 +175,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             />
           )}
 
-          <Typography.Text strong>Sao lưu & khôi phục</Typography.Text>
+          <Text strong>Sao lưu & khôi phục</Text>
           {onNavigate && (
             <Button
               icon={<EditOutlined />}
@@ -206,10 +197,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             }
           />
           <SnapshotRollbackCard db={db} />
-          <Typography.Text strong>Đồng bộ GitHub</Typography.Text>
+          <Text strong>Đồng bộ GitHub</Text>
           <GitHubConfigCard db={db} />
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
-          <Typography.Text strong>Lưu trữ & môi trường</Typography.Text>
+          <Text strong>Lưu trữ & môi trường</Text>
           <LocalSqlitePersistenceCard db={db} />
           <StoragePersistenceCard />
 
@@ -270,16 +261,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Typography.Text strong>Quy ước & công cụ AI</Typography.Text>
+          <Text strong>Quy ước & công cụ AI</Text>
           <GlobalConventionsCard db={db} />
           <McpConfigCard db={db} />
           <AiToolCatalogCard db={db} />
           <OracleAiToolConfigCard db={db} />
           <SshFsAiToolConfigCard db={db} />
-          <Typography.Text strong>Trợ lý & Ghost Dev</Typography.Text>
+          <Text strong>Trợ lý & Ghost Dev</Text>
           <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
-          <Typography.Text strong>Ngân sách & Knowledge</Typography.Text>
+          <Text strong>Ngân sách & Knowledge</Text>
           <BudgetWarnThresholdCard db={db} />
           <KnowledgeServerConfigCard />
         </Space>
@@ -295,9 +286,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ),
       children: (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Typography.Text strong>Kết nối SSH</Typography.Text>
+          <Text strong>Kết nối SSH</Text>
           <SshConfigCard db={db} />
-          <Typography.Text strong>Phân loại hệ thống</Typography.Text>
+          <Text strong>Phân loại hệ thống</Text>
           <SystemTypeOptionsCard db={db} />
         </Space>
       ),
@@ -306,6 +297,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '16px 24px' }}>
+      {contextHolder}
       <PageHeader
         title="Cài đặt & Cấu hình công suất"
         subtitle="Cấu hình công suất làm việc hàng tuần tiêu chuẩn và lên lịch ngoại lệ cho các ngày cụ thể."

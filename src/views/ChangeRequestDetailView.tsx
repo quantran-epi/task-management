@@ -1,15 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Collapse, Empty, Modal, Select, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
-import {
-  BranchesOutlined,
-  BugOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  ThunderboltOutlined,
-  ToolOutlined,
-} from '@ant-design/icons';
+import { Button, Collapse, Empty, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems } from '../db/repositories/systemRepo';
@@ -71,6 +62,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   db = defaultDb,
 }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
@@ -150,7 +143,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   };
 
   const handleDelete = () => {
-    Modal.confirm({
+    modal.confirm({
       title: 'Xóa Change Request',
       content: `Xóa CR '${cr.code} — ${cr.name}'? Toàn bộ ${tasks.length} tác vụ và lịch sử thảo luận của CR sẽ bị xóa vĩnh viễn.`,
       okText: 'Xóa vĩnh viễn',
@@ -260,6 +253,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         margin: '0 auto',
       }}
     >
+      {contextHolder}
       {/* 3a. Header */}
       <div
         style={{
@@ -281,9 +275,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             >
               {cr.code}
             </Tag>
-            <Typography.Title level={4} style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+            <Title level={4} style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
               {cr.name}
-            </Typography.Title>
+            </Title>
             <Tag color={typeMeta.color} icon={typeMeta.icon} style={{ margin: 0 }}>
               {typeMeta.label}
             </Tag>
@@ -335,7 +329,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Typography.Text strong>Tác vụ ({tasks.length})</Typography.Text>
+          <Text strong>Tác vụ ({tasks.length})</Text>
           <Button icon={<PlusOutlined />} size="small" onClick={handleCreateTask}>
             Thêm tác vụ
           </Button>

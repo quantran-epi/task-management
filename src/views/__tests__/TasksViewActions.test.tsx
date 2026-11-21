@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { message } from 'antd';
+import { ThemeAppHolder } from '../../components/ui';
 import { TasksView } from '../TasksView';
 
 const mocks = vi.hoisted(() => ({
@@ -8,7 +8,19 @@ const mocks = vi.hoisted(() => ({
   pauseTimer: vi.fn().mockResolvedValue(undefined),
   getTimerForTask: vi.fn(),
   canAdd: true,
+  messageInfo: vi.fn(),
 }));
+vi.mock('../../components/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../components/ui')>();
+  return {
+    ...actual,
+    useMessage: () => ({ info: mocks.messageInfo, error: vi.fn(), success: vi.fn(), warning: vi.fn() }),
+  };
+});
+
+function renderView(ui: React.ReactElement) {
+  return render(<ThemeAppHolder>{ui}</ThemeAppHolder>);
+}
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: () => undefined }));
 vi.mock('../../hooks/useTimer', () => ({ useTimer: () => mocks }));
 vi.mock('../../hooks/useKeyboardShortcuts', () => ({ useKeyboardShortcuts: () => {} }));
@@ -47,7 +59,7 @@ describe('TasksView workbench actions', () => {
   });
 
   it('focuses quick add on initial and repeated requests', () => {
-    const { rerender } = render(<TasksView quickAddRequest="first" />);
+    const { rerender } = renderView(<TasksView quickAddRequest="first" />);
     expect(screen.getByRole('textbox', { name: 'Quick add test' })).toHaveFocus();
     fireEvent.click(screen.getByRole('button', { name: 'Select task' }));
     screen.getByRole('button', { name: 'Select task' }).focus();
@@ -57,23 +69,19 @@ describe('TasksView workbench actions', () => {
 
   it('explains missing CR instead of silently focusing a disabled input', () => {
     mocks.canAdd = false;
-    const info = vi.spyOn(message, 'info').mockImplementation(() => undefined as any);
-    render(<TasksView quickAddRequest="first" />);
-    expect(info).toHaveBeenCalledWith('Chọn CR trước khi thêm tác vụ.');
-    info.mockRestore();
+    renderView(<TasksView quickAddRequest="first" />);
+    expect(mocks.messageInfo).toHaveBeenCalledWith('Chọn CR trước khi thêm tác vụ.');
   });
 
   it('explains missing task selection without starting a timer', () => {
-    const info = vi.spyOn(message, 'info').mockImplementation(() => undefined as any);
-    render(<TasksView />);
+    renderView(<TasksView />);
     toggleTimer();
-    expect(info).toHaveBeenCalledWith('Chọn một tác vụ để bật/tắt bộ đếm giờ.');
+    expect(mocks.messageInfo).toHaveBeenCalledWith('Chọn một tác vụ để bật/tắt bộ đếm giờ.');
     expect(mocks.startTimer).not.toHaveBeenCalled();
-    info.mockRestore();
   });
 
   it('starts and pauses the selected task timer, then removes listener on unmount', async () => {
-    const { unmount } = render(<TasksView />);
+    const { unmount } = renderView(<TasksView />);
     fireEvent.click(screen.getByRole('button', { name: 'Select task' }));
     toggleTimer();
     await waitFor(() => expect(mocks.startTimer).toHaveBeenCalledWith('task-1'));

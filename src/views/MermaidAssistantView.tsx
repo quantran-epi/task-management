@@ -1,38 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Card,
-  Input,
-  Button,
-  Space,
-  Typography,
-  Select,
-  Tooltip,
-  Alert,
-  Spin,
-  theme,
-  message,
-  Divider,
-  Tag,
-  Modal,
-} from 'antd';
-import {
-  RobotOutlined,
-  CopyOutlined,
-  DownloadOutlined,
-  PictureOutlined,
-  ClearOutlined,
-  PlayCircleOutlined,
-  UndoOutlined,
-  ZoomInOutlined,
-  ZoomOutOutlined,
-  ColumnWidthOutlined,
-  CodeOutlined,
-  ApartmentOutlined,
-  CheckOutlined,
-  SaveOutlined,
-  CloudSyncOutlined,
-  FullscreenOutlined,
-} from '@ant-design/icons';
+import { Card, Input, TextArea, Button, Space, Typography, Select, Tooltip, Alert, Spin, Divider, Tag, Modal, useAntdToken, useMessage } from '../components/ui';
+import { RobotOutlined, CopyOutlined, DownloadOutlined, PictureOutlined, ClearOutlined, PlayCircleOutlined, UndoOutlined, ZoomInOutlined, ZoomOutOutlined, ColumnWidthOutlined, CodeOutlined, ApartmentOutlined, CheckOutlined, SaveOutlined, CloudSyncOutlined, FullscreenOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { NoteEntityType } from '../types/models';
@@ -41,7 +9,6 @@ import { useLayoutStore } from '../workbench/store/layoutStore';
 import { fixMermaidWithAi } from '../services/ai/mermaidFixerService';
 import { downloadMermaidSvg, downloadMermaidPng } from '../utils/mermaidExport';
 
-const { TextArea } = Input;
 const { Text } = Typography;
 
 const MIN_SCALE = 0.2;
@@ -168,7 +135,8 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
   noteId,
   db = defaultDb,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
+  const messageApi = useMessage();
   const isDark = Boolean(
     (token as any).colorBgBase === '#000000' ||
       (token.colorBgContainer && parseInt(token.colorBgContainer.slice(1, 3) || 'ff', 16) < 128)
@@ -333,7 +301,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
       setCurrentNoteId(newNote.id);
       noteLoadedRef.current = true;
       setSaveStatus('saved');
-      message.success('Đã lưu thành Diagram Note');
+      messageApi.success('Đã lưu thành Diagram Note');
       if (activeTabId) {
         openTab({
           id: `doc-${newNote.id}`,
@@ -344,7 +312,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
         });
       }
     } catch {
-      message.error('Không thể lưu diagram note');
+      messageApi.error('Không thể lưu diagram note');
     }
   };
 
@@ -472,10 +440,10 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      message.success('Đã sao chép mã Mermaid');
+      messageApi.success('Đã sao chép mã Mermaid');
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      message.error('Không thể sao chép');
+      messageApi.error('Không thể sao chép');
     }
   };
 
@@ -492,7 +460,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
   const handleAiFix = async (overridePrompt?: string) => {
     const promptToSend = typeof overridePrompt === 'string' ? overridePrompt : aiCustomPrompt;
     setFixing(true);
-    const hideLoading = message.loading('AI đang phân tích và sửa cú pháp Mermaid...', 0);
+    const hideLoading = messageApi.loading('AI đang phân tích và sửa cú pháp Mermaid...', 0);
     try {
       const res = await fixMermaidWithAi({
         code,
@@ -503,9 +471,9 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
       setAiCustomPrompt('');
       setModalPromptDraft('');
       setIsAiModalOpen(false);
-      message.success('AI đã sửa cú pháp thành công!');
+      messageApi.success('AI đã sửa cú pháp thành công!');
     } catch (err: any) {
-      message.error(err?.message || 'Không thể sửa cú pháp bằng AI');
+      messageApi.error(err?.message || 'Không thể sửa cú pháp bằng AI');
     } finally {
       hideLoading();
       setFixing(false);
@@ -620,7 +588,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           <Select
             placeholder="Chọn mẫu sơ đồ..."
             style={{ width: 220 }}
-            onChange={(val) => {
+            onChange={(val: keyof typeof TEMPLATES) => {
               const tmpl = TEMPLATES[val];
               if (tmpl) setCode(tmpl.code);
             }}

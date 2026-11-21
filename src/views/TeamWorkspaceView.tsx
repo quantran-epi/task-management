@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button, Empty } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import { Button, Empty, EmptyImageSimple } from '../components/ui';
+import { ArrowLeftOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { listEmployees, listLeads, listSkills } from '../db/repositories/aiOfficeRepo';
@@ -52,7 +52,7 @@ export const TeamWorkspaceView: React.FC<TeamWorkspaceViewProps> = ({
       >
         <Empty
           description="Không tìm thấy nhóm AI này hoặc nhóm đã bị xóa."
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
         >
           <Button
             icon={<ArrowLeftOutlined />}

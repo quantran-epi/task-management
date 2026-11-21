@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Input, Select, Space, Modal, message } from 'antd';
-import { PlusOutlined, SearchOutlined, FilterOutlined } from '@ant-design/icons';
+import { Button, Input, Select, Space, useMessage, useTaskMateModal } from '../components/ui';
+import { PlusOutlined, SearchOutlined, FilterOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -23,6 +23,8 @@ export interface ChangeRequestsViewProps {
 
 export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = defaultDb }) => {
   const [crModalOpen, setCrModalOpen] = useState(false);
+  const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
 
   // Filters
@@ -86,7 +88,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
 
   const handleDeleteCRPrompt = (cr: ChangeRequest) => {
     const childTasks = tasks.filter((t) => t.crId === cr.id);
-    Modal.confirm({
+    modal.confirm({
       title: `Xóa Change Request: Xóa CR '${cr.name}'?`,
       content: (
         <div>
@@ -115,6 +117,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {contextHolder}
       <PageHeader
         title="Quản lý Change Requests (CR)"
         subtitle="Quản lý các đợt phát triển tính năng, nâng cấp và sửa lỗi theo Catalog hệ thống Enterprise"

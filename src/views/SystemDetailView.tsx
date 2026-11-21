@@ -1,31 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Breadcrumb,
-  Button,
-  Card,
-  Descriptions,
-  Empty,
-  Space,
-  Spin,
-  Table,
-  Tabs,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-  type DescriptionsProps,
-  type TabsProps,
-} from 'antd';
-import {
-  ApartmentOutlined,
-  BranchesOutlined,
-  CodeOutlined,
-  EditOutlined,
-  FolderOutlined,
-  PlusOutlined,
-  RocketOutlined,
-} from '@ant-design/icons';
+import { Alert, Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Table, Tabs, Tag, Tooltip, useMessage, EmptyImageSimple, Paragraph, Text, Title } from '../components/ui';
+import type { DescriptionsProps, TabsProps } from 'antd';
+import { ApartmentOutlined, BranchesOutlined, CodeOutlined, EditOutlined, FolderOutlined, PlusOutlined, RocketOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -152,6 +128,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
   db = defaultDb,
 }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const message = useMessage();
   const [createChildModalOpen, setCreateChildModalOpen] = useState(false);
   const [createCrModalOpen, setCreateCrModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
@@ -306,22 +283,22 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
             key: 'ssh',
             label: 'Máy chủ SSH',
             children: sshConfig ? (
-              <Typography.Text code copyable>
+              <Text code copyable>
                 {`${sshConfig.username}@${sshConfig.host}:${sshConfig.port}`}
-              </Typography.Text>
+              </Text>
             ) : (
-              <Typography.Text type="secondary">—</Typography.Text>
+              <Text type="secondary">—</Text>
             ),
           },
           {
             key: 'repoPath',
             label: 'Đường dẫn Repository',
             children: system.remoteRepoPath ? (
-              <Typography.Text code copyable style={{ fontSize: 12 }}>
+              <Text code copyable style={{ fontSize: 12 }}>
                 {system.remoteRepoPath}
-              </Typography.Text>
+              </Text>
             ) : (
-              <Typography.Text type="secondary">—</Typography.Text>
+              <Text type="secondary">—</Text>
             ),
           },
           {
@@ -400,9 +377,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
               key: 'remoteRepoPath',
               render: (path?: string) =>
                 path ? (
-                  <Typography.Text code style={{ fontSize: 11 }}>
+                  <Text code style={{ fontSize: 11 }}>
                     {path}
-                  </Typography.Text>
+                  </Text>
                 ) : (
                   '—'
                 ),
@@ -417,14 +394,14 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         />
       ) : (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Typography.Text strong>Hệ thống này chưa có subsystem con nào</Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Text strong>Hệ thống này chưa có subsystem con nào</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
                 Subsystem là đơn vị deploy gắn đúng một repo remote SSH. Thêm subsystem để bắt đầu
                 cấu hình.
-              </Typography.Text>
+              </Text>
             </div>
           }
         >
@@ -485,17 +462,17 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         />
       ) : (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Typography.Text strong>
+              <Text strong>
                 Chưa có Change Request nào ảnh hưởng hệ thống này
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              </Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
                 {isLogicalParent(system)
                   ? 'CR sẽ xuất hiện ở đây khi subsystem con được chọn làm target.'
                   : 'CR sẽ xuất hiện ở đây khi subsystem này được chọn làm target.'}
-              </Typography.Text>
+              </Text>
             </div>
           }
         >
@@ -529,13 +506,13 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         />
       ) : gitState.status === 'unconfigured' ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <Typography.Text strong>Subsystem chưa cấu hình SSH/Repo</Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Text strong>Subsystem chưa cấu hình SSH/Repo</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>
                 Cấu hình SSH và đường dẫn repo trong System Catalog để xem nhánh và commit.
-              </Typography.Text>
+              </Text>
             </div>
           }
         >
@@ -546,9 +523,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       ) : (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Space size={8}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
               Nhánh hiện tại:
-            </Typography.Text>
+            </Text>
             <Tag color="blue" style={{ fontFamily: 'monospace' }}>
               {system.defaultBaseBranch || 'origin/main'}
             </Tag>
@@ -564,9 +541,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
                 dataIndex: 'name',
                 key: 'name',
                 render: (name: string) => (
-                  <Typography.Text code style={{ fontSize: 12 }}>
+                  <Text code style={{ fontSize: 12 }}>
                     {name}
-                  </Typography.Text>
+                  </Text>
                 ),
               },
               {
@@ -577,9 +554,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
                 render: (sha?: string) =>
                   sha ? (
                     <Tooltip title={sha}>
-                      <Typography.Text code style={{ fontSize: 12 }}>
+                      <Text code style={{ fontSize: 12 }}>
                         {sha.slice(0, 8)}
-                      </Typography.Text>
+                      </Text>
                     </Tooltip>
                   ) : (
                     '—'
@@ -674,9 +651,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <Typography.Title level={4} style={{ margin: 0 }}>
+            <Title level={4} style={{ margin: 0 }}>
               {system.name}
-            </Typography.Title>
+            </Title>
             <Tag color="cyan" style={{ fontFamily: 'monospace', fontSize: 13, padding: '2px 8px', margin: 0 }}>
               {system.code}
             </Tag>
@@ -685,9 +662,9 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
             </Tag>
           </div>
           {system.description && (
-            <Typography.Paragraph type="secondary" style={{ margin: 0, fontSize: 13 }}>
+            <Paragraph type="secondary" style={{ margin: 0, fontSize: 13 }}>
               {system.description}
-            </Typography.Paragraph>
+            </Paragraph>
           )}
         </div>
 
