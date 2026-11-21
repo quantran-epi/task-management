@@ -46,6 +46,15 @@ Tất cả pane trong `UtilityToolPanel.tsx` (4 pane JSON/XML/TextCompare/Markdo
 - Scoped vitest: `UtilityToolPanel.test.tsx` + `UtilityToolAIAssistant.test.tsx` → 47 passed.
 - Chrome (Playwright, E2E `e2e/utility-editor-lag.spec.ts`): 7/7 passed — paste + Format lần đầu + folding JSON/XML, Save as mở <2s, Text Compare diff + gutter, Markdown render + gutter, đổi tab qua lại giữ nội dung, gutter mirror scroll, AI assistant mở cho cả 4 tool. Không chạy full suite.
 
+## Follow-up (user báo vẫn lag)
+
+Round 2 — đo bằng PerformanceObserver trong Chrome thay vì tin E2E threshold:
+
+- Trước: 113 ký tự gõ vào XML input tạo **6780** component renders (`Tooltip` 876, `Button` 834, `Wave` 731, `SaveAsModal` 114, `UtilityToolAIAssistant` 114) — AntD Modal/Tooltip/Button dù đóng vẫn được dựng lại mỗi keystroke.
+- Sau: (a) conditional mount `saveOpen && <SaveAsModal>` / `aiOpen && <UtilityToolAIAssistant>` ở cả 4 tool; (b) thay 22 Tooltip+Button toolbar bằng native `<button>` + `title`, giữ aria-label để test/E2E; (c) thay 2 `Select` indent bằng native `<select>`.
+- Đo lại cùng 113 ký tự: **219** component renders (chỉ `LineNumberedPane` 135 + `Update` 84) — giảm ~97%.
+- Chrome UAT: Format lần đầu có output ngay; Save as dialog xuất hiện trong **65ms** (đo `performance.now()` trong page); folding vẫn đúng; 47 unit tests + 7/7 Playwright pass.
+
 ## Current Focus
 
-- resolved — root cause fixed at state owner + render path; verified trong Chrome.
+- resolved — root cause fixed at state owner + render path + toolbar/modal mount; verified bằng measurement trong Chrome.
