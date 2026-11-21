@@ -19,8 +19,8 @@ export interface AttentionTodayListProps {
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Urgent: '#ff4d4f',
   High: '#fa8c16',
-  Medium: '#1677ff',
-  Low: '#8c8c8c',
+  Medium: 'var(--accent)',
+  Low: 'var(--fg-secondary)',
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -70,7 +70,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
           <Badge
             count={items.length}
             overflowCount={99}
-            style={{ backgroundColor: items.length > 0 ? '#1677ff' : '#d9d9d9' }}
+            style={{ backgroundColor: items.length > 0 ? 'var(--accent)' : '#d9d9d9' }}
           />
         </Space>
       }
@@ -119,7 +119,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                       style={{
                         cursor: 'pointer',
                         fontWeight: 500,
-                        color: item.task.status === 'Done' ? undefined : '#1677ff',
+                        color: item.task.status === 'Done' ? undefined : 'var(--accent)',
                       }}
                       onClick={() => onTaskClick(item.task.id)}
                       role="button"
@@ -138,7 +138,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                       <Text
                         type="secondary"
                         ellipsis={{ tooltip: internalCrMap.get(item.task.crId) }}
-                        style={{ fontSize: 11, lineHeight: 1.2 }}
+                        style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}
                       >
                         {internalCrMap.get(item.task.crId)}
                       </Text>
@@ -159,10 +159,10 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                               bordered={false}
                               style={{
                                 color: PRIORITY_COLORS[item.task.priority],
-                                backgroundColor: `${PRIORITY_COLORS[item.task.priority]}15`,
+                                backgroundColor: `color-mix(in srgb, ${PRIORITY_COLORS[item.task.priority]} 9%, transparent)`,
                                 fontWeight: 600,
                                 margin: 0,
-                                fontSize: 11,
+                                fontSize: 'var(--font-size-xs)',
                               }}
                             >
                               {PRIORITY_LABELS[item.task.priority] || item.task.priority}

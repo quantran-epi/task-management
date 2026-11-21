@@ -256,7 +256,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
       ]}
       title={
         <Space>
-          <CalendarOutlined style={{ color: '#1677ff' }} />
+          <CalendarOutlined style={{ color: 'var(--accent)' }} />
           <span>
             {activeTab === 'briefing' ? 'Khởi động ngày (Briefing)' : 'Tổng kết ngày (Debriefing)'}{' '}
             ({dayjs(targetDate).format('DD/MM/YYYY')})
@@ -289,7 +289,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
               {
                 label: (
                   <Space size="small">
-                    <MoonOutlined style={{ color: '#1677ff' }} />
+                    <MoonOutlined style={{ color: 'var(--accent)' }} />
                     <span>Debriefing (Tổng kết)</span>
                   </Space>
                 ),
@@ -309,7 +309,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   <Statistic
                     title="Kế hoạch (Planned)"
                     value={formatMinutes(briefingMetrics.plannedMinutes)}
-                    prefix={<ClockCircleOutlined style={{ color: '#1677ff' }} />}
+                    prefix={<ClockCircleOutlined style={{ color: 'var(--accent)' }} />}
                   />
                 </Card>
               </Col>
@@ -335,7 +335,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                     value={`${briefingMetrics.loadPercent}%`}
                     styles={{
                       content: {
-                        color: briefingMetrics.isOverCapacity ? '#fa541c' : '#1677ff',
+                        color: briefingMetrics.isOverCapacity ? '#fa541c' : 'var(--accent)',
                       },
                     }}
                   />
@@ -430,7 +430,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   style={{ fontSize: 13, lineHeight: 1.6 }}
                 />
               ) : !aiLoading && !aiError ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                   Nhấn "Nhận diện & Gợi ý AI" để nhận lời khuyên trọng tâm và tối ưu hóa thứ tự
                   thực hiện công việc cho sáng nay.
                 </Text>
@@ -438,7 +438,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
               {aiLoading && !briefingAiInsight && (
                 <div style={{ textAlign: 'center', padding: '12px 0' }}>
                   <Spin size="small" />
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#8c8c8c' }}>
+                  <span style={{ marginLeft: 8, fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }}>
                     Đang phân tích kế hoạch ngày...
                   </span>
                 </div>
@@ -514,7 +514,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   <Statistic
                     title="Công suất mục tiêu"
                     value={formatMinutes(capacityMinutes)}
-                    prefix={<FireOutlined style={{ color: '#1677ff' }} />}
+                    prefix={<FireOutlined style={{ color: 'var(--accent)' }} />}
                   />
                 </Card>
               </Col>
@@ -528,7 +528,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                     value={`${debriefingMetrics.capacityPercent}%`}
                     styles={{
                       content: {
-                        color: debriefingMetrics.isOverCapacity ? '#fa541c' : '#1677ff',
+                        color: debriefingMetrics.isOverCapacity ? '#fa541c' : 'var(--accent)',
                       },
                     }}
                   />
@@ -595,7 +595,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                   style={{ fontSize: 13, lineHeight: 1.6 }}
                 />
               ) : !aiLoading && !aiError ? (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                   Nhấn "Đánh giá cuối ngày" để AI phân tích hiệu suất làm việc và chiến lược giải
                   quyết các việc tồn đọng cho ngày tiếp theo.
                 </Text>
@@ -603,7 +603,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
               {aiLoading && !debriefingAiInsight && (
                 <div style={{ textAlign: 'center', padding: '12px 0' }}>
                   <Spin size="small" />
-                  <span style={{ marginLeft: 8, fontSize: 12, color: '#8c8c8c' }}>
+                  <span style={{ marginLeft: 8, fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }}>
                     Đang phân tích tổng kết ngày...
                   </span>
                 </div>
@@ -664,7 +664,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
                           <Text strong>{name}</Text>
                           <Space size="small">
                             <Tag color="blue">{record.task.status}</Tag>
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                               Kế hoạch: {formatMinutes(record.allocatedMinutes)}
                             </Text>
                           </Space>

@@ -79,7 +79,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FolderOpenOutlined style={{ color: '#1677ff' }} />
+          <FolderOpenOutlined style={{ color: 'var(--accent)' }} />
           <span>Chọn thư mục Git Repository từ xa ({sshConfig?.name})</span>
         </div>
       }
@@ -109,7 +109,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
             justifyContent: 'space-between',
             padding: '6px 12px',
             backgroundColor: 'rgba(0, 0, 0, 0.02)',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-control)',
             border: '1px solid #d9d9d9',
           }}
         >
@@ -151,7 +151,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
         </div>
 
         {/* Current Path Indicator */}
-        <div style={{ fontSize: 12, color: 'rgba(0, 0, 0, 0.65)', fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 'var(--font-size-small)', color: 'rgba(0, 0, 0, 0.65)', fontFamily: 'monospace' }}>
           Đang duyệt: <strong>{currentPath}</strong>
         </div>
 
@@ -161,7 +161,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
             height: 320,
             overflowY: 'auto',
             border: '1px solid #f0f0f0',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-control)',
             padding: '4px 8px',
           }}
         >

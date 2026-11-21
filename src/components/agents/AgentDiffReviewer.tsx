@@ -358,7 +358,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
       if (onMentionFile) {
         items.push({
           key: 'mention-file',
-          icon: <CommentOutlined style={{ color: '#1677ff' }} />,
+          icon: <CommentOutlined style={{ color: 'var(--accent)' }} />,
           label: 'Nhắc đến trong chatbox (@file)',
           onClick: () => {
             onMentionFile(node.path);
@@ -458,10 +458,10 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             size="small"
           />
 
-          <Tag color="success" style={{ margin: 0, fontWeight: 600, fontSize: 11 }}>
+          <Tag color="success" style={{ margin: 0, fontWeight: 600, fontSize: 'var(--font-size-xs)' }}>
             +{totalAdditions}
           </Tag>
-          <Tag color="error" style={{ margin: 0, fontWeight: 600, fontSize: 11 }}>
+          <Tag color="error" style={{ margin: 0, fontWeight: 600, fontSize: 'var(--font-size-xs)' }}>
             -{totalDeletions}
           </Tag>
 
@@ -513,7 +513,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
             size="small"
             type="primary"
             icon={<CheckOutlined />}
-            style={{ backgroundColor: '#4f46e5' }}
+            style={{ backgroundColor: 'var(--accent)' }}
             onClick={handleAcceptAll}
             loading={acting}
             disabled={!hasChanges || loading}
@@ -554,7 +554,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontWeight: 600,
                   color: token.colorTextSecondary,
                 }}
@@ -571,10 +571,10 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                 <Popover
                   trigger="click"
                   placement="bottomRight"
-                  title={<span style={{ fontSize: 12 }}>Loại trừ khỏi Explorer</span>}
+                  title={<span style={{ fontSize: 'var(--font-size-small)' }}>Loại trừ khỏi Explorer</span>}
                   content={
                     <div style={{ width: 230, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <Text type="secondary" style={{ fontSize: 11 }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                         Bỏ qua thư mục quá lớn để tối ưu hiệu năng:
                       </Text>
                       <Space wrap size={[4, 4]}>
@@ -606,7 +606,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   <Button
                     type="text"
                     size="small"
-                    icon={<SettingOutlined style={{ fontSize: 11 }} />}
+                    icon={<SettingOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
                     style={{ height: 20, padding: '0 4px', fontSize: 10, color: token.colorTextTertiary }}
                   >
                     Bỏ qua
@@ -623,7 +623,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   { label: `Diff (${diffFiles.length})`, value: 'diff' },
                   { label: `Tất cả (${allWorktreeFiles.length || diffFiles.length})`, value: 'all' },
                 ]}
-                style={{ fontSize: 11 }}
+                style={{ fontSize: 'var(--font-size-xs)' }}
               />
 
               <Input
@@ -687,12 +687,12 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       >
                         <Space size={5} style={{ overflow: 'hidden', flex: 1 }}>
                           {node.isDir ? (
-                            <FolderOutlined style={{ color: '#1677ff', fontSize: 12 }} />
+                            <FolderOutlined style={{ color: 'var(--accent)', fontSize: 'var(--font-size-small)' }} />
                           ) : (
                             <FileTextOutlined
                               style={{
-                                color: df ? '#4f46e5' : token.colorTextSecondary,
-                                fontSize: 12,
+                                color: df ? 'var(--accent)' : token.colorTextSecondary,
+                                fontSize: 'var(--font-size-small)',
                               }}
                             />
                           )}
@@ -758,7 +758,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                 }}
               >
                 <Space direction="horizontal" size={8} style={{ overflow: 'hidden' }}>
-                  <Text strong ellipsis={{ tooltip: selectedFile.newPath }} style={{ fontSize: 12 }}>
+                  <Text strong ellipsis={{ tooltip: selectedFile.newPath }} style={{ fontSize: 'var(--font-size-small)' }}>
                     {selectedFile.newPath}
                   </Text>
                   <Tag
@@ -782,7 +782,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       type="default"
                       icon={<CommentOutlined />}
                       onClick={() => handleReviewFile(selectedFile.newPath)}
-                      style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                      style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                     >
                       Review
                     </Button>
@@ -793,7 +793,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     type="default"
                     icon={<FolderOpenOutlined />}
                     onClick={() => handleOpenInExplorer(selectedFile.newPath)}
-                    style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                    style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                   >
                     Explorer
                   </Button>
@@ -803,7 +803,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       size="small"
                       type="primary"
                       icon={<CheckOutlined />}
-                      style={{ backgroundColor: '#16a34a', fontSize: 11, padding: '0 6px', height: 22 }}
+                      style={{ backgroundColor: '#16a34a', fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                       onClick={() => handleAcceptFile(selectedFile.newPath)}
                       loading={acting}
                     >
@@ -826,7 +826,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                       type="text"
                       icon={<UndoOutlined />}
                       disabled={acting}
-                      style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                      style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                     >
                       Revert File
                     </Button>
@@ -864,7 +864,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
               >
                 <Space direction="horizontal" size={8}>
                   <FileTextOutlined style={{ fontSize: 13, color: token.colorTextSecondary }} />
-                  <Text strong style={{ fontSize: 12 }}>
+                  <Text strong style={{ fontSize: 'var(--font-size-small)' }}>
                     {selectedFilePath}
                   </Text>
                   <Tag style={{ fontSize: 10, margin: 0 }}>READ-ONLY</Tag>
@@ -902,7 +902,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                         onMentionFile(selectedFilePath);
                         message.success(`Đã thêm @${selectedFilePath} vào chatbox`);
                       }}
-                      style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                      style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                     >
                       Nhắc (@file)
                     </Button>
@@ -917,7 +917,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                         message.success('Đã sao chép nội dung tập tin');
                       }
                     }}
-                    style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                    style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                   >
                     Sao chép
                   </Button>
@@ -926,7 +926,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                     size="small"
                     icon={<FolderOpenOutlined />}
                     onClick={() => handleOpenInExplorer(selectedFilePath)}
-                    style={{ fontSize: 11, padding: '0 6px', height: 22 }}
+                    style={{ fontSize: 'var(--font-size-xs)', padding: '0 6px', height: 22 }}
                   >
                     Explorer
                   </Button>
@@ -942,7 +942,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   backgroundColor: token.colorBgContainer,
                   fontFamily:
                     'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   lineHeight: '20px',
                 }}
               >

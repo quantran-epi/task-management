@@ -59,7 +59,7 @@ export function DocPublishBadge({ status, compact: explicitCompact }: DocPublish
         aria-label={`Trạng thái xuất bản: ${stateUi.label}`}
         color={stateUi.color}
         icon={stateUi.icon}
-        style={{ marginInlineEnd: 0, fontSize: 12 }}
+        style={{ marginInlineEnd: 0, fontSize: 'var(--font-size-small)' }}
       >
         {!compact && stateUi.label}
       </Tag>

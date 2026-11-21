@@ -182,11 +182,11 @@ export const GlobalDiagramViewer: React.FC = () => {
             gap: 4,
             padding: '3px 8px',
             backgroundColor: token.colorPrimary,
-            color: '#ffffff',
+            color: 'var(--fg)',
             borderRadius: 18,
             boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
             cursor: 'pointer',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             fontWeight: 500,
             animation: 'fadeIn 0.15s ease',
           }}
@@ -201,7 +201,7 @@ export const GlobalDiagramViewer: React.FC = () => {
           <Button
             type="text"
             size="small"
-            icon={<CloseOutlined style={{ color: '#ffffff', fontSize: 10 }} />}
+            icon={<CloseOutlined style={{ color: 'var(--fg)', fontSize: 10 }} />}
             onClick={dismissFloating}
             style={{ width: 16, height: 16, minWidth: 16, padding: 0, marginLeft: 2 }}
           />

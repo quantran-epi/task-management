@@ -48,7 +48,7 @@ const LOAD_STROKE_COLORS: Record<DailyLoadState, string> = {
   available: '#52c41a',
   busy: '#fa8c16',
   overloaded: '#ff4d4f',
-  'no-capacity': '#8c8c8c',
+  'no-capacity': 'var(--fg-secondary)',
 };
 
 export const TodaySummaryCard: React.FC<TodaySummaryCardProps> = ({
@@ -94,10 +94,10 @@ export const TodaySummaryCard: React.FC<TodaySummaryCardProps> = ({
       {/* Utilization Progress Bar */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             Mức sử dụng công suất
           </Text>
-          <Text strong style={{ fontSize: 12 }}>
+          <Text strong style={{ fontSize: 'var(--font-size-small)' }}>
             {percent}%
           </Text>
         </div>

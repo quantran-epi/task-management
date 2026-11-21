@@ -59,7 +59,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
         backgroundColor: gutterBg,
         color: token.colorTextSecondary,
         padding: '3px 12px',
-        fontSize: 11,
+        fontSize: 'var(--font-size-xs)',
         userSelect: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -79,7 +79,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                 loading={acting}
                 disabled={acting}
                 onClick={handleAccept}
-                style={{ fontSize: 11, height: 22, padding: '0 6px' }}
+                style={{ fontSize: 'var(--font-size-xs)', height: 22, padding: '0 6px' }}
               >
                 Accept
               </Button>
@@ -95,7 +95,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                 loading={acting}
                 disabled={acting}
                 onClick={handleReject}
-                style={{ fontSize: 11, height: 22, padding: '0 6px' }}
+                style={{ fontSize: 'var(--font-size-xs)', height: 22, padding: '0 6px' }}
               >
                 Reject
               </Button>
@@ -112,7 +112,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
         style={{
           fontFamily:
             'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           lineHeight: '22px',
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
         }}
@@ -216,7 +216,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                   <Button
                     size="small"
                     type="text"
-                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 'var(--font-size-xs)' }} />}
                     style={{ height: 20, width: 20, padding: 0, marginRight: 6, flexShrink: 0 }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -269,7 +269,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
       style={{
         fontFamily:
           'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
         lineHeight: '22px',
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
       }}
@@ -331,7 +331,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                   <Button
                     size="small"
                     type="text"
-                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 'var(--font-size-xs)' }} />}
                     style={{ height: 20, width: 20, padding: 0, marginRight: 4, flexShrink: 0 }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -390,7 +390,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
                   <Button
                     size="small"
                     type="text"
-                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 11 }} />}
+                    icon={<CheckOutlined style={{ color: '#52c41a', fontSize: 'var(--font-size-xs)' }} />}
                     style={{ height: 20, width: 20, padding: 0, marginRight: 4, flexShrink: 0 }}
                     onClick={(e) => {
                       e.stopPropagation();

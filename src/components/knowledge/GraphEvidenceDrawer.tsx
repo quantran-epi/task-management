@@ -171,12 +171,12 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
         <Space direction="vertical" size={2}>
           <Text strong>{r.subjectName}</Text>
           <Space orientation="horizontal" size={4}>
-            <Tag style={{ fontSize: 11 }}>{r.subjectKind}</Tag>
+            <Tag style={{ fontSize: 'var(--font-size-xs)' }}>{r.subjectKind}</Tag>
             <Tooltip title={r.subjectUrn}>
               <Button
                 type="text"
                 size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                icon={<CopyOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                 onClick={() => copyToClipboard(r.subjectUrn, 'URN Chủ thể')}
               />
             </Tooltip>
@@ -191,7 +191,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
       width: 130,
       render: (_, r) => (
         <Space direction="vertical" size={2}>
-          <Text code style={{ fontSize: 12 }}>
+          <Text code style={{ fontSize: 'var(--font-size-small)' }}>
             {r.relation}
           </Text>
           {r.qualifiers && Object.keys(r.qualifiers).length > 0 && (
@@ -215,12 +215,12 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
         <Space direction="vertical" size={2}>
           <Text strong>{r.objectName}</Text>
           <Space orientation="horizontal" size={4}>
-            <Tag style={{ fontSize: 11 }}>{r.objectKind}</Tag>
+            <Tag style={{ fontSize: 'var(--font-size-xs)' }}>{r.objectKind}</Tag>
             <Tooltip title={r.objectUrn}>
               <Button
                 type="text"
                 size="small"
-                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                icon={<CopyOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                 onClick={() => copyToClipboard(r.objectUrn, 'URN Đối tượng')}
               />
             </Tooltip>
@@ -352,7 +352,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
                       borderRadius: 4,
                       marginBottom: 0,
                       fontFamily: 'monospace',
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                     }}
                   >
                     "{occ.quote}"
@@ -457,7 +457,7 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
       render: (_, proposal) => (
         <Space direction="vertical" size={2}>
           <Text strong>{proposal.relationType}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {proposal.sourceEntityName} → {proposal.targetEntityName}
           </Text>
         </Space>

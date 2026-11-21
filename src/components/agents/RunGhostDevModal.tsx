@@ -221,7 +221,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
       open={visible}
       title={
         <Space>
-          <RobotOutlined style={{ color: '#4f46e5', fontSize: 18 }} />
+          <RobotOutlined style={{ color: 'var(--accent)', fontSize: 18 }} />
           <span>Run Ghost Dev — {task.name}</span>
         </Space>
       }
@@ -234,7 +234,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
           key="submit"
           type="primary"
           icon={<RocketOutlined />}
-          style={{ backgroundColor: '#4f46e5' }}
+          style={{ backgroundColor: 'var(--accent)' }}
           loading={submitting}
           onClick={handleSubmit}
         >
@@ -278,7 +278,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   value: cfg.id,
                   label: (
                     <Space>
-                      <CloudServerOutlined style={{ color: '#1677ff' }} />
+                      <CloudServerOutlined style={{ color: 'var(--accent)' }} />
                       <span>Remote SSH: {cfg.name} ({cfg.username}@{cfg.host}:{cfg.port})</span>
                     </Space>
                   ),
@@ -286,7 +286,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               ]}
             />
             {execTarget !== 'local' && (
-              <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+              <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-small)', marginTop: 4, marginBottom: 0 }}>
                 Claude Code sẽ chạy bên trong WSL/Server từ xa qua SSH — an toàn, không bị quét process bởi Trellix trên máy host.
               </Paragraph>
             )}
@@ -315,7 +315,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                     value: p,
                     label: (
                       <Space>
-                        <FolderOutlined style={{ color: '#1677ff' }} />
+                        <FolderOutlined style={{ color: 'var(--accent)' }} />
                         <span>{p}</span>
                       </Space>
                     ),
@@ -401,7 +401,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             }}
           >
             <Space>
-              <FileTextOutlined style={{ color: '#4f46e5' }} />
+              <FileTextOutlined style={{ color: 'var(--accent)' }} />
               <span style={{ fontWeight: 600 }}>Cấu hình Prompt cho Agent</span>
             </Space>
             <Segmented
@@ -439,7 +439,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   marginBottom: 6,
                 }}
               >
-                <span style={{ fontSize: 12, color: '#666' }}>
+                <span style={{ fontSize: 'var(--font-size-small)', color: '#666' }}>
                   Bạn có thể chỉnh sửa toàn bộ nội dung prompt gửi cho Master Agent:
                 </span>
                 <Button
@@ -464,7 +464,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   setCustomPromptText(e.target.value);
                   setIsCustomEdited(true);
                 }}
-                style={{ fontFamily: 'monospace', fontSize: 12 }}
+                style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)' }}
               />
             </div>
           )}
@@ -489,7 +489,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   borderRadius: 4,
                   maxHeight: 180,
                   overflowY: 'auto',
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
                   color: '#374151',

@@ -163,7 +163,7 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                 Thêm nhắc nhở ({fields.length}/5)
               </Button>
             ) : (
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Đã đạt tối đa 5 nhắc nhở
               </Text>
             )}

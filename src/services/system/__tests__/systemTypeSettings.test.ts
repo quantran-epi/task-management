@@ -74,7 +74,7 @@ describe('systemTypeSettings', () => {
     ]);
     expect(normalized).toEqual([
       { value: 'PAYMENT_GATEWAY', label: 'Pay', color: '#123456' },
-      { value: 'NO_COLOR', label: 'NO_COLOR', color: '#8c8c8c' },
+      { value: 'NO_COLOR', label: 'NO_COLOR', color: '#8c8c8c' },  // ponytail: data/export value, not a UI style token
       { value: 'NO_LABEL', label: 'NO_LABEL', color: '#abcdef' },
     ]);
 
@@ -93,7 +93,7 @@ describe('systemTypeSettings', () => {
     expect(matches[0]).toEqual({
       value: 'PAYMENT_GATEWAY',
       label: 'PAYMENT_GATEWAY',
-      color: '#8c8c8c',
+      color: '#8c8c8c',  // ponytail: data/export value, not a UI style token
     });
   });
 

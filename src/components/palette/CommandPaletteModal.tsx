@@ -81,7 +81,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'view',
         title: 'Tổng quan (Dashboard)',
         subtitle: 'Chuyển đến màn hình chính',
-        icon: <DashboardOutlined style={{ color: '#1677ff' }} />,
+        icon: <DashboardOutlined style={{ color: 'var(--accent)' }} />,
         action: () => {
           onNavigate('dashboard');
           onClose();
@@ -152,7 +152,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'view',
         title: 'Cài đặt (Settings)',
         subtitle: 'Cấu hình công suất, sao lưu và thông báo',
-        icon: <SettingOutlined style={{ color: '#8c8c8c' }} />,
+        icon: <SettingOutlined style={{ color: 'var(--fg-secondary)' }} />,
         action: () => {
           onNavigate('settings');
           onClose();
@@ -174,7 +174,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'action',
         title: 'Tạo công việc mới',
         subtitle: 'Mở cửa sổ thêm nhanh tác vụ',
-        icon: <PlusOutlined style={{ color: '#1677ff' }} />,
+        icon: <PlusOutlined style={{ color: 'var(--accent)' }} />,
         action: () => {
           onClose();
           onCreateTask?.();
@@ -246,7 +246,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       category: 'task',
       title: t.name,
       subtitle: `${t.status} • ${t.priority} ${t.jiraKey ? `• [${t.jiraKey}]` : ''}`,
-      icon: <CheckSquareOutlined style={{ color: t.status === 'Done' ? '#52c41a' : '#1677ff' }} />,
+      icon: <CheckSquareOutlined style={{ color: t.status === 'Done' ? '#52c41a' : 'var(--accent)' }} />,
       action: () => {
         onClose();
         onNavigate('insight', { type: 'task', id: t.id });
@@ -436,7 +436,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           <Input
             ref={inputRef}
             size="large"
-            prefix={<SearchOutlined style={{ color: '#8c8c8c', fontSize: 18 }} />}
+            prefix={<SearchOutlined style={{ color: 'var(--fg-secondary)', fontSize: 18 }} />}
             placeholder="Tìm công việc, CR, hệ thống, màn hình, lệnh... (gõ '?' để xem cú pháp)"
             value={query}
             onChange={(e) => {
@@ -460,7 +460,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
         {/* Quick prefix filter buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text type="secondary" style={{ fontSize: 12, marginRight: 2 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 2 }}>
             Bộ lọc nhanh:
           </Text>
           <Tag
@@ -508,7 +508,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               overflowY: 'auto',
               padding: '8px 4px',
               backgroundColor: '#fafafa',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid #f0f0f0',
             }}
           >
@@ -548,7 +548,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                         background: '#fff',
                         fontWeight: 600,
                         fontSize: 13,
-                        color: '#1677ff',
+                        color: 'var(--accent)',
                       }}
                     >
                       {item.prefix}
@@ -556,13 +556,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                     <div>
                       <Text strong>{item.name}</Text>
                       <div>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                           {item.desc}
                         </Text>
                       </div>
                     </div>
                   </Space>
-                  <Text code style={{ fontSize: 12 }}>
+                  <Text code style={{ fontSize: 'var(--font-size-small)' }}>
                     {item.example}
                   </Text>
                 </ListItem>
@@ -587,7 +587,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                       style={{
                         cursor: 'pointer',
                         padding: '8px 12px',
-                        borderRadius: 6,
+                        borderRadius: 'var(--radius-control)',
                         backgroundColor: isSelected ? '#e6f4ff' : 'transparent',
                         transition: 'background-color 0.15s ease',
                         borderBottom: '1px solid #f0f0f0',
@@ -605,7 +605,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                             {item.title}
                           </Text>
                           {item.subtitle && (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                               {item.subtitle}
                             </Text>
                           )}
@@ -628,8 +628,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             alignItems: 'center',
             paddingTop: 8,
             borderTop: '1px solid #f0f0f0',
-            fontSize: 12,
-            color: '#8c8c8c',
+            fontSize: 'var(--font-size-small)',
+            color: 'var(--fg-secondary)',
           }}
         >
           <Space size="middle">
@@ -658,7 +658,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           <Button
             type="link"
             size="small"
-            style={{ padding: 0, fontSize: 12 }}
+            style={{ padding: 0, fontSize: 'var(--font-size-small)' }}
             onClick={() => setShowCheatsheet((prev) => !prev)}
           >
             {isAskingCheatsheet ? 'Đóng hướng dẫn' : 'Xem phím tắt (?)'}

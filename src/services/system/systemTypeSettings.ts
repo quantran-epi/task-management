@@ -12,7 +12,7 @@ export const SYSTEM_TYPE_OPTIONS_SETTING_KEY = 'system_type_options';
 export const SYSTEM_TYPE_VALUE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
 export const SYSTEM_TYPE_VALUE_MAX_LENGTH = 40;
 export const LOGICAL_GROUP_TYPE = 'LOGICAL_GROUP';
-export const SYSTEM_TYPE_FALLBACK_COLOR = '#8c8c8c';
+export const SYSTEM_TYPE_FALLBACK_COLOR = '#8c8c8c';  // ponytail: data/export value, not a UI style token
 
 /** Icon components only — each surface owns its own styling. */
 export const SYSTEM_TYPE_ICON_COMPONENTS: Readonly<Record<string, ComponentType<any>>> = {

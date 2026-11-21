@@ -88,7 +88,7 @@ export const ShellPermissionModal: React.FC<ShellPermissionModalProps> = ({
         <Button
           key="approve"
           type="primary"
-          style={{ backgroundColor: '#4f46e5' }}
+          style={{ backgroundColor: 'var(--accent)' }}
           onClick={() => handleResponse(true)}
           loading={responding}
           aria-label="Cho phép chạy lệnh"
@@ -114,7 +114,7 @@ export const ShellPermissionModal: React.FC<ShellPermissionModalProps> = ({
               backgroundColor: '#1e1e1e',
               color: '#f87171',
               padding: '10px 14px',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               fontSize: 13,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
               margin: 0,
@@ -135,7 +135,7 @@ export const ShellPermissionModal: React.FC<ShellPermissionModalProps> = ({
           </Text>
         </div>
 
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
           Lệnh này không nằm trong danh sách lệnh an toàn mặc định (SAFE_COMMAND_PREFIXES).
           Chỉ cho phép nếu bạn tin tưởng hành động này.
         </Text>

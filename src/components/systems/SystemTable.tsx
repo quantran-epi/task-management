@@ -98,7 +98,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               <Tag
                 style={{
                   fontFamily: 'monospace',
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontWeight: 600,
                   margin: 0,
                   background: isParent ? '#f9f0ff' : '#e6fffb',
@@ -110,7 +110,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               </Tag>
             </Space>
             {record.description && (
-              <Text type="secondary" style={{ fontSize: 12, paddingLeft: 22 }} ellipsis>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', paddingLeft: 22 }} ellipsis>
                 {record.description}
               </Text>
             )}
@@ -145,10 +145,10 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       render: (sshConfigId?: string, record?: SystemTableRow) => {
         if (!sshConfigId) {
           if (record?.type === 'LOGICAL_GROUP') {
-            return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+            return <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>—</Text>;
           }
           return (
-            <Tag color="default" style={{ color: '#8c8c8c' }}>
+            <Tag color="default" style={{ color: 'var(--fg-secondary)' }}>
               Chưa liên kết
             </Tag>
           );
@@ -170,7 +170,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               color="blue"
               style={{
                 fontFamily: 'monospace',
-                fontSize: 11.5,
+                fontSize: 'var(--font-size-xs)',
                 maxWidth: 200,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -191,16 +191,16 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       render: (path?: string, record?: SystemTableRow) => {
         if (!path) {
           if (record?.type === 'LOGICAL_GROUP') {
-            return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+            return <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>—</Text>;
           }
-          return <Text type="secondary" style={{ fontSize: 12 }}>Chưa cấu hình</Text>;
+          return <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>Chưa cấu hình</Text>;
         }
 
         return (
           <Space size={4}>
             <code
               style={{
-                fontSize: 11.5,
+                fontSize: 'var(--font-size-xs)',
                 padding: '2px 6px',
                 background: 'var(--bg-elev, #f7f8fa)',
                 border: '1px solid var(--border, #e9eaee)',
@@ -213,7 +213,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<CopyOutlined style={{ fontSize: 11 }} />}
+              icon={<CopyOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
               onClick={() => handleCopyPath(path)}
               title="Sao chép đường dẫn"
               style={{ width: 22, height: 22, padding: 0 }}
@@ -229,10 +229,10 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       width: 140,
       render: (branch?: string, record?: SystemTableRow) => {
         if (record?.type === 'LOGICAL_GROUP') {
-          return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+          return <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>—</Text>;
         }
         return (
-          <Tag color="geekblue" style={{ fontFamily: 'monospace', fontSize: 11 }}>
+          <Tag color="geekblue" style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xs)' }}>
             {branch || 'origin/main'}
           </Tag>
         );
@@ -252,7 +252,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
                 type="link"
                 icon={<PlusOutlined />}
                 onClick={() => onAddSubsystem(record.id)}
-                style={{ padding: 0, fontSize: 12 }}
+                style={{ padding: 0, fontSize: 'var(--font-size-small)' }}
               >
                 Thêm subsystem
               </Button>
@@ -295,8 +295,8 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       rowKey="id"
       defaultExpandAllRows
       style={{
-        background: 'var(--bg-island, #ffffff)',
-        borderRadius: 8,
+        background: 'var(--bg-island, var(--bg-island))',
+        borderRadius: 'var(--radius-control)',
       }}
       locale={{
         emptyText: (

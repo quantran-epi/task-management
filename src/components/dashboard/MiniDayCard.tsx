@@ -49,7 +49,7 @@ const LOAD_STATUS_CONFIG: Record<
     color: 'default',
     icon: <MinusCircleOutlined />,
     progressStatus: 'normal',
-    progressColor: '#8c8c8c',
+    progressColor: 'var(--fg-secondary)',
   },
 };
 
@@ -81,13 +81,13 @@ export const MiniDayCard: React.FC<MiniDayCardProps> = ({ day, onNavigateToDate 
         cursor: 'pointer',
         minWidth: 180,
         padding: '8px 10px',
-        borderRadius: 6,
+        borderRadius: 'var(--radius-control)',
         border: metrics.isOverloaded
           ? '1px solid #ff4d4f'
           : isToday
-          ? '1px solid #1677ff'
+          ? '1px solid var(--accent)'
           : '1px solid #f0f0f0',
-        backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : '#ffffff',
+        backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : 'var(--bg-island)',
         transition: 'all 0.2s ease',
         display: 'flex',
         flexDirection: 'column',
@@ -106,19 +106,19 @@ export const MiniDayCard: React.FC<MiniDayCardProps> = ({ day, onNavigateToDate 
           <Text strong style={{ fontSize: 13 }}>
             {formattedDate}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             ({dayName})
           </Text>
         </Space>
         {isToday && (
-          <Tag color="processing" style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 4px' }}>
+          <Tag color="processing" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '18px', padding: '0 4px' }}>
             Hôm nay
           </Tag>
         )}
       </div>
 
       {/* Capacity & allocated figures */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-small)' }}>
         <Text type="secondary">
           {formatMinutes(metrics.activeAllocatedMinutes)} / {formatMinutes(metrics.effectiveCapacityMinutes)}
         </Text>
@@ -148,7 +148,7 @@ export const MiniDayCard: React.FC<MiniDayCardProps> = ({ day, onNavigateToDate 
         <Tag
           color={statusCfg.color}
           icon={statusCfg.icon}
-          style={{ margin: 0, fontSize: 11, padding: '0 6px' }}
+          style={{ margin: 0, fontSize: 'var(--font-size-xs)', padding: '0 6px' }}
         >
           {statusCfg.label}
         </Tag>

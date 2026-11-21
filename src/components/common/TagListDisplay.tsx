@@ -48,7 +48,7 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
           role="note"
           aria-label={`${tag} (${tooltipTitle})`}
         >
-          <LinkOutlined style={{ fontSize: 12, color: token.colorTextTertiary }} />
+          <LinkOutlined style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary }} />
           <span>{tag}</span>
         </Tag>
       );
@@ -72,7 +72,7 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
 
   const popoverContent = (
     <div style={{ maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <Text strong style={{ fontSize: 12 }}>
+      <Text strong style={{ fontSize: 'var(--font-size-small)' }}>
         Tất cả:
       </Text>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>

@@ -59,7 +59,7 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
         <Button
           key="submit"
           type="primary"
-          style={{ backgroundColor: '#4f46e5' }}
+          style={{ backgroundColor: 'var(--accent)' }}
           onClick={handleSubmit}
           loading={submitting}
           disabled={!comment.trim()}
@@ -84,8 +84,8 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
                 backgroundColor: '#1e1e1e',
                 color: '#d4d4d4',
                 padding: '8px 12px',
-                borderRadius: 6,
-                fontSize: 12,
+                borderRadius: 'var(--radius-control)',
+                fontSize: 'var(--font-size-small)',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                 margin: '6px 0 0 0',
                 lineHeight: 1.4,

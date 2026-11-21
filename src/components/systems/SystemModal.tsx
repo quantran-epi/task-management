@@ -239,7 +239,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           <div
             style={{
               padding: 12,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               background: 'var(--bg-elev, #f7f8fa)',
               border: '1px solid var(--border, #e9eaee)',
               marginTop: 6,
@@ -252,7 +252,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                 alignItems: 'center',
                 gap: 6,
                 marginBottom: 10,
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 fontWeight: 600,
                 color: 'var(--fg-strong, #000000)',
               }}

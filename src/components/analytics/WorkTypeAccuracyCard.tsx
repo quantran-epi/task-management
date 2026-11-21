@@ -142,7 +142,7 @@ export const WorkTypeAccuracyCard: React.FC<WorkTypeAccuracyCardProps> = ({
       title={
         <Space vertical size={2}>
           <span>Độ chính xác ước tính theo Loại công việc</span>
-          <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', fontWeight: 'normal' }}>
             So sánh ước tính vs thực tế để nhận diện thói quen estimate non hay già cho từng mảng
           </Text>
         </Space>

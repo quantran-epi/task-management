@@ -25,7 +25,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         description={
           <div>
             <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 8 }}>{heading}</div>
-            <div style={{ color: '#8c8c8c' }}>{body}</div>
+            <div style={{ color: 'var(--fg-secondary)' }}>{body}</div>
           </div>
         }
       />

@@ -48,7 +48,7 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
         }}
       >
         {badge}
-        <Text data-testid="github-sync-status-label" style={{ fontSize: 12 }}>
+        <Text data-testid="github-sync-status-label" style={{ fontSize: 'var(--font-size-small)' }}>
           GitHub
         </Text>
       </span>

@@ -139,7 +139,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   style={{
                     cursor: isStopping ? 'not-allowed' : 'pointer',
                     opacity: isStopping ? 0.6 : 1,
-                    borderColor: isSelected ? '#4f46e5' : token.colorBorderSecondary,
+                    borderColor: isSelected ? 'var(--accent)' : token.colorBorderSecondary,
                     backgroundColor: isSelected ? token.colorFillAlter : token.colorBgContainer,
                     borderWidth: isSelected ? 2 : 1,
                     transition: 'all 0.2s ease',
@@ -172,7 +172,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   {/* Branch and Workers info */}
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       color: token.colorTextSecondary,
                       marginBottom: 8,
                       display: 'flex',
@@ -181,7 +181,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     }}
                   >
                     <BranchesOutlined />
-                    <Text code style={{ fontSize: 11 }}>
+                    <Text code style={{ fontSize: 'var(--font-size-xs)' }}>
                       {session.branchName}
                     </Text>
                   </div>
@@ -200,7 +200,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                   >
                     <Space direction="horizontal" size={6}>
                       <RobotOutlined style={{ color: '#722ed1', fontSize: 13 }} />
-                      <Text style={{ fontSize: 12 }}>Master</Text>
+                      <Text style={{ fontSize: 'var(--font-size-small)' }}>Master</Text>
                     </Space>
                     <Tag color="#722ed1" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
                       {session.masterModel || 'opus'}
@@ -227,16 +227,16 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            fontSize: 11,
+                            fontSize: 'var(--font-size-xs)',
                           }}
                         >
                           <Space direction="horizontal" size={4}>
-                            <ThunderboltOutlined style={{ color: '#1677ff', fontSize: 11 }} />
-                            <Text style={{ fontSize: 11 }} ellipsis>
+                            <ThunderboltOutlined style={{ color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }} />
+                            <Text style={{ fontSize: 'var(--font-size-xs)' }} ellipsis>
                               {worker.role || 'Worker'}
                             </Text>
                           </Space>
-                          <Tag color="#1677ff" style={{ margin: 0, fontSize: 9, lineHeight: '16px' }}>
+                          <Tag color="var(--accent)" style={{ margin: 0, fontSize: 9, lineHeight: '16px' }}>
                             {worker.model || 'haiku'}
                           </Tag>
                         </div>
@@ -340,7 +340,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     padding: '0 4px 4px 4px',
                   }}
                 >
-                  <Text type="secondary" style={{ fontSize: 12 }}>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                     {auditHistory.length} phiên đã lưu
                   </Text>
                   <Popconfirm
@@ -398,7 +398,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
 
                   <div
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       color: token.colorTextSecondary,
                       marginBottom: 6,
                       display: 'flex',
@@ -416,7 +416,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
 
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       color: token.colorTextSecondary,
                       marginBottom: 8,
                       display: 'flex',
@@ -425,7 +425,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     }}
                   >
                     <BranchesOutlined />
-                    <Text code style={{ fontSize: 11 }}>
+                    <Text code style={{ fontSize: 'var(--font-size-xs)' }}>
                       {record.branchName}
                     </Text>
                   </div>
@@ -442,7 +442,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                       <Tag color="#722ed1" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
                         {record.masterModel}
                       </Tag>
-                      <Tag color="#1677ff" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
+                      <Tag color="var(--accent)" style={{ margin: 0, fontSize: 10, lineHeight: '18px' }}>
                         {record.workerModel}
                       </Tag>
                     </Space>

@@ -1039,9 +1039,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           Segmented: {
             trackBg: '#09090b',
             itemSelectedBg: '#27272a',
-            itemSelectedColor: '#ffffff',
+            itemSelectedColor: 'var(--bg-island)',
             itemColor: '#cbd5e1',
-            itemHoverColor: '#ffffff',
+            itemHoverColor: 'var(--bg-island)',
           },
         },
       }}
@@ -1076,11 +1076,11 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             }}
           >
             <Space direction="horizontal" size={8}>
-              <RobotOutlined style={{ color: '#4f46e5' }} />
+              <RobotOutlined style={{ color: 'var(--accent)' }} />
               <Text style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>
                 {taskTitle ? `Terminal: ${taskTitle}` : 'Terminal Stream'}
               </Text>
-              <Text style={{ color: '#888', fontSize: 11 }}>({filteredLogs.length} dòng)</Text>
+              <Text style={{ color: '#888', fontSize: 'var(--font-size-xs)' }}>({filteredLogs.length} dòng)</Text>
 
               {/* Live Claude Code style metrics tag */}
               {isThinking ? (
@@ -1091,14 +1091,14 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 5,
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     fontWeight: 600,
                     margin: 0,
                     backgroundColor: '#1e1b4b',
                     color: '#93c5fd',
                   }}
                 >
-                  <LoadingOutlined spin style={{ fontSize: 11 }} />
+                  <LoadingOutlined spin style={{ fontSize: 'var(--font-size-xs)' }} />
                   <span>{formatDuration(displayElapsedSec)}</span>
                   <span>•</span>
                   <span>{formatTokenCount(sessionTokens)}</span>
@@ -1111,14 +1111,14 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 5,
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     fontWeight: 500,
                     margin: 0,
                     backgroundColor: '#18181b',
                     color: '#a1a1aa',
                   }}
                 >
-                  <CheckCircleOutlined style={{ fontSize: 11, color: '#10b981' }} />
+                  <CheckCircleOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#10b981' }} />
                   <span>{formatDuration(displayElapsedSec)}</span>
                   <span>•</span>
                   <span>{formatTokenCount(sessionTokens)}</span>
@@ -1172,7 +1172,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
                     }
                   }}
-                  style={{ color: '#4f46e5' }}
+                  style={{ color: 'var(--accent)' }}
                 >
                   Cuộn xuống
                 </Button>
@@ -1203,7 +1203,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               boxSizing: 'border-box',
             }}
           >
-            <Text style={{ color: '#d4d4d8', fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
+            <Text style={{ color: '#d4d4d8', fontSize: 'var(--font-size-xs)', fontWeight: 600, flexShrink: 0 }}>
               Tiến trình:
             </Text>
 
@@ -1262,10 +1262,10 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   height: 24,
                   padding: '0 8px',
                   borderRadius: 4,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontWeight: selectedAgent === 'all' ? 700 : 500,
                   backgroundColor: selectedAgent === 'all' ? '#27272a' : '#09090b',
-                  color: selectedAgent === 'all' ? '#ffffff' : '#cbd5e1',
+                  color: selectedAgent === 'all' ? 'var(--fg)' : '#cbd5e1',
                   border: selectedAgent === 'all' ? '1px solid #52525b' : '1px solid #27272a',
                   cursor: 'pointer',
                   userSelect: 'none',
@@ -1291,7 +1291,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   height: 24,
                   padding: '0 8px',
                   borderRadius: 4,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontWeight: 700,
                   backgroundColor: selectedAgent === 'master' ? '#27272a' : '#09090b',
                   color: selectedAgent === 'master' ? '#f3e8ff' : '#c084fc',
@@ -1338,7 +1338,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       height: 24,
                       padding: '0 6px 0 8px',
                       borderRadius: 4,
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       fontWeight: 700,
                       backgroundColor: isSelected ? '#1e293b' : '#09090b',
                       color: isSelected
@@ -1365,9 +1365,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   >
                     {isExited ? (
                       isError ? (
-                        <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 11, flexShrink: 0 }} />
+                        <CloseCircleOutlined style={{ color: '#ef4444', fontSize: 'var(--font-size-xs)', flexShrink: 0 }} />
                       ) : (
-                        <CheckCircleOutlined style={{ color: '#10b981', fontSize: 11, flexShrink: 0 }} />
+                        <CheckCircleOutlined style={{ color: '#10b981', fontSize: 'var(--font-size-xs)', flexShrink: 0 }} />
                       )
                     ) : (
                       <span style={{ fontSize: 10, flexShrink: 0 }}>⚡</span>
@@ -1481,7 +1481,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               viewMode === 'raw'
                 ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'
                 : 'inherit',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             lineHeight: viewMode === 'raw' ? '22px' : '1.5',
           }}
           tabIndex={0}
@@ -1550,7 +1550,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         backgroundColor: isSubagent ? '#0b1329' : '#1e1435',
                         borderColor: isSubagent ? '#2563eb' : '#7c3aed',
                         borderLeft: `4px solid ${isSubagent ? '#3b82f6' : '#a855f7'}`,
-                        borderRadius: 6,
+                        borderRadius: 'var(--radius-control)',
                         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.4)',
                       }}
                       styles={{ body: { padding: '8px 12px' } }}
@@ -1566,7 +1566,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         <Space size={6}>
                           {isSubagent ? (
                             <Tag
-                              color="#1677ff"
+                              color="var(--accent)"
                               style={{
                                 margin: 0,
                                 fontSize: 10,
@@ -1589,7 +1589,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                               Master
                             </Tag>
                           )}
-                          <Text strong style={{ color: '#ffffff', fontSize: 12 }}>
+                          <Text strong style={{ color: 'var(--fg)', fontSize: 'var(--font-size-small)' }}>
                             {item.title}
                           </Text>
                         </Space>
@@ -1621,14 +1621,14 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                               {
                                 key: 'thinking',
                                 label: (
-                                  <span style={{ color: '#a78bfa', fontSize: 11, fontStyle: 'italic' }}>
+                                  <span style={{ color: '#a78bfa', fontSize: 'var(--font-size-xs)', fontStyle: 'italic' }}>
                                     💭 Xem suy nghĩ nội bộ (Thinking)
                                   </span>
                                 ),
                                 children: (
                                   <div
                                     style={{
-                                      fontSize: 11,
+                                      fontSize: 'var(--font-size-xs)',
                                       color: '#a1a1aa',
                                       whiteSpace: 'pre-wrap',
                                       lineHeight: 1.5,
@@ -1672,7 +1672,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       >
                         <Space size={6}>
                           <BulbOutlined style={{ color: '#a78bfa' }} />
-                          <Text strong style={{ color: '#a78bfa', fontSize: 12 }}>
+                          <Text strong style={{ color: '#a78bfa', fontSize: 'var(--font-size-small)' }}>
                             {item.title}
                           </Text>
                           {isSubagent && (
@@ -1694,14 +1694,14 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                             {
                               key: 'thought_body',
                               label: (
-                                <span style={{ color: '#71717a', fontSize: 11, fontStyle: 'italic' }}>
+                                <span style={{ color: '#71717a', fontSize: 'var(--font-size-xs)', fontStyle: 'italic' }}>
                                   Xem chuỗi suy nghĩ ({item.body.length} ký tự)
                                 </span>
                               ),
                               children: (
                                 <div
                                   style={{
-                                    fontSize: 11,
+                                    fontSize: 'var(--font-size-xs)',
                                     color: '#cbd5e1',
                                     whiteSpace: 'pre-wrap',
                                     lineHeight: 1.5,
@@ -1744,7 +1744,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       >
                         <Space size={6}>
                           <ToolOutlined style={{ color: '#06b6d4' }} />
-                          <Text strong style={{ color: '#06b6d4', fontSize: 12 }}>
+                          <Text strong style={{ color: '#06b6d4', fontSize: 'var(--font-size-small)' }}>
                             {item.title}
                           </Text>
                           {isSubagent && (
@@ -1762,7 +1762,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         style={{
                           marginTop: 4,
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-xs)',
                           color: '#a1a1aa',
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-all',
@@ -1845,7 +1845,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                             strong
                             style={{
                               color: item.isError ? '#ef4444' : '#10b981',
-                              fontSize: 12,
+                              fontSize: 'var(--font-size-small)',
                             }}
                           >
                             {item.title}
@@ -1859,7 +1859,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                         style={{
                           margin: '4px 0 0 0',
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-xs)',
                           color: item.isError ? '#fca5a5' : '#86efac',
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-all',
@@ -1881,7 +1881,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       style={{
                         backgroundColor: '#1e1b4b',
                         borderColor: '#4338ca',
-                        borderRadius: 6,
+                        borderRadius: 'var(--radius-control)',
                       }}
                       styles={{ body: { padding: '8px 12px' } }}
                     >
@@ -1895,7 +1895,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       >
                         <Space size={6}>
                           <CommentOutlined style={{ color: '#818cf8' }} />
-                          <Text strong style={{ color: '#c7d2fe', fontSize: 12 }}>
+                          <Text strong style={{ color: '#c7d2fe', fontSize: 'var(--font-size-small)' }}>
                             Chỉ đạo người dùng
                           </Text>
                         </Space>
@@ -1924,7 +1924,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     >
                       <Space size={6}>
                         <SafetyCertificateOutlined style={{ color: '#f59e0b' }} />
-                        <Text style={{ color: '#fde68a', fontSize: 11 }}>{item.body}</Text>
+                        <Text style={{ color: '#fde68a', fontSize: 'var(--font-size-xs)' }}>{item.body}</Text>
                       </Space>
                     </div>
                   );
@@ -1944,7 +1944,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     >
                       <Space size={6}>
                         <RobotOutlined style={{ color: '#6366f1' }} />
-                        <Text style={{ color: '#c7d2fe', fontSize: 11 }}>{item.body}</Text>
+                        <Text style={{ color: '#c7d2fe', fontSize: 'var(--font-size-xs)' }}>{item.body}</Text>
                       </Space>
                     </div>
                   );
@@ -1955,7 +1955,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   <div
                     key={idx}
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       fontFamily: 'monospace',
                       color: item.isError ? '#f87171' : '#a1a1aa',
                       wordBreak: 'break-all',
@@ -1989,9 +1989,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 <Spin
                   indicator={<LoadingOutlined style={{ fontSize: 14, color: '#818cf8' }} spin />}
                 />
-                <span style={{ fontSize: 12 }}>Claude AI đang xử lý / suy nghĩ...</span>
+                <span style={{ fontSize: 'var(--font-size-small)' }}>Claude AI đang xử lý / suy nghĩ...</span>
               </Space>
-              <span style={{ fontSize: 11, color: '#93c5fd', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: '#93c5fd', fontFamily: 'monospace' }}>
                 {formatDuration(displayElapsedSec)} • {formatTokenCount(sessionTokens)}
               </span>
             </div>
@@ -2010,7 +2010,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               }}
             >
               <CheckCircleOutlined style={{ fontSize: 14, color: '#4ade80' }} />
-              <span style={{ fontSize: 12, fontWeight: 500 }}>
+              <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500 }}>
                 Đã hoàn thành {latestResultInfo.durationStr ? `trong ${latestResultInfo.durationStr}` : (displayElapsedSec ? `trong ${formatDuration(displayElapsedSec)}` : '')} ({formatTokenCount(sessionTokens)}) — Sẵn sàng nhận chỉ đạo mới.
               </span>
             </div>
@@ -2041,7 +2041,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 overflowY: 'auto',
                 backgroundColor: '#18181b',
                 border: '1px solid #3f3f46',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
                 zIndex: 1000,
                 padding: '4px 0',
@@ -2082,7 +2082,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       <span
                         style={{
                           fontWeight: 700,
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-small)',
                           color: isSelected ? '#a5b4fc' : '#818cf8',
                           fontFamily: 'monospace',
                         }}
@@ -2121,7 +2121,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     {skill.description && (
                       <div
                         style={{
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-xs)',
                           color: '#94a3b8',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',

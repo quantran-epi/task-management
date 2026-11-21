@@ -72,7 +72,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
       return <CalendarOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
     }
     if (item.entityType === 'cr') {
-      return <FolderOutlined style={{ color: '#1677ff', fontSize: 16 }} />;
+      return <FolderOutlined style={{ color: 'var(--accent)', fontSize: 16 }} />;
     }
     if (item.entityType === 'system') {
       return <FlagOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
@@ -121,7 +121,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
               e.stopPropagation();
               onDismiss(item);
             }}
-            style={{ padding: '0 4px', color: '#8c8c8c' }}
+            style={{ padding: '0 4px', color: 'var(--fg-secondary)' }}
           >
             Bỏ qua
           </Button>
@@ -168,7 +168,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
             >
               {item.title}
             </Text>
-            <Tag color={item.tagColor} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
+            <Tag color={item.tagColor} style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '18px' }}>
               {item.tagLabel}
             </Tag>
           </div>
@@ -176,7 +176,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
             <Text
               type="secondary"
               ellipsis
-              style={{ fontSize: 12, lineHeight: 1.3 }}
+              style={{ fontSize: 'var(--font-size-small)', lineHeight: 1.3 }}
             >
               {item.subtitle}
             </Text>

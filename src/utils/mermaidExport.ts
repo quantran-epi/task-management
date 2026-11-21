@@ -39,7 +39,7 @@ export function prepareSvgForExport(svgEl: SVGSVGElement, isDark = false): {
 
   clone.setAttribute('width', String(width));
   clone.setAttribute('height', String(height));
-  clone.style.backgroundColor = isDark ? '#141414' : '#ffffff';
+  clone.style.backgroundColor = isDark ? '#141414' : '#ffffff';  // ponytail: data/export value, not a UI style token
 
   const svgString = new XMLSerializer().serializeToString(clone);
   return { svgString, width, height };
@@ -111,7 +111,7 @@ export async function downloadMermaidPng(
       }
 
       ctx.scale(scale, scale);
-      ctx.fillStyle = isDark ? '#141414' : '#ffffff';
+      ctx.fillStyle = isDark ? '#141414' : '#ffffff';  // ponytail: data/export value, not a UI style token
       ctx.fillRect(0, 0, width, height);
 
       const base64Data = btoa(unescape(encodeURIComponent(svgString)));

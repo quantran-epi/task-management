@@ -204,7 +204,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                 </Popconfirm>,
               ]}
               style={{
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 border: '1px solid var(--border, #f0f0f0)',
                 marginBottom: 8,
                 padding: '8px 12px',
@@ -222,7 +222,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                   </a>
                 }
                 description={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#6b7280' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-xs)', color: '#6b7280' }}>
                     <Tag color="cyan" style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '16px' }}>
                       MERMAID
                     </Tag>

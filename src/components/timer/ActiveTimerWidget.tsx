@@ -147,7 +147,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
               type="secondary"
               data-testid="capsule-hierarchy-subtitle"
               style={{
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 lineHeight: 1.1,
               }}
             >
@@ -254,7 +254,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
                   ellipsis
                   type="secondary"
                   data-testid={`dropdown-hierarchy-subtitle-${timer.taskId}`}
-                  style={{ fontSize: 11, lineHeight: 1.1 }}
+                  style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.1 }}
                 >
                   {subtitle}
                 </Text>
@@ -333,14 +333,14 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             openTimerPopout();
           }}
         >
-          <Text strong style={{ fontSize: 12 }}>
+          <Text strong style={{ fontSize: 'var(--font-size-small)' }}>
             {activeTimers.length} bộ đếm đang chạy
           </Text>
           <Button
             type="link"
             size="small"
-            icon={<ExportOutlined style={{ fontSize: 12 }} />}
-            style={{ padding: 0, fontSize: 12 }}
+            icon={<ExportOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
+            style={{ padding: 0, fontSize: 'var(--font-size-small)' }}
             aria-label="Mở cửa sổ nổi"
           >
             Mở cửa sổ nổi

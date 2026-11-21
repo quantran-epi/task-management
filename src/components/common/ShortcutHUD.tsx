@@ -175,7 +175,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
                   </span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Text strong style={{ fontSize: 13.5 }}>
+                      <Text strong style={{ fontSize: 'var(--font-size-ui)' }}>
                         {item.title}
                       </Text>
                       <Tag
@@ -195,7 +195,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
                     {item.description && (
                       <div
                         style={{
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-small)',
                           color: token.colorTextSecondary,
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
@@ -220,7 +220,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
                         minWidth: 22,
                         height: 22,
                         padding: '0 6px',
-                        fontSize: 11.5,
+                        fontSize: 'var(--font-size-xs)',
                         fontWeight: 600,
                         fontFamily: 'monospace',
                         color: token.colorText,
@@ -248,7 +248,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
           padding: '8px 16px',
           borderTop: `1px solid ${token.colorBorderSecondary}`,
           backgroundColor: token.colorFillAlter,
-          fontSize: 11.5,
+          fontSize: 'var(--font-size-xs)',
           color: token.colorTextTertiary,
         }}
       >

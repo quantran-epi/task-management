@@ -525,7 +525,7 @@ export function DocumentSetForm({
                         key={al}
                         closable
                         onClose={() => handleRemoveAlias(al)}
-                        style={{ fontSize: 12 }}
+                        style={{ fontSize: 'var(--font-size-small)' }}
                       >
                         {al}
                       </Tag>
@@ -663,9 +663,9 @@ export function DocumentSetForm({
           onChange={(e) => setSearchDocQuery(e.target.value)}
           allowClear
         />
-        <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 6, padding: 8 }}>
+        <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 'var(--radius-control)', padding: 8 }}>
           {treeData.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#8c8c8c', padding: 24 }}>
+            <div style={{ textAlign: 'center', color: 'var(--fg-secondary)', padding: 24 }}>
               Không tìm thấy tài liệu phù hợp
             </div>
           ) : (
