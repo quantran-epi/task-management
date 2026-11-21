@@ -678,6 +678,473 @@ src/workbench/toolwindows/SystemsExplorer.tsx:3
 - `@ant-design/plots` xuất hiện ở 4 file analytics (ngoài phạm vi thay control nhưng phải ghi để grep `@ant-design` không hiểu nhầm): `src/components/analytics/EstimateVsActualChart.tsx`, `src/components/analytics/ProductivityHeatmapChart.tsx`, `src/components/analytics/WorkTypeAccuracyCard.tsx`, `src/components/analytics/WorkTypeBreakdownChart.tsx`.
 
 
+### 3.2 Tồn kho UI surface (INV-02 — 12 nhóm)
+
+Mỗi dòng dưới đây bắt đầu bằng marker `<!-- SURFACE: <group> -->` để kiểm tra bằng grep. Cột `file/route` là path tương đối hoặc route hash; cột `control tiêu thụ` là wrapper/control AntD cần thay hoặc behavior phải giữ; cột `ghi chú` là lý do nhóm này dễ sót. Mọi path cũng được thêm một dòng vào fixture `tests/fixtures/ant-design-surface-inventory.txt` (file thuộc nhiều nhóm chỉ một dòng fixture). Số đếm là lệnh chạy live; PATTERNS ghi 19 tool window / 20 view nhưng live là 18 / 22.
+
+**route/view** — lệnh: `sed -n "11,26p" src/hooks/useHashRoute.ts` (15 VALID_ROUTES), `sed -n "82,147p" src/AppIntelliJ.tsx` (5 branch render), grep case trong `src/workbench/EditorArea.tsx` (22 case).
+<!-- SURFACE: route --> | `#dashboard` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `dashboard` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#tasks` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `tasks` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#planner` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `planner` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#analytics` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `analytics` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#notes` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `notes` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#settings` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `settings` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#config-profiles` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `config-profiles` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#timer-popout` → `src/AppIntelliJ.tsx` branch riêng → `src/views/TimerPopoutView.tsx` | `AntdThemeAdapter` + `ThemeAppHolder` (không singleton), provider riêng từng popout | surface popout — dễ sót nếu chỉ quét `src/views/`
+<!-- SURFACE: route --> | `#notes-popout` → `src/AppIntelliJ.tsx` branch riêng → `src/views/NotesPopoutView.tsx` | `AntdThemeAdapter` + `ThemeAppHolder` (không singleton), provider riêng từng popout | surface popout — dễ sót nếu chỉ quét `src/views/`
+<!-- SURFACE: route --> | `#ai-popout` → `src/AppIntelliJ.tsx` branch riêng → `src/views/AIPopoutView.tsx` | `AntdThemeAdapter` + `ThemeAppHolder` (không singleton), provider riêng từng popout | surface popout — dễ sót nếu chỉ quét `src/views/`
+<!-- SURFACE: route --> | `#coding-zone-popout` → `src/AppIntelliJ.tsx` branch riêng → `src/views/CodingZonePopoutView.tsx` | `AntdThemeAdapter` + `ThemeAppHolder` (không singleton), provider riêng từng popout | surface popout — dễ sót nếu chỉ quét `src/views/`
+<!-- SURFACE: route --> | `#insight` → branch main → `src/views/ItemInsightView.tsx` (tab `insight`) | `AntdThemeAdapter` + `ThemeAppHolder` branch main | route hợp lệ nhưng render qua tab workbench
+<!-- SURFACE: route --> | `#team` → branch main `src/AppIntelliJ.tsx` → `src/views/TeamWorkspaceView.tsx` (tab `team_workspace`) | `AntdThemeAdapter` + `ThemeAppHolder` dùng chung branch main | route hợp lệ nhưng render qua tab workbench
+<!-- SURFACE: route --> | `#telegram` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `telegram` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `#mermaid` → branch main `src/AppIntelliJ.tsx` → `WorkbenchLayout` → `EditorArea.tsx` tab `mermaid` | `AntdThemeAdapter` + `ThemeAppHolder` bọc một lần cho branch main | 15 route hợp lệ, mọi branch tự bọc provider
+<!-- SURFACE: route --> | `viewType:"tasks"` → `<TasksView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/TasksView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"notes"` → `<NotesView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/NotesView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"doc_set"` → `<DocumentSetDetail />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/DocumentSetDetail.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"doc_set_library"` → `<DocSetLibrary />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/DocSetLibrary.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"planner"` → `<PlannerView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/PlannerView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"analytics"` → `<AnalyticsView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/AnalyticsView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"settings"` → `<SettingsView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/SettingsView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"config-profiles"` → `<ConfigProfilesView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/ConfigProfilesView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"cr_detail"` → `<ChangeRequestDetailView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/ChangeRequestDetailView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"dashboard"` → `<DashboardView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/DashboardView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"telegram"` → `<TelegramMonitorView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/TelegramMonitorView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"mermaid"` → `<MermaidAssistantView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/MermaidAssistantView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"systems"` → `<SystemCatalogView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/SystemCatalogView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"system_detail"` → `<SystemDetailView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/SystemDetailView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"remote_file"` → `<RemoteFileViewer />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/editor/RemoteFileViewer.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"insight"` → `<ItemInsightView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/ItemInsightView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"staff_detail"` → `<StaffDetailView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/StaffDetailView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"team_workspace"` → `<TeamWorkspaceView />` (`src/workbench/EditorArea.tsx:567-670`) → `src/views/TeamWorkspaceView.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"json_formatter"` → `<UtilityToolPanel />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/toolwindows/UtilityToolPanel.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"xml_formatter"` → `<UtilityToolPanel />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/toolwindows/UtilityToolPanel.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"text_compare"` → `<UtilityToolPanel />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/toolwindows/UtilityToolPanel.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | `viewType:"markdown_viewer"` → `<UtilityToolPanel />` (`src/workbench/EditorArea.tsx:567-670`) → `src/workbench/toolwindows/UtilityToolPanel.tsx` | wrapper AntD trong view | 22 case switch, liệt kê riêng không viết tắt
+<!-- SURFACE: route --> | popout `timer-popout` — `src/views/TimerPopoutView.tsx` tự bọc `AntdThemeAdapter` + `ThemeAppHolder` trong `src/AppIntelliJ.tsx` | provider context message/notification riêng | behavior phải giữ: không dùng singleton holder chung
+<!-- SURFACE: route --> | popout `notes-popout` — `src/views/NotesPopoutView.tsx` tự bọc `AntdThemeAdapter` + `ThemeAppHolder` trong `src/AppIntelliJ.tsx` | provider context message/notification riêng | behavior phải giữ: không dùng singleton holder chung
+<!-- SURFACE: route --> | popout `ai-popout` — `src/views/AIPopoutView.tsx` tự bọc `AntdThemeAdapter` + `ThemeAppHolder` trong `src/AppIntelliJ.tsx` | provider context message/notification riêng | behavior phải giữ: không dùng singleton holder chung
+<!-- SURFACE: route --> | popout `coding-zone-popout` — `src/views/CodingZonePopoutView.tsx` tự bọc `AntdThemeAdapter` + `ThemeAppHolder` trong `src/AppIntelliJ.tsx` | provider context message/notification riêng | behavior phải giữ: không dùng singleton holder chung
+<!-- SURFACE: route --> | `src/views/ChangeRequestsView.tsx` | wrapper AntD qua workbench | view tồn tại dù không phải case switch trực tiếp của EditorArea
+<!-- SURFACE: route --> | `src/views/AgentControlView.tsx` | wrapper AntD qua workbench | view tồn tại dù không phải case switch trực tiếp của EditorArea
+<!-- SURFACE: route --> | `src/views/AiOfficeView.tsx` | wrapper AntD qua workbench | view tồn tại dù không phải case switch trực tiếp của EditorArea
+
+**tool window + shell** — lệnh: `find src/workbench/toolwindows -maxdepth 1 -name "*.tsx" | sort` = **18 file** (PATTERNS ghi 19); `find src/workbench -maxdepth 2 -name "*.tsx" | grep -v __tests__` cho shell.
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/AiOfficeExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/AiStaffExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/BottomToolWindow.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/CRExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/DiagramExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/DocsExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/LeftToolWindow.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/LineNumberedPane.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/NotificationPanel.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/RemoteGitExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/RemoteTerminalPanel.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/RightToolWindow.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/Stripe.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/SystemsExplorer.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/ToolExplorerPanel.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/UtilityToolAIAssistant.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/UtilityToolPanel.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/toolwindows/utilityTools.tsx` | wrapper AntD (icon/menu/toolbar) | tool window workbench
+<!-- SURFACE: toolwindow --> | `src/workbench/WorkbenchLayout.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/TitleBar.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/StatusBar.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/EditorArea.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/search/SearchEverywhereModal.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/virtual/VirtualizedList.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/actions/actionRegistry.ts` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/AntdThemeAdapter.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/DocSetLibrary.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/DocumentSetDetail.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/WorkbenchResizeHandle.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+<!-- SURFACE: toolwindow --> | `src/workbench/editor/RemoteFileViewer.tsx` | shell/provider/command registry | không phải wrapper nhưng tiêu thụ control
+
+**settings** — lệnh: `find src/components/settings -maxdepth 1 -name "*.tsx" | sort` = **30 file**, mỗi file một dòng.
+<!-- SURFACE: settings --> | `src/components/settings/AiToolCatalogCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/BackupExportCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/BackupImportCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/BudgetWarnThresholdCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/ConfigProfileExportButton.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/ConfigProfileImportCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GhostDevConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GitHubConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GitHubConflictModal.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GitHubPassphraseModal.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GitHubSyncCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/GlobalConventionsCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/ImportPreviewModal.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/ImportProfilePreviewModal.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/JiraConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/KnowledgeServerConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/LocalSqlitePersistenceCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/McpConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/NineRouterConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/NotificationSettingsCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/OracleAiToolConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/OverridesTable.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/PostProfileImportChecklist.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/PostRestoreBanner.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/SnapshotRollbackCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/SshConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/SshFsAiToolConfigCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/StoragePersistenceCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/SystemTypeOptionsCard.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/components/settings/WeeklyCapacityForm.tsx` | form/table/modal/notification wrapper | settings surface
+<!-- SURFACE: settings --> | `src/views/SettingsView.tsx` | chứa các settings card | view tổng hợp
+<!-- SURFACE: settings --> | `src/views/ConfigProfilesView.tsx` | chứa các settings card | view tổng hợp
+
+**CR / notes** — lệnh: `find src/components/changeRequests -maxdepth 1 -name "*.tsx"` = 3 file; `find src/components/notes -maxdepth 1 -name "*.tsx"` = **16 file**.
+<!-- SURFACE: cr --> | `src/components/changeRequests/ChangeRequestModal.tsx` | modal/table/form wrapper | CR surface
+<!-- SURFACE: cr --> | `src/components/changeRequests/ChangeRequestTable.tsx` | modal/table/form wrapper | CR surface
+<!-- SURFACE: cr --> | `src/components/changeRequests/TargetSystemsSelector.tsx` | modal/table/form wrapper | CR surface
+<!-- SURFACE: cr --> | `src/views/ChangeRequestsView.tsx` | view CR | ánh xạ route/tab
+<!-- SURFACE: cr --> | `src/views/ChangeRequestDetailView.tsx` | view CR | ánh xạ route/tab
+<!-- SURFACE: notes --> | `src/components/notes/BacklinksSection.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocEditorPane.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocFolderContentsView.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocFolderTree.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocListPane.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocOutlineToC.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/DocsLibraryActions.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/EntityNotesSection.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/NormalizeDocModal.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/NoteAttachmentsPanel.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/NoteDetailModal.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/NoteEditor.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/QuickNoteEntry.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/QuickPreviewDrawer.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/SmartIngestionBanner.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/components/notes/ZipImportPreviewModal.tsx` | wrapper AntD (tree/editor/modal/banner) | notes surface
+<!-- SURFACE: notes --> | `src/views/NotesView.tsx` | view notes + popout | popout tự bọc holder
+<!-- SURFACE: notes --> | `src/views/NotesPopoutView.tsx` | view notes + popout | popout tự bọc holder
+
+**AI Office** — lệnh: `find src/components/ai -maxdepth 1 -name "*.tsx"` (21), `find src/components/ai/grounded -maxdepth 1 -type f` (16), `find src/components/agents -maxdepth 1 -name "*.tsx"` = **11 file**; cộng `AiOfficeExplorer`, team workspace.
+<!-- SURFACE: ai --> | `src/views/AiOfficeView.tsx` | wrapper AntD trong AI Office | view điều khiển
+<!-- SURFACE: ai --> | `src/views/AgentControlView.tsx` | wrapper AntD trong AI Office | view điều khiển
+<!-- SURFACE: ai --> | `src/views/StaffDetailView.tsx` | wrapper AntD trong AI Office | view điều khiển
+<!-- SURFACE: ai --> | `src/components/ai/AIChatDrawer.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/AIDebugModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/AITaskPlannerInstructionsModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ActiveAiTurnIndicator.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/AiChatWidget.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatHeader.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatInputBar.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatMessageBubble.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatMessageList.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatTabBar.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ChatTabToolbox.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/CitationChip.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/InlineAISelectionBar.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/InlineApiErrorCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/InterruptedBanner.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/McpSettingsModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/MermaidViewer.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/OracleSqlclSettingsModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/RemoteCitationChips.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/ScopePickerModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/SshFsSettingsModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/CandidateChipList.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/CitationGroup.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/ClaimBlock.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/DiagnosticsPanel.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/EvidenceOnlyCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/GraphPathCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/GroundedAnswerCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/GroundedBanner.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/IntentRoutingPrompt.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/PartialSeedNotice.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/ReasonCodeChip.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/ScopeChipsBar.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/ScopeVariationCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/SeedEntityCard.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/SourcesPanel.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/ai/grounded/StageDiagnosticsList.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/AgentDiffReviewer.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/AgentSessionList.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/AgentTerminalLog.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/CodingZoneChatStrip.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/CodingZoneDiffPanel.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/CodingZoneModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/CodingZoneTree.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/DiffHunkView.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/DiffInlineCommentModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/RunGhostDevModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/components/agents/ShellPermissionModal.tsx` | wrapper AntD (chat/citation/modal/diff) | AI Office surface
+<!-- SURFACE: ai --> | `src/workbench/toolwindows/AiOfficeExplorer.tsx` | explorer / team workspace | nhánh AI Office
+<!-- SURFACE: ai --> | `src/views/TeamWorkspaceView.tsx` | explorer / team workspace | nhánh AI Office
+
+**modal/drawer/popconfirm** — lệnh: `grep -rlnE "<(Modal|Drawer|Popover)" src --include="*.tsx" | grep -v __tests__ | wc -l` = **85 file**; `grep -rln "<Popconfirm" src --include="*.tsx" | grep -v __tests__ | wc -l` = **33 file** (PATTERNS ghi 85/33 — khớp). `<Popconfirm>` khác `Modal.confirm` đã xử lý ở §3.1(d).
+<!-- SURFACE: modal --> | `src/components/agents/AgentDiffReviewer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/agents/DiffInlineCommentModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/agents/RunGhostDevModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/agents/ShellPermissionModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/AIDebugModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/AITaskPlannerInstructionsModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/ChatInputBar.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/ChatMessageList.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/ChatTabToolbox.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/McpSettingsModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/MermaidViewer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/OracleSqlclSettingsModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/ScopePickerModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/SshFsSettingsModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/grounded/SourcesPanel.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/AiStaffImportModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/BudgetTopUpModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/EmployeeEditorDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/LinkedItemPicker.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/SkillEditorDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/TeamActivityIndicator.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/TeamEditorDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/ai/office/TeamSettingsDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/changeRequests/ChangeRequestModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/changeRequests/ChangeRequestTable.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/GlobalDiagramViewer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/QuickReminderModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/RemoteDirectoryBrowserModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/ResetDbModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/ShortcutHUD.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/common/TagListDisplay.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/dailyReview/DailyReviewModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/diagrams/EntityDiagramsSection.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/knowledge/DocumentSetDeleteDialog.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/knowledge/DocumentSetForm.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/knowledge/GraphEvidenceDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/knowledge/PublishPreviewModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/DocFolderTree.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/DocsLibraryActions.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/NormalizeDocModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/NoteDetailModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/NoteEditor.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/QuickPreviewDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notes/ZipImportPreviewModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/notifications/NotificationDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/palette/CommandPaletteModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/ActualWorklogPlanner.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/AllocationModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/CapacitySettingsModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/FeasibilityModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/TaskAllocationCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/planner/WorkSessionDetailModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/AiToolCatalogCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/GitHubConfigCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/GitHubConflictModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/GitHubPassphraseModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/GlobalConventionsCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/ImportPreviewModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/ImportProfilePreviewModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/JiraConfigCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/McpConfigCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/NineRouterConfigCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/OverridesTable.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/settings/SshConfigCard.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/shell/UpgradeModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/systems/SystemModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/BatchActionBar.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/CreateJiraIssueModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/InlineProgress.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/ManualWorkSessionModal.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/TaskDrawer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/TaskDrawerPlanning.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/tasks/TaskTable.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/AgentControlView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/MermaidAssistantView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/NotesView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/PlannerView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/TasksView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/views/TelegramMonitorView.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/DocumentSetDetail.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/TitleBar.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/search/find/FindInRemoteFiles.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/toolwindows/DiagramExplorer.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/toolwindows/UtilityToolAIAssistant.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/workbench/toolwindows/UtilityToolPanel.tsx` | `<Modal>`/`<Drawer>`/`<Popover>` wrapper | overlay surface
+<!-- SURFACE: modal --> | `src/components/agents/AgentDiffReviewer.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/agents/AgentSessionList.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/ActiveAiTurnIndicator.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/OracleSqlclSettingsModal.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/office/AgentActivityPanel.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/office/EmployeeCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/office/SkillCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/ai/office/TeamSettingsDrawer.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/diagrams/EntityDiagramsSection.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/notes/DocEditorPane.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/notes/EntityNotesSection.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/notes/NoteAttachmentsPanel.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/planner/TaskAllocationCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/planner/WorkSessionDetailModal.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/GitHubConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/GlobalConventionsCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/JiraConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/KnowledgeServerConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/McpConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/NineRouterConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/OverridesTable.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/SshConfigCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/settings/SystemTypeOptionsCard.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/systems/SystemTable.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/tasks/BatchActionBar.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/tasks/LinkedKnowledgeSection.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/tasks/TaskDrawerPlanning.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/tasks/TaskJiraSection.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/components/tasks/WorkSessionsTab.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/views/NotesPopoutView.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/views/TelegramMonitorView.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/workbench/toolwindows/AiOfficeExplorer.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+<!-- SURFACE: modal --> | `src/workbench/toolwindows/BottomToolWindow.tsx` | `<Popconfirm>` wrapper | confirm surface, khác static `Modal.confirm`
+
+**form/table** — lệnh: `grep -rlnE "<(Table|Form)([ >]|$)|<Form\." src --include="*.tsx" | grep -v __tests__ | wc -l` = **38 file**. `src/components/ui/form.tsx:35-39` mirror static subcomponent `FormItem`/`FormList`/`FormErrorList`/`useForm`/`useWatch` — phải thay cùng wrapper.
+<!-- SURFACE: form --> | `src/components/ui/form.tsx` | static subcomponent `FormItem`, `FormList`, `FormErrorList`, `useForm`, `useWatch` | mirror AntD form static
+<!-- SURFACE: form --> | `src/components/agents/RunGhostDevModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/ai/OracleSqlclSettingsModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/ai/SshFsSettingsModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/analytics/WorkTypeAccuracyCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/changeRequests/ChangeRequestModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/changeRequests/ChangeRequestTable.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/common/QuickReminderModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/knowledge/DlpWarningPanel.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/knowledge/DocumentSetForm.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/knowledge/GraphEvidenceDrawer.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/notes/NoteEditor.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/notes/ZipImportPreviewModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/planner/ActualWorklogPlanner.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/planner/AllocationModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/planner/CandidateAllocationsTable.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/planner/DateInspectionBreakdown.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/planner/WorkSessionDetailModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/GhostDevConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/GitHubConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/GitHubSyncCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/ImportPreviewModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/ImportProfilePreviewModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/JiraConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/KnowledgeServerConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/McpConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/NineRouterConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/OverridesTable.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/SshConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/settings/SshFsAiToolConfigCard.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/systems/SystemModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/tasks/CreateJiraIssueModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/tasks/ManualWorkSessionModal.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/tasks/TaskDrawer.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/tasks/TaskTable.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/components/tasks/WorkSessionsTab.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/views/ChangeRequestDetailView.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/views/SystemDetailView.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+<!-- SURFACE: form --> | `src/views/TelegramMonitorView.tsx` | `<Form>`/`<Table>` wrapper | caller form/table
+
+**menu/context menu** — lệnh: `grep -rln "onContextMenu" src --include="*.tsx" | grep -v __tests__` trả **đúng 1 file**: `src/components/tasks/TaskTable.tsx:1014`. Chỉ grep `<Menu` sẽ sót context menu này.
+<!-- SURFACE: menu --> | `src/components/ui/menu.tsx` | wrapper Menu + static item/submenu/group | menu/context menu surface
+<!-- SURFACE: menu --> | `src/components/ui/dropdown.tsx` | wrapper Dropdown/DropdownButton | menu/context menu surface
+<!-- SURFACE: menu --> | `src/workbench/actions/actionRegistry.ts` | command/menu registry | menu/context menu surface
+<!-- SURFACE: menu --> | `src/components/tasks/TaskTable.tsx` | `onContextMenu` duy nhất tại dòng 1014 — dễ sót | menu/context menu surface
+
+**tooltip/popover** — lệnh: `grep -rln "<Tooltip" src --include="*.tsx" | grep -v __tests__ | wc -l` = **76 file** (PATTERNS ghi 76 — khớp).
+<!-- SURFACE: tooltip --> | `src/components/ui/tooltip.tsx` | wrapper Tooltip/Popover | control gốc
+<!-- SURFACE: tooltip --> | `src/components/ui/popover.tsx` | wrapper Tooltip/Popover | control gốc
+<!-- SURFACE: tooltip --> | `src/components/agents/AgentDiffReviewer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/agents/AgentTerminalLog.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/agents/DiffHunkView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ActiveAiTurnIndicator.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatHeader.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatInputBar.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatMessageBubble.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatMessageList.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatTabBar.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/ChatTabToolbox.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/CitationChip.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/InlineAISelectionBar.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/MermaidViewer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/grounded/CandidateChipList.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/grounded/ClaimBlock.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/grounded/GroundedAnswerCard.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/grounded/ReasonCodeChip.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/grounded/SourcesPanel.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/office/AgentActivityPanel.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/office/TeamWorkspace.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/ai/widget/PatchDiffApprovalCard.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/changeRequests/ChangeRequestTable.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/common/TagListDisplay.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/diagrams/EntityDiagramsSection.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/knowledge/DocPublishBadge.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/knowledge/DocumentSetForm.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/knowledge/GraphEvidenceDrawer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/DocEditorPane.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/DocFolderTree.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/DocListPane.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/EntityNotesSection.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/NoteAttachmentsPanel.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/QuickNoteEntry.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notes/QuickPreviewDrawer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notifications/NotificationBell.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/notifications/NotificationItemRow.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/palette/CommandPaletteModal.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/planner/DayColumn.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/planner/DayColumnHeader.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/settings/SshConfigCard.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/settings/SystemTypeOptionsCard.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/shell/GitHubSyncStatusDot.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/shell/StatusBadge.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/systems/SystemTable.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/LinkedKnowledgeSection.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/TaskChecklistSection.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/TaskDrawer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/TaskDrawerPlanning.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/TaskTable.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/tasks/WorkSessionsTab.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/components/timer/ActiveTimerWidget.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/ChangeRequestDetailView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/ConfigProfilesView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/ItemInsightView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/MermaidAssistantView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/NotesPopoutView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/NotesView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/SystemDetailView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/TelegramMonitorView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/views/TimerPopoutView.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/DocumentSetDetail.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/EditorArea.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/StatusBar.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/TitleBar.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/editor/RemoteFileViewer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/search/find/FindInRemoteFiles.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/AiOfficeExplorer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/AiStaffExplorer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/BottomToolWindow.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/DiagramExplorer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/LeftToolWindow.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/RemoteGitExplorer.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/RemoteTerminalPanel.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/RightToolWindow.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/Stripe.tsx` | `<Tooltip>` wrapper | caller tooltip
+<!-- SURFACE: tooltip --> | `src/workbench/toolwindows/ToolExplorerPanel.tsx` | `<Tooltip>` wrapper | caller tooltip
+
+**notification** — lệnh: `find src/components/notifications -type f` + `ls src/hooks/use{Notifications,DesktopNotification,TimerAlertMonitor}.ts`. Notification phải **realtime, không reload** (memory rule).
+<!-- SURFACE: notification --> | `src/components/notifications/NotificationBell.tsx` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/components/notifications/NotificationDrawer.tsx` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/components/notifications/NotificationItemRow.tsx` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/components/ui/notification.tsx` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/workbench/toolwindows/NotificationPanel.tsx` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/hooks/useNotifications.ts` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/hooks/useDesktopNotification.ts` | notification wrapper/hook | giữ realtime, không reload
+<!-- SURFACE: notification --> | `src/hooks/useTimerAlertMonitor.ts` | notification wrapper/hook | giữ realtime, không reload
+
+**empty/error/loading** — lệnh: `find src -type f \( -iname "*empty*" -o -iname "*loading*" -o -iname "*error*" -o -iname "*skeleton*" -o -iname "*banner*" \)` — nhóm phân tán, PATTERNS không có cluster riêng.
+<!-- SURFACE: state --> | `src/components/common/EmptyState.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ui/empty.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ui/skeleton.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ui/result.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ui/alert.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ui/spin.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ai/InlineApiErrorCard.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ai/InterruptedBanner.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ai/widget/StagedLoadingIndicator.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/ai/grounded/GroundedBanner.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/notes/SmartIngestionBanner.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+<!-- SURFACE: state --> | `src/components/settings/PostRestoreBanner.tsx` | empty/error/loading wrapper hoặc banner | trạng thái phân tán, dễ sót
+
 ## 4. Phân loại implementation
 
 *(Do 51-03 viết tiếp.)*
