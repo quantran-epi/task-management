@@ -325,6 +325,12 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {error && <Alert type="warning" showIcon message="AI không thể hoàn tất" description={error} />}
 
+        {contextContent && (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Ngữ cảnh: {contextLabel || 'tham khảo'} — chỉ đọc, không bị sửa.
+          </Text>
+        )}
+
         <Space.Compact style={{ width: '100%' }}>
           <TextArea
             value={prompt}

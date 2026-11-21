@@ -9,9 +9,12 @@ import {
   FormatPainterOutlined,
   MinusOutlined,
   SwapOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import type { EditorViewType } from '../store/layoutStore';
 import { renderSafeMarkdown } from '../../utils/markdown';
+import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
 
 type Indent = '2' | '4' | 'tab';
 
@@ -301,12 +304,13 @@ function escapeHtml(s: string) {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]!));
 }
 
-function JsonFormatter() {
+function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [formatted, setFormatted] = useState(false);
   const [indent, setIndent] = useState<Indent>('2');
+  const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
@@ -356,6 +360,9 @@ function JsonFormatter() {
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
+        <Tooltip title="AI · JSON Formatter">
+          <Button aria-label="AI · JSON Formatter" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
+        </Tooltip>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)' }}>
           {error ? `❌ ${error}` : formatted ? '✓ JSON hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
@@ -372,16 +379,25 @@ function JsonFormatter() {
         </div>
       </div>
       <div style={footerStyle}><span>JSON · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <UtilityToolAIAssistant
+        open={aiOpen}
+        toolId="json_formatter"
+        content={input}
+        onApply={(v) => { setInput(v); setOutput(''); setError(null); setFormatted(false); }}
+        onClose={() => setAiOpen(false)}
+        db={db}
+      />
     </div>
   );
 }
 
-function XmlFormatter() {
+function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [formatted, setFormatted] = useState(false);
   const [indent, setIndent] = useState<Indent>('2');
+  const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
@@ -430,6 +446,9 @@ function XmlFormatter() {
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
+        <Tooltip title="AI · XML Formatter">
+          <Button aria-label="AI · XML Formatter" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
+        </Tooltip>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)' }}>
           {error ? `❌ ${error}` : formatted ? '✓ XML hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
@@ -446,16 +465,25 @@ function XmlFormatter() {
         </div>
       </div>
       <div style={footerStyle}><span>XML · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <UtilityToolAIAssistant
+        open={aiOpen}
+        toolId="xml_formatter"
+        content={input}
+        onApply={(v) => { setInput(v); setOutput(''); setError(null); setFormatted(false); }}
+        onClose={() => setAiOpen(false)}
+        db={db}
+      />
     </div>
   );
 }
 
-function TextCompare() {
+function TextCompare({ db }: { db: TaskPlannerDatabase }) {
   const [a, setA] = useState('');
   const [b, setB] = useState('');
   const [mode, setMode] = useState<'lines' | 'words'>('lines');
   const [ignoreCase, setIgnoreCase] = useState(false);
   const [ignoreSpace, setIgnoreSpace] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLTextAreaElement>();
 
   const result = useMemo<DiffResult>(() => {
@@ -498,6 +526,9 @@ function TextCompare() {
         <Tooltip title="Xóa cả hai">
           <Button icon={<DeleteOutlined />} onClick={() => { setA(''); setB(''); }} />
         </Tooltip>
+        <Tooltip title="AI · Text Compare">
+          <Button aria-label="AI · Text Compare" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
+        </Tooltip>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: result.changes ? 'var(--warning, #a56906)' : 'var(--success, #338555)' }}>
           {!a.trim() && !b.trim()
             ? 'Dán 2 đoạn text để so sánh'
@@ -535,12 +566,23 @@ function TextCompare() {
           )}
         </div>
       </div>
+      <UtilityToolAIAssistant
+        open={aiOpen}
+        toolId="text_compare"
+        content={b}
+        contextContent={a}
+        contextLabel="A — GỐC (tham khảo)"
+        onApply={setB}
+        onClose={() => setAiOpen(false)}
+        db={db}
+      />
     </div>
   );
 }
 
-function MarkdownViewer() {
+function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
   const [source, setSource] = useState('');
+  const [aiOpen, setAiOpen] = useState(false);
   const rendered = useMemo(() => renderSafeMarkdown(source), [source]);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLDivElement>();
 
@@ -552,6 +594,9 @@ function MarkdownViewer() {
         </Tooltip>
         <Tooltip title="Clear">
           <Button icon={<DeleteOutlined />} onClick={() => setSource('')}>Clear</Button>
+        </Tooltip>
+        <Tooltip title="AI · Markdown Viewer">
+          <Button aria-label="AI · Markdown Viewer" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
         </Tooltip>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: 'var(--fg-muted, #6c707e)' }}>
           {source.length} ký tự · {source.trim() ? 'Đã cập nhật' : 'Sẵn sàng'}
@@ -569,20 +614,34 @@ function MarkdownViewer() {
         </div>
       </div>
       <div style={footerStyle}><span>Markdown · UTF-8</span><span>{rendered ? 'Đã render' : 'Chưa có nội dung'}</span></div>
+      <UtilityToolAIAssistant
+        open={aiOpen}
+        toolId="markdown_viewer"
+        content={source}
+        onApply={setSource}
+        onClose={() => setAiOpen(false)}
+        db={db}
+      />
     </div>
   );
 }
 
-export function UtilityToolPanel({ viewType }: { viewType: EditorViewType }) {
+export function UtilityToolPanel({
+  viewType,
+  db = defaultDb,
+}: {
+  viewType: EditorViewType;
+  db?: TaskPlannerDatabase;
+}) {
   switch (viewType) {
     case 'json_formatter':
-      return <JsonFormatter />;
+      return <JsonFormatter db={db} />;
     case 'xml_formatter':
-      return <XmlFormatter />;
+      return <XmlFormatter db={db} />;
     case 'text_compare':
-      return <TextCompare />;
+      return <TextCompare db={db} />;
     case 'markdown_viewer':
-      return <MarkdownViewer />;
+      return <MarkdownViewer db={db} />;
     default:
       return null;
   }
