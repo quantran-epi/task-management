@@ -390,7 +390,293 @@ Kết quả live: `[]`.
 
 ## 3. Import tồn dư và UI surface
 
-*(Do 51-02 viết tiếp.)*
+Phần này viết tiếp §2 của 51-01. Mọi số liệu là kết quả lệnh chạy live tại repo root ngày 2026-11-21; PATTERNS chỉ là lịch sử khi lệch source. Không có dòng source nào dưới `src/` đổi trong Phase 51.
+
+### 3.1 Tồn kho import tồn dư
+
+Lệnh gốc cho cả năm nhóm (a)-(e), chạy từ `/Users/tranducquan/Working/Personal/task-management`:
+
+```bash
+grep -rnE "from ['\"](antd|@ant-design/icons)" src --include='*.ts' --include='*.tsx'
+grep -rnE "^import (type )?\{" src --include='*.ts' --include='*.tsx' \
+  | grep -E "(antd|@ant-design/icons)" | grep -vE "^[^:]+:[0-9]+:import type \{" | grep -vE "from ['\"]antd/es/"
+grep -rn "import type .* from 'antd'" src --include='*.ts' --include='*.tsx'
+grep -rnE "export type .* from ['\"]antd" --include='*.ts' --include='*.tsx' src
+grep -rnE "(import|export) type .* from ['\"]antd/es/" --include='*.ts' --include='*.tsx' src
+grep -rnE "\b(Modal)\.confirm\(|\b(message|notification)\.(success|error|warning|warn|info|loading|open|destroy)\(" src --include='*.ts' --include='*.tsx' | grep -v '/ui/'
+grep -rn "@ant-design/icons/" src --include='*.tsx'
+grep -rln "@ant-design/plots" src --include='*.tsx'
+```
+
+**(a) Tổng hợp import `antd` / `@ant-design/icons` (runtime + type-only gộp)**
+
+- Lệnh: `grep -rnE "from ['\"](antd|@ant-design/icons)" src --include='*.ts' --include='*.tsx'`
+- **139 dòng / 97 file** tại HEAD (PATTERNS ghi "97 file" — khớp; artifact ghi thêm số dòng 139 để không nhầm file với dòng).
+- Mọi phát hiện `path:line` được chép nguyên vào `tests/fixtures/ant-design-surface-inventory.txt` (139 dòng, `LC_ALL=C sort`, duy nhất), mỗi dòng `grep -Fq` khớp trong artifact này (xem bảng chi tiết một dòng một mục từ (b) đến (e) ở dưới).
+- Phân bổ: 56 wrapper `src/components/ui/*.tsx` + 4 file hạ tầng (`antdTheme.ts`, `index.ts`, test fixtures) + 10 file `__tests__` + các view/tool window/settings/component tiêu thụ type.
+
+Danh sách 139 `path:line` (copy nguyên từ lệnh ở trên, `LC_ALL=C sort`; đây là nội dung fixture `tests/fixtures/ant-design-surface-inventory.txt` trước khi thêm path surface ở §3.2):
+
+```text
+src/components/agents/AgentDiffReviewer.tsx:3
+src/components/agents/AgentDiffReviewer.tsx:4
+src/components/ai/ActiveAiTurnIndicator.tsx:3
+src/components/ai/ChatHeader.tsx:3
+src/components/ai/ChatInputBar.tsx:3
+src/components/ai/ChatMessageBubble.tsx:4
+src/components/ai/ChatTabToolbox.tsx:3
+src/components/ai/grounded/SourcesPanel.tsx:4
+src/components/ai/office/AiStaffImportModal.tsx:4
+src/components/analytics/WorkTypeAccuracyCard.tsx:3
+src/components/changeRequests/ChangeRequestTable.tsx:3
+src/components/knowledge/DocumentSetForm.tsx:3
+src/components/knowledge/GraphEvidenceDrawer.tsx:3
+src/components/notes/DocEditorPane.tsx:3
+src/components/notes/DocFolderTree.tsx:3
+src/components/notes/DocListPane.tsx:3
+src/components/notes/NoteAttachmentsPanel.tsx:4
+src/components/settings/BackupImportCard.tsx:4
+src/components/settings/ConfigProfileImportCard.tsx:4
+src/components/settings/SystemTypeOptionsCard.tsx:5
+src/components/systems/SystemTable.tsx:4
+src/components/tasks/BatchActionBar.tsx:3
+src/components/tasks/InlineStatusTag.tsx:3
+src/components/tasks/QuickAddBar.tsx:3
+src/components/tasks/TaskFilterBar.tsx:3
+src/components/tasks/TaskTable.tsx:3
+src/components/tasks/WorkSessionsTab.tsx:3
+src/components/timer/ActiveTimerWidget.tsx:3
+src/components/ui/__tests__/antdInventory.test.ts:34
+src/components/ui/__tests__/antdInventory.test.ts:38
+src/components/ui/__tests__/antdInventory.test.ts:48
+src/components/ui/__tests__/antdInventory.test.ts:49
+src/components/ui/__tests__/antdInventory.test.ts:50
+src/components/ui/__tests__/antdInventory.test.ts:75
+src/components/ui/__tests__/antdInventory.test.ts:76
+src/components/ui/__tests__/antdInventory.test.ts:81
+src/components/ui/__tests__/antdInventory.test.ts:92
+src/components/ui/__tests__/button.test.tsx:3
+src/components/ui/__tests__/controls.test.tsx:5
+src/components/ui/__tests__/wave02Wrappers.test.tsx:4
+src/components/ui/__tests__/wave02Wrappers.test.tsx:5
+src/components/ui/alert.tsx:1
+src/components/ui/antdTheme.ts:5
+src/components/ui/app.tsx:1
+src/components/ui/auto-complete.tsx:4
+src/components/ui/avatar.tsx:1
+src/components/ui/badge.tsx:1
+src/components/ui/breadcrumb.tsx:1
+src/components/ui/button.tsx:1
+src/components/ui/card.tsx:1
+src/components/ui/checkbox.tsx:1
+src/components/ui/checkbox.tsx:2
+src/components/ui/collapse.tsx:1
+src/components/ui/config-provider.tsx:1
+src/components/ui/config-provider.tsx:2
+src/components/ui/date-picker.tsx:1
+src/components/ui/date-picker.tsx:2
+src/components/ui/date-picker.tsx:7
+src/components/ui/descriptions.tsx:4
+src/components/ui/divider.tsx:1
+src/components/ui/drawer.tsx:1
+src/components/ui/dropdown.tsx:1
+src/components/ui/empty.tsx:1
+src/components/ui/form.tsx:1
+src/components/ui/grid.tsx:7
+src/components/ui/icon.tsx:144
+src/components/ui/image.tsx:1
+src/components/ui/index.ts:358
+src/components/ui/input-number.tsx:1
+src/components/ui/input-number.tsx:2
+src/components/ui/input.tsx:1
+src/components/ui/layout.tsx:1
+src/components/ui/list.tsx:1
+src/components/ui/mentions.tsx:1
+src/components/ui/mentions.tsx:6
+src/components/ui/mentions.tsx:7
+src/components/ui/menu.tsx:1
+src/components/ui/menu.tsx:5
+src/components/ui/message.tsx:1
+src/components/ui/modal.tsx:1
+src/components/ui/notification.tsx:1
+src/components/ui/pagination.tsx:1
+src/components/ui/popconfirm.tsx:1
+src/components/ui/popover.tsx:1
+src/components/ui/popover.tsx:5
+src/components/ui/progress.tsx:1
+src/components/ui/radio.tsx:1
+src/components/ui/radio.tsx:2
+src/components/ui/result.tsx:1
+src/components/ui/segmented.tsx:4
+src/components/ui/select.tsx:1
+src/components/ui/select.tsx:2
+src/components/ui/skeleton.tsx:1
+src/components/ui/slider.tsx:5
+src/components/ui/space.tsx:1
+src/components/ui/spin.tsx:1
+src/components/ui/splitter.tsx:1
+src/components/ui/splitter.tsx:5
+src/components/ui/statistic.tsx:1
+src/components/ui/switch.tsx:1
+src/components/ui/table.tsx:1
+src/components/ui/tabs.tsx:1
+src/components/ui/tag.tsx:1
+src/components/ui/tag.tsx:2
+src/components/ui/textarea.tsx:1
+src/components/ui/textarea.tsx:2
+src/components/ui/textarea.tsx:3
+src/components/ui/time-picker.tsx:5
+src/components/ui/time-picker.tsx:9
+src/components/ui/tooltip.tsx:1
+src/components/ui/tooltip.tsx:5
+src/components/ui/tooltip.tsx:6
+src/components/ui/tree-select.tsx:1
+src/components/ui/tree-select.tsx:5
+src/components/ui/tree-select.tsx:6
+src/components/ui/tree.tsx:1
+src/components/ui/tree.tsx:5
+src/components/ui/typography.tsx:1
+src/components/ui/upload.tsx:1
+src/components/ui/upload.tsx:5
+src/utils/documentLinks.tsx:2
+src/views/SystemDetailView.tsx:3
+src/views/TasksView.tsx:3
+src/workbench/EditorArea.tsx:4
+src/workbench/toolwindows/AiStaffExplorer.tsx:3
+src/workbench/toolwindows/CRExplorer.tsx:15
+src/workbench/toolwindows/CRExplorer.tsx:3
+src/workbench/toolwindows/DiagramExplorer.tsx:3
+src/workbench/toolwindows/RemoteGitExplorer.tsx:10
+src/workbench/toolwindows/RemoteGitExplorer.tsx:11
+src/workbench/toolwindows/RemoteGitExplorer.tsx:3
+src/workbench/toolwindows/RemoteGitExplorer.tsx:4
+src/workbench/toolwindows/RemoteGitExplorer.tsx:5
+src/workbench/toolwindows/RemoteGitExplorer.tsx:6
+src/workbench/toolwindows/RemoteGitExplorer.tsx:7
+src/workbench/toolwindows/RemoteGitExplorer.tsx:8
+src/workbench/toolwindows/RemoteGitExplorer.tsx:9
+src/workbench/toolwindows/SystemsExplorer.tsx:24
+src/workbench/toolwindows/SystemsExplorer.tsx:3
+```
+
+**(b) Runtime import (value import, không phải `import type`)**
+
+- Lệnh: `grep -rnE "^import (type )?\{" src --include='*.ts' --include='*.tsx' | grep -E "(antd|@ant-design/icons)" | grep -vE "^[^:]+:[0-9]+:import type \{" | grep -vE "from ['\"]antd/es/"`
+- **76 dòng / 61 file** (bao gồm 5 dòng deep-import icon value ở (e)); trong đó **65 dòng từ `antd`** (58 file) và **5 dòng từ `@ant-design/icons` barrel** (`icon.tsx:144`, `button.test.tsx:3`, và 3 dòng trong fixture test `antdInventory.test.ts`); phần còn lại là value import từ file nội bộ khớp cụm từ "antd" nhưng **không** phải dependency AntD (`src/styles/tokens.ts:1`, `src/components/ui/antdTheme.ts:6`) — phải lọc tay khi đọc output.
+- Đây là nhóm `scanConsumedAntd()` thấy được: 52 components / 141 icons / 3 utilities (xem §1). Hệ quả: thay runtime khi chuyển wrapper sang control tự build (Phase 53/54), adduction caller Phase 55.
+
+**(c) Type-only import từ `antd` barrel**
+
+- Lệnh: `grep -rn "import type .* from 'antd'" src --include='*.ts' --include='*.tsx'`
+- **31 dòng / 31 file** (PATTERNS ghi 28 file — lệch; lệnh live là truth). `src/components/ui/config-provider.tsx:2` nằm trong 31 dòng này.
+- Tên type phổ biến: `MenuProps` (17), `InputRef` (4), `UploadProps` (3), `TableColumnsType` (3), kèm `ModalFuncProps`, `DescriptionsProps`, `TabsProps`, `MentionsRef`, `UploadFile`, `TreeDataNode`, `ThemeConfig`. Ngoài ra các type import deep `antd/es/*` ở (c2) gồm `DataNode`, `ColumnsType`, `TextAreaRef`.
+- Hệ quả: **không thay runtime Phase 53/54, bắt buộc thay khi gỡ dependency Phase 56**. `extractNamedImportsForTest()` bỏ entry có tiền tố `type` (`tests/helpers/antdInventory.ts:34`) nên `scanConsumedAntd()` không đếm nhóm này.
+
+**SURFACE-DETAIL — 31 dòng `import type ... from 'antd'` (đầy đủ, mỗi dòng một file):**
+
+| path:line | type | hệ quả |
+|---|---|---|
+| src/utils/documentLinks.tsx:2 | `ModalFuncProps` | chỉ thay Phase 56 |
+| src/components/changeRequests/ChangeRequestTable.tsx:3 | `TableColumnsType`, `MenuProps` | chỉ thay Phase 56 |
+| src/components/ui/config-provider.tsx:2 | `ThemeConfig` | chỉ thay Phase 56 |
+| src/components/ui/__tests__/wave02Wrappers.test.tsx:4 | `InputRef` | bằng chứng, thay cùng test Phase 56 |
+| src/components/tasks/InlineStatusTag.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/timer/ActiveTimerWidget.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/settings/ConfigProfileImportCard.tsx:4 | `UploadProps` | chỉ thay Phase 56 |
+| src/components/tasks/WorkSessionsTab.tsx:3 | `TableColumnsType` | chỉ thay Phase 56 |
+| src/components/tasks/BatchActionBar.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/tasks/TaskFilterBar.tsx:3 | `InputRef` | chỉ thay Phase 56 |
+| src/components/notes/DocListPane.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/notes/NoteAttachmentsPanel.tsx:4 | `UploadFile` | chỉ thay Phase 56 |
+| src/components/settings/BackupImportCard.tsx:4 | `UploadProps` | chỉ thay Phase 56 |
+| src/components/ai/ActiveAiTurnIndicator.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/tasks/QuickAddBar.tsx:3 | `InputRef` | chỉ thay Phase 56 |
+| src/components/ai/ChatTabToolbox.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/ai/ChatMessageBubble.tsx:4 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/tasks/TaskTable.tsx:3 | `TableColumnsType`, `MenuProps` | chỉ thay Phase 56 |
+| src/components/agents/AgentDiffReviewer.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/notes/DocFolderTree.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/knowledge/DocumentSetForm.tsx:3 | `TreeDataNode` | chỉ thay Phase 56 |
+| src/components/ai/ChatHeader.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/components/ai/ChatInputBar.tsx:3 | `MentionsRef` | chỉ thay Phase 56 |
+| src/components/ai/office/AiStaffImportModal.tsx:4 | `UploadProps` | chỉ thay Phase 56 |
+| src/workbench/toolwindows/AiStaffExplorer.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/workbench/toolwindows/CRExplorer.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/workbench/toolwindows/DiagramExplorer.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/workbench/EditorArea.tsx:4 | `MenuProps` | chỉ thay Phase 56 |
+| src/workbench/toolwindows/SystemsExplorer.tsx:3 | `MenuProps` | chỉ thay Phase 56 |
+| src/views/TasksView.tsx:3 | `InputRef` | chỉ thay Phase 56 |
+| src/views/SystemDetailView.tsx:3 | `DescriptionsProps`, `TabsProps` | chỉ thay Phase 56 |
+
+**(c2) Type re-export + deep type import (tách riêng, không gộp vào 31 dòng (c))**
+
+- (i) `grep -rnE "export type .* from ['\"]antd" --include='*.ts' --include='*.tsx' src | wc -l` = **13 dòng**: 10 dòng `from 'antd'` + 3 dòng `from 'antd/es/*'`. PATTERNS không liệt kê riêng nhóm này.
+- (ii) `grep -rnE "(import|export) type .* from ['\"]antd/es/" --include='*.ts' --include='*.tsx' src | wc -l` = **22 dòng** (19 `import type` + 3 `export type`). PATTERNS ghi "10 icon deep-import ở `RemoteGitExplorer.tsx`" — **đó là import value ở (e)**, không phải type; không được cộng vào 22.
+- Hệ quả: **đổi khi gỡ dependency Phase 56**, cùng hệ quả với (c) nhưng giữ hàng riêng để Phase 56 quét đủ ba dạng `import type`, `export type`, deep path.
+
+**SURFACE-DETAIL — 13 dòng `export type ... from 'antd...'`:**
+
+| path:line | nội dung | hệ quả |
+|---|---|---|
+| src/components/ui/date-picker.tsx:7 | `DatePickerProps` from `'antd'` | đổi Phase 56 |
+| src/components/ui/mentions.tsx:6 | `MentionsProps`, `MentionsRef` from `'antd'` | đổi Phase 56 |
+| src/components/ui/mentions.tsx:7 | `MentionsOptionProps` from `'antd/es/mentions'` | đổi Phase 56 |
+| src/components/ui/menu.tsx:5 | `MenuProps`, `MenuItemProps`, `MenuRef`, `MenuTheme` from `'antd'` | đổi Phase 56 |
+| src/components/ui/popover.tsx:5 | `PopoverProps` from `'antd'` | đổi Phase 56 |
+| src/components/ui/splitter.tsx:5 | `SplitterProps` from `'antd'` | đổi Phase 56 |
+| src/components/ui/time-picker.tsx:9 | `TimePickerProps`, `TimeRangePickerProps` from `'antd'` | đổi Phase 56 |
+| src/components/ui/tooltip.tsx:5 | `TooltipProps` from `'antd'` | đổi Phase 56 |
+| src/components/ui/tooltip.tsx:6 | `TooltipPlacement` from `'antd/es/tooltip'` | đổi Phase 56 |
+| src/components/ui/tree-select.tsx:5 | `TreeSelectProps`, `TreeDataNode` from `'antd'` | đổi Phase 56 |
+| src/components/ui/tree-select.tsx:6 | `SelectValue` from `'antd/es/tree-select'` | đổi Phase 56 |
+| src/components/ui/tree.tsx:5 | `TreeProps`, `TreeDataNode` from `'antd'` | đổi Phase 56 |
+| src/components/ui/upload.tsx:5 | `UploadProps`, `UploadFile` from `'antd'` | đổi Phase 56 |
+
+**SURFACE-DETAIL — 19 dòng `import type ... from 'antd/es/*'` (cộng 3 export ở trên thành 22):**
+
+| path:line | type | hệ quả |
+|---|---|---|
+| src/components/agents/AgentDiffReviewer.tsx:4 | `DataNode` | đổi Phase 56 |
+| src/components/ai/grounded/SourcesPanel.tsx:4 | `ColumnsType` | đổi Phase 56 |
+| src/components/analytics/WorkTypeAccuracyCard.tsx:3 | `ColumnsType` | đổi Phase 56 |
+| src/components/knowledge/GraphEvidenceDrawer.tsx:3 | `ColumnsType` | đổi Phase 56 |
+| src/components/notes/DocEditorPane.tsx:3 | `TextAreaRef` | đổi Phase 56 |
+| src/components/settings/SystemTypeOptionsCard.tsx:5 | `ColumnsType` | đổi Phase 56 |
+| src/components/systems/SystemTable.tsx:4 | `ColumnsType` | đổi Phase 56 |
+| src/components/ui/__tests__/wave02Wrappers.test.tsx:5 | `TextAreaRef` | đổi Phase 56 |
+| src/components/ui/checkbox.tsx:2 | `CheckboxGroupProps as AntCheckboxGroupProps` | đổi Phase 56 |
+| src/components/ui/date-picker.tsx:2 | `RangePickerProps` | đổi Phase 56 |
+| src/components/ui/input-number.tsx:2 | `InputNumberProps as AntInputNumberProps` | đổi Phase 56 |
+| src/components/ui/radio.tsx:2 | `RadioButtonProps as AntRadioButtonProps` | đổi Phase 56 |
+| src/components/ui/select.tsx:2 | `BaseOptionType`, `DefaultOptionType` | đổi Phase 56 |
+| src/components/ui/tag.tsx:2 | `CheckableTagProps as AntCheckableTagProps` | đổi Phase 56 |
+| src/components/ui/textarea.tsx:2 | `TextAreaProps as AntTextAreaProps` | đổi Phase 56 |
+| src/components/ui/textarea.tsx:3 | `TextAreaRef` | đổi Phase 56 |
+| src/workbench/toolwindows/CRExplorer.tsx:15 | `DataNode` | đổi Phase 56 |
+| src/workbench/toolwindows/RemoteGitExplorer.tsx:3 | `DataNode` | đổi Phase 56 |
+| src/workbench/toolwindows/SystemsExplorer.tsx:24 | `DataNode` | đổi Phase 56 |
+
+**(d) Static API — regex call site, KHÔNG phải import**
+
+- Nguồn phát hiện: **regex call site**, không phải import. `scanConsumedAntd()` không thấy `message.*` / `notification.*` / `Modal.confirm` (`51-CONTROL-INVENTORY.md:21`).
+- Phương pháp: dùng chính receiver-binding rule của `src/components/ui/__tests__/staticApiGuard.test.ts:7-10,38-60` — receiver chỉ hợp lệ khi bind qua `useMessage()` / `useNotification()` / `useTaskMateModal()`; mọi call không bind là violation. Chạy `npx vitest run src/components/ui/__tests__/staticApiGuard.test.ts --bail=1`: **0 call unbound** tại HEAD (AntD static đã biến mất).
+- Lệnh `grep -rlE '\b(message|notification)\.(success|error|warning|warn|info|loading|open|destroy)\(|\bModal\.confirm\(' --include='*.ts' --include='*.tsx' src | grep -v '/ui/' | wc -l` = **86 file ngoài `ui/` dùng cú pháp `message.*` / `notification.*`**, **tất cả bind qua context** (`useMessage` / `useNotification` trong `ThemeAppHolder`) — đây là surface thông báo, không phải static API.
+- Bốn file PATTERNS nêu (`src/components/changeRequests/ChangeRequestModal.tsx`, `src/components/settings/JiraConfigCard.tsx`, `src/components/settings/LocalSqlitePersistenceCard.tsx`, `src/components/settings/SnapshotRollbackCard.tsx`) là **ghi chú lịch sử**: hiện `ChangeRequestModal.tsx:67` `const message = useMessage()`, ba file settings `const notification = useNotification()` (`JiraConfigCard.tsx:38`, `LocalSqlitePersistenceCard.tsx:23`, `SnapshotRollbackCard.tsx:19`). Không trình bày như số liệu hiện tại; vẫn là surface thông báo phải giữ behavior realtime (xem §3.2 nhóm notification).
+
+**(e) Deep-import icon value + ghi chú plots**
+
+- Lệnh: `grep -rn "@ant-design/icons/" src --include='*.tsx'` = **8 dòng**, tất cả tại `src/workbench/toolwindows/RemoteGitExplorer.tsx:4-11`:
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:4` — `FolderOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:5` — `FolderOpenOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:6` — `FileTextOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:7` — `ReloadOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:8` — `SearchOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:9` — `BranchesOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:10` — `CloudServerOutlined`
+  - `src/workbench/toolwindows/RemoteGitExplorer.tsx:11` — `FolderViewOutlined`
+- PATTERNS tự liệt kê 8 tên nhưng ghi nhầm thành 10; dùng **8**, không cộng thêm type import `antd/es/tree` ở dòng 3 (đó là nhóm (c2)).
+- `@ant-design/plots` xuất hiện ở 4 file analytics (ngoài phạm vi thay control nhưng phải ghi để grep `@ant-design` không hiểu nhầm): `src/components/analytics/EstimateVsActualChart.tsx`, `src/components/analytics/ProductivityHeatmapChart.tsx`, `src/components/analytics/WorkTypeAccuracyCard.tsx`, `src/components/analytics/WorkTypeBreakdownChart.tsx`.
+
 
 ## 4. Phân loại implementation
 
