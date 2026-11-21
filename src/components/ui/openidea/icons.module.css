@@ -65,3 +65,19 @@
   width: var(--oi-tree-icon-size);
   height: var(--oi-tree-icon-size);
 }
+
+.spin {
+  animation: oiIconSpin 0.9s linear infinite;
+}
+
+@keyframes oiIconSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation-duration: 2.4s;
+  }
+}
