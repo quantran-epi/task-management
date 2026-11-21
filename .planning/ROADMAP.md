@@ -11,6 +11,57 @@
 - Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
 - Phase 42: Read-only git inspection for the reviewer agent (v1.4, INSERTED)
 - Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (COMPLETE — verified 2026-11-17)
+- Phase 49: Design System Foundation — IntelliJ-only shell, unified light/dark tokens, all AntD wrappers, ESLint/CI guard (v1.5)
+- Phase 50: Full App Adoption — migrate every surface to wrappers, remove token-valued inline styles, Chrome UAT light+dark, all gates green (v1.5)
+
+## Milestone: v1.5 Design System & UI Consistency
+
+**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: một shell, một nguồn token light+dark, mọi control AntD được wrap tại một điểm, và guard bằng ESLint + CI để không tái diễn import trực tiếp.
+**Requirements:** SHELL-01..03, TOKEN-01..04, CTRL-01..06, GUARD-01..03, ADOPT-01..04
+**Source:** `.planning/REQUIREMENTS.md`, `.planning/research/SUMMARY.md`, `.planning/PROJECT.md`
+**UI hint:** yes
+
+## Phases
+
+- [ ] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all ~60 AntD wrappers, ESLint/CI guard, focused token+wrapper tests.
+- [ ] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green.
+
+## Phase Details
+
+### Phase 49: Design System Foundation
+
+**Goal:** Nền design system duy nhất, IntelliJ-only, với token dùng chung cho ConfigProvider và CSS ở cả light/dark và mọi control AntD có wrapper TaskMate làm điểm cấu hình duy nhất, được bảo vệ bởi ESLint + CI.
+**Depends on:** Nothing (first phase of v1.5; follows Phase 48 from prior milestone)
+**Requirements**: SHELL-01, SHELL-02, SHELL-03, TOKEN-01, TOKEN-02, TOKEN-03, TOKEN-04, CTRL-01, CTRL-02, CTRL-03, CTRL-04, CTRL-05, CTRL-06, GUARD-01, GUARD-02, GUARD-03
+**Success Criteria** (what must be TRUE):
+  1. Ứng dụng chỉ khởi động shell IntelliJ/workbench; repo không còn code shell AntD cũ, flag chuyển đổi trong `main.tsx`, hay PWA install prompts, và không có migration cho cấu hình shell cũ.
+  2. Một nguồn token duy nhất (màu, radius, chiều cao control, font, spacing) drive cả AntD `ConfigProvider` lẫn CSS/workbench; đổi theme cập nhật ngay mọi control không reload và giữ nguyên lựa chọn hiện tại của user.
+  3. Mọi control AntD dùng trong app (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip, ~60 components) có wrapper TaskMate tại `src/components/ui/`; mỗi wrapper áp token defaults và policy riêng — không re-export rỗng, đổi implementation tại một điểm.
+  4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; CI chạy lint + build và làm pipeline fail khi có vi phạm.
+  5. Focused Vitest xanh cho wrapper và token ở cả light và dark: giá trị token, accessible name của icon button, policy footer/close của modal, bảng màu status tag, và phát hiện drift giữa ConfigProvider và CSS token.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 50: Full App Adoption
+
+**Goal:** Mọi bề mặt UI chạy trên design system mới: không còn import AntD trực tiếp hay style inline trùng token, light/dark parity quan sát được trên Chrome, và mọi cổng kiểm tra xanh trước khi đóng milestone.
+**Depends on:** Phase 49
+**Requirements**: ADOPT-01, ADOPT-02, ADOPT-03, ADOPT-04
+**Success Criteria** (what must be TRUE):
+  1. Mọi màn hình, tool window, settings, CR, notes, AI Office và modal trong shell IntelliJ render qua wrapper `src/components/ui/`; không còn import AntD trực tiếp bên ngoài thư mục wrapper.
+  2. Không còn style inline lặp lại giá trị token trong các view đã migrate — màu, font, size, spacing lấy từ nguồn token chung.
+  3. UAT Chrome quan sát được ở cả light và dark cho task quick-add, settings CRUD, CR detail actions, modal forms, toolbar icon buttons và AI chat controls; focus, keyboard nav và accessible name còn nguyên trên mọi control.
+  4. Light/dark parity trên các luồng đại diện: cùng một control ở hai theme chỉ khác giá trị token, không có control nào lệch màu/font/size.
+  5. `tsc --noEmit`, lint, focused Vitest và build đều xanh.
+**Plans**: TBD
+**UI hint**: yes
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 49. Design System Foundation | 0/TBD | Not started | - |
+| 50. Full App Adoption | 0/TBD | Not started | - |
 
 ## Previous Milestone: v1.3
 
