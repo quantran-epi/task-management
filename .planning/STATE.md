@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: executing
-stopped_at: Completed 53-03-PLAN.md
-last_updated: "2026-11-21T19:57:28.643Z"
+stopped_at: Completed 53-04-PLAN.md
+last_updated: "2026-11-21T20:18:24.347Z"
 last_activity: 2026-11-21 -- Phase 53 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 ## Current Position
 
 Phase: 53 (native-core-form-controls) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-11-21 -- Phase 53 execution started
 
@@ -55,8 +55,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T19:57:22.215Z
-Stopped at: Completed 53-03-PLAN.md
+Last session: 2026-11-21T20:18:14.403Z
+Stopped at: Completed 53-04-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -308,6 +308,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 53]: Native form fields keep AntD prop aliases as type-only imports while rendering native S-FLD/portal DOM; callers stay unchanged until Phase 56.
 - [Phase 53]: InputRef/TextAreaRef/MentionsRef expose focus/blur/select, resizableTextArea.textArea and textarea members consumed by DocEditorPane/ChatInputBar/TasksView.
 - [Phase 53]: Select/mentions/time-picker reuse the 53-01 Popup helper; its control prop supplies per-wrapper measurement hooks.
+- [Phase 53]: wrapIcon factory name, WrappedIconProps and WrappedIcon stay unchanged; only its internal parameter type becomes a static vendored SVG descriptor — Preserve the 257-export guard and 165 importing files while removing runtime @ant-design/icons
+- [Phase 53]: Monochrome vendored SVG paths are normalized to currentColor so D-12 tone and caller style win — Raw OpenIDEA greys otherwise override token-derived color
+- [Phase 53]: --ui-spin-accent keeps reading getStatusTokens('accent', mode) = #3871e1 — D-12 spinner accent contract must stay separate from control accent palette
 
 ## Performance Metrics
 
@@ -367,6 +370,7 @@ Progress: [█████░░░░░] 50%
 | Phase 53-native-core-form-controls P01 | ~7 min | 3 tasks | 38 files |
 | Phase 53 P02 | ~14 min | 4 tasks | 13 files |
 | Phase 53-native-core-form-controls P03 | ~19 min | 4 tasks | 9 files |
+| Phase 53 P04 | ~15 min | 3 tasks | 12 files |
 
 ### Blockers
 
