@@ -502,11 +502,11 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
   return (
     <div style={panelStyle}>
       <div style={toolbarStyle}>
-        <button type="button" style={toolPrimaryBtnStyle} title="Format JSON" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
-        <button type="button" style={toolBtnStyle} title="Minify JSON" onClick={() => run(true)}><MinusOutlined /> Minify</button>
-        <button type="button" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
-        <button type="button" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
-        <button type="button" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
+        <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} title="Format JSON" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Minify JSON" onClick={() => run(true)}><MinusOutlined /> Minify</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
         <select
           aria-label="Indent"
           value={indent}
@@ -517,8 +517,8 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
           <option value="4">4 spaces</option>
           <option value="tab">Tab</option>
         </select>
-        <button type="button" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
-        <button type="button" style={toolBtnStyle} aria-label="AI · JSON Formatter" title="AI · JSON Formatter" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="AI · JSON Formatter" title="AI · JSON Formatter" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)' }}>
           {error ? `❌ ${error}` : formatted ? '✓ JSON hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
@@ -583,11 +583,11 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
   return (
     <div style={panelStyle}>
       <div style={toolbarStyle}>
-        <button type="button" style={toolPrimaryBtnStyle} title="Format XML" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
-        <button type="button" style={toolBtnStyle} title="Minify XML" onClick={() => run(true)}><MinusOutlined /> Minify</button>
-        <button type="button" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
-        <button type="button" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
-        <button type="button" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
+        <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} title="Format XML" onClick={() => run(false)}><FormatPainterOutlined /> Format</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Minify XML" onClick={() => run(true)}><MinusOutlined /> Minify</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy input" onClick={() => copyToClipboard(input)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(output)}><CopyOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clearContent}><DeleteOutlined /></button>
         <select
           aria-label="Indent"
           value={indent}
@@ -598,8 +598,8 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
           <option value="4">4 spaces</option>
           <option value="tab">Tab</option>
         </select>
-        <button type="button" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
-        <button type="button" style={toolBtnStyle} aria-label="AI · XML Formatter" title="AI · XML Formatter" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="AI · XML Formatter" title="AI · XML Formatter" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)' }}>
           {error ? `❌ ${error}` : formatted ? '✓ XML hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
@@ -680,10 +680,10 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
         />
         <Checkbox checked={ignoreCase} onChange={(e) => patchContent({ ignoreCase: e.target.checked })}>Bỏ qua hoa/thường</Checkbox>
         <Checkbox checked={ignoreSpace} onChange={(e) => patchContent({ ignoreSpace: e.target.checked })}>Bỏ qua khoảng trắng</Checkbox>
-        <button type="button" style={toolBtnStyle} title="Đổi chiều" onClick={() => { setA(b); setB(a); }}><SwapOutlined /> Đổi chiều</button>
-        <button type="button" style={toolBtnStyle} aria-label="Clear" title="Xóa cả hai" onClick={clearContent}><DeleteOutlined /></button>
-        <button type="button" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
-        <button type="button" style={toolBtnStyle} aria-label="AI · Text Compare" title="AI · Text Compare" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Đổi chiều" onClick={() => { setA(b); setB(a); }}><SwapOutlined /> Đổi chiều</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Xóa cả hai" onClick={clearContent}><DeleteOutlined /></button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="AI · Text Compare" title="AI · Text Compare" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: result.changes ? 'var(--warning, #a56906)' : 'var(--success, #338555)' }}>
           {!a.trim() && !b.trim()
             ? 'Dán 2 đoạn text để so sánh'
@@ -759,10 +759,10 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
   return (
     <div style={panelStyle}>
       <div style={toolbarStyle}>
-        <button type="button" style={toolBtnStyle} title="Copy source" onClick={() => copyToClipboard(source)}><CopyOutlined /> Copy</button>
-        <button type="button" style={toolBtnStyle} title="Clear" onClick={clearContent}><DeleteOutlined /> Clear</button>
-        <button type="button" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
-        <button type="button" style={toolBtnStyle} aria-label="AI · Markdown Viewer" title="AI · Markdown Viewer" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy source" onClick={() => copyToClipboard(source)}><CopyOutlined /> Copy</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Clear" onClick={clearContent}><DeleteOutlined /> Clear</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Save as" title="Save as" onClick={() => setSaveOpen(true)}><SaveOutlined /> Save as</button>
+        <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="AI · Markdown Viewer" title="AI · Markdown Viewer" onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
         <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: 'var(--fg-muted, #6c707e)' }}>
           {source.length} ký tự · {source.trim() ? 'Đã cập nhật' : 'Sẵn sàng'}
         </span>

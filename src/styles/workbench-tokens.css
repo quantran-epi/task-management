@@ -604,3 +604,30 @@ html, body, #root {
   background: var(--accent);
   border-radius: 2px 2px 0 0;
 }
+
+/* Utility tool editor toolbar buttons — visible press/hover feedback (native buttons
+   replaced AntD Button to avoid re-rendering the whole toolbar on each keystroke). */
+.utility-tool-btn {
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+.utility-tool-btn:hover {
+  background: var(--bg-hover, #eef1f6) !important;
+  border-color: var(--accent, #3871e1) !important;
+}
+.utility-tool-btn:active {
+  background: var(--accent-soft, #dbe7ff) !important;
+  border-color: var(--accent, #3871e1) !important;
+  transform: translateY(1px);
+}
+.utility-tool-btn:focus {
+  border-color: var(--accent, #3871e1);
+  box-shadow: 0 0 0 2px var(--accent-soft, rgba(56, 113, 225, 0.25));
+}
+.utility-tool-btn:focus-visible {
+  outline: 2px solid var(--accent, #3871e1);
+  outline-offset: 1px;
+}
+.utility-tool-btn.primary:hover,
+.utility-tool-btn.primary:active {
+  background: var(--accent-hover, #2f5fc4) !important;
+}
