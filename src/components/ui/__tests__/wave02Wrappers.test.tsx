@@ -13,6 +13,8 @@ describe('wave 02 additive wrapper extensions (D-03)', () => {
     const ref = createRef<InputRef>();
     render(<Input ref={ref} aria-label="Tìm" />);
     expect(ref.current).not.toBeNull();
+    expect(() => ref.current?.focus()).not.toThrow();
+    expect(ref.current?.input).toBeInstanceOf(HTMLInputElement);
     expect(screen.getByLabelText('Tìm')).toBeInTheDocument();
   });
 
@@ -20,6 +22,7 @@ describe('wave 02 additive wrapper extensions (D-03)', () => {
     const ref = createRef<TextAreaRef>();
     render(<Textarea ref={ref} placeholder="Fallback" />);
     expect(ref.current?.nativeElement).toBeInstanceOf(HTMLTextAreaElement);
+    expect(ref.current?.resizableTextArea?.textArea).toBeInstanceOf(HTMLTextAreaElement);
   });
 
   it('keeps the AntD range-picker value/onChange signature at the view boundary', () => {
