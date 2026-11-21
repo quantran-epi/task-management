@@ -131,7 +131,7 @@ export const GlobalConventionsCard: React.FC<GlobalConventionsCardProps> = ({ db
           </Button>
         </Space>
 
-        <Text type="secondary" style={{ fontSize: 12 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
           {charCount} ký tự · {lineCount} dòng (Nhấn Ctrl+S / ⌘S để lưu)
         </Text>
       </div>

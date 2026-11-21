@@ -136,7 +136,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
               border: '1px solid rgba(0,0,0,0.15)',
             }}
           />
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {color}
           </Text>
         </Space>
@@ -243,7 +243,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
       {draft && (
         <Space align="end" wrap style={{ marginTop: 12 }}>
           <Space direction="vertical" size={2}>
-            <Text style={{ fontSize: 12 }}>Giá trị</Text>
+            <Text style={{ fontSize: 'var(--font-size-small)' }}>Giá trị</Text>
             <Input
               value={draft.value}
               maxLength={SYSTEM_TYPE_VALUE_MAX_LENGTH}
@@ -255,7 +255,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
             />
           </Space>
           <Space direction="vertical" size={2}>
-            <Text style={{ fontSize: 12 }}>Nhãn hiển thị</Text>
+            <Text style={{ fontSize: 'var(--font-size-small)' }}>Nhãn hiển thị</Text>
             <Input
               value={draft.label}
               onChange={(e) => setDraft({ ...draft, label: e.target.value })}
@@ -264,11 +264,11 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
             />
           </Space>
           <Space direction="vertical" size={2}>
-            <Text style={{ fontSize: 12 }}>Màu (hex)</Text>
+            <Text style={{ fontSize: 'var(--font-size-small)' }}>Màu (hex)</Text>
             <Input
               value={draft.color}
               onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-              placeholder="#8c8c8c"
+              placeholder={'#8c8c8c' /* ponytail: sample hex value for users, not a style token */}
               style={{ width: 120 }}
             />
           </Space>

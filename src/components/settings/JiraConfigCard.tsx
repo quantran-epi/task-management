@@ -372,7 +372,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
               justifyContent: 'space-between',
               padding: '8px 12px',
               background: 'rgba(0, 0, 0, 0.02)',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid rgba(0, 0, 0, 0.08)',
             }}
           >

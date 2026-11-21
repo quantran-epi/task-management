@@ -52,7 +52,7 @@ export const GhostDevConfigCard: React.FC = () => {
     <Card
       title={
         <Space>
-          <RobotOutlined style={{ color: '#4f46e5' }} />
+          <RobotOutlined style={{ color: 'var(--accent)' }} />
           <span>Ghost Dev Agent Configuration</span>
         </Space>
       }
@@ -64,7 +64,7 @@ export const GhostDevConfigCard: React.FC = () => {
           <Button
             type="primary"
             icon={<SaveOutlined />}
-            style={{ backgroundColor: '#4f46e5' }}
+            style={{ backgroundColor: 'var(--accent)' }}
             onClick={handleSave}
             size="small"
           >

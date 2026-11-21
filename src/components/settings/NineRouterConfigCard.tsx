@@ -411,16 +411,16 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         <FormItem
           label="Giới hạn ký tự ngữ cảnh (Safe Character Budget)"
           extra={
-            <div style={{ marginTop: 6, fontSize: 12 }}>
+            <div style={{ marginTop: 6, fontSize: 'var(--font-size-small)' }}>
               <div style={{ marginBottom: 6 }}>
                 Tương đương ước tính:{' '}
-                <strong style={{ color: '#1677ff' }}>
+                <strong style={{ color: 'var(--accent)' }}>
                   ~{Math.round(charLimit / 4).toLocaleString()} tokens
                 </strong>{' '}
-                <span style={{ color: '#8c8c8c' }}>(quy đổi xấp xỉ 1 token ≈ 4 ký tự)</span>
+                <span style={{ color: 'var(--fg-secondary)' }}>(quy đổi xấp xỉ 1 token ≈ 4 ký tự)</span>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ color: '#8c8c8c' }}>Gợi ý nhanh:</span>
+                <span style={{ color: 'var(--fg-secondary)' }}>Gợi ý nhanh:</span>
                 <CheckableTag
                   checked={charLimit === 12000}
                   onChange={() => setCharLimit(12000)}
@@ -452,7 +452,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                   1M (~250k tok) • Siêu lớn
                 </CheckableTag>
               </div>
-              <div style={{ color: '#8c8c8c', lineHeight: 1.4 }}>
+              <div style={{ color: 'var(--fg-secondary)', lineHeight: 1.4 }}>
                 Tự do tùy chỉnh theo mô hình: mô hình nhỏ cục bộ (Ollama 8k–32k context) nên dùng 8k–32k ký tự để tránh lỗi vượt ngữ cảnh; mô hình hiện đại (Claude 3.5, GPT-4o, Gemini) có thể đặt 100k–1M+ ký tự để nạp file và tài liệu đầy đủ.
               </div>
             </div>
@@ -477,7 +477,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         <FormItem
           label="Context window của mô hình (tokens)"
           extra={
-            <div style={{ marginTop: 6, fontSize: 12, color: '#8c8c8c', lineHeight: 1.5 }}>
+            <div style={{ marginTop: 6, fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)', lineHeight: 1.5 }}>
               Dùng để tự động nén ngữ cảnh giữa lượt (giống Claude Code). Khi prompt
               vượt ngưỡng, phần hội thoại cũ được tóm tắt lại, giữ nguyên 20 kết quả
               công cụ gần nhất. Chế độ tra cứu nén ở 75%, chế độ phân tích ở 90%.
@@ -544,7 +544,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 description={
                   <div>
                     <div style={{ marginBottom: 6 }}>{connectionResult.message}</div>
-                    <div style={{ fontSize: 12, opacity: 0.9 }}>
+                    <div style={{ fontSize: 'var(--font-size-small)', opacity: 0.9 }}>
                       <strong>Gợi ý:</strong> 9Router server chạy cục bộ tại <code>http://localhost:20128</code> (chạy lệnh <code>npx 9router</code>). Nếu dùng Web qua HTTPS, trình duyệt sẽ chặn kết nối HTTP cục bộ (Mixed Content) - hãy sử dụng ứng dụng Tauri Desktop.
                     </div>
                   </div>
@@ -556,7 +556,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
 
         <div style={{ marginTop: 28, marginBottom: 16, borderTop: '1px solid #f0f0f0', paddingTop: 20 }}>
           <Space align="center" style={{ marginBottom: 12 }}>
-            <PictureOutlined style={{ fontSize: 18, color: '#4f46e5' }} />
+            <PictureOutlined style={{ fontSize: 18, color: 'var(--accent)' }} />
             <Text strong style={{ fontSize: 15 }}>
               Cấu hình Tạo hình ảnh AI (Image Generation - DALL-E / Flux / OpenAI)
             </Text>
@@ -579,7 +579,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
           <FormItem
             label="Mô hình tạo ảnh (Image Model)"
             extra={
-              <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c' }}>
+              <div style={{ marginTop: 4, fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }}>
                 {availableImageModels.length > 5
                   ? `Đã nạp ${availableImageModels.length} mô hình từ máy chủ (bấm "Kiểm tra kết nối tạo ảnh" để cập nhật). Có thể chọn hoặc gõ tùy chỉnh.`
                   : 'Gợi ý: dall-e-3, dall-e-2, flux-schnell, flux-dev, stable-diffusion-3. Bấm "Kiểm tra kết nối tạo ảnh" để nạp danh sách từ máy chủ, hoặc gõ tùy chỉnh.'}

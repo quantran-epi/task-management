@@ -87,7 +87,7 @@ export const GitHubPassphraseModal: React.FC<GitHubPassphraseModalProps> = ({
       open={open}
       title={
         <Space>
-          <LockOutlined style={{ color: '#1677ff' }} />
+          <LockOutlined style={{ color: 'var(--accent)' }} />
           <span>Nhập mật khẩu giải mã GitHub</span>
         </Space>
       }

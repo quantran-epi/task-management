@@ -232,7 +232,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
       render: (text: string, row: SshConfig) => (
         <Space direction="vertical" size={2}>
           <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {row.username}@{row.host}:{row.port}
           </Text>
         </Space>
@@ -300,7 +300,7 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
     <Card
       title={
         <span>
-          <CloudServerOutlined style={{ marginRight: 8, color: '#1677ff' }} />
+          <CloudServerOutlined style={{ marginRight: 8, color: 'var(--accent)' }} />
           Cấu hình Remote SSH / Workspace
         </span>
       }

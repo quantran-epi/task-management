@@ -95,7 +95,7 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
 
         <UploadDragger {...uploadProps} style={{ padding: '16px 0' }}>
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ fontSize: 36, color: '#1677ff' }} />
+            <InboxOutlined style={{ fontSize: 36, color: 'var(--accent)' }} />
           </p>
           <p className="ant-upload-text">Nhấp hoặc kéo thả tệp JSON profile vào khu vực này</p>
           <p className="ant-upload-hint">Hỗ trợ .json tối đa 50MB. Không ghi đè toàn bộ cài đặt.</p>

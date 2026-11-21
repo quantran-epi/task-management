@@ -74,7 +74,7 @@ export const BackupImportCard: React.FC<BackupImportCardProps> = ({
 
         <UploadDragger {...uploadProps} style={{ padding: '16px 0' }}>
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ fontSize: 36, color: '#1677ff' }} />
+            <InboxOutlined style={{ fontSize: 36, color: 'var(--accent)' }} />
           </p>
           <p className="ant-upload-text">Nhấp hoặc kéo thả tệp JSON sao lưu vào khu vực này</p>
           <p className="ant-upload-hint">

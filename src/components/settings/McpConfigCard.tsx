@@ -187,7 +187,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
                   key={server.id}
                   style={{
                     padding: '14px 16px',
-                    borderRadius: 8,
+                    borderRadius: 'var(--radius-control)',
                     border: `1px solid ${token.colorBorderSecondary}`,
                     background: token.colorFillAlter,
                     marginBottom: 12,
@@ -244,7 +244,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
                   </div>
 
                   <div style={{ marginTop: 8 }}>
-                    <Text code style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                    <Text code style={{ fontSize: 'var(--font-size-small)', wordBreak: 'break-all' }}>
                       {server.url}
                     </Text>
                   </div>
@@ -255,14 +255,14 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
                         marginTop: 8,
                         padding: '6px 10px',
                         background: token.colorBgContainer,
-                        borderRadius: 6,
+                        borderRadius: 'var(--radius-control)',
                         border: `1px dashed ${token.colorBorderSecondary}`,
                         maxHeight: 60,
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                       }}
                     >
-                      <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'pre-line' }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', whiteSpace: 'pre-line' }}>
                         {server.instruction.slice(0, 150)}
                         {server.instruction.length > 150 ? '...' : ''}
                       </Text>
@@ -276,7 +276,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
                         showIcon
                         icon={testRes.ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
                         message={testRes.message}
-                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        style={{ padding: '4px 10px', fontSize: 'var(--font-size-small)' }}
                       />
                     </div>
                   )}

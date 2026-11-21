@@ -172,7 +172,7 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
                           <Tag key={label} style={{ marginInlineEnd: 0 }}>{label}</Tag>
                         ))}
                         {entry.usage.references.map((reference) => (
-                          <Text key={reference} type="secondary" style={{ fontSize: 11 }} code>
+                          <Text key={reference} type="secondary" style={{ fontSize: 'var(--font-size-small)' }} code>
                             {reference}
                           </Text>
                         ))}
@@ -213,7 +213,7 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
                   <div key={label}>
                     <Tag>{label}</Tag>
                     {selected.usage.references[index] && (
-                      <Text type="secondary" code style={{ fontSize: 11 }}>
+                      <Text type="secondary" code style={{ fontSize: 'var(--font-size-small)' }}>
                         {selected.usage.references[index]}
                       </Text>
                     )}
@@ -231,7 +231,7 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
                   background: token.colorFillTertiary,
                   padding: 8,
                   borderRadius: 4,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-small)',
                   whiteSpace: 'pre-wrap',
                   maxHeight: 400,
                   overflowY: 'auto',
