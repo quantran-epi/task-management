@@ -19,6 +19,15 @@ describe('Button wrapper', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('ant-btn-dangerous');
   });
 
+  it('lets explicit caller type, danger and style win over the variant (WR-03)', () => {
+    render(<Button type="link" danger={false} style={{ padding: 0 }}>Link</Button>);
+    const button = screen.getByRole('button', { name: 'Link' });
+    expect(button).toHaveClass('ant-btn-link');
+    expect(button).not.toHaveClass('ant-btn-dangerous');
+    expect(button.style.padding).toBe('0px');
+    expect(button.getAttribute('style')).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
+  });
+
   it('forwards loading and disabled states', () => {
     const { rerender } = render(<Button disabled>Disabled</Button>);
     expect(screen.getByRole('button', { name: 'Disabled' })).toBeDisabled();

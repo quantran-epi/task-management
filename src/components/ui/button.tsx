@@ -32,9 +32,14 @@ function controlStyle(): CSSProperties {
 }
 
 /** Single swap point for every AntD Button. Caller props win; metrics come from the contract. */
-export function Button({ variant = 'default', ...rest }: ButtonProps) {
-  const { type, danger } = VARIANT_PROPS[variant];
-  const merged = withoutUndefined({ ...rest, type, danger, style: controlStyle() });
+export function Button({ variant = 'default', style, type, danger, ...rest }: ButtonProps) {
+  const variantProps = VARIANT_PROPS[variant];
+  const merged = withoutUndefined({
+    ...rest,
+    type: type ?? variantProps.type,
+    danger: danger ?? variantProps.danger,
+    style: { ...controlStyle(), ...style },
+  });
   return <AntButton {...merged} />;
 }
 
