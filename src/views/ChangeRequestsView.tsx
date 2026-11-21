@@ -116,7 +116,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
     .map((s) => ({ label: `${s.name} (${s.code})`, value: s.id }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {contextHolder}
       <PageHeader
         title="Quản lý Change Requests (CR)"
@@ -138,7 +138,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
       <div
         style={{
           display: 'flex',
-          gap: 12,
+          gap: 'var(--gap-12)',
           flexWrap: 'wrap',
           alignItems: 'center',
           padding: '10px 14px',

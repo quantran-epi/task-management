@@ -178,7 +178,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
       destroyOnHidden
       title={title}
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={onCancel}>Hủy</Button>
           <Button
             type="primary"
@@ -194,7 +194,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
     >
       <div
         data-testid={isEmployee ? 'employee-editor-drawer' : 'lead-editor-drawer'}
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}
       >
         {isEmployee && sharedTeamCount > 0 && (
           <Alert type="info" showIcon message={SHARED_EDIT_COPY} />

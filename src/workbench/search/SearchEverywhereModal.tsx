@@ -354,7 +354,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             borderBottom: '1px solid var(--border-strong)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
             {TABS_CONFIG.map((tab) => {
               const isActive = activeTab === tab.key;
               return (
@@ -411,7 +411,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             padding: '10px 14px',
             borderBottom: '1px solid var(--border)',
             background: 'var(--bg-popup)',
-            gap: 10,
+            gap: 'var(--gap-10)',
           }}
         >
           <SearchOutlined style={{ fontSize: 15, color: 'var(--fg-icon)' }} />
@@ -497,7 +497,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     color: 'var(--fg-strong)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', overflow: 'hidden' }}>
                     {getCategoryIcon(item.category)}
                     <span
                       style={{

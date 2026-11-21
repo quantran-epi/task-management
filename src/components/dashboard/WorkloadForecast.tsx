@@ -39,7 +39,7 @@ export const WorkloadForecast: React.FC<WorkloadForecastProps> = ({
           onChange={(val) => onHorizonChange(val as ForecastHorizon)}
         />
       }
-      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16 } }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' } }}
     >
       {/* Overload Alert banner per D-07 */}
       {overloadedDays.length > 0 && (
@@ -56,7 +56,7 @@ export const WorkloadForecast: React.FC<WorkloadForecastProps> = ({
                 </Text>
                 . Nhấn vào ngày để điều chỉnh:
               </Text>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-6)' }}>
                 {overloadedDays.map((d) => (
                   <Tag
                     key={d.date}
@@ -80,7 +80,7 @@ export const WorkloadForecast: React.FC<WorkloadForecastProps> = ({
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: 12,
+          gap: 'var(--gap-12)',
         }}
       >
         {horizonDays.map((day) => (

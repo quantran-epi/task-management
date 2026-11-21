@@ -186,7 +186,7 @@ export function BottomToolWindow({
         }}
       >
         {/* Left: Dynamic Terminal Tabs list */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', overflowX: 'auto' }}>
           {terminalTabs.map((tab) => {
             const isActive = activeTerminalId === tab.id;
             return (
@@ -202,7 +202,7 @@ export function BottomToolWindow({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 'var(--gap-6)',
                   padding: '3px 8px',
                   fontSize: 'var(--font-size-small, 12px)',
                   fontWeight: isActive ? 600 : 400,
@@ -321,7 +321,7 @@ export function BottomToolWindow({
         </div>
 
         {/* Right: Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
           {activeConfig && (
             <span
               style={{
@@ -330,7 +330,7 @@ export function BottomToolWindow({
                 marginRight: 6,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-4)',
               }}
             >
               <CloudServerOutlined style={{ fontSize: 'var(--font-size-small)', color: '#f59e0b' }} />

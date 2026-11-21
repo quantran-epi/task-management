@@ -235,7 +235,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         initialValues={{ status: 'Open', type: 'ENHANCEMENT' }}
         style={{ marginTop: 16 }}
       >
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--gap-16)' }}>
           <FormItem
             name="name"
             label="Tên Change Request"
@@ -265,7 +265,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           label="Loại Change Request (CR Type)"
           rules={[{ required: true, message: 'Vui lòng chọn loại Change Request.' }]}
         >
-          <RadioGroup style={{ width: '100%', display: 'flex', gap: 12 }}>
+          <RadioGroup style={{ width: '100%', display: 'flex', gap: 'var(--gap-12)' }}>
             <RadioButton value="NEW_FEATURE" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
                 <ThunderboltOutlined style={{ color: 'var(--accent)', marginRight: 6 }} />
@@ -319,7 +319,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           <TextArea rows={2} placeholder="Tóm tắt yêu cầu kinh doanh, phạm vi ảnh hưởng, và mục tiêu..." />
         </FormItem>
 
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 'var(--gap-16)' }}>
           <FormItem name="status" label="Trạng thái" style={{ flex: 1 }}>
             <Select options={CR_STATUSES.map((s) => ({ label: STATUS_LABELS[s] || s, value: s }))} />
           </FormItem>
@@ -329,7 +329,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           </FormItem>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-16)' }}>
           <FormItem name="opsOwners" label="Ops Owner">
             <TagSelect field="opsOwners" />
           </FormItem>
@@ -348,7 +348,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {fields.map((field) => (
-                  <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <div key={field.key} style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
                     <FormItem
                       {...field}
                       noStyle
@@ -402,7 +402,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                     />
                   </div>
                 ))}
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
                   <Button
                     type="dashed"
                     onClick={() => add('')}

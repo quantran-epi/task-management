@@ -98,7 +98,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
     }
 
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
         {item.category === 'reminder' && (
           <Tooltip title="Đánh dấu đã xong nhắc nhở">
             <Button
@@ -138,15 +138,15 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
         justifyContent: 'space-between',
         padding: '10px 12px',
         borderBottom: '1px solid #f0f0f0',
-        gap: 12,
+        gap: 'var(--gap-12)',
         width: '100%',
         boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--gap-10)', flex: 1, minWidth: 0 }}>
         <div style={{ marginTop: 2, flexShrink: 0 }}>{renderLeading()}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexWrap: 'wrap' }}>
             <Text
               strong
               ellipsis

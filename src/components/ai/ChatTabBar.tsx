@@ -107,7 +107,7 @@ function SortableChatTabItem({
     }
     if (resolvedStatus === 'interrupted') {
       return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-2)', flexShrink: 0 }}>
           <Badge status="warning" />
           <ReloadOutlined style={{ fontSize: 9, color: token.colorWarning }} />
         </span>
@@ -131,7 +131,7 @@ function SortableChatTabItem({
     fontSize: 'var(--font-size-small)',
     display: 'flex',
     alignItems: 'center',
-    gap: 5,
+    gap: 'var(--gap-5)',
     cursor: 'pointer',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
@@ -465,7 +465,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
           style={{
             display: 'flex',
             alignItems: 'flex-end',
-            gap: 2,
+            gap: 'var(--gap-2)',
             padding: '6px 4px 0 6px',
             overflowX: 'auto',
             scrollbarWidth: 'none',

@@ -1062,7 +1062,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 6,
+            gap: 'var(--gap-6)',
             padding: '8px 12px',
             borderBottom: '1px solid #333',
             backgroundColor: '#252526',
@@ -1090,7 +1090,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 5,
+                    gap: 'var(--gap-5)',
                     fontSize: 'var(--font-size-xs)',
                     fontWeight: 600,
                     margin: 0,
@@ -1110,7 +1110,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 5,
+                    gap: 'var(--gap-5)',
                     fontSize: 'var(--font-size-xs)',
                     fontWeight: 500,
                     margin: 0,
@@ -1196,7 +1196,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               paddingTop: 2,
               position: 'relative',
               width: '100%',
@@ -1240,7 +1240,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-4)',
                 overflowX: 'auto',
                 scrollbarWidth: 'none',
                 flex: 1,
@@ -1287,7 +1287,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 'var(--gap-4)',
                   height: 24,
                   padding: '0 8px',
                   borderRadius: 4,
@@ -1334,7 +1334,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 5,
+                      gap: 'var(--gap-5)',
                       height: 24,
                       padding: '0 6px 0 8px',
                       borderRadius: 4,
@@ -1502,7 +1502,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'flex-start',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                   marginBottom: 2,
                   wordBreak: 'break-all',
                   whiteSpace: 'pre-wrap',
@@ -1537,7 +1537,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             ))
           ) : (
             // HUMAN-FRIENDLY VIEW MODE
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
               {parsedLogs.map((item, idx) => {
                 const isSubagent = item.raw.source === 'worker';
 
@@ -2000,7 +2000,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '6px 12px',
                 backgroundColor: '#14291f',
                 border: '1px solid #1e4620',
@@ -2025,7 +2025,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
             backgroundColor: '#252526',
             borderTop: '1px solid #333',
             display: 'flex',
-            gap: 8,
+            gap: 'var(--gap-8)',
           }}
         >
           {/* Slash Command Autocomplete Overlay */}
@@ -2073,12 +2073,12 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
                       cursor: 'pointer',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 2,
+                      gap: 'var(--gap-2)',
                       backgroundColor: isSelected ? '#27272a' : 'transparent',
                       borderLeft: isSelected ? '3px solid #6366f1' : '3px solid transparent',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                       <span
                         style={{
                           fontWeight: 700,

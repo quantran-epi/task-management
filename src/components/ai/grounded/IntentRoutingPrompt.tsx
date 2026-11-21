@@ -39,7 +39,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
         body: { padding: '12px 16px' },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space orientation="horizontal" size={6}>
             <QuestionCircleOutlined style={{ color: token.colorInfo ?? 'var(--accent)', fontSize: 15 }} />

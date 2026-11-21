@@ -59,7 +59,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
       <div
         style={{
           display: 'flex',
@@ -85,7 +85,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
         )}
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
         <Input
           placeholder="Thêm việc cần làm / checklist..."
           value={newText}
@@ -114,7 +114,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '6px 12px',
                 background: item.done ? '#fafafa' : undefined,
               }}

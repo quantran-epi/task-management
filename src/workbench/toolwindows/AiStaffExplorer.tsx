@@ -168,7 +168,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           borderBottom: '1px solid var(--border, #e9eaee)',
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--gap-6)',
         }}
       >
         <Input
@@ -284,7 +284,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-7)', minWidth: 0, flex: 1 }}>
                   <CrownOutlined style={{ fontSize: 13, color: '#d97706', flexShrink: 0 }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
@@ -364,7 +364,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-7)', minWidth: 0, flex: 1 }}>
                   <UserOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)', flexShrink: 0 }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
@@ -417,7 +417,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
               Chưa có kỹ năng nào
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
               {filteredSkills.map((skill) => (
                 <div key={skill.id} data-testid={`ai-staff-skill-${skill.id}`}>
                   <SkillCard

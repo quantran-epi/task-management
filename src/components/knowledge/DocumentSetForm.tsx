@@ -519,7 +519,7 @@ export function DocumentSetForm({
                       Thêm
                     </Button>
                   </Space>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-6)' }}>
                     {aliases.map((al) => (
                       <Tag
                         key={al}

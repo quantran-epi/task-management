@@ -270,7 +270,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
             />
           )}
           {entitiesSlot && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', marginBottom: 12 }}>
               {entitiesSlot}
             </div>
           )}
@@ -572,7 +572,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                         borderTop: `1px dashed ${token.colorBorderSecondary}`,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 8,
+                        gap: 'var(--gap-8)',
                         flexWrap: 'wrap',
                       }}
                     >
@@ -626,7 +626,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                 >
                   Các giả định bên dưới được tạo theo yêu cầu suy đoán và không có trích dẫn tài liệu chứng minh.
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
                   {displayAnswer.hypotheses.map((h) => (
                     <div
                       key={h.id}

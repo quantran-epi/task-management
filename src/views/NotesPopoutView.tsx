@@ -282,7 +282,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 'var(--gap-8)',
           background: token.colorBgElevated,
         }}
       >
@@ -371,7 +371,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
           padding: 12,
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
+          gap: 'var(--gap-10)',
         }}
       >
         {filteredNotes.length === 0 ? (

@@ -116,7 +116,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
       {!embedded && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Space>
@@ -222,7 +222,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                   </a>
                 }
                 description={
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-xs)', color: '#6b7280' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', fontSize: 'var(--font-size-xs)', color: '#6b7280' }}>
                     <Tag color="cyan" style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '16px' }}>
                       MERMAID
                     </Tag>

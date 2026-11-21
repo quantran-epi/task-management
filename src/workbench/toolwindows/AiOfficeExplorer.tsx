@@ -180,7 +180,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           borderBottom: '1px solid var(--border, #e9eaee)',
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--gap-6)',
         }}
       >
         <Input
@@ -281,7 +281,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                   e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0, flex: 1 }}>
                   <TeamOutlined style={{ fontSize: 14, color: 'var(--accent, #3871e1)', flexShrink: 0 }} />
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
@@ -290,7 +290,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                     >
                       {team.name}
                     </Typography.Text>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', marginTop: 2 }}>
                       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary, #5f6269)' }}>
                         {leadName ? `Lead: ${leadName}` : 'Chưa chọn lead'}
                       </span>

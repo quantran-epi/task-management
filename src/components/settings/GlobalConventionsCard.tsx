@@ -117,7 +117,7 @@ export const GlobalConventionsCard: React.FC<GlobalConventionsCardProps> = ({ db
           alignItems: 'center',
           marginBottom: 8,
           flexWrap: 'wrap',
-          gap: 8,
+          gap: 'var(--gap-8)',
         }}
       >
         <Space size={8}>

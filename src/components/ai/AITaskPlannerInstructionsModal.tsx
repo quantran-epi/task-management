@@ -83,7 +83,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr',
-              gap: 10,
+              gap: 'var(--gap-10)',
             }}
           >
             <div
@@ -94,7 +94,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
                 background: token.colorFillAlter,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 4 }}>
                 <CalendarOutlined style={{ color: 'var(--accent)' }} />
                 <Text code strong style={{ fontSize: 14 }}>/plan</Text>
                 <Text strong>Lập kế hoạch trong ngày</Text>
@@ -112,7 +112,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
                 background: token.colorFillAlter,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 4 }}>
                 <CheckCircleOutlined style={{ color: '#52c41a' }} />
                 <Text code strong style={{ fontSize: 14 }}>/status</Text>
                 <Text strong>Báo cáo tiến độ hiện tại</Text>
@@ -130,7 +130,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
                 background: token.colorFillAlter,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 4 }}>
                 <ClockCircleOutlined style={{ color: '#faad14' }} />
                 <Text code strong style={{ fontSize: 14 }}>/overdue</Text>
                 <Text strong>Cảnh báo tác vụ quá hạn & sắp đến hạn</Text>
@@ -148,7 +148,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
                 background: token.colorFillAlter,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 4 }}>
                 <Text code strong style={{ fontSize: 14 }}>/clear</Text>
                 <Text strong>Làm mới ngữ cảnh</Text>
               </div>
@@ -199,7 +199,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
               background: token.colorFillAlter,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 6 }}>
               <BranchesOutlined style={{ color: token.colorPrimary }} />
               <Text strong>Nguyên tắc chống ảo giác (Anti-Hallucination)</Text>
             </div>
@@ -219,7 +219,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
       footer={null}
       width={600}
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <RobotOutlined style={{ color: token.colorPrimary, fontSize: 18 }} />
           <span>Hướng dẫn sử dụng AI Task Planner</span>
         </div>

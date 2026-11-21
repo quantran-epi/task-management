@@ -499,11 +499,11 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 12,
+          gap: 'var(--gap-12)',
           marginBottom: 16,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flexWrap: 'wrap' }}>
           <ApartmentOutlined style={{ fontSize: 20, color: '#10b981' }} />
           <Input
             value={title}
@@ -567,7 +567,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           {currentNoteId ? (
             <Tag
               color={saveStatus === 'saved' ? 'green' : saveStatus === 'saving' ? 'processing' : 'warning'}
-              style={{ fontSize: 'var(--font-size-xs)', margin: 0, padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ fontSize: 'var(--font-size-xs)', margin: 0, padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-4)' }}
             >
               <CloudSyncOutlined />
               {saveStatus === 'saved' ? 'Đã lưu' : saveStatus === 'saving' ? 'Đang lưu...' : 'Chưa lưu'}
@@ -623,7 +623,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
         style={{
           display: 'flex',
           flex: 1,
-          gap: 16,
+          gap: 'var(--gap-16)',
           minHeight: 0,
           overflow: 'hidden',
         }}
@@ -633,7 +633,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           size="small"
           title={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                 <CodeOutlined />
                 <span>Mã nguồn Mermaid</span>
               </span>
@@ -659,7 +659,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               display: 'flex',
               flexDirection: 'column',
               padding: 12,
-              gap: 12,
+              gap: 'var(--gap-12)',
               overflowY: 'auto',
             },
           }}
@@ -689,11 +689,11 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               border: `1px solid ${token.colorBorderSecondary}`,
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                 <RobotOutlined style={{ color: token.colorPrimary }} />
                 <span>AI Diagram Fixer & Enhancer</span>
               </span>
@@ -709,7 +709,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               </Button>
             </div>
 
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
               <Input
                 size="small"
                 value={aiCustomPrompt}
@@ -781,7 +781,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 showIcon
                 message="Lỗi cú pháp Mermaid"
                 description={
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', marginTop: 4 }}>
                     <Text type="danger" style={{ fontSize: 'var(--font-size-small)' }}>
                       {error}
                     </Text>
@@ -822,7 +822,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
             }}
           >
             {loading ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
                 <Spin size="small" />
                 <Text type="secondary">Đang dựng sơ đồ...</Text>
               </div>
@@ -847,7 +847,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
       {/* Expanded AI Prompt Modal */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
             <RobotOutlined style={{ color: token.colorPrimary }} />
             <span>Soạn thảo yêu cầu AI Diagram Fixer & Enhancer</span>
           </div>
@@ -878,7 +878,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
         }
         destroyOnClose={false}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 0 4px 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', padding: '12px 0 4px 0' }}>
           <Text type="secondary" style={{ fontSize: 13 }}>
             Nhập prompt chi tiết cho AI (thêm nhánh, đổi layout, sửa lỗi cú pháp, bổ sung node, chuyển đổi loại biểu đồ...):
           </Text>

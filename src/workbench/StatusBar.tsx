@@ -55,8 +55,8 @@ export function StatusBar({
       }}
     >
       {/* Left: Active Center Item Focus & Storage Indicators */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-14)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <CheckCircleFilled style={{ color: 'var(--success, #338555)', fontSize: 'var(--font-size-xs)' }} />
           <Tooltip title={activeTab?.title ? `Active Item: ${activeTab.title}` : (activeRunningTask ? `Task: ${activeRunningTask}` : 'Ready')}>
             <Typography.Text
@@ -82,7 +82,7 @@ export function StatusBar({
               paddingLeft: 10,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
             }}
           >
             <span>TaskMate v1.3</span>
@@ -95,7 +95,7 @@ export function StatusBar({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               color: 'var(--fg-muted, #6c707e)',
               cursor: 'default',
             }}
@@ -110,7 +110,7 @@ export function StatusBar({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               color:
                 knowledgeStatus === 'connected'
                   ? 'var(--success, #338555)'
@@ -125,8 +125,8 @@ export function StatusBar({
       </div>
 
       {/* Right: Active AI Turn Indicator, Active Timer Widget & Sync status */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-12)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <ActiveAiTurnIndicator compact />
           <ActiveTimerWidget compact />
         </div>
@@ -136,7 +136,7 @@ export function StatusBar({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               color:
                 syncStatus === 'synced'
                   ? 'var(--success, #338555)'

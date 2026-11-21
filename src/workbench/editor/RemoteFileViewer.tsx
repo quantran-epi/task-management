@@ -203,11 +203,11 @@ export function RemoteFileViewer({
           padding: '6px 12px',
           borderBottom: '1px solid var(--border, #e9eaee)',
           background: 'var(--bg-elev, #f7f8fa)',
-          gap: 8,
+          gap: 'var(--gap-8)',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0, overflow: 'hidden' }}>
           <FileTextOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 14 }} />
           <span
             data-testid="remote-file-path"
@@ -269,7 +269,7 @@ export function RemoteFileViewer({
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexShrink: 0 }}>
           {hasMermaid && (
             <Tooltip title="Save detected Mermaid diagram to Diagram Studio">
               <Button

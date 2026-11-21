@@ -46,7 +46,7 @@ export interface RemoteCitationChipsProps {
 export const RemoteCitationChips: React.FC<RemoteCitationChipsProps> = ({ citations, onActivate }) => {
   if (citations.length === 0) return null;
   return (
-    <div data-testid="remote-citation-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
+    <div data-testid="remote-citation-chips" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)', padding: '4px 0' }}>
       {citations.map((citation) => {
         const key = `${citation.relativePath}:${citation.line}`;
         return (

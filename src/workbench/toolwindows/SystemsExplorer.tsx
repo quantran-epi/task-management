@@ -174,7 +174,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
             alignItems: 'center',
             width: '100%',
             justifyContent: 'space-between',
-            gap: 6,
+            gap: 'var(--gap-6)',
           }}
         >
           <Typography.Text ellipsis style={{ flex: 1, fontSize: 13, lineHeight: '20px' }}>
@@ -227,7 +227,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   width: '100%',
-                  gap: 6,
+                  gap: 'var(--gap-6)',
                 }}
               >
                 <Typography.Text ellipsis strong style={{ flex: 1, fontSize: 13, lineHeight: '20px' }}>
@@ -277,7 +277,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
           padding: '8px 10px',
           borderBottom: '1px solid var(--border, #e9eaee)',
           display: 'flex',
-          gap: 6,
+          gap: 'var(--gap-6)',
           alignItems: 'center',
         }}
       >

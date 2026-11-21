@@ -167,7 +167,7 @@ export const WorkTypeAccuracyCard: React.FC<WorkTypeAccuracyCardProps> = ({
         </Space>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
         <Alert
           description={insightTip}
           type={alertType}

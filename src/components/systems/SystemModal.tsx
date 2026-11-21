@@ -128,7 +128,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   return (
     <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <ApartmentOutlined style={{ color: 'var(--accent, #3871e1)' }} />
           <span>{system ? `Chỉnh sửa hệ thống: ${system.name}` : 'Tạo hệ thống mới'}</span>
         </div>
@@ -185,7 +185,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           />
         </FormItem>
 
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 'var(--gap-12)' }}>
           <FormItem
             name="name"
             label="Tên hệ thống"
@@ -250,7 +250,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 'var(--gap-6)',
                 marginBottom: 10,
                 fontSize: 'var(--font-size-small)',
                 fontWeight: 600,

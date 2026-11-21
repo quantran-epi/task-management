@@ -332,7 +332,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                 borderColor: token.colorBorderSecondary,
               }}
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                 <SyncOutlined spin={false} style={{ fontSize: 'var(--font-size-xs)' }} />
                 {isCompacted ? 'Đã tóm tắt ngữ cảnh trước đó' : 'Ngữ cảnh đã được đặt lại'}
               </span>
@@ -395,7 +395,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 'var(--gap-10)',
                   margin: '4px 0 12px',
                   fontSize: 'var(--font-size-xs)',
                   color: token.colorTextTertiary,
@@ -492,7 +492,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
             borderRadius: 'var(--radius-control)',
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: 'var(--gap-8)',
           }}
         >
           <div
@@ -505,7 +505,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
               fontSize: 13,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
               <ExclamationCircleOutlined />
               <span>Xác nhận thực hiện hành động</span>
             </div>
@@ -543,7 +543,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
             }}
           >
             <span>Bấm nút bên dưới hoặc gõ &quot;yes&quot; / &quot;no&quot; để tiếp tục:</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
               <Button
                 size="small"
                 onClick={() => onConfirmAction(false)}
@@ -565,7 +565,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
           <Modal
             open={isPopoutOpen}
             title={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: token.colorWarningText }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', color: token.colorWarningText }}>
                 <ExclamationCircleOutlined />
                 <span>Xác nhận thực hiện hành động</span>
               </div>

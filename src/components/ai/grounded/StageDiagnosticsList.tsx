@@ -50,7 +50,7 @@ export const StageDiagnosticsList: React.FC<StageDiagnosticsListProps> = ({ stag
   if (stages.length === 0) return null;
 
   return (
-    <div className="stage-diagnostics-list" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div className="stage-diagnostics-list" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
       {stages.map((stage) => (
         <div
           key={stage.stage}
@@ -60,10 +60,10 @@ export const StageDiagnosticsList: React.FC<StageDiagnosticsListProps> = ({ stag
             background: token.colorFillTertiary,
             display: 'flex',
             flexDirection: 'column',
-            gap: 4,
+            gap: 'var(--gap-4)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: token.colorText }}>
               {STAGE_LABELS[stage.stage]}
             </span>
@@ -84,7 +84,7 @@ export const StageDiagnosticsList: React.FC<StageDiagnosticsListProps> = ({ stag
           </div>
           {(stage.reasonCodes.length > 0 ||
             (stage.fallback && stage.fallbackReason)) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)' }}>
               {stage.reasonCodes.map((code) => (
                 <ReasonCodeChip key={code} code={code} />
               ))}

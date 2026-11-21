@@ -36,7 +36,7 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
         body: { padding: '14px 16px' },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
         <Space align="center" size={8}>
           <ExclamationCircleFilled style={{ color: token.colorError, fontSize: 18 }} />
           <Text strong style={{ color: token.colorErrorText, fontSize: 15 }}>

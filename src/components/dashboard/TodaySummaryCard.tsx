@@ -74,7 +74,7 @@ export const TodaySummaryCard: React.FC<TodaySummaryCardProps> = ({
   return (
     <Card
       title={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--gap-8)' }}>
           <span style={{ fontSize: 16, fontWeight: 600 }}>{formattedDate}</span>
           <Tag color="blue" style={{ margin: 0 }}>
             {scheduledCount} tác vụ hôm nay
@@ -82,7 +82,7 @@ export const TodaySummaryCard: React.FC<TodaySummaryCardProps> = ({
         </div>
       }
       data-testid="today-summary-card"
-      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16 } }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' } }}
     >
       {/* KPI Statistic */}
       <Statistic
@@ -110,7 +110,7 @@ export const TodaySummaryCard: React.FC<TodaySummaryCardProps> = ({
       </div>
 
       {/* Dual-encoded status badge row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--gap-8)' }}>
         <Space size={8}>
           <Tag
             color={statusCfg.color}

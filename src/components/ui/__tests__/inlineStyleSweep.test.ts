@@ -8,7 +8,7 @@ const TOKEN_LITERALS = [
   /fontSize:\s*(?:11|12|13\.5)\b/,
   /borderRadius:\s*[68]\b/,
   /#(?:1677ff|4f46e5|8c8c8c|ffffff)\b/i,
-  /\bgap:\s*[diagram]\b/i,
+  /\bgap:\s*\d+\b/,
 ];
 
 function manifestNames(): string[] {
@@ -37,6 +37,16 @@ function violations(path: string): string[] {
 describe('D-10 inline token literal sweep over all wave manifests', () => {
   it('has a non-empty set of wave manifests', () => {
     expect(manifestNames().length).toBeGreaterThan(0);
+  });
+
+  it('matches literal numeric gaps but not var() gaps or the old typo pattern (WR-04)', () => {
+    const gapPattern = TOKEN_LITERALS.find((pattern) => pattern.test('gap: 8'));
+    expect(gapPattern).toBeDefined();
+    expect(gapPattern!.test('gap: 8')).toBe(true);
+    expect(gapPattern!.test('gap: 12')).toBe(true);
+    expect(gapPattern!.test('gap: d')).toBe(false);
+    expect(gapPattern!.test('gap: diagram')).toBe(false);
+    expect(gapPattern!.test("gap: 'var(--gap-2)'")).toBe(false);
   });
 
   it('finds no token-valued inline style literal in any migrated wave', () => {

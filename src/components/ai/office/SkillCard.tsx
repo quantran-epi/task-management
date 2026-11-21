@@ -32,7 +32,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
         padding: 16,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 'var(--gap-8)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -66,7 +66,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
         {`Đang dùng bởi ${agentCount} nhân viên`}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>

@@ -30,7 +30,7 @@ export const CandidateChipList: React.FC<CandidateChipListProps> = ({
       style={{
         display: 'flex',
         flexWrap: 'wrap',
-        gap: 8,
+        gap: 'var(--gap-8)',
         alignItems: 'center',
         marginTop: 8,
       }}
@@ -66,7 +66,7 @@ export const CandidateChipList: React.FC<CandidateChipListProps> = ({
                 color: token.colorText,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 'var(--gap-6)',
                 fontSize: 13,
                 fontWeight: 500,
                 outline: 'none',

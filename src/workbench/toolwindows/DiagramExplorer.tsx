@@ -515,7 +515,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
             margin: '1px 0',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
             <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? '#059669' : '#10b981' }}>
               <FileTextOutlined />
             </span>
@@ -552,7 +552,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           </div>
 
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, marginLeft: 4 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-2)', flexShrink: 0, marginLeft: 4 }}
             onClick={(e) => e.stopPropagation()}
           >
             <Dropdown menu={{ items: diagMenu }} trigger={['click']} placement="bottomRight">
@@ -620,7 +620,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           transition: 'all 0.15s ease',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', minWidth: 0, flex: 1 }}>
           <span
             className="workbench-tree-expand-btn"
             role="button"
@@ -642,7 +642,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         </div>
 
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0, marginLeft: 4 }}
           onClick={(e) => e.stopPropagation()}
         >
           <span
@@ -682,7 +682,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         )}
 
         {isExpanded && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
             {count === 0 ? (
               <div style={{ padding: '4px 8px 4px 34px', fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
                 Trống
@@ -725,7 +725,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                       <span style={{ textDecoration: 'line-through', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {item.title || 'Untitled Diagram'}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-2)' }}>
                         <Tooltip title="Khôi phục">
                           <Button
                             type="text"
@@ -818,7 +818,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           transition: 'all 0.15s ease',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', minWidth: 0, flex: 1 }}>
           <span
             className="workbench-tree-expand-btn"
             role="button"
@@ -840,7 +840,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         </div>
 
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0, marginLeft: 4 }}
           onClick={(e) => e.stopPropagation()}
         >
           <span
@@ -882,7 +882,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         </Dropdown>
 
         {isExpanded && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
             {/* Child subfolders */}
             {node.children.map((child) => renderFolderNode(child))}
 
@@ -922,7 +922,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
     >
       {contextHolder}
       {/* 1. Search Bar + Create Button */}
-      <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
         <Input
           prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
           placeholder="Tìm kiếm biểu đồ..."
@@ -953,7 +953,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
         {isSearching ? (
           /* Search results mode */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
             <div style={{ padding: '4px 8px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)', fontWeight: 600 }}>
               KẾT QUẢ TÌM KIẾM ({searchResults.length})
             </div>
@@ -969,7 +969,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           </div>
         ) : (
           /* Normal mode */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', flex: 1 }}>
             {/* Pinned system category */}
             {pinnedDiagrams.length > 0 &&
               renderSpecialCategory(
@@ -1059,7 +1059,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                   </Button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
                   {folderTree.map((rootNode) => renderFolderNode(rootNode))}
                 </div>
               )}
@@ -1129,7 +1129,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         footer={null}
         destroyOnClose
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', marginTop: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', maxHeight: 300, overflowY: 'auto', marginTop: 10 }}>
           <button
             type="button"
             onClick={() => handleConfirmMove(null)}
@@ -1181,7 +1181,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         cancelText="Huỷ"
         destroyOnClose
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', marginTop: 10 }}>
           <div>
             <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 4 }}>Loại đối tượng</div>
             <Select

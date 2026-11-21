@@ -161,7 +161,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            gap: 16,
+            gap: 'var(--gap-16)',
             marginBottom: 16,
           }}
         >
@@ -184,7 +184,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            gap: 16,
+            gap: 'var(--gap-16)',
           }}
         >
           <div style={{ flex: 1 }}>
@@ -254,7 +254,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
 
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={8}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
               <Text>Sắp đến hạn (Due Soon)</Text>
               <Select
                 value={settings.dueSoonDays}
@@ -272,7 +272,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           </Col>
 
           <Col xs={24} sm={8}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
               <Text>Việc ứ đọng (Stale Tasks)</Text>
               <Select
                 value={settings.staleTaskDays}
@@ -290,7 +290,7 @@ export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> =
           </Col>
 
           <Col xs={24} sm={8}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
               <Text>Ngưỡng quá tải công suất</Text>
               <Select
                 value={settings.capacityOverloadThreshold}

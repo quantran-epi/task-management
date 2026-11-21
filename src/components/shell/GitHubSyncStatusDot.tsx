@@ -43,7 +43,7 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--gap-6)',
           cursor: 'pointer',
         }}
       >

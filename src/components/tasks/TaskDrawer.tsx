@@ -472,7 +472,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             <Input placeholder="Tên tác vụ..." maxLength={120} />
           </FormItem>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
             <FormItem
               name="crId"
               label="Change Request (CR)"
@@ -513,7 +513,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       {renderSection(
         'Trạng thái & phân loại',
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--gap-12)' }}>
             <FormItem name="status" label="Trạng thái" rules={[{ required: true }]}>
               <Select
                 aria-label="Trạng thái"
@@ -533,7 +533,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             </FormItem>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
             <FormItem name="opsOwners" label="Ops Owner">
               <TagSelect field="opsOwners" inheritedText={opsInheritedText} />
             </FormItem>
@@ -550,7 +550,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         <>
           <FormItem label="Thời gian ước tính">
             <Space direction="vertical" style={{ width: '100%' }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 'var(--gap-12)', alignItems: 'center' }}>
                 <FormItem
                   name="hours"
                   label="Giờ"
@@ -588,7 +588,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             </Space>
           </FormItem>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
             <FormItem name="deadline" label="Hạn chót">
               <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Hạn chót" />
             </FormItem>
@@ -644,11 +644,11 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 12,
+                      gap: 'var(--gap-12)',
                       marginTop: 12,
                     }}
                   >
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
                       <FormItem
                         name="recurrenceFrequency"
                         label="Tần suất"
@@ -727,7 +727,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           <RemindersFormList />
 
           <FormItem label="Tiến độ" style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 'var(--gap-16)', alignItems: 'center' }}>
               <FormItem name="progress" noStyle>
                 <Slider min={0} max={100} style={{ flex: 1 }} />
               </FormItem>
@@ -839,7 +839,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       />
                     </div>
                   ))}
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
                     <Button
                       type="dashed"
                       onClick={() => add('')}
@@ -957,7 +957,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         </Space>
       }
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={handleClose}>Hủy</Button>
           <Button type="primary" onClick={() => void handleSave()} loading={saving}>
             Lưu tác vụ

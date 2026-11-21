@@ -169,12 +169,12 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
                   marginBottom: 2,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1, paddingRight: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', minWidth: 0, flex: 1, paddingRight: 12 }}>
                   <span style={{ color: token.colorTextSecondary, fontSize: 14 }}>
                     {CATEGORY_ICONS[item.category] || <AppstoreOutlined />}
                   </span>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
                       <Text strong style={{ fontSize: 'var(--font-size-ui)' }}>
                         {item.title}
                       </Text>

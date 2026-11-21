@@ -107,7 +107,7 @@ export function Stripe({ slot, items, bottomItems }: StripeProps) {
         flexDirection: isHorizontal ? 'row' : 'column',
         alignItems: 'center',
         padding: isHorizontal ? '0 8px' : '8px 0',
-        gap: 4,
+        gap: 'var(--gap-4)',
         userSelect: 'none',
         boxSizing: 'border-box',
         zIndex: 5,

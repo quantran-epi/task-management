@@ -42,7 +42,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ db = defaultDb }) 
   const accuracySummary = calculateWorkTypeAccuracy(tasks, filteredSessions, period);
 
   return (
-    <div data-testid="analytics-view" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div data-testid="analytics-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       <PageHeader
         title="Thống kê hiệu suất & Thời gian làm việc"
         subtitle="Phân tích thời gian ước tính, thời gian thực tế và nhịp độ năng suất"

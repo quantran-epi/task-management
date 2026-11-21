@@ -149,7 +149,7 @@ export const AiStaffImportModal: React.FC<AiStaffImportModalProps> = ({
       destroyOnHidden
       data-testid="ai-staff-import-modal"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={handleClose}>Đóng</Button>
           <Button
             type="primary"
@@ -163,7 +163,7 @@ export const AiStaffImportModal: React.FC<AiStaffImportModalProps> = ({
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
         <Text type="secondary">
           Tệp JSON gồm ba mảng tuỳ chọn: <Text code>skills</Text>, <Text code>employees</Text>,{' '}
           <Text code>leads</Text>. Nhân viên tham chiếu kỹ năng bằng{' '}

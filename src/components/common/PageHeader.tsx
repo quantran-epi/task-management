@@ -28,7 +28,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 'var(--gap-12)',
         marginBottom: 16,
         ...style,
       }}
@@ -39,7 +39,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 12,
+          gap: 'var(--gap-12)',
         }}
       >
         <div style={{ minWidth: 0 }}>
@@ -78,7 +78,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 'var(--gap-8)',
               flexWrap: 'wrap',
             }}
           >

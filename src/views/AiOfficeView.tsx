@@ -191,7 +191,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
+        gap: 'var(--gap-16)',
         padding: 16,
         background: token.colorBgContainer,
       }}
@@ -245,7 +245,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              gap: 12,
+              gap: 'var(--gap-12)',
               padding: '10px 14px',
               background: 'var(--bg-island)',
               borderRadius: 'var(--radius-control)',
@@ -281,7 +281,7 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: 16,
+                gap: 'var(--gap-16)',
               }}
             >
               {segment === 'employees' &&

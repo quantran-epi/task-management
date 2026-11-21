@@ -179,7 +179,7 @@ export const GlobalDiagramViewer: React.FC = () => {
             zIndex: 3000,
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 'var(--gap-4)',
             padding: '3px 8px',
             backgroundColor: token.colorPrimary,
             color: 'var(--fg)',
@@ -193,7 +193,7 @@ export const GlobalDiagramViewer: React.FC = () => {
         >
           <span
             onClick={handleOpenDiagramFromSelection}
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}
           >
             <ApartmentOutlined />
             <span>Xem Diagram</span>
@@ -216,7 +216,7 @@ export const GlobalDiagramViewer: React.FC = () => {
         style={{ top: 20 }}
         title={
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 32 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
               <ApartmentOutlined style={{ color: token.colorPrimary }} />
               <span>Sơ đồ Diagram</span>
             </span>

@@ -104,7 +104,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       <PageHeader
         title="Danh mục hệ thống (Enterprise Systems Catalog)"
         subtitle="Quản lý cấu trúc Parent Systems, Subsystems deployable, thông tin SSH và kho mã nguồn từ xa"
@@ -126,7 +126,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 12,
+          gap: 'var(--gap-12)',
           padding: '10px 14px',
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',

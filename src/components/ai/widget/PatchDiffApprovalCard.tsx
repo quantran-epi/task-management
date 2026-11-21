@@ -56,11 +56,11 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
   const staleBlockedCopy = STALE_BLOCKED_COPY[staleReason];
   return (
     <section data-testid="patch-diff-approval" aria-label={`Đề xuất chỉnh sửa: ${patch.sectionTitle}`}
-      style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0, maxWidth: '100%',
+      style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 0, maxWidth: '100%',
         borderRadius: 'var(--radius-control)', margin: '8px 0 16px', color: token.colorText,
         backgroundColor: stale ? token.colorWarningBg : token.colorBgContainer,
         border: `1px solid ${stale ? token.colorWarningBorder : token.colorBorderSecondary}` }}>
-      <div style={{ display: 'flex', gap: 8, minWidth: 0, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-8)', minWidth: 0, alignItems: 'center', fontSize: 14, fontWeight: 600 }}>
         <DiffOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} />
         <span title={patch.sectionTitle} style={{ minWidth: 0, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           Đề xuất chỉnh sửa: {patch.sectionTitle}
@@ -70,7 +70,7 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
         style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {subtitleText}
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
         {/* non-color signals: explicit +/− prefixes and text counts */}
         <span style={{ backgroundColor: addBg, padding: '2px 8px', borderRadius: 'var(--radius-control)', fontSize: 'var(--font-size-small)', whiteSpace: 'nowrap' }}>+{patch.addedLines} dòng thêm</span>
         <span style={{ backgroundColor: delBg, padding: '2px 8px', borderRadius: 'var(--radius-control)', fontSize: 'var(--font-size-small)', whiteSpace: 'nowrap' }}>−{patch.removedLines} dòng xóa</span>
@@ -99,7 +99,7 @@ export const PatchDiffApprovalCard: React.FC<PatchDiffApprovalCardProps> = ({
           : <><CloseCircleOutlined style={{ color: token.colorTextSecondary }} /> {variant === 'skill'
             ? 'Đã từ chối đề xuất — kỹ năng không thay đổi.'
             : 'Đã từ chối đề xuất — tài liệu không thay đổi.'}</>}
-      </div> : <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+      </div> : <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)', marginTop: 4 }}>
         <Button danger disabled={applying} onClick={onReject} style={{ minHeight: 32, fontSize: 'var(--font-size-small)' }}>Từ chối</Button>
         <Tooltip title={stale ? staleBlockedCopy : undefined}>
           <span tabIndex={stale ? 0 : undefined} aria-label={stale ? staleBlockedCopy : undefined}>

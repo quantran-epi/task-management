@@ -117,7 +117,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <Typography.Text strong style={{ fontSize: 'var(--font-size-small)' }}>
             Máy chủ MCP
           </Typography.Text>
@@ -146,7 +146,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           Chưa có máy chủ MCP nào. Thêm trong Cài đặt.
         </Typography.Text>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', maxHeight: 200, overflowY: 'auto' }}>
           {mcpServers.map((server) => (
             <div
               key={server.id}
@@ -210,7 +210,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
             key: 'analysis-mode',
             label: (
               <div
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-12)' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleAnalysisMode(activeTabId);
@@ -230,7 +230,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
             key: 'auto-approve',
             label: (
               <div
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-12)' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleAutoApproveMutations(activeTabId);
@@ -293,13 +293,13 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
         padding: '5px 12px',
         background: token.colorFillAlter,
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
-        gap: 8,
+        gap: 'var(--gap-8)',
         fontSize: 'var(--font-size-small)',
         boxSizing: 'border-box',
       }}
     >
       {/* Left controls: Tab Model selection. Hidden when the host has no chat-scoped model. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 180, flexShrink: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 180, flexShrink: 0, flex: 1 }}>
         {onModelChange ? (
           <>
             <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
@@ -343,7 +343,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       </div>
 
       {/* Right controls: Tab Toggles (Analysis mode, Auto-approve, MCP, Clear context) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexShrink: 0 }}>
         {compact ? (
           <>
             {/* Unified MCP Popover Button in compact mode */}
@@ -373,7 +373,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                       height: 22,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 'var(--gap-4)',
                     }}
                   >
                     MCP
@@ -410,7 +410,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     height: 22,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   Phân tích
@@ -446,7 +446,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                       height: 22,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 'var(--gap-4)',
                     }}
                   >
                     MCP
@@ -471,7 +471,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     height: 22,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   Tự duyệt
@@ -501,7 +501,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     height: 22,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   Oracle
@@ -531,7 +531,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     height: 22,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   SSH Files

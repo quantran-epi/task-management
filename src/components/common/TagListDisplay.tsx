@@ -41,7 +41,7 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
             opacity: 0.75,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 'var(--gap-4)',
             margin: '2px 4px 2px 0',
           }}
           tabIndex={0}
@@ -71,11 +71,11 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
   const remainingTags = tags.slice(2);
 
   const popoverContent = (
-    <div style={{ maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
       <Text strong style={{ fontSize: 'var(--font-size-small)' }}>
         Tất cả:
       </Text>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)' }}>
         {tags.map((tag, idx) => renderTag(tag, idx))}
       </div>
     </div>

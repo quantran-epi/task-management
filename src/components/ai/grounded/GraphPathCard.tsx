@@ -144,7 +144,7 @@ const PathRow: React.FC<PathRowProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           {prefixLabel && (
             <Tag style={{ margin: 0, fontWeight: 600, fontSize: 'var(--font-size-xs)' }}>{prefixLabel}</Tag>
           )}
@@ -228,7 +228,7 @@ const PathRow: React.FC<PathRowProps> = ({
               </code>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
               {renderHopClassificationBadge(hopCls, token)}
               {hopCitations.length > 0 && (
                 <CitationGroup citations={hopCitations} onActivate={onCitationActivate} />
@@ -337,7 +337,7 @@ export const GraphPathCard: React.FC<GraphPathCardProps> = ({
               body: { padding: 12 },
             }}
             title={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
                 <NodeIndexOutlined style={{ color: token.colorPrimary }} />
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
                   Bản chụp đồ thị: {snapLabel}…

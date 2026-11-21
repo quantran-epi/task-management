@@ -494,7 +494,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
         padding: isAskingInline ? 12 : 4,
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 'var(--gap-6)',
         maxWidth: 420,
         minWidth: 280,
       }}
@@ -674,8 +674,8 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
         </Space>
       ) : (
         /* Inline Query & Stream Area */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
+          <div style={{ display: 'flex', gap: 'var(--gap-6)' }}>
             <Input
               size="small"
               placeholder="Nhập câu hỏi về đoạn này..."
@@ -721,7 +721,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
                     marginBottom: 4,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   <Spin size="small" />
@@ -737,7 +737,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-6)', marginTop: 4 }}>
             <Button size="small" onClick={handleMentionToDrawer}>
               Mention vào Chat
             </Button>

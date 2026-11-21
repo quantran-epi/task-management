@@ -360,7 +360,7 @@ export function RemoteTerminalPanel({
           color: '#bcbec4',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <Tag color={connected ? 'green' : connecting ? 'orange' : 'default'} style={{ margin: 0, fontSize: 'var(--font-size-xs)' }}>
             {connected ? 'SSH Connected' : connecting ? 'Connecting...' : 'Disconnected'}
           </Tag>
@@ -381,7 +381,7 @@ export function RemoteTerminalPanel({
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <Tooltip title="Extract Mermaid diagrams from terminal output into Diagram Studio">
             <Button
               size="small"

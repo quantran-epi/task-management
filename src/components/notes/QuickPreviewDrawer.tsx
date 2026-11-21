@@ -349,7 +349,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
   // panel is text-only (no dangerouslySetInnerHTML) and never auto-imports.
   const hasCitationData = Boolean(citedExcerpt || citedSnapshotId || (setIds && setIds.length > 0));
   const localAbsentExcerptPanel = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
       <div
         data-testid="local-document-absent-notice"
         style={{
@@ -375,7 +375,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
             </Text>
           )}
         </div>
-        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', fontSize: 13 }}>
           {_sectionAnchor && <div><Text strong>Mục:</Text> {_sectionAnchor}</div>}
           {citedExcerpt && <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{citedExcerpt}</div>}
           {(setIds?.length ?? 0) > 0 && (
@@ -392,7 +392,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
     <Modal
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 24, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0 }}>
             <FileTextOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span
               style={{
@@ -446,7 +446,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
           <Empty description="Không tìm thấy tài liệu hoặc đã bị xóa" />
         )
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
           {/* 1. Snapshot-mismatch banner when currentHash !== citedContentHash (D-10) */}
           {hashMismatch && (
             <div data-testid="snapshot-mismatch-banner">
@@ -500,7 +500,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   color: '#0958d9',
                   display: 'flex',
                   alignItems: 'flex-start',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                   lineHeight: 1.5,
                 }}
               >
@@ -739,7 +739,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 'var(--gap-6)',
                   marginBottom: 10,
                   fontWeight: 600,
                   fontSize: 13,
@@ -754,7 +754,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
                 {backlinks.tasks.map((task: Task) => (
                   <div
                     key={`task-backlink-${task.id}`}
@@ -764,7 +764,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
@@ -788,7 +788,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
@@ -806,7 +806,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',

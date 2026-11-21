@@ -192,7 +192,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
       }}
     >
       {/* Header with Search and Sort */}
-      <div style={{ padding: '12px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ padding: '12px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
         {/* Optional Current Folder Scope Indicator with Breadcrumbs */}
         {currentFolder && (
           <div
@@ -206,7 +206,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               border: '1px solid #fde68a',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
               <FolderFilled style={{ color: '#d97706', fontSize: 15, flexShrink: 0 }} />
               <div
                 style={{
@@ -218,7 +218,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   whiteSpace: 'nowrap',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 'var(--gap-4)',
                 }}
               >
                 {folderPath && folderPath.length > 1 ? (
@@ -324,7 +324,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
           padding: '4px 8px 12px 8px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 'var(--gap-6)',
         }}
       >
         {filteredAndSortedDocs.length === 0 ? (
@@ -385,8 +385,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 }}
               >
                 {/* Title row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--gap-6)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
                     {isQuickNote ? (
                       <FormOutlined style={{ fontSize: 13, color: '#faad14' }} />
                     ) : (
@@ -406,7 +406,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-2)' }}>
                     {doc.isPinned && <PushpinFilled style={{ color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }} />}
                     {doc.deletedAt && onRestoreDoc && (
                       <Tooltip title="Khôi phục tài liệu">
@@ -476,7 +476,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     color: '#bfbfbf',
                   }}
                 >
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: '70%' }}>
+                  <div style={{ display: 'flex', gap: 'var(--gap-4)', flexWrap: 'wrap', maxWidth: '70%' }}>
                     {doc.tags?.slice(0, 2).map((t) => (
                       <Tag key={t} style={{ margin: 0, fontSize: 10, padding: '0 4px', borderRadius: 4 }}>
                         #{t}
@@ -486,7 +486,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                       <span style={{ fontSize: 10 }}>+{(doc.tags?.length || 0) - 2}</span>
                     )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
                     <DocPublishBadge status={publishStatuses?.[doc.id]} compact={compactPublishBadges} />
                     <span>{new Date(doc.updatedAt).toLocaleDateString('vi-VN')}</span>
                   </div>

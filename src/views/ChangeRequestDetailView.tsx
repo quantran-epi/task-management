@@ -247,7 +247,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
+        gap: 'var(--gap-16)',
         padding: '16px 20px',
         maxWidth: 1400,
         margin: '0 auto',
@@ -260,15 +260,15 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          gap: 16,
+          gap: 'var(--gap-16)',
           padding: '16px 20px',
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flexWrap: 'wrap' }}>
             <Tag
               color="blue"
               style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)', padding: '2px 8px', margin: 0 }}
@@ -286,7 +286,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             </Tag>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexWrap: 'wrap' }}>
             {targetSystems.length > 0 ? (
               targetSystems.map((sys) => (
                 <Tooltip key={sys.id} title={`${sys.name} (${sys.type})`}>
@@ -354,7 +354,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 key: 'name',
                 render: (name: string, record: Task) => (
                   <span
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', cursor: 'pointer' }}
                     onClick={() => openTaskDrawer(record.id)}
                   >
                     <span
@@ -436,7 +436,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         items={secondaryBlocks.map((block) => ({
           key: block.key,
           label: (
-            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
               {block.header}
               {block.count > 0 && (
                 <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>

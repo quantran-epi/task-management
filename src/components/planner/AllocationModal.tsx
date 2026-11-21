@@ -285,7 +285,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
               const item = option.data as { task: Task; crName?: string };
               const t = item.task;
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', padding: '2px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text ellipsis style={{ maxWidth: 260 }}>
                       {t.name}

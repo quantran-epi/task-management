@@ -193,7 +193,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
           paddingBottom: 12,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
           <UserOutlined style={{ fontSize: 20, color: 'var(--accent, #3871e1)' }} />
           <div>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>

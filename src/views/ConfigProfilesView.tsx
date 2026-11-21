@@ -580,7 +580,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 'var(--gap-8)',
           flexWrap: 'nowrap',
           marginBottom: 12,
         }}

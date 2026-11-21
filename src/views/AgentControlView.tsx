@@ -244,7 +244,7 @@ export const AgentControlView: React.FC = () => {
         onClose={() => setAuditDrawerOpen(false)}
       >
         {selectedAuditRecord && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
             {/* Session Summary Metadata */}
             <Descriptions size="small" bordered column={1}>
               <DescriptionsItem label="Trạng thái">
@@ -329,14 +329,14 @@ export const AgentControlView: React.FC = () => {
               </Title>
               {selectedAuditRecord.userFeedbackHistory &&
               selectedAuditRecord.userFeedbackHistory.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
                   {selectedAuditRecord.userFeedbackHistory.map((fb, idx) => (
                     <div
                       key={idx}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 6,
+                        gap: 'var(--gap-6)',
                         padding: 10,
                         backgroundColor: '#fafafa',
                         border: '1px solid #f0f0f0',

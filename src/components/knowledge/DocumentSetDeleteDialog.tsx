@@ -88,7 +88,7 @@ export const DocumentSetDeleteDialog: React.FC<DocumentSetDeleteDialogProps> = (
           <Paragraph>
             Bộ tài liệu này chưa từng xuất bản lên máy chủ Knowledge Server. Bạn có chắc chắn muốn xóa bản ghi này khỏi cơ sở dữ liệu cục bộ không?
           </Paragraph>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)', marginTop: 16 }}>
             <Button disabled={isDeleting} onClick={close}>Hủy</Button>
             <Button type="primary" danger loading={isDeleting} onClick={() => void executeDeleteLocalOnly()}>
               Xóa cục bộ
@@ -113,7 +113,7 @@ export const DocumentSetDeleteDialog: React.FC<DocumentSetDeleteDialogProps> = (
             onChange={(event) => setConfirmation(event.target.value)}
             disabled={isDeleting}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', marginTop: 16 }}>
             <Button
               type="primary"
               danger

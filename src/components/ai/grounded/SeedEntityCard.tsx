@@ -47,13 +47,13 @@ export const SeedEntityCard: React.FC<SeedEntityCardProps> = ({
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
-        gap: 4,
+        gap: 'var(--gap-4)',
         fontSize: 14,
         lineHeight: 1.5,
         color: token.colorText,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600 }}>{entity.canonicalName}</span>
         <Tag
           color="processing"

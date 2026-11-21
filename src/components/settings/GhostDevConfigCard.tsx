@@ -88,7 +88,7 @@ export const GhostDevConfigCard: React.FC = () => {
       )}
 
       <Form form={form} layout="vertical">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-16)' }}>
           <FormItem
             name="masterModel"
             label="Default Master Model (Lead Agent)"

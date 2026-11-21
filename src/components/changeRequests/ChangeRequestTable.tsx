@@ -151,7 +151,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
           <>
             {contextHolder}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
               <span
                 style={{
                   fontWeight: 600,
@@ -202,7 +202,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 8,
+                        gap: 'var(--gap-8)',
                         maxWidth: 380,
                         maxHeight: 280,
                         overflowY: 'auto',
@@ -225,7 +225,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                               fontSize: 'var(--font-size-small)',
                               display: 'flex',
                               alignItems: 'flex-start',
-                              gap: 6,
+                              gap: 'var(--gap-6)',
                               lineHeight: 1.4,
                               color: token.colorLink,
                             }}
@@ -299,7 +299,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
         }
 
         return (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)' }}>
             {targets.map((target) => {
               const sys = systemMap.get(target.systemId);
               const label = sys ? sys.code : target.systemId.slice(0, 8);

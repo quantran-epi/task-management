@@ -180,10 +180,10 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {/* Top Banner: Spent progress and active timer controls */}
       <Card size="small" styles={{ body: { padding: '12px 16px' } }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
@@ -231,7 +231,7 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
               border: `1px solid ${token.colorBorderSecondary}`,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
               <span
                 style={{
                   width: 10,

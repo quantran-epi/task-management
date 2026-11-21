@@ -434,7 +434,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
           padding: '6px 10px',
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
           flexWrap: 'nowrap',
-          gap: 8,
+          gap: 'var(--gap-8)',
           backgroundColor: token.colorBgContainer,
         }}
       >
@@ -546,7 +546,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                 borderBottom: `1px solid ${token.colorBorderSecondary}`,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 'var(--gap-8)',
               }}
             >
               <div
@@ -573,7 +573,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   placement="bottomRight"
                   title={<span style={{ fontSize: 'var(--font-size-small)' }}>Loại trừ khỏi Explorer</span>}
                   content={
-                    <div style={{ width: 230, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ width: 230, display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
                       <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                         Bỏ qua thư mục quá lớn để tối ưu hiệu năng:
                       </Text>
@@ -754,7 +754,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                 }}
               >
                 <Space direction="horizontal" size={8} style={{ overflow: 'hidden' }}>

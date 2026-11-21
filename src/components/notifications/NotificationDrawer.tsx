@@ -94,7 +94,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     <Drawer
       zIndex={1050}
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <span>Thông báo & Nhắc nhở</span>
           <Badge
             count={items.length}

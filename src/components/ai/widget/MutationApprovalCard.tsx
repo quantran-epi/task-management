@@ -33,14 +33,14 @@ export const MutationApprovalCard: React.FC<MutationApprovalCardProps> = ({
         borderRadius: 'var(--radius-control)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 'var(--gap-8)',
       }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 'var(--gap-8)',
           fontSize: 14,
           fontWeight: 600,
           color: token.colorWarningText,
@@ -56,7 +56,7 @@ export const MutationApprovalCard: React.FC<MutationApprovalCardProps> = ({
         dangerouslySetInnerHTML={{ __html: summaryHtml }}
       />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)', marginTop: 4 }}>
         <Button danger onClick={onReject}>
           Từ chối
         </Button>

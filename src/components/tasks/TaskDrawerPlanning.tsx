@@ -255,7 +255,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           marginBottom: 12,
         }}
       >
-        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <ClockCircleOutlined />
           <span>Lập kế hoạch & Phân bổ hàng ngày</span>
         </Title>

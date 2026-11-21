@@ -196,7 +196,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
       </div>
 
       <ImagePreviewGroup>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
           {/* Persisted attachments */}
           {attachments.map((att) => {
             const previewUrl = objectUrls.get(att.id);

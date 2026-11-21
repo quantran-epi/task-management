@@ -88,7 +88,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
       destroyOnHidden
       title="Tạo nhóm"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={onCancel}>Hủy</Button>
           <Button
             type="primary"
@@ -102,7 +102,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         </div>
       }
     >
-      <div data-testid="team-editor-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div data-testid="team-editor-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
         {error && <Alert type="error" showIcon message={error} />}
 
         <div>

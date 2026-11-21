@@ -574,7 +574,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     display: 'inline-flex',
                     flexWrap: 'wrap',
                     alignItems: 'center',
-                    gap: 4,
+                    gap: 'var(--gap-4)',
                   }}
                 >
                   {activeCitations.map((c) => {
@@ -641,7 +641,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 marginTop: 4,
                 paddingLeft: 4,
               }}
@@ -663,7 +663,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                       color: token.colorTextQuaternary,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 'var(--gap-2)',
                       cursor: 'default',
                     }}
                   >
@@ -683,7 +683,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                       color: token.colorTextQuaternary,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 'var(--gap-2)',
                       cursor: 'default',
                     }}
                   >
@@ -863,7 +863,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 'var(--gap-8)',
               marginTop: 4,
               paddingLeft: 4,
             }}
@@ -885,7 +885,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     color: token.colorTextQuaternary,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 2,
+                    gap: 'var(--gap-2)',
                     cursor: 'default',
                   }}
                 >
@@ -905,7 +905,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     color: token.colorTextQuaternary,
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 2,
+                    gap: 'var(--gap-2)',
                     cursor: 'default',
                   }}
                 >
@@ -1298,11 +1298,11 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         {isUser ? (
           <div style={{ whiteSpace: 'pre-wrap' }}>{renderUserMessageWithMentions(msg.content)}</div>
         ) : isStreaming && !msg.content ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', padding: '4px 0' }}>
             <Spin
               indicator={<LoadingOutlined style={{ fontSize: 16, color: token.colorPrimary }} spin />}
             />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
               <Text strong style={{ fontSize: 13, color: token.colorText }}>
                 {streamingStatus || 'Đang suy nghĩ câu trả lời...'}
               </Text>
@@ -1352,7 +1352,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
       {/* AI-Generated Files Cards */}
       {!isUser && !isStreaming && msg.generatedFiles && msg.generatedFiles.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', marginTop: 8 }}>
           {msg.generatedFiles.map((file) => {
             const formatLower = file.format?.toLowerCase() || '';
             const isImage =
@@ -1375,7 +1375,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     alt={file.filename}
                     style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 'var(--radius-control)', display: 'block' }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 'var(--gap-12)' }}>
                     <Text strong ellipsis style={{ fontSize: 13 }}>{file.filename}</Text>
                     <a href={file.content} download={file.filename}>
                       <Button size="small" icon={<DownloadOutlined />} style={{ fontSize: 'var(--font-size-small)', height: 26 }}>
@@ -1416,10 +1416,10 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                   borderRadius: 'var(--radius-control)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   backgroundColor: token.colorFillAlter,
-                  gap: 12,
+                  gap: 'var(--gap-12)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', overflow: 'hidden' }}>
                   {fileIcon}
                   <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                     <Text strong ellipsis style={{ fontSize: 13 }}>
@@ -1430,7 +1430,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     </Text>
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexShrink: 0 }}>
                   <Button
                     size="small"
                     icon={<DownloadOutlined />}
@@ -1464,7 +1464,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 6,
+            gap: 'var(--gap-6)',
             marginTop: 6,
             paddingLeft: 4,
           }}
@@ -1512,7 +1512,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 'var(--gap-8)',
           marginTop: 4,
           minHeight: 20,
           paddingLeft: isUser ? 0 : 4,
@@ -1528,7 +1528,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-2)', cursor: 'default' }}>
               ⏱ {(msg.durationMs / 1000).toFixed(1)}s
             </span>
           </Tooltip>
@@ -1539,7 +1539,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             zIndex={1500}
             getPopupContainer={(node) => node.parentElement || document.body}
           >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, cursor: 'default' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-2)', cursor: 'default' }}>
               🪙 {(msg.tokenUsage.totalTokens ?? ((msg.tokenUsage.promptTokens || 0) + (msg.tokenUsage.completionTokens || 0))).toLocaleString()} tokens
             </span>
           </Tooltip>
@@ -1567,7 +1567,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           </Tooltip>
         )}
 
-        <div className="tc-actions" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <div className="tc-actions" style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-2)' }}>
           <Tooltip
             title={copied ? 'Đã sao chép' : 'Sao chép nội dung'}
             zIndex={1500}

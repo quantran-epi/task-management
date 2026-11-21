@@ -351,7 +351,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
     <>
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
             <FileTextOutlined style={{ color: 'var(--accent)' }} />
             <span>Xem trước & Nhập tài liệu từ Zip</span>
             {zipFile && (
@@ -399,7 +399,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
             />
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-14)' }}>
             {/* Top configuration box: target destination folder */}
             <div
               style={{
@@ -422,7 +422,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
               </RadioGroup>
 
               {targetMode === 'new' ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 420 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', maxWidth: 420 }}>
                   <Input
                     prefix={<FolderAddOutlined style={{ color: 'var(--accent)' }} />}
                     placeholder="Tên thư mục mới..."
@@ -452,8 +452,8 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
             </div>
 
             {/* Filter and summary toolbar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-12)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
                 <Checkbox
                   indeterminate={selectedCount > 0 && selectedCount < extractedDocs.length}
                   checked={selectedCount === extractedDocs.length && extractedDocs.length > 0}
@@ -548,7 +548,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
       {/* Markdown Content Preview Drawer */}
       <Drawer
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
             <FileTextOutlined style={{ color: 'var(--accent)' }} />
             <span>{previewDoc?.detectedTitle || previewDoc?.fileName}</span>
           </div>

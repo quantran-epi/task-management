@@ -61,7 +61,7 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
         </Button>,
       ]}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
         <div style={{ fontSize: 14, fontWeight: 600 }}>{scopeLine}</div>
 
         <Descriptions size="small" column={1}>

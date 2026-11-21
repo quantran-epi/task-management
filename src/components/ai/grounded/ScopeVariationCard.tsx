@@ -87,7 +87,7 @@ export const ScopeVariationCard: React.FC<ScopeVariationCardProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'baseline',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 marginBottom: index < conflictGroup.branches.length - 1 ? 6 : 0,
               }}
             >

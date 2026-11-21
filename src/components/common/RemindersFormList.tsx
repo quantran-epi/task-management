@@ -102,7 +102,7 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                 key={field.key}
                 style={{
                   display: 'flex',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                   alignItems: 'flex-start',
                   width: '100%',
                 }}

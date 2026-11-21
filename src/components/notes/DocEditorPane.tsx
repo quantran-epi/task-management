@@ -624,7 +624,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           padding: '8px 16px',
           borderBottom: '1px solid #f0f0f0',
           backgroundColor: '#fafafa',
-          gap: 12,
+          gap: 'var(--gap-12)',
           flexShrink: 0,
           minWidth: 0,
         }}
@@ -853,7 +853,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             width: '100%',
           }}
         />
-        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--gap-6)', marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {parentTask && (
             <Tag
               color="blue"
@@ -1030,12 +1030,12 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: 8,
+                        gap: 'var(--gap-8)',
                         borderLeft: isSelected ? '3px solid #7c3aed' : '3px solid transparent',
                         transition: 'background-color 0.15s',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', overflow: 'hidden' }}>
                         {icon}
                         <span
                           style={{
@@ -1191,9 +1191,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           <span>{charCount} ký tự</span>
           <span>{wordCount} từ</span>
         </Space>
-        <div data-testid="doc-editor-status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div data-testid="doc-editor-status" style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <DocPublishBadge status={publishStatus} compact={compactPublishBadge} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
             <CloudSyncOutlined style={{ color: '#52c41a' }} />
             <span>{saveStatus}</span>
           </div>

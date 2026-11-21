@@ -91,7 +91,7 @@ export const MiniDayCard: React.FC<MiniDayCardProps> = ({ day, onNavigateToDate 
         transition: 'all 0.2s ease',
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 'var(--gap-6)',
       }}
     >
       {/* Top row: Date, Day name, and Today badge */}

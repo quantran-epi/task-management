@@ -538,7 +538,7 @@ export function DocumentSetDetail({
   return (
     <div
       data-testid="doc-set-detail"
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 12, overflow: 'auto' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 'var(--gap-12)', overflow: 'auto' }}
     >
       <div style={{ flexShrink: 0 }}>
         <Title level={4} style={{ margin: 0, fontSize: 20 }}>
@@ -735,12 +735,12 @@ export function DocumentSetDetail({
                   )}
                 </Descriptions>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--gap-8)', marginTop: 4 }}>
                   <Statistic title="Thực thể" value={graphStatus?.nodeCount ?? 0} />
                   <Statistic title="Sự kiện" value={graphStatus?.factCount ?? 0} />
                   <Statistic title="Dẫn chứng" value={graphStatus?.evidenceCount ?? 0} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 'var(--gap-8)' }}>
                   <Statistic
                     title="Mâu thuẫn"
                     value={graphStatus?.conflictCount ?? 0}
@@ -891,7 +891,7 @@ export function DocumentSetDetail({
       >
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           {chunkData && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--gap-8)' }}>
               <Statistic title="Tổng số phần" value={chunkData.total} />
               <Statistic title="Thành công" value={chunkData.success} valueStyle={{ color: token.colorSuccess }} />
               <Statistic

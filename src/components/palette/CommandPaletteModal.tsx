@@ -430,9 +430,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         body: { padding: '12px' },
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
         {/* Search input bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <Input
             ref={inputRef}
             size="large"
@@ -459,7 +459,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         </div>
 
         {/* Quick prefix filter buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexWrap: 'wrap' }}>
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 2 }}>
             Bộ lọc nhanh:
           </Text>

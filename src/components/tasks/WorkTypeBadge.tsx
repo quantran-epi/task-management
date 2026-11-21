@@ -64,7 +64,7 @@ export const WorkTypeBadge: React.FC<WorkTypeBadgeProps> = ({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
+        gap: 'var(--gap-4)',
         margin: 0,
         ...style,
       }}

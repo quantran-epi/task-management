@@ -132,7 +132,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
           style={{ margin: '16px 0' }}
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
           {notes.map((note) => {
             const count = attachmentCounts?.get(note.id) || 0;
             return (

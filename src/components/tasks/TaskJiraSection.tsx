@@ -310,19 +310,19 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
           marginBottom: 12,
         }}
       >
-        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <BranchesOutlined style={{ color: 'var(--accent)' }} />
           <span>Tích hợp Jira Cloud</span>
         </Title>
       </div>
 
       {!task.jiraKey ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
           <Text type="secondary" style={{ fontSize: 13 }}>
             Tác vụ chưa được liên kết với Jira Issue nào.
           </Text>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-8)', alignItems: 'center' }}>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -363,7 +363,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-14)' }}>
           {/* Header row with Jira key badge and Unlink button */}
           <div
             style={{
@@ -388,7 +388,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
                   padding: '2px 8px',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 'var(--gap-4)',
                   margin: 0,
                 }}
                 onClick={() => {
@@ -436,7 +436,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
               border: '1px solid #f0f0f0',
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -560,7 +560,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
                 Không có luồng chuyển trạng thái nào khả dụng từ trạng thái hiện tại.
               </Text>
             ) : (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 'var(--gap-8)', alignItems: 'center' }}>
                 <Select
                   value={selectedTransitionId}
                   onChange={(val) => setSelectedTransitionId(val)}

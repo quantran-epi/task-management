@@ -75,6 +75,21 @@ export const fileStatusMap = {
 
 const cssMetrics = {
   '--island-gap': sharedTokens.islandGap,
+  // D-09: spacing gaps reach views as CSS vars, never inline literals.
+  // Exact values preserve current spacing; each maps 1:1 to its old px literal.
+  '--gap-1': '1px',
+  '--gap-2': '2px',
+  '--gap-3': '3px',
+  '--gap-4': '4px',
+  '--gap-5': '5px',
+  '--gap-6': '6px',
+  '--gap-7': '7px',
+  '--gap-8': '8px',
+  '--gap-10': '10px',
+  '--gap-12': '12px',
+  '--gap-14': '14px',
+  '--gap-16': '16px',
+  '--gap-24': '24px',
   '--island-radius': '8px',
   '--radius-small': '4px',
   '--radius-control': '4px',

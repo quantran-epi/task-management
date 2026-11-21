@@ -124,7 +124,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
                 fontSize: 'var(--font-size-small)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-4)',
               }}
               onClick={() => onOpenDocPreview(doc.id)}
             >
@@ -150,7 +150,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
                 fontSize: 'var(--font-size-small)',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-4)',
                 cursor: link.docId ? 'pointer' : 'default',
                 maxWidth: '100%',
               }}

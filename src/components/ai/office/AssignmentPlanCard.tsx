@@ -51,10 +51,10 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
         borderLeft: `3px solid ${token.colorPrimary}`,
         display: 'flex',
         flexDirection: 'column',
-        gap: 8,
+        gap: 'var(--gap-8)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', fontSize: 14, fontWeight: 600 }}>
         <TeamOutlined style={{ color: token.colorPrimary }} />
         <span>Kế hoạch phân việc</span>
         <span style={{ marginLeft: 'auto' }}>
@@ -74,7 +74,7 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
               key={`${item.agentId}-${idx}`}
               style={{
                 display: 'flex',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 alignItems: 'center',
                 padding: '6px 0',
                 borderTop: idx === 0 ? 'none' : `1px dashed ${token.colorBorderSecondary}`,
@@ -104,11 +104,11 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
             : 'Đã từ chối — không nhân viên nào được giao việc.'}
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
           <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             Duyệt để bắt đầu lô việc này.
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
             <Button onClick={onReject} data-testid="assignment-plan-reject">
               Từ chối
             </Button>

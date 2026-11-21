@@ -38,7 +38,7 @@ export const PartialSeedNotice: React.FC<PartialSeedNoticeProps> = ({
         Không phân giải được {failedSeeds.length} thực thể:{' '}
         {shown.map((seed) => seed.urn).join(', ')}. Kết quả bên dưới chỉ từ các thực thể hợp lệ.
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)', marginTop: 6 }}>
         {shown.map((seed) => (
           <ReasonCodeChip key={seed.urn} code={seed.reasonCode} />
         ))}

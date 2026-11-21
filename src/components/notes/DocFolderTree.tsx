@@ -447,7 +447,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           }}
           className="doc-tree-item"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
             <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? 'var(--accent)' : isDiagram ? '#10b981' : '#6b7280' }}>
               {isDiagram ? <ApartmentOutlined /> : isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
             </span>
@@ -484,7 +484,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           </div>
 
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, marginLeft: 4 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-2)', flexShrink: 0, marginLeft: 4 }}
             onClick={(e) => e.stopPropagation()}
           >
             {publishStatuses?.[doc.id] && (
@@ -617,7 +617,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           transition: 'all 0.15s ease',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', minWidth: 0, flex: 1 }}>
           <span
             className="workbench-tree-expand-btn"
             role="button"
@@ -634,7 +634,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0, marginLeft: 4 }} onClick={(e) => e.stopPropagation()}>
           <span
             style={{
               fontSize: 'var(--font-size-xs)',
@@ -672,7 +672,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         )}
 
         {isExpanded && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
             {visibleDocs.length === 0 ? (
               <div style={{ padding: '4px 8px 4px 34px', fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
                 Trống
@@ -820,7 +820,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
+            gap: 'var(--gap-4)',
             minWidth: 0,
             flex: 1,
           }}
@@ -863,7 +863,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 2,
+            gap: 'var(--gap-2)',
             flexShrink: 0,
             marginLeft: 4,
           }}
@@ -922,7 +922,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
         {/* Expanded Content: Subfolders and Child Documents */}
         {isExpanded && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
             {node.children.map((child) => renderFolderNode(child))}
             {visibleDocs.map((doc) => renderDocItem(doc, node.depth + 1))}
             {hasMoreDocs && (
@@ -959,7 +959,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 'var(--gap-10)',
         padding: '12px 8px',
         backgroundColor: '#fafafa',
         borderRight: typeof width === 'number' ? '1px solid #f0f0f0' : 'none',
@@ -967,7 +967,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       }}
     >
       {/* 1. Search Bar & Scope Toggle */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
         <Input
           placeholder="Tìm kiếm tài liệu (BM25)..."
           prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
@@ -1008,7 +1008,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       </div>
 
       {/* 2. Top CTA buttons */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
         <Button
           type="primary"
           style={{
@@ -1069,7 +1069,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
       {/* 3. When Searching: Render Search Result List */}
       {debouncedQuery ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)', flex: 1, overflowY: 'auto' }}>
           <div style={{ padding: '4px 8px', fontSize: 'var(--font-size-xs)', fontWeight: 700, color: '#6b7280' }}>
             KẾT QUẢ TÌM KIẾM ({searchResults?.length || 0})
             {searchScope === 'folder' && (
@@ -1090,7 +1090,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         </div>
       ) : (
         /* 4. Normal Mode: Unified Tree with Special Folders + User Folders + Root Documents */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', flex: 1 }}>
           {/* Top Special System Folders */}
           {renderSpecialFolder('pinned', 'Đã ghim', <PushpinFilled style={{ color: '#f59e0b' }} />, pinnedDocs, '#f59e0b')}
           {renderSpecialFolder(
@@ -1187,7 +1187,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 </Button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
                 {folderTree.map((rootNode) => renderFolderNode(rootNode))}
               </div>
             )}
@@ -1207,7 +1207,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               >
                 TAGS
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '0 4px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)', padding: '0 4px' }}>
                 {tagCounts.map(([tag, count]) => {
                   const isTagActive = activeTag === tag;
                   return (
@@ -1225,7 +1225,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 4,
+                        gap: 'var(--gap-4)',
                         padding: '2px 8px',
                         borderRadius: 12,
                         fontSize: 'var(--font-size-small)',

@@ -32,13 +32,13 @@ const panelStyle: React.CSSProperties = {
 const toolbarStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 8,
+  gap: 'var(--gap-8)',
   padding: '9px 14px',
   borderBottom: '1px solid var(--border, #e9eaee)',
   flexWrap: 'wrap',
 };
 const toolBtnStyle: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px',
+  display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', height: 28, padding: '0 10px',
   border: '1px solid var(--border-strong, #d1d3d9)', borderRadius: 'var(--radius-control)',
   background: 'var(--bg-island, #fff)', color: 'var(--fg, #1f2937)',
   font: 'inherit', fontSize: 'var(--font-size-small, 12px)', cursor: 'pointer',
@@ -83,7 +83,7 @@ const footerStyle: React.CSSProperties = {
   height: 28,
   display: 'flex',
   alignItems: 'center',
-  gap: 14,
+  gap: 'var(--gap-14)',
   padding: '0 14px',
   background: 'var(--bg-elev, #f7f8fa)',
   borderTop: '1px solid var(--border, #e9eaee)',
@@ -391,7 +391,7 @@ function SaveAsModal({ open, defaultName, formats, db, onClose }: SaveAsModalPro
         <Radio value="download">Tải về máy</Radio>
         <Radio value="docs">Lưu vào Docs</Radio>
       </RadioGroup>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
         <Input aria-label="Tên file/doc" value={name} onChange={(e) => setDefaultName(e.target.value)} placeholder="Tên file/doc" />
         <Select aria-label="Định dạng" value={extension} onChange={setExtension} style={{ width: 110 }} options={formats.map((f) => ({ value: f.extension, label: `.${f.extension}` }))} />
       </div>

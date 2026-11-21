@@ -66,13 +66,13 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
 
   return (
     <div className="doc-outline-toc" style={{ padding: '8px 4px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', marginBottom: 8, paddingLeft: 4 }}>
         <OrderedListOutlined style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }} />
         <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#595959' }}>
           Mục lục
         </Text>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
         {headings.map((item, idx) => {
           const indent = (item.level - 1) * 12 + 4;
           return (

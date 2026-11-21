@@ -175,7 +175,7 @@ function compactedNodeToDataNode(node: CompactedNode): CustomTreeNodeData {
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--gap-6)',
           minWidth: 0,
           maxWidth: '100%',
           overflow: 'hidden',
@@ -760,14 +760,14 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 'var(--gap-8)',
           padding: '8px 10px',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-elev)',
         }}
       >
         {/* SSH Host Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <CloudServerOutlined style={{ color: 'var(--folder-icon)', fontSize: 13 }} />
           <Select
             size="small"
@@ -784,7 +784,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         </div>
 
         {/* Remote Repository Path */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <FolderViewOutlined style={{ color: 'var(--fg-muted)', fontSize: 13 }} />
           <Input
             size="small"
@@ -808,7 +808,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         </div>
 
         {/* Branch Selector & Refresh */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <BranchesOutlined style={{ color: 'var(--accent)', fontSize: 13 }} />
           <Select
             size="small"
@@ -846,7 +846,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         </div>
 
         {/* Global whole-ref search (IntelliJ-style) — distinct from the subtree search below */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
             Tìm toàn kho
           </span>
@@ -888,7 +888,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         }}
       >
         {globalQuery.trim() ? (
-          <div data-testid="global-search-results" role="listbox" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div data-testid="global-search-results" role="listbox" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
             {globalResults.length === 0 && !globalSearching ? (
               <div style={{ padding: 12, fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>
                 Không có kết quả trong kho từ xa.

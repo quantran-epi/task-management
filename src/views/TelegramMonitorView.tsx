@@ -352,9 +352,9 @@ export const TelegramMonitorView: React.FC = () => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--gap-16)' }}>
           <Space orientation="vertical" size={2}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
               <SendOutlined style={{ fontSize: 24, color: 'var(--accent)' }} />
               <Title level={4} style={{ margin: 0 }}>
                 Telegram AI Gateway
@@ -443,7 +443,7 @@ export const TelegramMonitorView: React.FC = () => {
                       justifyContent: 'space-between',
                       marginBottom: 16,
                       flexWrap: 'wrap',
-                      gap: 12,
+                      gap: 'var(--gap-12)',
                     }}
                   >
                     <Space>
@@ -632,7 +632,7 @@ export const TelegramMonitorView: React.FC = () => {
             {
               key: 'whitelist',
               label: (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                   <SafetyCertificateOutlined />
                   <span>Whitelist & Phân quyền ({activeUsersCount})</span>
                   {pendingCount > 0 && (
@@ -691,7 +691,7 @@ export const TelegramMonitorView: React.FC = () => {
                       }
                       size="small"
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
                         {pendingUsers.map((p) => (
                           <div
                             key={p.chatId}
@@ -704,7 +704,7 @@ export const TelegramMonitorView: React.FC = () => {
                               borderRadius: 'var(--radius-control)',
                               border: '1px solid #fde68a',
                               flexWrap: 'wrap',
-                              gap: 8,
+                              gap: 'var(--gap-8)',
                             }}
                           >
                             <Space orientation="vertical" size={2}>

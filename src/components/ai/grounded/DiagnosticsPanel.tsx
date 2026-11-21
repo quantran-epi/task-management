@@ -63,7 +63,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'fulltext',
       label: 'Toàn văn (BM25)',
       children: diagnostics?.fulltext ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           {renderStatusTag(diagnostics.fulltext.status)}
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.fulltext.latencyMs}ms ({diagnostics.fulltext.itemCount} mục)
@@ -75,7 +75,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'vector',
       label: 'Ngữ nghĩa (Vector)',
       children: diagnostics?.vector ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           {renderStatusTag(diagnostics.vector.status)}
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.vector.latencyMs}ms ({diagnostics.vector.itemCount} mục)
@@ -87,7 +87,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'graph',
       label: 'Đồ thị (Graph)',
       children: diagnostics?.graph ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           {renderStatusTag(diagnostics.graph.status)}
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.graph.latencyMs}ms ({diagnostics.graph.itemCount} mục)

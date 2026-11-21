@@ -220,13 +220,13 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 12,
+              gap: 'var(--gap-12)',
               minWidth: 260,
               padding: '4px 0',
             }}
             onClick={() => handleOpenChat(turn)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0, flex: 1 }}>
               <SyncOutlined spin style={{ fontSize: 'var(--font-size-small)', color: token.colorPrimary }} />
               <div style={{ minWidth: 0 }}>
                 <Typography.Text strong ellipsis style={{ fontSize: 'var(--font-size-small)', display: 'block' }}>
@@ -238,7 +238,7 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexShrink: 0 }}>
               <Typography.Text
                 style={{
                   fontVariantNumeric: 'tabular-nums',
@@ -275,7 +275,7 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
       danger: true,
       label: (
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', padding: '2px 0' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', justifyContent: 'center', padding: '2px 0' }}
           onClick={() => aiTurnManager.abortAll()}
         >
           <CloseCircleOutlined />

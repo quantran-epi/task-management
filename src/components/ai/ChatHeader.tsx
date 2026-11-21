@@ -101,12 +101,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         padding: '0 10px',
         borderBottom: `1px solid var(--border, #e9eaee)`,
         background: `var(--bg-elev, #f7f8fa)`,
-        gap: 6,
+        gap: 'var(--gap-6)',
         userSelect: 'none',
         boxSizing: 'border-box',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
         <JetBrainsAIIcon size={14} />
         <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
           Trợ lý AI
@@ -118,7 +118,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               padding: '2px 8px',
               background: token.colorBgContainer,
               border: `1px solid ${token.colorBorderSecondary}`,
@@ -167,7 +167,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         )}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0 }}>
         {onPopout && (
           <Tooltip title="Mở cửa sổ riêng (Popout)">
             <Button

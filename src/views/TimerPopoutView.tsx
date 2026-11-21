@@ -187,7 +187,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
           display: 'flex',
           flexDirection: 'column',
           justifyContent: activeTimers.length <= 1 ? 'center' : 'flex-start',
-          gap: 6,
+          gap: 'var(--gap-6)',
         }}
       >
         {activeTimers.length === 0 ? (
@@ -223,10 +223,10 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                   background: token.colorFillAlter,
                   borderRadius: token.borderRadiusLG,
                   border: `1px solid ${token.colorBorderSecondary}`,
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0, flex: 1 }}>
                   <span
                     data-testid="popout-status-indicator"
                     style={{
@@ -319,7 +319,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 4,
+              gap: 'var(--gap-4)',
             }}
           >
             {activeTimers.map((timer) => {
@@ -340,10 +340,10 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                     background: token.colorFillAlter,
                     borderRadius: token.borderRadiusSM,
                     border: `1px solid ${token.colorBorderSecondary}`,
-                    gap: 6,
+                    gap: 'var(--gap-6)',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
                     <span
                       style={{
                         width: 6,

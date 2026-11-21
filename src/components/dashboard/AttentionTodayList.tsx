@@ -103,16 +103,16 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '10px 0',
-                  gap: 12,
+                  gap: 'var(--gap-12)',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flex: 1, minWidth: 0 }}>
                   <Checkbox
                     checked={item.task.status === 'Done'}
                     onChange={() => handleToggleDone(item.task)}
                     aria-label={`Đánh dấu hoàn thành cho ${item.task.name}`}
                   />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', flex: 1, minWidth: 0 }}>
                     <Text
                       ellipsis
                       delete={item.task.status === 'Done' || item.task.status === 'Cancelled'}
@@ -143,7 +143,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                         {internalCrMap.get(item.task.crId)}
                       </Text>
                     )}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginTop: 2 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)', alignItems: 'center', marginTop: 2 }}>
                       {item.category === 'overdue' && (
                         <Tag color="error" style={{ margin: 0 }}>
                           Quá hạn {item.daysOverdue ?? 0} ngày

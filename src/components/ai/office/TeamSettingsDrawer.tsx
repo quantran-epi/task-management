@@ -255,7 +255,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
       destroyOnHidden
       title="Cài đặt nhóm"
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={onCancel}>Hủy</Button>
           <Button type="primary" onClick={handleSave} data-testid="team-settings-save">
             Lưu cài đặt nhóm
@@ -263,7 +263,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         </div>
       }
     >
-      <div data-testid="team-settings-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div data-testid="team-settings-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
         <div data-testid="team-roster-block">
           <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Thành viên</div>
           {rosterError && (
@@ -277,7 +277,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             />
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
             {members.length === 0 && (
               <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                 Nhóm chưa có thành viên nào.
@@ -292,7 +292,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                 <div
                   key={member.id}
                   data-testid={`team-member-row-${member.id}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}
                 >
                   <Avatar
                     size={20}
@@ -392,7 +392,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                 render: (_value, row) => {
                   const color = agentColorFor(row.agentId);
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                       <Avatar
                         size={20}
                         shape={row.role === 'lead' ? 'square' : 'circle'}
@@ -444,7 +444,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
 
         <div data-testid="team-threshold-block">
           <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Ngưỡng cảnh báo</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
             <InputNumber
               min={1}
               max={100}
@@ -526,7 +526,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>Chế độ</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động chia việc</span>
@@ -548,7 +548,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>Công cụ AI theo nhóm</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 'var(--font-size-small)' }}>SSH File System</span>

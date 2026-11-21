@@ -275,7 +275,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
         </Space>
       }
       footer={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--gap-12)' }}>
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {isStreaming ? (
               <Space><Spin size="small" /> AI đang phản hồi...</Space>
@@ -303,7 +303,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
         </div>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
         {error && <Alert type="warning" showIcon message="AI không thể hoàn tất" description={error} />}
 
         {contextContent && (
@@ -344,7 +344,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
               ]}
             />
             {viewMode === 'split' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, height: 400 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)', height: 400 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border, #e5e7eb)', borderRadius: 'var(--radius-control)', overflow: 'hidden' }}>
                   <div style={paneHeaderStyle}>Nội dung gốc</div>
                   <div style={{ ...paneBodyStyle, background: 'var(--bg-elev, #fafafa)' }}>

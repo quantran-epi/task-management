@@ -951,7 +951,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   return (
     <div
       data-testid="team-workspace"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}
     >
       <Splitter
         style={{
@@ -996,14 +996,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '10px 16px',
                 borderBottom: `1px solid ${token.colorBorderSecondary}`,
               }}
             >
               <span style={{ fontSize: 16, fontWeight: 600 }}>{team.name}</span>
               {lead ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                   <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary }}>›</span>
                   <Avatar
                     size={18}
@@ -1035,7 +1035,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                     aria-label={`Ngữ cảnh nhóm đã ghim: ${team.pinnedContext}`}
                     title={team.pinnedContext}
                     data-testid="team-header-pinned-badge"
-                    style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-4)' }}
                   >
                     Đã ghim
                   </Tag>
@@ -1049,7 +1049,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   marginLeft: 'auto',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 5,
+                  gap: 'var(--gap-5)',
                   fontSize: 'var(--font-size-xs)',
                   color: token.colorTextSecondary,
                   background: token.colorFillQuaternary,

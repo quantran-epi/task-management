@@ -359,7 +359,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
           </FormItem>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
           <FormItem
             name="masterModel"
             label="Master Agent Model"
@@ -397,7 +397,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
               alignItems: 'center',
               marginBottom: 12,
               flexWrap: 'wrap',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             <Space>

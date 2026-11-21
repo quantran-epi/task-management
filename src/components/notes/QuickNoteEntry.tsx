@@ -130,7 +130,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 6,
+        gap: 'var(--gap-6)',
         padding: '10px 12px',
         borderRadius: 'var(--radius-control)',
         border: '1px solid #d9d9d9',
@@ -163,7 +163,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 8,
+          gap: 'var(--gap-8)',
           borderTop: '1px solid #f0f0f0',
           paddingTop: 6,
         }}

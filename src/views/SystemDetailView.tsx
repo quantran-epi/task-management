@@ -239,7 +239,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
     // ponytail: plain flex div, not antd `Space` — Space's mount measurement makes jsdom
     // accessible-name queries ~1s per call, which times the row-action test out.
     return (
-      <div style={{ display: 'flex', gap: 4 }}>
+      <div style={{ display: 'flex', gap: 'var(--gap-4)' }}>
         <Tooltip title={reason ?? 'Mở Git Explorer'}>
           <Button
             size="small"
@@ -396,7 +396,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         <Empty
           image={EmptyImageSimple}
           description={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
               <Text strong>Hệ thống này chưa có subsystem con nào</Text>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Subsystem là đơn vị deploy gắn đúng một repo remote SSH. Thêm subsystem để bắt đầu
@@ -464,7 +464,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         <Empty
           image={EmptyImageSimple}
           description={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
               <Text strong>
                 Chưa có Change Request nào ảnh hưởng hệ thống này
               </Text>
@@ -508,7 +508,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
         <Empty
           image={EmptyImageSimple}
           description={
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
               <Text strong>Subsystem chưa cấu hình SSH/Repo</Text>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Cấu hình SSH và đường dẫn repo trong System Catalog để xem nhánh và commit.
@@ -595,14 +595,14 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '16px 20px', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)', padding: '16px 20px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Breadcrumb navigation */}
       <Breadcrumb
         items={[
           {
             title: (
               <span
-                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}
                 onClick={() => {
                   openTab({
                     id: 'systems',
@@ -621,7 +621,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
                 {
                   title: (
                     <span
-                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                      style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}
                       onClick={() => handleOpenSystem(parentSystem)}
                     >
                       <FolderOutlined /> {parentSystem.name} ({parentSystem.code})
@@ -642,15 +642,15 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          gap: 16,
+          gap: 'var(--gap-16)',
           padding: '16px 20px',
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flexWrap: 'wrap' }}>
             <Title level={4} style={{ margin: 0 }}>
               {system.name}
             </Title>

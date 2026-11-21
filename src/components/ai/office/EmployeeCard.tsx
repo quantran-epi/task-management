@@ -16,7 +16,7 @@ function cardSurface(token: AntdToken, hovered: boolean): React.CSSProperties {
     padding: 16,
     display: 'flex',
     flexDirection: 'column',
-    gap: 8,
+    gap: 'var(--gap-8)',
   };
 }
 
@@ -47,7 +47,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
         <Avatar
           size={32}
           shape="circle"
@@ -61,7 +61,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)' }}>
         <Tag style={{ fontSize: 'var(--font-size-small)' }}>{employee.model}</Tag>
         {skillName ? (
           <Tag style={{ fontSize: 'var(--font-size-small)', background: token.colorFillAlter }}>{skillName}</Tag>
@@ -74,7 +74,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         <Tag style={{ fontSize: 'var(--font-size-small)' }}>{teamCount} nhóm</Tag>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>
@@ -113,7 +113,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
         <Avatar
           size={32}
           shape="square"
@@ -122,7 +122,7 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
           {initialOf(lead.name)}
         </Avatar>
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
             <CrownOutlined style={{ fontSize: 'var(--font-size-xs)', color: token.colorPrimary }} />
             <span style={{ fontSize: 14, fontWeight: 600 }}>{lead.name}</span>
           </div>
@@ -130,12 +130,12 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-4)' }}>
         <Tag style={{ fontSize: 'var(--font-size-small)' }}>{lead.model}</Tag>
         <Tag style={{ fontSize: 'var(--font-size-small)' }}>Lead</Tag>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
         <Button size="small" onClick={onEdit}>
           Sửa
         </Button>

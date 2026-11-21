@@ -48,7 +48,7 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
       dataIndex: 'taskName',
       key: 'taskName',
       render: (_: string, row: DayInsightRow) => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
           <Space orientation="horizontal" size={6} wrap>
             <Text style={{ opacity: row.isActive ? 1 : 0.55 }}>{row.taskName}</Text>
             {row.isRunning && (
@@ -101,7 +101,7 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
   ];
 
   return (
-    <div data-testid="day-insight-panel" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div data-testid="day-insight-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
       <div>
         <Text strong style={{ fontSize: 16 }}>
           {formattedDate}

@@ -65,7 +65,7 @@ export const WeeklyCapacityForm: React.FC<WeeklyCapacityFormProps> = ({ db = def
       size="small"
       style={{ marginBottom: 16 }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 'var(--gap-4)' }}>
         {WEEKDAYS.map((day) => {
           const rule = rules.get(day.dayOfWeek);
           const totalMinutes = rule !== undefined ? rule.workMinutes : (day.dayOfWeek >= 1 && day.dayOfWeek <= 5 ? 480 : 0);

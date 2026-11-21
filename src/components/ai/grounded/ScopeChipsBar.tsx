@@ -66,7 +66,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 6,
+        gap: 'var(--gap-6)',
         padding: '6px 10px',
         background: token.colorFillTertiary,
         borderRadius: token.borderRadiusSM,
@@ -161,7 +161,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
           color: token.colorPrimary,
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 2,
+          gap: 'var(--gap-2)',
           marginLeft: 4,
         }}
         aria-label="Chỉnh sửa phạm vi tra cứu"

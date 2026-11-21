@@ -58,7 +58,7 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
             {detectedEntities.map((entity) => {
               const isChecked = selectedIds.includes(entity.id);
               return (
-                <div key={entity.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div key={entity.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
                   <Checkbox
                     checked={isChecked}
                     onChange={() => toggleSelect(entity.id)}

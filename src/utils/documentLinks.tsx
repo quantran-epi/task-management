@@ -124,7 +124,7 @@ export function promptLocalPathAction(cleanPath: string, confirm: ConfirmDialog 
       icon: <FolderOutlined style={{ color: 'var(--accent)' }} />,
       width: 520,
       content: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', marginTop: 8 }}>
           <div
             style={{
               wordBreak: 'break-all',
@@ -144,7 +144,7 @@ export function promptLocalPathAction(cleanPath: string, confirm: ConfirmDialog 
         </div>
       ),
       footer: () => (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)', marginTop: 16 }}>
           <Button
             onClick={() => {
               modal.destroy();

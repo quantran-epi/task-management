@@ -52,7 +52,7 @@ function MutedRow({ label }: { label: string }) {
 
 function TaskLeafTitle({ task }: { task: Task }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 6 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 'var(--gap-6)' }}>
       <Typography.Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 'var(--font-size-ui)', lineHeight: 1.2 }}>
         {task.name}
       </Typography.Text>
@@ -169,8 +169,8 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
           key: `cr:${cr.id}`,
           title: (
             <Dropdown menu={{ items: getCrMenu(cr) ?? [] }} trigger={['contextMenu']}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 6 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 'var(--gap-6)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
                   {cr.code && (
                     <Tag
                       color="blue"
@@ -183,7 +183,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
                     {cr.name}
                   </Typography.Text>
                 </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0 }}>
                   <Tag color={STATUS_TAG_COLORS[cr.status] || 'default'} style={{ margin: 0, fontSize: 'var(--font-size-small)', lineHeight: '16px' }}>
                     {cr.status}
                   </Tag>
@@ -231,7 +231,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
           borderBottom: '1px solid var(--border, #e9eaee)',
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--gap-6)',
         }}
       >
         <Input
@@ -275,7 +275,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
           <Empty
             image={<InboxOutlined style={{ fontSize: 28, color: 'var(--fg-muted, #6c707e)' }} />}
             description={
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Chưa có Change Request nào</span>
                 <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #6c707e)' }}>
                   Tạo CR đầu tiên để bắt đầu.

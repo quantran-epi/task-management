@@ -80,8 +80,8 @@ export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, on
         </Button>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
+        <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
           <Select
             value={itemType}
             onChange={(value: AiTeamLinkItemType) => setItemType(value)}
@@ -108,7 +108,7 @@ export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, on
               <div
                 key={`${row.itemType}-${row.id}`}
                 role="listitem"
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 0' }}
               >
                 <span
                   style={{

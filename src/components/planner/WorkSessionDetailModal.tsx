@@ -200,7 +200,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
       width={680}
       destroyOnClose
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)', marginTop: 12 }}>
         {/* Existing sessions on this date */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -303,7 +303,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
           </Text>
 
           <Form form={form} layout="vertical" onFinish={handleFinish}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
               <FormItem
                 name="date"
                 label="Ngày làm việc"

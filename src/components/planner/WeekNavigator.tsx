@@ -60,7 +60,7 @@ export const WeekNavigator: React.FC<WeekNavigatorProps> = ({
         flexWrap: 'wrap',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
+        gap: 'var(--gap-12)',
       }}
     >
       <Space wrap size="middle">

@@ -86,7 +86,7 @@ export function LeftToolWindow({
           userSelect: 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-7)' }}>
           {icon}
           <span
             style={{
@@ -100,7 +100,7 @@ export function LeftToolWindow({
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
           <Tooltip title={`Collapse ${title}`}>
             <button
               type="button"

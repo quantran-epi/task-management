@@ -152,7 +152,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
           userSelect: 'none',
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 'var(--gap-4)',
           margin: 0,
           borderRadius: 12,
           padding: '1px 10px',

@@ -158,7 +158,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
         padding: 16,
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
+        gap: 'var(--gap-16)',
         borderRight: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
@@ -195,7 +195,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             </Tag>
           )}
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           {memberRows.map(({ member, agent, isLead }) => {
             const status = statusByAgent.get(member.agentId);
             const color = agentColorFor(member.agentId);
@@ -220,7 +220,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             // remaining) lives in the tooltip and the accessible name, not on every row.
             const usageLine = `đã dùng ${estimated ? '~' : ''}${fmt(used)} (${fmt(usedIn)} vào / ${fmt(usedOut)} ra) · còn ${fmt(remaining)}/${fmt(granted)}`;
             return (
-              <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
                 <Avatar
                   size={22}
                   shape={isLead ? 'square' : 'circle'}
@@ -229,7 +229,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
                   {initialOf(agent.name)}
                 </Avatar>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--gap-5)', minWidth: 0 }}>
                     <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {agent.name}
                     </span>
@@ -364,9 +364,9 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
           with their own uppercase headers, which made a 5-person sidebar scroll. */}
       <div
         data-testid="team-linked-items"
-        style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
           <span style={{ ...SECTION_LABEL, marginBottom: 0, color: token.colorTextSecondary }}>Liên kết</span>
           <Button size="small" type="text" icon={<PlusOutlined />} onClick={onAddLink} data-testid="team-add-link" style={{ fontSize: 'var(--font-size-small)' }}>
             Thêm
@@ -377,7 +377,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
 
       <div
         data-testid="team-mode-toggles"
-        style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động chia việc</span>

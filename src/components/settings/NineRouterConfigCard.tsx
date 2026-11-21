@@ -419,7 +419,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 </strong>{' '}
                 <span style={{ color: 'var(--fg-secondary)' }}>(quy đổi xấp xỉ 1 token ≈ 4 ký tự)</span>
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ display: 'flex', gap: 'var(--gap-6)', flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ color: 'var(--fg-secondary)' }}>Gợi ý nhanh:</span>
                 <CheckableTag
                   checked={charLimit === 12000}
@@ -481,7 +481,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               Dùng để tự động nén ngữ cảnh giữa lượt (giống Claude Code). Khi prompt
               vượt ngưỡng, phần hội thoại cũ được tóm tắt lại, giữ nguyên 20 kết quả
               công cụ gần nhất. Chế độ tra cứu nén ở 75%, chế độ phân tích ở 90%.
-              <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ marginTop: 6, display: 'flex', gap: 'var(--gap-6)', flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>Gợi ý:</span>
                 <CheckableTag
                   checked={contextWindowTokens === 32000}

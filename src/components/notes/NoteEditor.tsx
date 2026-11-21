@@ -186,7 +186,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" initialValues={{ isPinned: false }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'flex-start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 'var(--gap-16)', alignItems: 'flex-start' }}>
           <FormItem name="title" label="Tiêu đề (tùy chọn)">
             <Input placeholder="Tiêu đề ghi chú..." maxLength={120} />
           </FormItem>
@@ -195,7 +195,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
           </FormItem>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 'var(--gap-12)' }}>
           <FormItem name="entityType" label="Liên kết thực thể">
             <Select
               allowClear

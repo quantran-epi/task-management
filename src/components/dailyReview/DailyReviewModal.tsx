@@ -266,7 +266,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
       width={760}
       destroyOnHidden
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)', marginTop: 12 }}>
         {/* Tab switch */}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <Segmented<DailyReviewTabMode>

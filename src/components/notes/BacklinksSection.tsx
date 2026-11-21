@@ -36,16 +36,16 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
         borderTop: '1px solid #f0f0f0',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 12 }}>
         <LinkOutlined style={{ color: 'var(--accent)' }} />
         <Text strong style={{ fontSize: 13 }}>
           Được liên kết từ ({totalCount})
         </Text>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
         {tasks.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-6)', alignItems: 'center' }}>
             <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Tác vụ:
             </Text>
@@ -64,7 +64,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
         )}
 
         {changeRequests.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-6)', alignItems: 'center' }}>
             <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Change Request:
             </Text>
@@ -83,7 +83,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
         )}
 
         {referencingNotes.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-6)', alignItems: 'center' }}>
             <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Tài liệu khác:
             </Text>

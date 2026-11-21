@@ -259,7 +259,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
         const subtitle = subtitleParts.join(' › ');
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
             <Text strong style={{ fontSize: 13, lineHeight: 1.3 }}>
               {record.task.name}
             </Text>
@@ -304,7 +304,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                 }
               }}
               content={
-                <div style={{ width: 220, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ width: 220, display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
                   <Text strong style={{ fontSize: 13 }}>
                     Nhập số phút thực tế
                   </Text>
@@ -358,7 +358,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                   backgroundColor: actualMins > 0 ? '#fafafa' : 'var(--bg-island)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 4,
+                  gap: 'var(--gap-4)',
                   minHeight: 52,
                 }}
               >
@@ -426,7 +426,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
               backgroundColor: '#f5f5f5',
               display: 'flex',
               flexDirection: 'column',
-              gap: 4,
+              gap: 'var(--gap-4)',
               fontVariantNumeric: 'tabular-nums',
             }}
           >
@@ -457,7 +457,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {/* Actual Worklog Toolbar: Searchable Add Task & Week Total Chips */}
       <div
         style={{
@@ -465,7 +465,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
           flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 12,
+          gap: 'var(--gap-12)',
           padding: '12px 16px',
           backgroundColor: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',

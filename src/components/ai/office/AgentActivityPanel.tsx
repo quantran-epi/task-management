@@ -233,7 +233,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
         style={{
           display: 'grid',
           gridTemplateColumns: '18px minmax(0, 1fr) auto',
-          gap: 8,
+          gap: 'var(--gap-8)',
           alignItems: 'center',
           width: '100%',
           padding: 8,
@@ -247,7 +247,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
         <span aria-hidden="true" style={{ color: statusMeta.color, fontSize: 'var(--font-size-small)' }}>
           {statusMeta.icon}
         </span>
-        <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', minWidth: 0 }}>
           <Tooltip title={toolName}>
             <span
               style={{
@@ -354,7 +354,7 @@ const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => voi
         minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--gap-8)', minWidth: 0 }}>
         <strong style={{ fontSize: 'var(--font-size-small)', minWidth: 0 }}>{row.toolName}</strong>
         <span data-testid="activity-progress-clock" style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
           {`Đang chạy · đã chạy ${formatClock(elapsedMs)}`}
@@ -363,7 +363,7 @@ const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => voi
       <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', display: 'block', minWidth: 0 }}>
         {`${row.agentName}${snippet ? ` · “${snippet}”` : ''}`}
       </Typography.Text>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)', marginTop: 4 }}>
         <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', minWidth: 0 }}>
           {RUNNING_NOTE}
         </Typography.Text>
@@ -405,7 +405,7 @@ const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, i
         minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--gap-8)', minWidth: 0 }}>
         <Tag color="blue" data-testid="activity-prompt-kind">
           {`${log.agentKind.toUpperCase()}: ${log.agentName}`}
         </Tag>
@@ -553,7 +553,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
       }}
     >
       <div style={{ padding: 12, borderBottom: `1px solid ${token.colorBorderSecondary}`, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--gap-8)', minWidth: 0 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 'var(--font-size-xs)', letterSpacing: '0.1em', textTransform: 'uppercase', color: token.colorPrimary }}>
               Live inspection
@@ -576,7 +576,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         <div
           role="group"
           aria-label="Lọc theo agent"
-          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, minWidth: 0 }}
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-8)', marginTop: 8, minWidth: 0 }}
         >
           {['all', ...pillIds].map((id) => {
             const active = filter === id;
@@ -601,7 +601,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         role="tablist"
         aria-label="Panel sections"
         onKeyDown={onTabKeyDown}
-        style={{ display: 'flex', gap: 16, padding: '0 12px', borderBottom: `1px solid ${token.colorBorderSecondary}`, minWidth: 0 }}
+        style={{ display: 'flex', gap: 'var(--gap-16)', padding: '0 12px', borderBottom: `1px solid ${token.colorBorderSecondary}`, minWidth: 0 }}
       >
         {(['timeline', 'prompts'] as const).map((key) => {
           const selected = tab === key;
@@ -642,7 +642,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', padding: 12 }}
       >
         {runningExplore ? <ProgressCard row={runningExplore} onCancel={onCancelToolCall} /> : null}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 8, fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-12)', marginBottom: 8, fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary }}>
           <span>✓ xong</span>
           <span>› đang chạy</span>
           <span>! lỗi</span>
@@ -659,7 +659,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
             }
           />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 0 }}>
             {visibleRows.map((row) => <TimelineEventRow key={row.step.id} row={row} onCancel={onCancelToolCall} />)}
           </div>
         )}

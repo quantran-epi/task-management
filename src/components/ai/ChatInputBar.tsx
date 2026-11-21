@@ -426,11 +426,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                   padding: '2px 0',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
                   <FileTextOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
                   <span
                     style={{
@@ -491,7 +491,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             key: `agent-${agent.id}`,
             value: `@[${agent.name}](agent:${agent.id})`,
             label: (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', padding: '2px 0' }}>
                 <Avatar
                   size={20}
                   shape={agent.isLead ? 'square' : 'circle'}
@@ -536,11 +536,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '2px 0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
                 <CheckSquareOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
                 <span
                   style={{
@@ -566,7 +566,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                   </Tag>
                 )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0 }}>
                 <Tag
                   style={{
                     margin: 0,
@@ -590,7 +590,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 'var(--gap-6)',
               padding: '2px 0',
               borderTop: `1px dashed ${token.colorBorderSecondary}`,
               marginTop: 4,
@@ -632,11 +632,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '2px 0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
                 <BranchesOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
                 <span
                   style={{
@@ -649,7 +649,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                   {c.code} · {c.name}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0 }}>
                 <Tag
                   style={{
                     margin: 0,
@@ -684,11 +684,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 8,
+                gap: 'var(--gap-8)',
                 padding: '2px 0',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
                 <ApartmentOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
                 <span
                   style={{
@@ -733,7 +733,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 'var(--gap-8)',
               padding: '2px 0',
             }}
           >
@@ -757,7 +757,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'flex-end',
-        gap: 8,
+        gap: 'var(--gap-8)',
       }}
     >
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -767,7 +767,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             style={{
               display: 'flex',
               flexWrap: 'wrap',
-              gap: 6,
+              gap: 'var(--gap-6)',
               marginBottom: 6,
               maxHeight: 72,
               overflowY: 'auto',
@@ -863,7 +863,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }}
         />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexShrink: 0 }}>
         <Tooltip title="Mở rộng soạn thảo toàn màn hình">
           <Button
             type="text"
@@ -915,7 +915,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
             <FullscreenOutlined style={{ color: token.colorPrimary }} />
             <span>Soạn thảo tin nhắn AI toàn màn hình</span>
           </div>
@@ -929,7 +929,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             padding: '16px 0 8px 0',
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
+            gap: 'var(--gap-12)',
           },
         }}
         footer={
@@ -937,7 +937,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
               Mẹo: Nhấn <b>Cmd + Enter</b> (hoặc <b>Ctrl + Enter</b>) để gửi trực tiếp.
             </span>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
               <Button onClick={() => setIsFullscreenModalOpen(false)}>
                 Hủy
               </Button>

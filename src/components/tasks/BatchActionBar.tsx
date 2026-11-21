@@ -152,7 +152,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           padding: '8px 20px',
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
+          gap: 'var(--gap-16)',
           zIndex: 1000,
           border: `1px solid ${token.colorBorderSecondary}`,
         }}
@@ -214,7 +214,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         okButtonProps={{ disabled: !targetCrId }}
         destroyOnClose
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)', marginTop: 16 }}>
           <div>
             <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 'var(--font-size-small)' }}>CR đích:</div>
             <Select

@@ -320,7 +320,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
 
       {mcpCitations.length > 0 && (
         <div style={{ marginTop: docCitations.length > 0 ? 12 : 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', marginBottom: 6 }}>
             <Tag color="purple" style={{ fontWeight: 700, margin: 0 }}>
               LIVE MCP
             </Tag>
@@ -372,7 +372,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
         width={650}
       >
         {selectedMcp && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
             <div>
               <Typography.Text strong>Máy chủ:</Typography.Text>{' '}
               <Typography.Text>{selectedMcp.mcpMetadata?.serverName ?? 'MCP Server'}</Typography.Text>

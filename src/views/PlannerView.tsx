@@ -173,7 +173,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
   }, [currentWeekStart]);
 
   return (
-    <div data-testid="planner-view" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div data-testid="planner-view" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {/* 1. Standard Page Header */}
       <PageHeader
         title="Kế hoạch công suất"
@@ -219,7 +219,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           flexWrap: 'wrap',
           justifyContent: 'space-between',
           alignItems: 'center',
-          gap: 12,
+          gap: 'var(--gap-12)',
           padding: '12px 16px',
           backgroundColor: token.colorBgContainer,
           borderRadius: token.borderRadius,
@@ -256,7 +256,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
           style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(230px, 1fr))',
-            gap: 12,
+            gap: 'var(--gap-12)',
             overflowX: isMobile ? 'visible' : 'auto',
             minHeight: 520,
             alignItems: 'stretch',
@@ -316,7 +316,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         cancelText="Hủy"
         destroyOnClose
       >
-        <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
           <Text type="secondary">
             Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
@@ -383,7 +383,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               optionRender={(option) => {
                 const crName = (option.data as { crName?: string } | undefined)?.crName;
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', padding: '2px 0' }}>
                     <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
                     {crName && (
                       <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}>

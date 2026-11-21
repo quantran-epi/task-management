@@ -226,13 +226,13 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 12,
+            gap: 'var(--gap-12)',
             minWidth: 260,
             padding: '4px 0',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flex: 1, minWidth: 0 }}>
             <span
               style={{
                 width: 6,

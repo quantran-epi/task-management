@@ -78,7 +78,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
   return (
     <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <FolderOpenOutlined style={{ color: 'var(--accent)' }} />
           <span>Chọn thư mục Git Repository từ xa ({sshConfig?.name})</span>
         </div>
@@ -100,7 +100,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
         </Button>,
       ]}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
         {/* Navigation Bar */}
         <div
           style={{
@@ -196,7 +196,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
                     <FolderOutlined style={{ color: '#faad14', fontSize: 16 }} />
                     <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>
                       {item.name}

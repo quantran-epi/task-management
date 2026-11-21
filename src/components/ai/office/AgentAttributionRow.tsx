@@ -44,7 +44,7 @@ export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent,
   return (
     <div
       data-testid={`agent-attribution-${agent.agentId}`}
-      style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}
+      style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', marginBottom: 4 }}
     >
       <Avatar
         size={24}
@@ -155,7 +155,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
   return (
     <div
       data-testid={`agent-status-${agent.agentId}`}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}
+      style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginTop: 4 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
@@ -171,7 +171,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
         aria-hidden={!actionsVisible}
         style={{
           display: 'flex',
-          gap: 4,
+          gap: 'var(--gap-4)',
           opacity: actionsVisible ? 1 : 0,
           pointerEvents: actionsVisible ? 'auto' : 'none',
           transition: 'opacity .12s',

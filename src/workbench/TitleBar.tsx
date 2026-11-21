@@ -82,7 +82,7 @@ export function TitleBar({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 'var(--gap-10)',
             ...noDragStyle,
           }}
         >
@@ -133,7 +133,7 @@ export function TitleBar({
               transition: 'border-color 0.15s ease',
             }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-7)' }}>
               <SearchOutlined style={{ fontSize: 13, color: 'var(--fg-icon, #6c707e)' }} />
               <span>Search everywhere...</span>
             </span>
@@ -158,7 +158,7 @@ export function TitleBar({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 'var(--gap-6)',
             ...noDragStyle,
           }}
         >
@@ -171,7 +171,7 @@ export function TitleBar({
               border: '1px solid var(--border-strong, #d1d3d9)',
               borderRadius: 'var(--radius-control, 4px)',
               padding: 2,
-              gap: 2,
+              gap: 'var(--gap-2)',
             }}
           >
             <Tooltip title="Dashboard Overview">
@@ -254,7 +254,7 @@ export function TitleBar({
                   fontWeight: activeView === 'telegram' ? 600 : 400,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 'var(--gap-4)',
                 }}
               >
                 <span>Telegram</span>
@@ -384,7 +384,7 @@ export function TitleBar({
       {/* Tauri & Shell Runtime Diagnostics Modal */}
       <Modal
         title={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
             <DesktopOutlined style={{ color: 'var(--accent, #3871e1)' }} />
             <span>TaskMate Application Runtime</span>
           </div>
@@ -394,7 +394,7 @@ export function TitleBar({
         footer={null}
         width={420}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '8px 0' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-14)', padding: '8px 0' }}>
           <div>
             <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>
               Active Runtime:
@@ -413,7 +413,7 @@ export function TitleBar({
             </Tag>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', marginTop: 8 }}>
             {isTauri && (
               <Button
                 icon={<CodeOutlined />}

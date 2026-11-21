@@ -286,7 +286,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
     activeFilterCount > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {contextHolder}
       {/* 1. Page Header */}
       <PageHeader
@@ -374,7 +374,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         cancelText="Hủy"
         destroyOnClose
       >
-        <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ marginTop: 12, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)' }}>
           <Text type="secondary">
             Chọn tác vụ để đánh giá công suất và xem trước phân bổ khối lượng công việc:
           </Text>
@@ -440,7 +440,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
               optionRender={(option) => {
                 const crName = (option.data as { crName?: string } | undefined)?.crName;
                 return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', padding: '2px 0' }}>
                     <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
                     {crName && (
                       <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}>

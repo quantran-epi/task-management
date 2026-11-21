@@ -43,7 +43,7 @@ export function ToolExplorerPanel() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
+                gap: 'var(--gap-10)',
                 width: '100%',
                 padding: 9,
                 border: 'none',

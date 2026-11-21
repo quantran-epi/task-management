@@ -221,7 +221,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 4,
+          gap: 'var(--gap-4)',
           marginTop: 6,
         }}
       >
@@ -266,7 +266,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
         </Space>
 
         {/* Right side: Duration popover tag and Delete Popconfirm button side-by-side */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
           <Popover
             content={editPopoverContent}
             trigger="click"
@@ -281,7 +281,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
                 margin: 0,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 4,
+                gap: 'var(--gap-4)',
               }}
               title="Nhấn để sửa thời gian hoặc ngày"
               aria-label={`Allocated ${formatMinutes(allocation.allocatedMinutes)}`}

@@ -98,7 +98,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
             padding: '12px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: 'var(--gap-8)',
           }}
           role="list"
           aria-label="Danh sách phiên Ghost Dev"
@@ -177,7 +177,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                       marginBottom: 8,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 'var(--gap-6)',
                     }}
                   >
                     <BranchesOutlined />
@@ -216,7 +216,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                         borderLeft: `2px dashed ${token.colorBorderSecondary}`,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 4,
+                        gap: 'var(--gap-4)',
                         marginBottom: 6,
                       }}
                     >
@@ -316,7 +316,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
             padding: '12px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
+            gap: 'var(--gap-8)',
           }}
           role="list"
           aria-label="Danh sách lịch sử phiên Ghost Dev"
@@ -421,7 +421,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                       marginBottom: 8,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 6,
+                      gap: 'var(--gap-6)',
                     }}
                   >
                     <BranchesOutlined />
@@ -452,7 +452,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
                     style={{
                       display: 'flex',
                       justifyContent: 'flex-end',
-                      gap: 8,
+                      gap: 'var(--gap-8)',
                       marginTop: 6,
                       borderTop: `1px solid ${token.colorBorderSecondary}`,
                       paddingTop: 6,

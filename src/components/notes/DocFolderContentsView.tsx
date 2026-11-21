@@ -129,8 +129,8 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
           ]}
         />
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
             {currentFolder ? (
               <FolderOpenFilled style={{ fontSize: 28, color: '#d97706' }} />
             ) : (
@@ -171,7 +171,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
       </div>
 
       {/* Main Content Area */}
-      <div style={{ padding: '20px 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ padding: '20px 24px', flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--gap-24)' }}>
         {/* Section 1: Subfolders */}
         {subfolders.length > 0 && (
           <div>
@@ -194,7 +194,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                     }}
                     bodyStyle={{ padding: '12px 14px' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
                       <FolderFilled style={{ fontSize: 22, color: '#d97706', flexShrink: 0 }} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <Text strong style={{ fontSize: 13, color: '#1f2937', display: 'block' }} ellipsis={{ tooltip: folder.title }}>
@@ -271,7 +271,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                           height: '100%',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 6 }}>
                           {isQuick ? (
                             <FormOutlined style={{ color: '#faad14', fontSize: 15 }} />
                           ) : (
@@ -302,7 +302,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         </Paragraph>
 
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto' }}>
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 'var(--gap-4)', flexWrap: 'wrap' }}>
                             {doc.tags?.slice(0, 2).map((t) => (
                               <Tag key={t} style={{ fontSize: 10, margin: 0, padding: '0 4px', lineHeight: '18px' }}>
                                 #{t}

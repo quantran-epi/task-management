@@ -32,7 +32,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div
       data-testid="dashboard-view"
-      style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}
     >
       <PageHeader
         title="Bảng tổng quan"

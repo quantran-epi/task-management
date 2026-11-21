@@ -321,11 +321,11 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
           fontSize: 'var(--font-size-small)',
         }}
       >
-        <span style={{ fontWeight: 600, color: token.colorTextSecondary, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontWeight: 600, color: token.colorTextSecondary, display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
           <span>📊</span>
           <span>Mermaid Diagram</span>
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
           <Tooltip title={viewSource ? 'Xem sơ đồ' : 'Xem mã nguồn'}>
             <Button
               type="text"
@@ -409,7 +409,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
         }}
       >
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: 'var(--gap-8)' }}>
             <Spin size="small" />
             <span style={{ fontSize: 13, color: token.colorTextSecondary }}>Đang render sơ đồ...</span>
           </div>
@@ -420,7 +420,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               showIcon
               message={<span style={{ fontWeight: 600 }}>Lỗi cú pháp Mermaid</span>}
               description={
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', marginTop: 4 }}>
                   <pre
                     style={{
                       margin: 0,
@@ -521,7 +521,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: 8,
+            gap: 'var(--gap-8)',
             marginBottom: 12,
           }}
         >
@@ -542,7 +542,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               <Button size="small" aria-label="reset-zoom" icon={<UndoOutlined />} onClick={handleResetZoom} />
             </Tooltip>
           </Space>
-          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary, display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-4)' }}>
             <DragOutlined /> Kéo để di chuyển · Ctrl + cuộn để zoom
           </span>
         </div>

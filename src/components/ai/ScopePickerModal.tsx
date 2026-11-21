@@ -218,7 +218,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
       destroyOnHidden
       style={{ top: 80 }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', marginTop: 12 }}>
         <Input
           ref={inputRef}
           prefix={<SearchOutlined style={{ color: token.colorTextSecondary }} />}
@@ -230,7 +230,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
           aria-label="Tìm kiếm ngữ cảnh"
         />
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--gap-8)', alignItems: 'center', flexWrap: 'wrap' }}>
           <Segmented
             value={activeTab}
             onChange={(val) => setActiveTab(val as ScopeTab)}
@@ -289,10 +289,10 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
                     }}
                     className="scope-picker-item"
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', minWidth: 0, flex: 1 }}>
                       {getIcon(item.type)}
                       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
                           <Text
                             strong={selected}
                             style={{

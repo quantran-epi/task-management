@@ -406,11 +406,11 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       destroyOnHidden
       title={title}
       footer={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
           <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             {`Đang dùng bởi ${agentCount} nhân viên`}
           </span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
             <Button onClick={onCancel}>Hủy</Button>
             <Button
               type="primary"
@@ -427,7 +427,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
     >
       <div
         data-testid="skill-editor-drawer"
-        style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}
       >
         {saveError !== null && (
           <Alert type="error" showIcon role="alert" data-testid="skill-editor-save-error" title={saveError} />
@@ -503,7 +503,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               borderTop: `1px solid ${token.colorBorderSecondary}`,
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             {/* WR-02: the header counts only still-pending rows. The decided cards below
@@ -539,7 +539,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               <div
                 key={row.id}
                 data-testid={`skill-pending-unresolved-${row.id}`}
-                style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
+                style={{ display: 'flex', gap: 'var(--gap-8)', alignItems: 'center', flexWrap: 'wrap' }}
               >
                 <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, flex: 1 }}>
                   Đề xuất này không xem được bản diff — hãy từ chối để dọn hàng chờ.
@@ -575,7 +575,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               borderTop: `1px solid ${token.colorBorderSecondary}`,
               display: 'flex',
               flexDirection: 'column',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             <div style={{ fontSize: 14, fontWeight: 600 }}>
@@ -597,7 +597,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                   label: (
                     <div
                       data-testid={`skill-version-row-${row.id}`}
-                      style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}
+                      style={{ display: 'flex', gap: 'var(--gap-8)', alignItems: 'center', minWidth: 0 }}
                     >
                       {row.status === 'approved' && row.version !== undefined ? (
                         <span
@@ -652,7 +652,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                     </div>
                   ),
                   children: (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{row.name}</div>
                       <div style={{ fontSize: 'var(--font-size-ui)' }}>{row.description}</div>
                       <MarkdownContentRenderer content={row.body} />

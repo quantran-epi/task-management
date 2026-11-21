@@ -175,7 +175,7 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.Rea
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 'var(--gap-4)',
           padding: '4px 8px',
           fontSize: 'var(--font-size-small)',
           background: token.colorFillAlter,
@@ -332,7 +332,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 8,
+          gap: 'var(--gap-8)',
           padding: '8px 16px',
           fontWeight: 600,
           fontSize: 14,
@@ -345,7 +345,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         >
           {scope.label}
         </Typography.Text>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexShrink: 0 }}>
           {turn.status === 'tool-limit' && (
             <Tag color="default" icon={<StopOutlined />} style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
               Đã dừng thu thập bằng chứng
@@ -436,7 +436,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 8,
+                  gap: 'var(--gap-8)',
                   minHeight: 32,
                   marginBottom: 4,
                   padding: '4px 8px',
@@ -515,7 +515,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 8,
+            gap: 'var(--gap-8)',
             padding: '8px 16px',
             justifyContent: 'center',
           }}

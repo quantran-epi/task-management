@@ -188,7 +188,7 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
   return (
     <div
       data-testid="skill-pending-proposals"
-      style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 16px' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', padding: '0 16px' }}
     >
       {visible.map(({ row, patch }) => (
         <div key={row.id} data-testid={`skill-pending-card-${row.id}`}>

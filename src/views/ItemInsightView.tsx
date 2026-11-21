@@ -400,7 +400,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
 
       {/* Main Header Card */}
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
           <div>
             <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
               {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}

@@ -378,7 +378,7 @@ export function EditorArea({ db }: EditorAreaProps) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 12,
+            gap: 'var(--gap-12)',
             minWidth: 260,
             maxWidth: 420,
             padding: '2px 0',
@@ -388,7 +388,7 @@ export function EditorArea({ db }: EditorAreaProps) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 'var(--gap-8)',
               flex: 1,
               minWidth: 0,
             }}
@@ -433,7 +433,7 @@ export function EditorArea({ db }: EditorAreaProps) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 'var(--gap-4)',
               flexShrink: 0,
             }}
             onClick={(e) => e.stopPropagation()}
@@ -715,7 +715,7 @@ export function EditorArea({ db }: EditorAreaProps) {
               overflowX: 'auto',
               overflowY: 'hidden',
               scrollbarWidth: 'none',
-              gap: 2,
+              gap: 'var(--gap-2)',
             }}
           >
             <SortableContext
@@ -756,7 +756,7 @@ export function EditorArea({ db }: EditorAreaProps) {
             height: '100%',
             flexShrink: 0,
             borderLeft: '1px solid var(--border, #e9eaee)',
-            gap: 2,
+            gap: 'var(--gap-2)',
           }}
         >
           <Tooltip title="Tải lại tab hiện tại (Alt+R)">
@@ -815,7 +815,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 3,
+                  gap: 'var(--gap-3)',
                   height: 24,
                   padding: '0 6px',
                   background: 'transparent',

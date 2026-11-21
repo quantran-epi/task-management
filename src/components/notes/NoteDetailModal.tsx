@@ -111,7 +111,7 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
         <div
           data-ai-context-type="note"
           data-ai-context-id={note.id}
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}
         >
           <div>
             {note.entityType ? (

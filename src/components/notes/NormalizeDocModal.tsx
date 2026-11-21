@@ -196,7 +196,7 @@ ${originalContent}
       }
       destroyOnClose
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 480 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minHeight: 480 }}>
         {error && (
           <Alert
             type="warning"
@@ -228,7 +228,7 @@ ${originalContent}
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
-              gap: 12,
+              gap: 'var(--gap-12)',
               height: 480,
             }}
           >

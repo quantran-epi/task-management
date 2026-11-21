@@ -47,7 +47,7 @@ export const LinkedItemsList: React.FC<LinkedItemsListProps> = ({ items, onRemov
         <div
           key={item.id}
           data-testid={`linked-item-${item.id}`}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 0' }}
         >
           <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, flexShrink: 0 }}>
             {iconFor(item.itemType)}

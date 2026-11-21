@@ -294,7 +294,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
       destroyOnClose
       width={720}
       footer={
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={handleClose}>Hủy bỏ</Button>
           <Button
             type="primary"
@@ -321,7 +321,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: 8,
+              gap: 'var(--gap-8)',
             }}
           >
             <Space align="center" size={8} wrap>
@@ -351,7 +351,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
           }}
         >
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-16)', alignItems: 'center' }}>
               <div>
                 <Text type="secondary" style={{ display: 'block', fontSize: 'var(--font-size-small)', marginBottom: 4 }}>
                   Khoảng thời gian đánh giá

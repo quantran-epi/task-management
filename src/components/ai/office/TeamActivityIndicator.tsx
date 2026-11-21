@@ -45,7 +45,7 @@ const StepRow: React.FC<{ step: AgentLiveStep }> = ({ step }) => {
   const [open, setOpen] = useState(false);
   const hasDetail = step.detail !== undefined && step.detail.length > 0;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
       <div
         role={hasDetail ? 'button' : undefined}
         tabIndex={hasDetail ? 0 : undefined}
@@ -62,7 +62,7 @@ const StepRow: React.FC<{ step: AgentLiveStep }> = ({ step }) => {
         }
         style={{
           display: 'flex',
-          gap: 6,
+          gap: 'var(--gap-6)',
           alignItems: 'baseline',
           cursor: hasDetail ? 'pointer' : 'default',
         }}
@@ -148,7 +148,7 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 'var(--gap-12)',
         minWidth: 220,
         // 37.1 UAT: a long run must show every step, so the body scrolls instead of the
         // data layer truncating it.
@@ -165,7 +165,7 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
           color: '#6c707e',
         };
         return (
-          <div key={row.agentId} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div key={row.agentId} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)' }}>
             <Typography.Text strong style={{ fontSize: 'var(--font-size-small)' }}>
               {agent.name}
             </Typography.Text>

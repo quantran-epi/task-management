@@ -385,8 +385,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         const hasNotes = taskNotesSet.has(record.id);
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
               <span
                 onClick={() => onOpenDrawer(record.id)}
                 style={{
@@ -461,7 +461,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 8,
+                        gap: 'var(--gap-8)',
                         maxWidth: 380,
                         maxHeight: 280,
                         overflowY: 'auto',
@@ -622,7 +622,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         }
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 100 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', minWidth: 100 }}>
             <span style={{ fontSize: 13, color: token.colorText }}>
               <strong>{formatMinutes(spentMinutes)}</strong>
               <span style={{ color: token.colorTextQuaternary }}> / {formatMinutes(estimate)}</span>
@@ -886,7 +886,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   }, [tasks.length, pagination.current, pagination.pageSize]);
 
   const columnCustomizationContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 200, padding: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 200, padding: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 6 }}>
         <strong style={{ fontSize: 13 }}>Cột hiển thị</strong>
         <Button type="link" size="small" onClick={handleResetColumns} style={{ padding: 0 }}>
@@ -925,7 +925,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       data-testid="task-table-container"
       tabIndex={0}
       onKeyDown={handleKeyDown}
-      style={{ outline: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}
+      style={{ outline: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}
     >
       {/* Table Toolbar Header */}
       <div
