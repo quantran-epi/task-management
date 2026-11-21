@@ -90,7 +90,7 @@ completed: 2026-11-21
 1. **Task 1: Codemod + static API → hook cho 22 view (D-01/D-05)** - `42057e98` (feat)
 2. **Task 2: Dọn inline token-valued + manifest wave-07 (D-08/D-09/D-10)** - `d1fe6825` (refactor)
 
-**Plan metadata commit:** orchestrator owns final metadata commit after the wave.
+**Plan metadata commit:** `036aa818` (docs: complete views adoption plan summary).
 
 ## Files Created/Modified
 - `tests/fixtures/adoption/wave-07.txt` — 22-path manifest for adoption source guards
