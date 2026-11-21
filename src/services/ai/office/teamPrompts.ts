@@ -42,6 +42,7 @@ export interface BuildEmployeeTurnRequestInput {
   skill?: AiSkill | undefined;
   team: AiTeam;
   instruction: string;
+  /** Accepted for call-site symmetry; the current order is carried by `instruction` only. */
   originalRequest: string;
   batchResults?: readonly BatchResult[] | undefined;
   /**
@@ -117,7 +118,6 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     skill,
     team,
     instruction,
-    originalRequest,
     batchResults,
     conventionsSegment,
     pinnedContextSegment,
@@ -190,8 +190,9 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     );
   }
 
-  parts.push(wrapUntrusted('YÊU CẦU GỐC', originalRequest));
-
+  // The current instruction already reaches the model as a trusted user-role message
+  // (`text: instruction`). Re-labelling `originalRequest` here made the model treat its own
+  // active order as untrusted data and ignore it. Other segments stay wrapped as data.
   if (batchResults && batchResults.length > 0) {
     parts.push(
       wrapUntrusted(

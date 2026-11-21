@@ -165,11 +165,14 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     expect(request.text).toBe('Chỉ viết phần mở đầu.');
   });
 
-  it('wraps the original user request in a delimited untrusted block', () => {
-    const request = buildEmployee({ originalRequest: 'YÊU CẦU-UNIQUE-abc' });
+  it('does not re-label the current request as untrusted data', () => {
+    const sentinel = 'YÊU CẦU-UNIQUE-abc';
+    const request = buildEmployee({ instruction: sentinel, originalRequest: sentinel });
     const system = request.systemMessages.map((m) => m.content).join('\n');
 
-    expectWrapped(system, 'YÊU CẦU GỐC', 'YÊU CẦU-UNIQUE-abc');
+    expect(request.text).toBe(sentinel);
+    expect(system).not.toContain(sentinel);
+    expect(system).not.toContain('YÊU CẦU GỐC');
   });
 
   it('builds assignment history chronologically, capped, then appends the recent window', () => {
