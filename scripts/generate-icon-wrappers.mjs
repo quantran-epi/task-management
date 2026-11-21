@@ -12,7 +12,8 @@ const declarations = new Set(
 function walk(dir) {
   let out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (['node_modules', '.git', 'dist', '.planning'].includes(entry.name)) continue;
+    // .claude/worktrees holds sibling agent branches — not this working tree's source.
+    if (['node_modules', '.git', 'dist', '.planning', '.claude'].includes(entry.name)) continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) out = out.concat(walk(path));
     else if (/\.(ts|tsx|js|jsx|mjs|html)$/.test(entry.name)) out.push(path);

@@ -6,7 +6,6 @@ import {
   ArrowLeftOutlined as ArrowLeftOutlinedComponent,
   ArrowRightOutlined as ArrowRightOutlinedComponent,
   ArrowUpOutlined as ArrowUpOutlinedComponent,
-  AuditOutlined as AuditOutlinedComponent,
   BarChartOutlined as BarChartOutlinedComponent,
   BellOutlined as BellOutlinedComponent,
   BookOutlined as BookOutlinedComponent,
@@ -59,7 +58,6 @@ import {
   EyeOutlined as EyeOutlinedComponent,
   FieldTimeOutlined as FieldTimeOutlinedComponent,
   FileAddOutlined as FileAddOutlinedComponent,
-  FileDoneOutlined as FileDoneOutlinedComponent,
   FileExcelOutlined as FileExcelOutlinedComponent,
   FileMarkdownOutlined as FileMarkdownOutlinedComponent,
   FileOutlined as FileOutlinedComponent,
@@ -91,12 +89,10 @@ import {
   InfoCircleOutlined as InfoCircleOutlinedComponent,
   KeyOutlined as KeyOutlinedComponent,
   LeftOutlined as LeftOutlinedComponent,
-  LineChartOutlined as LineChartOutlinedComponent,
   LinkOutlined as LinkOutlinedComponent,
   LoadingOutlined as LoadingOutlinedComponent,
   LockOutlined as LockOutlinedComponent,
   MenuFoldOutlined as MenuFoldOutlinedComponent,
-  MenuOutlined as MenuOutlinedComponent,
   MenuUnfoldOutlined as MenuUnfoldOutlinedComponent,
   MessageOutlined as MessageOutlinedComponent,
   MinusCircleOutlined as MinusCircleOutlinedComponent,
@@ -111,14 +107,12 @@ import {
   PictureOutlined as PictureOutlinedComponent,
   PlayCircleOutlined as PlayCircleOutlinedComponent,
   PlusOutlined as PlusOutlinedComponent,
-  PlusSquareOutlined as PlusSquareOutlinedComponent,
   ProjectOutlined as ProjectOutlinedComponent,
   PushpinFilled as PushpinFilledComponent,
   PushpinOutlined as PushpinOutlinedComponent,
   QuestionCircleOutlined as QuestionCircleOutlinedComponent,
   ReloadOutlined as ReloadOutlinedComponent,
   RightOutlined as RightOutlinedComponent,
-  RobotFilled as RobotFilledComponent,
   RobotOutlined as RobotOutlinedComponent,
   RocketOutlined as RocketOutlinedComponent,
   SafetyCertificateOutlined as SafetyCertificateOutlinedComponent,
@@ -127,7 +121,6 @@ import {
   SearchOutlined as SearchOutlinedComponent,
   SendOutlined as SendOutlinedComponent,
   SettingOutlined as SettingOutlinedComponent,
-  ShareAltOutlined as ShareAltOutlinedComponent,
   SplitCellsOutlined as SplitCellsOutlinedComponent,
   StarOutlined as StarOutlinedComponent,
   StopOutlined as StopOutlinedComponent,
@@ -192,7 +185,6 @@ export const AppstoreOutlined = wrapIcon(AppstoreOutlinedComponent);
 export const ArrowLeftOutlined = wrapIcon(ArrowLeftOutlinedComponent);
 export const ArrowRightOutlined = wrapIcon(ArrowRightOutlinedComponent);
 export const ArrowUpOutlined = wrapIcon(ArrowUpOutlinedComponent);
-export const AuditOutlined = wrapIcon(AuditOutlinedComponent);
 export const BarChartOutlined = wrapIcon(BarChartOutlinedComponent);
 export const BellOutlined = wrapIcon(BellOutlinedComponent);
 export const BookOutlined = wrapIcon(BookOutlinedComponent);
@@ -245,7 +237,6 @@ export const EyeInvisibleOutlined = wrapIcon(EyeInvisibleOutlinedComponent);
 export const EyeOutlined = wrapIcon(EyeOutlinedComponent);
 export const FieldTimeOutlined = wrapIcon(FieldTimeOutlinedComponent);
 export const FileAddOutlined = wrapIcon(FileAddOutlinedComponent);
-export const FileDoneOutlined = wrapIcon(FileDoneOutlinedComponent);
 export const FileExcelOutlined = wrapIcon(FileExcelOutlinedComponent);
 export const FileMarkdownOutlined = wrapIcon(FileMarkdownOutlinedComponent);
 export const FileOutlined = wrapIcon(FileOutlinedComponent);
@@ -277,12 +268,10 @@ export const InboxOutlined = wrapIcon(InboxOutlinedComponent);
 export const InfoCircleOutlined = wrapIcon(InfoCircleOutlinedComponent);
 export const KeyOutlined = wrapIcon(KeyOutlinedComponent);
 export const LeftOutlined = wrapIcon(LeftOutlinedComponent);
-export const LineChartOutlined = wrapIcon(LineChartOutlinedComponent);
 export const LinkOutlined = wrapIcon(LinkOutlinedComponent);
 export const LoadingOutlined = wrapIcon(LoadingOutlinedComponent);
 export const LockOutlined = wrapIcon(LockOutlinedComponent);
 export const MenuFoldOutlined = wrapIcon(MenuFoldOutlinedComponent);
-export const MenuOutlined = wrapIcon(MenuOutlinedComponent);
 export const MenuUnfoldOutlined = wrapIcon(MenuUnfoldOutlinedComponent);
 export const MessageOutlined = wrapIcon(MessageOutlinedComponent);
 export const MinusCircleOutlined = wrapIcon(MinusCircleOutlinedComponent);
@@ -297,14 +286,12 @@ export const PauseCircleOutlined = wrapIcon(PauseCircleOutlinedComponent);
 export const PictureOutlined = wrapIcon(PictureOutlinedComponent);
 export const PlayCircleOutlined = wrapIcon(PlayCircleOutlinedComponent);
 export const PlusOutlined = wrapIcon(PlusOutlinedComponent);
-export const PlusSquareOutlined = wrapIcon(PlusSquareOutlinedComponent);
 export const ProjectOutlined = wrapIcon(ProjectOutlinedComponent);
 export const PushpinFilled = wrapIcon(PushpinFilledComponent);
 export const PushpinOutlined = wrapIcon(PushpinOutlinedComponent);
 export const QuestionCircleOutlined = wrapIcon(QuestionCircleOutlinedComponent);
 export const ReloadOutlined = wrapIcon(ReloadOutlinedComponent);
 export const RightOutlined = wrapIcon(RightOutlinedComponent);
-export const RobotFilled = wrapIcon(RobotFilledComponent);
 export const RobotOutlined = wrapIcon(RobotOutlinedComponent);
 export const RocketOutlined = wrapIcon(RocketOutlinedComponent);
 export const SafetyCertificateOutlined = wrapIcon(SafetyCertificateOutlinedComponent);
@@ -313,7 +300,6 @@ export const ScheduleOutlined = wrapIcon(ScheduleOutlinedComponent);
 export const SearchOutlined = wrapIcon(SearchOutlinedComponent);
 export const SendOutlined = wrapIcon(SendOutlinedComponent);
 export const SettingOutlined = wrapIcon(SettingOutlinedComponent);
-export const ShareAltOutlined = wrapIcon(ShareAltOutlinedComponent);
 export const SplitCellsOutlined = wrapIcon(SplitCellsOutlinedComponent);
 export const StarOutlined = wrapIcon(StarOutlinedComponent);
 export const StopOutlined = wrapIcon(StopOutlinedComponent);
