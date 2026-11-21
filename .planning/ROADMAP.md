@@ -108,8 +108,8 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 50-03-PLAN.md — Sóng 2 settings: import barrel + static API → hook, giữ copy validation byte-for-byte (ADOPT-01/02, U2)
-- [ ] 50-04-PLAN.md — Sóng 3 CR/notes: FormItem mirror, Modal contextHolder, StatusTag token map (ADOPT-01/02, U3/U4)
+- [x] 50-03-PLAN.md — Sóng 2 settings: import barrel + static API → hook, giữ copy validation byte-for-byte (ADOPT-01/02, U2)
+- [x] 50-04-PLAN.md — Sóng 3 CR/notes: FormItem mirror, Modal contextHolder, StatusTag token map (ADOPT-01/02, U3/U4)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 3/9 | In Progress|  |
+| 50. Full App Adoption | 5/9 | In Progress|  |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 3/9 plans executed
+**Plans:** 5/9 plans executed
 
 Plans:
 **Wave 1**
