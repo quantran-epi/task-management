@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Form, FormItem } from '../form';
 import { Checkbox, CheckboxGroup } from '../checkbox';
+import { Select } from '../select';
 import { Radio, RadioButton, RadioGroup } from '../radio';
 import { Switch } from '../switch';
 
@@ -84,6 +85,46 @@ describe('Switch content and uncontrolled state (WR-02)', () => {
     fireEvent.click(control);
     expect(onChange.mock.calls[0]![0]).toBe(false);
     expect(control).toHaveAttribute('aria-checked', 'false');
+  });
+});
+
+describe('Select event parity (WR-04)', () => {
+  it('emits the full option and selects the first filtered row after typing', () => {
+    const onChange = vi.fn();
+    const onSearch = vi.fn();
+    const { container } = render(
+      <Select
+        aria-label="Chọn"
+        showSearch
+        placeholder="Chọn"
+        options={[{ value: 'apple', label: 'Apple' }, { value: 'banana', label: 'Banana' }]}
+        onChange={onChange}
+        onSearch={onSearch}
+      />,
+    );
+    const input = container.querySelector('input[aria-label="Chọn"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'ban' } });
+    expect(onSearch).toHaveBeenCalledWith('ban');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange.mock.calls[0]![0]).toBe('banana');
+    expect(onChange.mock.calls[0]![1]).toMatchObject({ value: 'banana', label: 'Banana' });
+  });
+
+  it('removes only the tag whose onClose was clicked', () => {
+    const onChange = vi.fn();
+    render(
+      <Select
+        mode="multiple"
+        value={['a', 'b']}
+        onChange={onChange}
+        tagRender={({ value, onClose }) => (
+          <button type="button" onClick={onClose}>remove-{String(value)}</button>
+        )}
+      />,
+    );
+    fireEvent.click(screen.getByText('remove-a'));
+    expect(onChange.mock.calls[0]![0]).toEqual(['b']);
   });
 });
 

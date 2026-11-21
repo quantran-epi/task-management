@@ -52,9 +52,18 @@ function labelOf(option: Option): ReactNode {
 }
 
 function valueKey(value: unknown): string {
-  return typeof value === 'object' && value !== null
-    ? String((value as { value?: unknown }).value ?? (value as { key?: unknown }).key ?? '')
-    : String(value);
+  if (typeof value === 'object' && value !== null) {
+    const keyed = value as { value?: unknown; key?: unknown };
+    if (keyed.value !== undefined || keyed.key !== undefined) {
+      return String(keyed.value ?? keyed.key);
+    }
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/** AntD's second onChange argument is the full option (label + value + raw props). */
+function toOption(option: Option): Option {
+  return { ...option, label: labelOf(option) };
 }
 
 /** Native S-SEL trigger + BODY portal listbox; AntD prop types stay unchanged. */
@@ -115,7 +124,7 @@ export function Select<
     if (!open) return;
     const index = filtered.findIndex((option) => selectedKeys.has(valueKey(option.value)));
     setLead(index >= 0 ? index : 0);
-  }, [open]);
+  }, [open, filtered, selectedKeys]);
 
   function close(focusTrigger = true) {
     setOpen(false);
@@ -133,20 +142,23 @@ export function Select<
   function emit(next: unknown, option: Option | Option[]) {
     if (!controlled) setInnerValue(next);
     if (multiple) {
-      (rest.onChange as ((value: unknown, options: Option[]) => void) | undefined)?.(next, option as Option[]);
+      (rest.onChange as ((value: unknown, options: Option[]) => void) | undefined)?.(
+        next,
+        (option as Option[]).map(toOption),
+      );
     } else {
-      (rest.onChange as ((value: unknown, option: Option) => void) | undefined)?.(next, option as Option);
+      (rest.onChange as ((value: unknown, option: Option) => void) | undefined)?.(next, toOption(option as Option));
     }
   }
 
-  function selectOption(option: Option) {
+  function selectOption(option: Option, remove = false) {
     if (option.disabled === true) return;
     const raw = option.value;
-    (rest.onSelect as ((value: unknown, option: Option) => void) | undefined)?.(raw, option);
+    (rest.onSelect as ((value: unknown, option: Option) => void) | undefined)?.(raw, toOption(option));
     if (multiple) {
       const list = Array.isArray(current) ? (current as unknown[]).slice() : [];
       const key = valueKey(raw);
-      const next = list.some((item) => valueKey(item) === key)
+      const next = remove || list.some((item) => valueKey(item) === key)
         ? list.filter((item) => valueKey(item) !== key)
         : [...list, raw];
       const chosen = next.map((value) => allOptions.find((item) => valueKey(item.value) === valueKey(value)) ?? { value, label: String(value) });
@@ -177,7 +189,7 @@ export function Select<
       setLead((index) => Math.max(0, index - 1));
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      const option = filtered[lead];
+      const option = filtered[lead] ?? filtered[0];
       if (option) selectOption(option);
     }
   }
@@ -265,7 +277,7 @@ export function Select<
             return (
               <span key={`${valueKey(option.value)}-${index}`} className={selectStyles.option}>
                 {rest.tagRender
-                  ? rest.tagRender({ value: option.value as never, closable: !disabled, onClose: () => selectOption(option) } as never)
+                  ? rest.tagRender({ ...toOption(option), value: option.value as never, closable: !disabled, onClose: () => selectOption(option, true) } as never)
                   : <span className={selectStyles.value}>{label}</span>}
               </span>
             );
@@ -300,7 +312,11 @@ export function Select<
                 setLead((index) => event.key === 'ArrowDown' ? Math.min(filtered.length - 1, index + 1) : Math.max(0, index - 1));
                 return;
               }
-              if (event.key === 'Enter' && open) { event.preventDefault(); if (filtered[lead]) selectOption(filtered[lead]!); }
+              if (event.key === 'Enter' && open) {
+                event.preventDefault();
+                const option = filtered[lead] ?? filtered[0];
+                if (option) selectOption(option);
+              }
               if (event.key === 'Escape' && open) close();
             }}
           />
