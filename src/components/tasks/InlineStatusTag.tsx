@@ -124,7 +124,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 'var(--island-gap)',
             textDecoration: cfg?.textDecoration,
           }}
         >
@@ -156,7 +156,7 @@ export const InlineStatusTag: React.FC<InlineStatusTagProps> = ({
           margin: 0,
           borderRadius: 12,
           padding: '1px 10px',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           fontWeight: 500,
           backgroundColor: current.bg,
           color: current.color,

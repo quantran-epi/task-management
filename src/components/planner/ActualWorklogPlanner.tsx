@@ -264,7 +264,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
               {record.task.name}
             </Text>
             {subtitle && (
-              <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}>
                 {subtitle}
               </Text>
             )}
@@ -308,7 +308,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                   <Text strong style={{ fontSize: 13 }}>
                     Nhập số phút thực tế
                   </Text>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                     {record.task.name} — {date}
                   </Text>
                   <InputNumber
@@ -353,9 +353,9 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                 style={{
                   cursor: 'pointer',
                   padding: '6px 8px',
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-control)',
                   border: '1px solid #f0f0f0',
-                  backgroundColor: actualMins > 0 ? '#fafafa' : '#ffffff',
+                  backgroundColor: actualMins > 0 ? '#fafafa' : 'var(--bg-island)',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
@@ -367,14 +367,14 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-small)',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
                   <Text type="secondary">
                     {plannedMins > 0 ? `P: ${formatMinutes(plannedMins)}` : 'P: —'}
                   </Text>
-                  <Text strong style={{ color: actualMins > 0 ? '#1677ff' : '#8c8c8c' }}>
+                  <Text strong style={{ color: actualMins > 0 ? 'var(--accent)' : 'var(--fg-secondary)' }}>
                     {actualMins > 0 ? `A: ${formatMinutes(actualMins)}` : 'A: —'}
                   </Text>
                 </div>
@@ -390,7 +390,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                           ? 'green'
                           : 'default'
                       }
-                      style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}
+                      style={{ margin: 0, fontSize: 'var(--font-size-xs)', padding: '0 4px', lineHeight: '18px' }}
                     >
                       {variance.formatted}
                     </Tag>
@@ -422,7 +422,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
           <div
             style={{
               padding: '6px 8px',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               backgroundColor: '#f5f5f5',
               display: 'flex',
               flexDirection: 'column',
@@ -430,7 +430,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-small)' }}>
               <Text type="secondary">P: {formatMinutes(taskPlanned)}</Text>
               <Text strong>A: {formatMinutes(taskActual)}</Text>
             </div>
@@ -444,7 +444,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                       ? 'green'
                       : 'default'
                   }
-                  style={{ margin: 0, fontSize: 11 }}
+                  style={{ margin: 0, fontSize: 'var(--font-size-xs)' }}
                 >
                   {variance.formatted}
                 </Tag>
@@ -467,8 +467,8 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
           alignItems: 'center',
           gap: 12,
           padding: '12px 16px',
-          backgroundColor: '#ffffff',
-          borderRadius: 8,
+          backgroundColor: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
           border: '1px solid #f0f0f0',
         }}
       >
@@ -529,7 +529,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
                 <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
                   Chưa có kế hoạch hoặc thời gian thực tế trong tuần này
                 </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                   Các tác vụ có kế hoạch hoặc phiên làm việc sẽ tự xuất hiện tại đây. Dùng "Thêm tác vụ" để ghi thời gian cho tác vụ khác.
                 </Text>
               </div>
@@ -545,7 +545,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
           scroll={{ x: 1200 }}
           bordered
           size="middle"
-          style={{ backgroundColor: '#ffffff', borderRadius: 8 }}
+          style={{ backgroundColor: 'var(--bg-island)', borderRadius: 'var(--radius-control)' }}
         />
       )}
 

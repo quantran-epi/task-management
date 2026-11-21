@@ -132,7 +132,7 @@ export const TaskChecklistSection: React.FC<TaskChecklistSectionProps> = ({
                   flex: 1,
                   padding: '2px 4px',
                   textDecoration: item.done ? 'line-through' : 'none',
-                  color: item.done ? '#8c8c8c' : undefined,
+                  color: item.done ? 'var(--fg-secondary)' : undefined,
                 }}
                 aria-label="Chỉnh sửa nội dung mục"
               />

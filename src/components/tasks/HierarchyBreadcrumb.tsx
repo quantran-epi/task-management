@@ -28,8 +28,8 @@ export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
         bordered={false}
         style={{
           margin: 0,
-          fontSize: 12,
-          color: '#8c8c8c',
+          fontSize: 'var(--font-size-small)',
+          color: 'var(--fg-secondary)',
           background: 'rgba(0, 0, 0, 0.04)',
         }}
       >
@@ -55,7 +55,7 @@ export const HierarchyBreadcrumb: React.FC<HierarchyBreadcrumbProps> = ({
       onClick={handleClick}
       style={{
         margin: 0,
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
         cursor: isClickable ? 'pointer' : 'default',
         maxWidth: 220,
         overflow: 'hidden',

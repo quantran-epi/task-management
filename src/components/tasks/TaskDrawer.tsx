@@ -438,7 +438,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     return {
       value: wt,
       label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--island-gap)' }}>
           {cfg.icon}
           <span>{cfg.label}</span>
         </span>
@@ -447,7 +447,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   });
 
   const renderSection = (title: string, children: React.ReactNode) => (
-    <section style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+    <section style={{ border: '1px solid #f0f0f0', borderRadius: 'var(--radius-control)', padding: 16, marginBottom: 16 }}>
       <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>
         {title}
       </Title>
@@ -605,7 +605,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             style={{
               padding: '12px',
               backgroundColor: '#fafafa',
-              borderRadius: '8px',
+              borderRadius: 'var(--radius-control)',
               marginBottom: '16px',
               border: '1px solid #f0f0f0',
             }}
@@ -618,7 +618,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               }}
             >
               <Space>
-                <SyncOutlined style={{ color: '#1677ff' }} />
+                <SyncOutlined style={{ color: 'var(--accent)' }} />
                 <span style={{ fontWeight: 500 }}>Lặp lại định kỳ</span>
               </Space>
               <FormItem name="isRecurring" valuePropName="checked" noStyle>
@@ -784,7 +784,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               {(fields, { add, remove }) => (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {fields.map((field) => (
-                    <div key={field.key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div key={field.key} style={{ display: 'flex', gap: 'var(--island-gap)', alignItems: 'center' }}>
                       <FormItem
                         {...field}
                         noStyle
@@ -801,7 +801,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       >
                         <Input
                           placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
-                          prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+                          prefix={<LinkOutlined style={{ color: 'var(--fg-secondary)' }} />}
                           style={{ flex: 1, minWidth: 0 }}
                         />
                       </FormItem>
@@ -891,13 +891,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     {
       key: 'notes',
       label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--island-gap)' }}>
           <span>Ghi chú</span>
           <Badge
             count={taskNotesCount || 0}
             overflowCount={99}
             size="small"
-            style={{ backgroundColor: taskNotesCount ? '#1677ff' : '#d9d9d9' }}
+            style={{ backgroundColor: taskNotesCount ? 'var(--accent)' : '#d9d9d9' }}
           />
         </span>
       ),
@@ -908,7 +908,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     {
       key: 'diagrams',
       label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--island-gap)' }}>
           <span>Biểu đồ</span>
           <Badge
             count={taskDiagramsCount || 0}
@@ -937,7 +937,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         <Space>
           <Button
             type="text"
-            icon={<RobotOutlined style={{ color: '#4f46e5' }} />}
+            icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
             onClick={() => setGhostDevModalOpen(true)}
             aria-label="Khởi chạy Ghost Dev"
           >
@@ -945,7 +945,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           </Button>
           <Button
             type="text"
-            icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+            icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
             onClick={handleAskAI}
             aria-label="Hỏi AI về tác vụ này"
           >

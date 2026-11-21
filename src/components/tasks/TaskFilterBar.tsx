@@ -77,7 +77,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         gap: 12,
         padding: '12px 16px',
         backgroundColor: token.colorFillAlter,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         border: `1px solid ${token.colorBorderSecondary}`,
       }}
     >
@@ -203,7 +203,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         }}
       >
         <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+          <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
             Trạng thái:
           </span>
           <Select
@@ -226,7 +226,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
         </Space>
 
         <Space orientation="horizontal" size="small" style={{ alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+          <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
             Độ ưu tiên:
           </span>
           <Select
@@ -249,7 +249,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           style={{
             padding: '14px 16px',
             backgroundColor: token.colorBgContainer,
-            borderRadius: 6,
+            borderRadius: 'var(--radius-control)',
             border: `1px dashed ${token.colorBorder}`,
           }}
         >
@@ -257,7 +257,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 1: Execution Date Range */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Thời gian kế hoạch:
                 </span>
                 <DateRangePicker
@@ -290,7 +290,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field: Worklog Date Range */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Ngày có worklog:
                 </span>
                 <DateRangePicker
@@ -323,7 +323,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 2: Deadline Range */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Hạn chót:
                 </span>
                 <DateRangePicker
@@ -356,7 +356,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 4: Work Types */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Loại việc:
                 </span>
                 <Select
@@ -370,7 +370,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                     const cfg = WORK_TYPE_CONFIG[wt];
                     return {
                       label: (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--island-gap)' }}>
                           <span
                             style={{
                               display: 'inline-block',
@@ -395,7 +395,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 5: Ops Owner */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Ops Owner:
                 </span>
                 <Select
@@ -415,7 +415,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 6: Business Analyst */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   BA:
                 </span>
                 <Select
@@ -435,7 +435,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             {/* Field 7: Jira Status */}
             <Col xs={24} sm={12} lg={6}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}>
                   Trạng thái Jira:
                 </span>
                 <Select

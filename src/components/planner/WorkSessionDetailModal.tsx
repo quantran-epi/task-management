@@ -182,7 +182,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
       title={
         <div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>Chi tiết phiên làm việc</div>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {taskName ?? 'Tác vụ'} — Ngày: {date}
           </Text>
         </div>
@@ -224,7 +224,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                 <ListItem
                   style={{
                     padding: '8px 12px',
-                    borderRadius: 6,
+                    borderRadius: 'var(--radius-control)',
                     backgroundColor: isSelected ? '#e6f4ff' : '#fafafa',
                     border: isSelected ? '1px solid #91caff' : '1px solid #f0f0f0',
                     marginBottom: 8,
@@ -272,7 +272,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
                       <div>
                         {s.note && <Text type="secondary">{s.note}</Text>}
                         {s.segments && s.segments.length > 0 && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: '#8c8c8c' }}>
+                          <div style={{ marginTop: 4, fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)' }}>
                             Các đoạn chạy:{' '}
                             {s.segments.map((seg, idx) => {
                               const segStart = dayjs(seg.startTime).format('HH:mm');

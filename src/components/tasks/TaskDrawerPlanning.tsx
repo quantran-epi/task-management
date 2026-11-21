@@ -188,7 +188,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
                 />
               </Space>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--island-gap)' }}>
               <Button size="small" onClick={() => setEditingId(null)}>
                 Hủy
               </Button>
@@ -341,7 +341,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       <Card size="small" title={<Text strong>Lập kế hoạch theo ngày</Text>}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
               Ngày thực hiện:
             </Text>
             <DatePicker
@@ -354,7 +354,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           </div>
 
           <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
               Thời lượng dự kiến:
             </Text>
             <Space align="center" size="middle">
@@ -392,7 +392,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           </div>
 
           <Space size="small">
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
               Mẫu nhanh:
             </Text>
             <Button

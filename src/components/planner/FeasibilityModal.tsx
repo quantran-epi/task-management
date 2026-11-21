@@ -285,7 +285,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
     <Modal
       title={
         <Space>
-          <ThunderboltOutlined style={{ color: '#1677ff' }} />
+          <ThunderboltOutlined style={{ color: 'var(--accent)' }} />
           <span>Đánh giá tính khả thi & Phân bổ khối lượng công việc</span>
         </Space>
       }
@@ -314,7 +314,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
             style={{
               padding: '10px 14px',
               backgroundColor: '#fafafa',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               marginBottom: 16,
               border: '1px solid #f0f0f0',
               display: 'flex',
@@ -346,14 +346,14 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
           style={{
             padding: 12,
             backgroundColor: '#fafafa',
-            borderRadius: 6,
+            borderRadius: 'var(--radius-control)',
             marginBottom: 16,
           }}
         >
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
               <div>
-                <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+                <Text type="secondary" style={{ display: 'block', fontSize: 'var(--font-size-small)', marginBottom: 4 }}>
                   Khoảng thời gian đánh giá
                 </Text>
                 <Space>
@@ -393,7 +393,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
               </div>
 
               <div>
-                <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+                <Text type="secondary" style={{ display: 'block', fontSize: 'var(--font-size-small)', marginBottom: 4 }}>
                   Chiến lược phân bổ
                 </Text>
                 <Segmented
@@ -411,7 +411,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
               </div>
 
               <div>
-                <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+                <Text type="secondary" style={{ display: 'block', fontSize: 'var(--font-size-small)', marginBottom: 4 }}>
                   Số giờ tối đa/ngày (Tùy chọn)
                 </Text>
                 <InputNumber

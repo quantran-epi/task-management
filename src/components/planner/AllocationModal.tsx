@@ -221,7 +221,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
       >
         {/* CR Filter */}
         <div style={{ marginBottom: 12 }}>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
             Lọc theo CR:
           </Text>
           <Select
@@ -296,7 +296,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                     </Space>
                   </div>
                   {item.crName && (
-                    <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}>
                       {item.crName}
                     </Text>
                   )}
@@ -352,7 +352,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         {/* Quick Presets */}
         <div style={{ marginBottom: 16 }}>
           <Space size="small">
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
               Mẫu nhanh:
             </Text>
             <Button size="small" onClick={() => handleQuickPreset(1)}>
@@ -373,7 +373,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             style={{
               padding: 12,
               backgroundColor: '#f5f5f5',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               marginBottom: 16,
             }}
             data-testid="estimate-comparison"

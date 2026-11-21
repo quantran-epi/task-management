@@ -38,7 +38,7 @@ export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = (
       dataIndex: 'date',
       key: 'date',
       render: (d: string) => (
-        <Text style={{ fontSize: 12 }}>
+        <Text style={{ fontSize: 'var(--font-size-small)' }}>
           {dayjs(d, 'YYYY-MM-DD').format('YYYY-MM-DD (ddd)')}
         </Text>
       ),
@@ -47,19 +47,19 @@ export const DateInspectionBreakdown: React.FC<DateInspectionBreakdownProps> = (
       title: 'Công suất',
       dataIndex: 'capacityMinutes',
       key: 'capacityMinutes',
-      render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
+      render: (m: number) => <Text style={{ fontSize: 'var(--font-size-small)' }}>{formatMinutes(m)}</Text>,
     },
     {
       title: 'Đang dùng',
       dataIndex: 'activeLoadMinutes',
       key: 'activeLoadMinutes',
-      render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
+      render: (m: number) => <Text style={{ fontSize: 'var(--font-size-small)' }}>{formatMinutes(m)}</Text>,
     },
     {
       title: 'Còn lại',
       dataIndex: 'netBalanceMinutes',
       key: 'netBalanceMinutes',
-      render: (m: number) => <Text style={{ fontSize: 12 }}>{formatMinutes(m)}</Text>,
+      render: (m: number) => <Text style={{ fontSize: 'var(--font-size-small)' }}>{formatMinutes(m)}</Text>,
     },
     {
       title: 'Trạng thái',

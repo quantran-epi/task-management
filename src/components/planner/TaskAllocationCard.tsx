@@ -111,7 +111,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       </Text>
 
       <div style={{ marginBottom: 8 }}>
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
           Ngày thực hiện:
         </Text>
         <DatePicker
@@ -124,7 +124,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
           Thời gian dự kiến:
         </Text>
         <Space size={4}>
@@ -150,7 +150,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
         </Space>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--island-gap)' }}>
         <Button size="small" onClick={() => setPopoverOpen(false)}>
           Hủy
         </Button>
@@ -172,8 +172,8 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       style={{
         marginBottom: 8,
         opacity: isActive ? 1 : 0.5,
-        borderLeft: isActive ? '3px solid #1677ff' : '3px solid #d9d9d9',
-        backgroundColor: isActive ? '#ffffff' : '#fafafa',
+        borderLeft: isActive ? '3px solid var(--accent)' : '3px solid #d9d9d9',
+        backgroundColor: isActive ? 'var(--bg-island)' : '#fafafa',
       }}
       bodyStyle={{ padding: '8px 10px' }}
       data-testid={`allocation-card-${allocation.id}`}
@@ -203,7 +203,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
           type="secondary"
           ellipsis={{ tooltip: `${changeRequest.code} · ${changeRequest.name}` }}
           style={{
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             display: 'block',
             marginTop: 2,
             marginBottom: 2,
@@ -227,7 +227,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
       >
         {/* Left side: Priority tag and inactive/status tags with wrap */}
         <Space size={4} wrap>
-          <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 11 }}>
+          <Tag color={PRIORITY_COLORS[task.priority]} style={{ margin: 0, fontSize: 'var(--font-size-xs)' }}>
             {PRIORITY_LABELS[task.priority] || task.priority}
           </Tag>
 
@@ -258,7 +258,7 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
             <Tag
               icon={task.status === 'Done' ? <CheckCircleOutlined /> : <StopOutlined />}
               color="default"
-              style={{ margin: 0, fontSize: 11 }}
+              style={{ margin: 0, fontSize: 'var(--font-size-xs)' }}
             >
               {task.status === 'Done' ? 'Hoàn thành - không tính' : 'Đã hủy - không tính'}
             </Tag>

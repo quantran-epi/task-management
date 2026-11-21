@@ -40,7 +40,7 @@ export const DayColumn: React.FC<DayColumnProps> = ({
         height: '100%',
         minWidth: 230,
         backgroundColor: '#fafafa',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         border: '1px solid #f0f0f0',
         padding: 6,
       }}
@@ -63,15 +63,15 @@ export const DayColumn: React.FC<DayColumnProps> = ({
               padding: '24px 8px',
               textAlign: 'center',
               border: '1px dashed #d9d9d9',
-              borderRadius: 6,
-              backgroundColor: '#ffffff',
+              borderRadius: 'var(--radius-control)',
+              backgroundColor: 'var(--bg-island)',
               margin: '4px 0',
             }}
           >
             <Text strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
               Chưa có tác vụ phân bổ
             </Text>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block' }}>
               Nhấn &quot;Phân bổ&quot; bên dưới để lập kế hoạch cho ngày này.
             </Text>
           </div>

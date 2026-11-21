@@ -97,7 +97,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
     return {
       value: wt,
       label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--island-gap)' }}>
           {cfg.icon}
           <span>{cfg.label}</span>
         </span>

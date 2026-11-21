@@ -311,7 +311,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
         }}
       >
         <Title level={5} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BranchesOutlined style={{ color: '#1677ff' }} />
+          <BranchesOutlined style={{ color: 'var(--accent)' }} />
           <span>Tích hợp Jira Cloud</span>
         </Title>
       </div>
@@ -334,7 +334,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
           </div>
 
           <div style={{ marginTop: 4 }}>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
               Hoặc gắn mã Jira Issue có sẵn:
             </Text>
             <SpaceCompact style={{ width: '100%', maxWidth: 300 }}>
@@ -355,7 +355,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
             </SpaceCompact>
             {keyError && (
               <div style={{ marginTop: 4 }}>
-                <Text type="danger" style={{ fontSize: 12 }}>
+                <Text type="danger" style={{ fontSize: 'var(--font-size-small)' }}>
                   {keyError}
                 </Text>
               </div>
@@ -372,7 +372,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
               alignItems: 'center',
               backgroundColor: '#fafafa',
               padding: '8px 12px',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid #f0f0f0',
             }}
           >
@@ -432,7 +432,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
             style={{
               backgroundColor: '#fafafa',
               padding: '10px 12px',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid #f0f0f0',
               display: 'flex',
               flexDirection: 'column',
@@ -504,7 +504,7 @@ export const TaskJiraSection: React.FC<TaskJiraSectionProps> = ({
             style={{
               backgroundColor: '#fafafa',
               padding: '12px',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid #f0f0f0',
             }}
           >

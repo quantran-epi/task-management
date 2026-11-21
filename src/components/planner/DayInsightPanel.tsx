@@ -58,7 +58,7 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
             )}
           </Space>
           {row.crName && (
-            <Text type="secondary" style={{ fontSize: 11 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
               {row.crName}
             </Text>
           )}
@@ -133,11 +133,11 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
 
       {capacityMinutes > 0 && (
         <div>
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
             Kế hoạch vs Sức chứa
           </Text>
           <Progress percent={Math.min(plannedPct, 100)} size="small" showInfo={false} />
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
             Thực tế vs Sức chứa
           </Text>
           <Progress

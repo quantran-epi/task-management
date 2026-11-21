@@ -59,7 +59,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
     <div style={{ width: 200, padding: 4 }}>
       <Space direction="vertical" style={{ width: '100%' }} size="small">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 600 }}>Tiến độ:</span>
+          <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>Tiến độ:</span>
           <InputNumber
             min={0}
             max={100}
@@ -100,7 +100,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
           cursor: 'pointer',
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 'var(--island-gap)',
           outline: 'none',
         }}
         onKeyDown={(e) => {
@@ -114,7 +114,7 @@ export const InlineProgress: React.FC<InlineProgressProps> = ({
           percent={progress}
           size="small"
           style={{ width: 80, margin: 0 }}
-          strokeColor="#1677ff"
+          strokeColor="var(--accent)"
         />
       </div>
     </Popover>

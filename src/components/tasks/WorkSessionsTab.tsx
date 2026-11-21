@@ -114,13 +114,13 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
       key: 'note',
       render: (note?: string) => {
         if (!note) {
-          return <span style={{ color: token.colorTextQuaternary, fontSize: 12 }}>—</span>;
+          return <span style={{ color: token.colorTextQuaternary, fontSize: 'var(--font-size-small)' }}>—</span>;
         }
         return (
           <Tooltip title={note.length > 50 ? note : undefined} placement="topLeft">
             <span
               style={{
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 color: token.colorTextSecondary,
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
@@ -186,7 +186,7 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Đã ghi nhận / Ước lượng:
               </Typography.Text>
               <div style={{ fontSize: 16, fontWeight: 600 }}>
@@ -226,7 +226,7 @@ export const WorkSessionsTab: React.FC<WorkSessionsTabProps> = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               padding: '8px 12px',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               background: token.colorFillAlter,
               border: `1px solid ${token.colorBorderSecondary}`,
             }}

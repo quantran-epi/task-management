@@ -47,7 +47,7 @@ export interface TaskTableProps {
 
 /** CR type colours fixed by UI-SPEC §7 / D-32. */
 const CR_TYPE_COLORS: Record<ChangeRequest['type'], string> = {
-  NEW_FEATURE: '#1677ff',
+  NEW_FEATURE: 'var(--accent)',
   ENHANCEMENT: '#52c41a',
   BUGFIX: '#faad14',
 };
@@ -55,8 +55,8 @@ const CR_TYPE_COLORS: Record<ChangeRequest['type'], string> = {
 const PRIORITY_COLORS: Record<TaskPriority, string> = {
   Urgent: '#ff4d4f',
   High: '#fa8c16',
-  Medium: '#1677ff',
-  Low: '#8c8c8c',
+  Medium: 'var(--accent)',
+  Low: 'var(--fg-secondary)',
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -316,7 +316,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
     {
       key: 'run-ghost-dev',
-      icon: <RobotOutlined style={{ color: '#4f46e5' }} />,
+      icon: <RobotOutlined style={{ color: 'var(--accent)' }} />,
       label: 'Chạy Ghost Dev',
       onClick: () => {
         setGhostDevTask(record);
@@ -431,8 +431,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     data-testid={`task-recurring-indicator-${record.id}`}
                     aria-label="Tác vụ lặp lại"
                     style={{
-                      color: '#1677ff',
-                      fontSize: 12,
+                      color: 'var(--accent)',
+                      fontSize: 'var(--font-size-small)',
                     }}
                   />
                 </Tooltip>
@@ -441,7 +441,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 <Tag
                   color="processing"
                   icon={<LinkOutlined style={{ marginRight: 4 }} />}
-                  style={{ cursor: 'pointer', margin: 0, fontSize: 12 }}
+                  style={{ cursor: 'pointer', margin: 0, fontSize: 'var(--font-size-small)' }}
                   title="Mở trên Jira Web"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -485,10 +485,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                             }}
                             title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
                             style={{
-                              fontSize: 12,
+                              fontSize: 'var(--font-size-small)',
                               display: 'flex',
                               alignItems: 'flex-start',
-                              gap: 6,
+                              gap: 'var(--island-gap)',
                               lineHeight: 1.4,
                               color: token.colorLink,
                             }}
@@ -496,7 +496,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                             {local ? (
                               <FolderOpenOutlined style={{ color: '#fa8c16', flexShrink: 0, marginTop: 2 }} />
                             ) : (
-                              <LinkOutlined style={{ color: '#1677ff', flexShrink: 0, marginTop: 2 }} />
+                              <LinkOutlined style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
                             )}
                             <span
                               title={link}
@@ -518,7 +518,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 >
                   <Tag
                     icon={<LinkOutlined />}
-                    style={{ margin: 0, cursor: 'pointer', fontSize: 11 }}
+                    style={{ margin: 0, cursor: 'pointer', fontSize: 'var(--font-size-xs)' }}
                   >
                     🔗 {linkCount}
                   </Tag>
@@ -536,7 +536,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       render: (_, record) => {
         const cr = crMap.get(record.crId);
         if (!cr) {
-          return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
+          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextQuaternary }}>—</span>;
         }
         return (
           <Tag
@@ -548,7 +548,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             }}
             style={{
               margin: 0,
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               fontWeight: 600,
               color: CR_TYPE_COLORS[cr.type],
               backgroundColor: `color-mix(in srgb, ${CR_TYPE_COLORS[cr.type]} 9%, transparent)`,
@@ -567,7 +567,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       render: (_, record) => {
         const system = record.systemId ? systemMap.get(record.systemId) : undefined;
         if (!system) {
-          return <span style={{ fontSize: 12, color: token.colorTextSecondary }}>Chung</span>;
+          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>Chung</span>;
         }
         return (
           <Tag
@@ -575,7 +575,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             title={system.name}
             style={{
               margin: 0,
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               fontFamily: 'monospace',
               color: '#13c2c2',
               backgroundColor: 'rgba(19, 194, 194, 0.12)',
@@ -654,7 +654,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       sortDirections: ['ascend', 'descend'],
       render: (deadline?: string) => {
         if (!deadline) {
-          return <span style={{ fontSize: 12, color: token.colorTextQuaternary }}>—</span>;
+          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextQuaternary }}>—</span>;
         }
         const isOverdue = deadline < today;
         return (
@@ -681,11 +681,11 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         <Tag
           bordered={false}
           style={{
-            color: PRIORITY_COLORS[priority] || '#8c8c8c',
-            backgroundColor: `${PRIORITY_COLORS[priority] || '#8c8c8c'}15`,
+            color: PRIORITY_COLORS[priority] || 'var(--fg-secondary)',
+            backgroundColor: `color-mix(in srgb, ${PRIORITY_COLORS[priority] || 'var(--fg-secondary)'} 9%, transparent)`,
             fontWeight: 600,
             margin: 0,
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
           }}
         >
           {PRIORITY_LABELS[priority] || priority}
@@ -791,7 +791,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <span
               style={{
                 fontVariantNumeric: 'tabular-nums',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 fontWeight: 600,
                 color: isRunning ? token.colorSuccess : token.colorWarning,
                 marginRight: 4,
@@ -893,7 +893,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           Mặc định
         </Button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--island-gap)', maxHeight: 280, overflowY: 'auto' }}>
         {ALL_CUSTOMIZABLE_COLUMNS.map((col) => {
           const isFixed = Boolean(col.fixed);
           const isChecked = isFixed || visibleColumns.includes(col.key);
@@ -906,7 +906,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             >
               <span style={{ fontSize: 13 }}>{col.label}</span>
               {isFixed && (
-                <span style={{ fontSize: 11, color: token.colorTextQuaternary, marginLeft: 4 }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextQuaternary, marginLeft: 4 }}>
                   (Cố định)
                 </span>
               )}
@@ -1088,7 +1088,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           value={standupFallbackText}
           readOnly
           rows={10}
-          style={{ fontFamily: 'monospace', fontSize: 12 }}
+          style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)' }}
           onFocus={(e) => e.target.select()}
         />
       </Modal>

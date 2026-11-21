@@ -77,7 +77,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
         padding: '8px 10px',
         borderRadius: '6px',
         backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : undefined,
-        border: isToday ? '1px solid #1677ff' : '1px solid #f0f0f0',
+        border: isToday ? '1px solid var(--accent)' : '1px solid #f0f0f0',
         marginBottom: '8px',
         minHeight: 142,
         boxSizing: 'border-box',

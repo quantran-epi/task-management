@@ -148,7 +148,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           transform: 'translateX(-50%)',
           backgroundColor: token.colorBgElevated,
           boxShadow: token.boxShadowSecondary,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-control)',
           padding: '8px 20px',
           display: 'flex',
           alignItems: 'center',
@@ -216,7 +216,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>CR đích:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 'var(--font-size-small)' }}>CR đích:</div>
             <Select
               showSearch
               optionFilterProp="label"
@@ -233,7 +233,7 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
           </div>
 
           <div>
-            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 12 }}>Subsystem đích:</div>
+            <div style={{ marginBottom: 4, fontWeight: 600, fontSize: 'var(--font-size-small)' }}>Subsystem đích:</div>
             <Select
               allowClear
               style={{ width: '100%' }}

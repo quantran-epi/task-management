@@ -98,19 +98,19 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
       style={{
         padding: '12px 14px',
         backgroundColor: '#fafafa',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         border: '1px solid #f0f0f0',
         marginBottom: 16,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <DeploymentUnitOutlined style={{ color: '#4f46e5' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--island-gap)', marginBottom: 8 }}>
+        <DeploymentUnitOutlined style={{ color: 'var(--accent)' }} />
         <Text strong style={{ fontSize: 13 }}>
           Tài liệu & Tri thức liên kết ({totalCount})
         </Text>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--island-gap)' }}>
         {/* Render legacy wiki-linked documents */}
         {legacyDocs?.map((doc) => (
           <Tooltip key={`legacy-${doc.id}`} title="Xem nhanh tài liệu này">
@@ -120,8 +120,8 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
               style={{
                 cursor: 'pointer',
                 padding: '3px 8px',
-                borderRadius: 6,
-                fontSize: 12,
+                borderRadius: 'var(--radius-control)',
+                fontSize: 'var(--font-size-small)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 4,
@@ -146,8 +146,8 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
               icon={isGraphUrn ? <DeploymentUnitOutlined /> : <FileTextOutlined />}
               style={{
                 padding: '3px 8px',
-                borderRadius: 6,
-                fontSize: 12,
+                borderRadius: 'var(--radius-control)',
+                fontSize: 'var(--font-size-small)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 4,
@@ -163,7 +163,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
                   <div>
                     <div><strong>{link.displayLabel}</strong></div>
                     {link.urn && (
-                      <div style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xs)' }}>
                         {link.urn}
                       </div>
                     )}
