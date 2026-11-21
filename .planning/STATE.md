@@ -116,6 +116,7 @@ Progress: [█████████░] 91%
 | 261121-foz | Line number mọi pane + fold JSON/XML + giữ nội dung khi đổi tab + Save as (download/Docs) cho utility editor | 2026-11-21 | 66c69839 | [261121-foz-line-number-v-collapse-expand-cho-utilit](./quick/261121-foz-line-number-v-collapse-expand-cho-utilit/) |
 | 261121-hza | Sửa seen receipt cho lead reply xếp hàng, bỏ nhãn untrusted cho lệnh hiện tại, prompt ủy thác code_edit cho Agent Developer | 2026-11-21 | e1b0c0ba | [261121-hza-fix-ai-team-seen-receipts-untrusted-inst](./quick/261121-hza-fix-ai-team-seen-receipts-untrusted-inst/) |
 | 261121-qpp | Resolve Agent Developer worktree repo từ system link trực tiếp hoặc CR targets; nhiều ứng viên thì lead hỏi tên hệ thống | 2026-11-21 | f5efc9be | [261121-qpp-resolve-agent-developer-worktree-repo-fr](./quick/261121-qpp-resolve-agent-developer-worktree-repo-fr/) |
+| 261121-r78 | Hiện lỗi local (worktree/config/SSH) thật trong bubble agent; lỗi provider vẫn sanitized | 2026-11-21 | 1d7bd676 | [261121-r78-show-truthful-local-errors-instead-of-ge](./quick/261121-r78-show-truthful-local-errors-instead-of-ge/) |
 
 ## Accumulated Context
 
