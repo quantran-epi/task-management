@@ -3,29 +3,29 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: planning
-last_updated: "2026-11-21T16:38:33.907Z"
+last_updated: "2026-11-21T18:00:00.000Z"
 last_activity: 2026-11-21
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
   percent: 0
 ---
 
-# Project State: TaskMate — Milestone v1.5
+# Project State: TaskMate — Milestone v1.6
 
 See: .planning/PROJECT.md (updated 2026-11-21)
 
-**Core value:** Một bộ design system TaskMate duy nhất, IntelliJ-only, light+dark, mọi control AntD đều wrap và có thể thay đổi tại một điểm.
-**Current focus:** Phase 50 — full-app-adoption
+**Core value:** Thay toàn bộ AntD bằng bộ control tự build theo OpenIDEA (PyCharm Islands), light+dark, API/behavior/a11y giữ nguyên; gỡ hoàn toàn `antd` + `@ant-design/icons`.
+**Current focus:** Phase 51 — control-inventory-surface-audit
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 51 — Control Inventory & Surface Audit
 Plan: —
-Status: Defining requirements
-Last activity: 2026-11-21 — Milestone v1.6 started
+Status: Roadmap created — ready for phase planning
+Last activity: 2026-11-21 — v1.6 roadmap created (Phases 51–58, 18 requirements mapped)
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 

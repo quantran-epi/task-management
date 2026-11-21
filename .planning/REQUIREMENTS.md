@@ -57,34 +57,45 @@
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
+Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending until the phase executes.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INV-01 | TBD | Pending |
-| INV-02 | TBD | Pending |
-| INV-03 | TBD | Pending |
-| MAP-01 | TBD | Pending |
-| MAP-02 | TBD | Pending |
-| MAP-03 | TBD | Pending |
-| NAT-01 | TBD | Pending |
-| NAT-02 | TBD | Pending |
-| NAT-03 | TBD | Pending |
-| NAT-04 | TBD | Pending |
-| CLEAN-01 | TBD | Pending |
-| CLEAN-02 | TBD | Pending |
-| CLEAN-03 | TBD | Pending |
-| VIS-01 | TBD | Pending |
-| VIS-02 | TBD | Pending |
-| VIS-03 | TBD | Pending |
-| VIS-04 | TBD | Pending |
-| VIS-05 | TBD | Pending |
+| INV-01 | 51 | Pending |
+| INV-02 | 51 | Pending |
+| INV-03 | 51 | Pending |
+| MAP-01 | 52 | Pending |
+| MAP-02 | 52 | Pending |
+| MAP-03 | 52 | Pending |
+| NAT-01 | 53 | Pending |
+| NAT-02 | 54 | Pending |
+| NAT-03 | 55 | Pending |
+| NAT-04 | 55 | Pending |
+| CLEAN-01 | 56 | Pending |
+| CLEAN-02 | 56 | Pending |
+| CLEAN-03 | 56 | Pending |
+| VIS-01 | 57 | Pending |
+| VIS-02 | 57 | Pending |
+| VIS-03 | 57 | Pending |
+| VIS-04 | 57 | Pending |
+| VIS-05 | 58 | Pending |
 
 **Coverage:**
 
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0
+
+| Phase | Requirements |
+|-------|--------------|
+| 51 | INV-01, INV-02, INV-03 |
+| 52 | MAP-01, MAP-02, MAP-03 |
+| 53 | NAT-01 |
+| 54 | NAT-02 |
+| 55 | NAT-03, NAT-04 |
+| 56 | CLEAN-01, CLEAN-02, CLEAN-03 |
+| 57 | VIS-01, VIS-02, VIS-03, VIS-04 |
+| 58 | VIS-05 |
 
 ---
 *Requirements defined: 2026-11-21*

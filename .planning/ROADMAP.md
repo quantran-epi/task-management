@@ -2,127 +2,157 @@
 
 ## Active Milestone
 
-- Phase 35: Shared-primitive extraction + SDLC behavior removal (v1.4)
-- Phase 36: Data model, multi-chat identity, backup/migration (v1.4) (COMPLETE — verified 2026-11-11)
-- Phase 37: Runtime reliability + concurrency (v1.4)
-- Phase 38: Hard token budget + accurate measurement (v1.4) (COMPLETE — verified 2026-11-14)
-- Phase 39: Skill versioning + enrichment approval (v1.4) (COMPLETE — verified 2026-11-14)
-- Phase 40: Explorer UX, CRUD correctness, observed walkthrough (v1.4)
-- Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (v1.4, INSERTED)
-- Phase 42: Read-only git inspection for the reviewer agent (v1.4, INSERTED)
-- Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (COMPLETE — verified 2026-11-17)
-- Phase 49: Design System Foundation — IntelliJ-only shell, unified light/dark tokens, all AntD wrappers, ESLint/CI guard (v1.5)
-- Phase 50: Full App Adoption — migrate every surface to wrappers, remove token-valued inline styles, Chrome UAT light+dark, all gates green (v1.5)
+- Phase 51: Control Inventory & Surface Audit (v1.6)
+- Phase 52: OpenIDEA Mapping & Design Contract (v1.6)
+- Phase 53: Native Core & Form Controls (v1.6)
+- Phase 54: Native Overlay & Complex Controls (v1.6)
+- Phase 55: Full Surface Adoption & Theme/Offline Parity (v1.6)
+- Phase 56: AntD Removal, Guardrails & Focused Verification (v1.6)
+- Phase 57: Chrome Visual & Behavior Sweep — dummy data, light/dark (v1.6)
+- Phase 58: Defect Closure & Milestone Sign-off (v1.6)
 
-## Milestone: v1.5 Design System & UI Consistency
+## Milestone: v1.6 Native UI Controls
 
-**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: một shell, một nguồn token light+dark, mọi control AntD được wrap tại một điểm, và guard bằng ESLint + CI để không tái diễn import trực tiếp.
-**Requirements:** SHELL-01..03, TOKEN-01..04, CTRL-01..06, GUARD-01..03, ADOPT-01..04
-**Source:** `.planning/REQUIREMENTS.md`, `.planning/research/SUMMARY.md`, `.planning/PROJECT.md`
+**Goal:** Thay toàn bộ AntD bằng bộ control tự build theo ngôn ngữ thiết kế OpenIDEA (PyCharm Islands), light + dark, tập trung tại wrapper TaskMate; giữ nguyên props/API/event/keyboard/focus/validation/a11y; gỡ hoàn toàn `antd` + `@ant-design/icons`.
+
+**Requirements:** INV-01..INV-03, MAP-01..MAP-03, NAT-01..NAT-04, CLEAN-01..CLEAN-03, VIS-01..VIS-05 (18 requirements)
+**Source:** `.planning/REQUIREMENTS.md`; proof đã duyệt tại `scratchpad/oi-prototype/PROOF.md` + source OpenIDEA (research bị bỏ qua theo chỉ định).
 **UI hint:** yes
+
+> **Blocking (VIS-01..VIS-05):** Tôi tự chạy app trên Chrome, seed dummy data, quét từng route/màn hình/feature nhỏ ở light và dark, đo computed style, chụp screenshot, log pass/fail, sửa mọi defect. Sếp không tự duyệt từng màn hình.
+
+**Cross-cutting constraints:** Tauri là runtime duy nhất được hỗ trợ; PWA/GitHub Pages out of scope; không thêm UI runtime library; không đổi data model/ID/backup/sync; hành vi local/offline không đổi; không chạy full Vitest suite — chỉ focused test; mọi thay đổi UI đi qua wrapper TaskMate.
 
 ## Phases
 
-- [x] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all AntD wrappers, ESLint + local checks guard, focused token+wrapper tests. (completed 2026-11-21)
-- [x] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green. (completed 2026-11-21)
+- [ ] **Phase 51: Control Inventory & Surface Audit** — liệt kê mọi control/import AntD, mọi UI surface, phân nhóm implementation (INV-01..03)
+- [ ] **Phase 52: OpenIDEA Mapping & Design Contract** — map control có tương đương, thiết kế control mới, khóa API/metric baseline (MAP-01..03)
+- [ ] **Phase 53: Native Core & Form Controls** — thay wrapper core/form bằng control tự build, không import AntD (NAT-01)
+- [ ] **Phase 54: Native Overlay & Complex Controls** — Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form + mọi trạng thái/behavior (NAT-02)
+- [ ] **Phase 55: Full Surface Adoption & Theme/Offline Parity** — mọi màn hình dùng wrapper, token light/dark, Tauri offline (NAT-03, NAT-04)
+- [ ] **Phase 56: AntD Removal, Guardrails & Focused Verification** — gỡ dependency, ESLint guard, focused test, cổng tổng hợp (CLEAN-01..03)
+- [ ] **Phase 57: Chrome Visual & Behavior Sweep** — seed dummy data, quét mọi màn hình light/dark, đo computed style, screenshot, log pass/fail, tương tác thật (VIS-01..04)
+- [ ] **Phase 58: Defect Closure & Milestone Sign-off** — sửa hết defect, re-quét, chốt milestone không cần sếp duyệt từng màn hình (VIS-05)
 
 ## Phase Details
 
-### Phase 49: Design System Foundation
+### Phase 51: Control Inventory & Surface Audit
 
-**Goal:** Nền design system duy nhất, IntelliJ-only, với token dùng chung cho ConfigProvider và CSS ở cả light/dark và mọi control AntD có wrapper TaskMate làm điểm cấu hình duy nhất, được bảo vệ bởi ESLint + CI.
-**Depends on:** Nothing (first phase of v1.5; follows Phase 48 from prior milestone)
-**Requirements**: SHELL-01, SHELL-02, SHELL-03, TOKEN-01, TOKEN-02, TOKEN-03, TOKEN-04, CTRL-01, CTRL-02, CTRL-03, CTRL-04, CTRL-05, CTRL-06, GUARD-01, GUARD-02, GUARD-03
+**Goal:** Có một danh mục duy nhất, đầy đủ và đối chiếu được về mọi control/UI surface TaskMate đang dùng trước khi thay bất cứ dòng code nào.
+**Depends on:** Nothing (first phase of v1.6; follows Phase 50 from v1.5)
+**Requirements**: INV-01, INV-02, INV-03
 **Success Criteria** (what must be TRUE):
 
-  1. Ứng dụng chỉ khởi động shell IntelliJ/workbench; repo không còn code shell AntD cũ, flag chuyển đổi trong `main.tsx`, hay PWA install prompts, và không có migration cho cấu hình shell cũ.
-  2. Một nguồn token duy nhất (màu, radius, chiều cao control, font, spacing) drive cả AntD `ConfigProvider` lẫn CSS/workbench; đổi theme cập nhật ngay mọi control không reload và giữ nguyên lựa chọn hiện tại của user.
-  3. Mọi control AntD dùng trong app (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip, ~60 components) có wrapper TaskMate tại `src/components/ui/`; mỗi wrapper áp token defaults và policy riêng — không re-export rỗng, đổi implementation tại một điểm.
-  4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; `npm run lint` + `npm run build` + focused test chạy local sau mỗi lần sửa, vi phạm làm lint fail. Không dùng GitHub Actions CI.
-  5. Focused Vitest xanh cho wrapper và token ở cả light và dark: giá trị token, accessible name của icon button, policy footer/close của modal, bảng màu status tag, và phát hiện drift giữa ConfigProvider và CSS token.
+  1. `src/components/ui/` chứa danh mục mọi wrapper và `grep` import `antd` / `@ant-design/icons` trong `src` trả về đúng danh sách đã liệt kê — không import nào nằm ngoài tồn kho.
+  2. Với mỗi control, tồn kho ghi rõ file, props, state, event, keyboard/focus, validation và accessible name; lưu tại `.planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md`.
+  3. Mọi UI surface được quét và ghi nhận: route/view, tool window, settings, CR, notes, AI Office, modal/drawer/popconfirm, form/table, menu/context menu, tooltip/popover, notification, và trạng thái empty/error/loading.
+  4. Mỗi control được gán nhóm implementation (core/form, overlay/complex, domain/adoption), độ phức tạp, wrapper cần thay, control OpenIDEA tương đương hoặc nhãn "cần thiết kế mới", và tiêu chí behavior phải giữ nguyên.
+  5. Số wrapper trong artifact tồn kho khớp số wrapper thực tế trong `src/components/ui/` — không sót, không trùng, đã được review.
 
-**Plans**: 9 plans in 8 waves (plan 05 split into 05/06/07 after checker review; old 06→08, 07→09)
-Plans:
-**Wave 1**
+**Research flag:** skipped — baseline thiết kế là `scratchpad/oi-prototype/PROOF.md` đã được sếp duyệt; không chạy research phase.
+**UI hint**: yes
 
-- [x] 49-01-PLAN.md — Xóa shell AntD/flag/PWA; hard-boot IntelliJ, giữ lại side effect + coding-zone popout (SHELL-01..03)
+### Phase 52: OpenIDEA Mapping & Design Contract
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Goal:** Mọi control có bản thiết kế OpenIDEA cụ thể, đo được, và khóa nguyên API wrapper hiện tại trước khi implementation.
+**Depends on:** Phase 51
+**Requirements**: MAP-01, MAP-02, MAP-03
+**Success Criteria** (what must be TRUE):
 
-- [x] 49-02-PLAN.md — Một nguồn `tokens.ts` cho ConfigProvider + CSS vars; toggle light/dark, localStorage override, broadcast popout + subscriber re-render (TOKEN-01..04)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 49-03-PLAN.md — Khung wrapper: `tokens.contract.ts`, Button/IconButton (aria-label), 144 icon, scanner tồn kho AntD (CTRL-01/02/06)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 49-04-PLAN.md — Wrapper nhóm input và overlay; holder giữ theme cho message/notification/modal (CTRL-03/04)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 49-05-PLAN.md — Wrapper status + control phức tạp chính (Table/Form/DatePicker/Menu/Tooltip/Popover/Tree/...) (CTRL-01/05/06)
-- [x] 49-06-PLAN.md — Wrapper control còn lại: Card/Descriptions/Grid/Typography/Space + utility lõi (CTRL-01/06) [wave 5, song song 05]
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [x] 49-07-PLAN.md — Wrapper utility/layout cuối, chốt barrel + test parity D-12 + scanner coverage (CTRL-01/05/06)
-
-**Wave 7** *(blocked on Wave 6 completion)*
-
-- [x] 49-08-PLAN.md — ESLint Babel-parser guard + npm script local, install package bản pin + verify repo tự động, test coverage D-04 (GUARD-01..03)
-
-**Wave 8** *(blocked on Wave 7 completion)*
-
-- [x] 49-09-PLAN.md — Cổng tổng hợp lint+build+focused test, ký Nyquist và UI-SPEC + advisory SUS (toàn bộ 16 requirement, 25 task)
-
-**Cross-cutting constraints:**
-
-- Every wrapper here calls a tokens.contract.ts helper; none is a bare re-export
+  1. Với mỗi control có tương đương OpenIDEA, thiết kế ghi token, metric, DOM/class, CSS module gốc, trạng thái, behavior và nguồn tham chiếu cụ thể (`scratchpad/oi-prototype/PROOF.md` + source OpenIDEA).
+  2. Với mỗi control không có tương đương, thiết kế mới theo ngôn ngữ OpenIDEA: font 13px, control height 28px, radius 4px, focus ring, popup portal cách anchor 4px, list row 24px, dialog radius 10px — áp cho cả light và dark.
+  3. Bảng đối chiếu trước/sau cho từng wrapper khẳng định props/API, event, controlled/uncontrolled, validation, keyboard/focus và accessible name không đổi.
+  4. Baseline metric (padding, margin, height, radius, font, border, shadow, alignment, overflow) được trích từ proof và ghi thành chuẩn đo cho Phase 57.
+  5. Design contract lưu tại `.planning/phases/52-openidea-mapping-design-contract/52-UI-SPEC.md` và được review trước khi Phase 53 bắt đầu.
 
 **UI hint**: yes
 
-### Phase 50: Full App Adoption
+### Phase 53: Native Core & Form Controls
 
-**Goal:** Mọi bề mặt UI chạy trên design system mới: không còn import AntD trực tiếp hay style inline trùng token, light/dark parity quan sát được trên Chrome, và mọi cổng kiểm tra xanh trước khi đóng milestone.
-**Depends on:** Phase 49
-**Requirements**: ADOPT-01, ADOPT-02, ADOPT-03, ADOPT-04
+**Goal:** Nhóm control core/form chạy hoàn toàn bằng control tự build, làm nền cho mọi nhóm control còn lại.
+**Depends on:** Phase 52
+**Requirements**: NAT-01
 **Success Criteria** (what must be TRUE):
 
-  1. Mọi màn hình, tool window, settings, CR, notes, AI Office và modal trong shell IntelliJ render qua wrapper `src/components/ui/`; không còn import AntD trực tiếp bên ngoài thư mục wrapper.
-  2. Không còn style inline lặp lại giá trị token trong các view đã migrate — màu, font, size, spacing lấy từ nguồn token chung.
-  3. UAT Chrome quan sát được ở cả light và dark cho task quick-add, settings CRUD, CR detail actions, modal forms, toolbar icon buttons và AI chat controls; focus, keyboard nav và accessible name còn nguyên trên mọi control.
-  4. Light/dark parity trên các luồng đại diện: cùng một control ở hai theme chỉ khác giá trị token, không có control nào lệch màu/font/size.
-  5. `tsc --noEmit`, lint, focused Vitest và build đều xanh.
+  1. Mọi wrapper core/form trong `src/components/ui/` render từ React + CSS variables/CSS module/Web API tự build; không import `antd` hay `@ant-design/icons`, không thêm thư viện UI runtime.
+  2. Icon tự build thay `@ant-design/icons`; mỗi icon button có accessible name (`aria-label`) quan sát được trong DOM.
+  3. Props/API wrapper core giữ nguyên — caller hiện tại không phải sửa khi chạy focused test.
+  4. Mọi wrapper core gọi helper token contract chung; không có re-export rỗng hay implementation trỏ lại AntD.
+  5. `tsc --noEmit` + lint + focused test core controls xanh, không còn import AntD trong nhóm core.
 
-**Plans**: 9 plans in 6 waves (5 bề mặt + nền + cổng tổng hợp; sóng 5 xử lý notify callback dùng chung)
-Plans:
-**Wave 1**
+**UI hint**: yes
 
-- [x] 50-01-PLAN.md — Nền adoption: mount ThemeAppHolder mỗi branch, wrapper ConfigProvider + theme bridge, codemod, guard static API + inline sweep, e2e skeleton (ADOPT-01..04)
+### Phase 54: Native Overlay & Complex Controls
 
-**Wave 2** *(blocked on Wave 1)*
+**Goal:** Nhóm control overlay/phức tạp được thay bằng control tự build với mọi trạng thái và behavior đặc trưng giữ nguyên.
+**Depends on:** Phase 53
+**Requirements**: NAT-02
+**Success Criteria** (what must be TRUE):
 
-- [x] 50-02-PLAN.md — Sóng 1 tasks/planner: import barrel + static API → hook + dọn inline token (ADOPT-01/02, U1)
-- [x] 50-06-PLAN.md — Sóng 5 tool windows: IconButton aria-label, actionRegistry nhận notify callback, dọn inline token (ADOPT-01/02/03, U5)
+  1. Mọi trạng thái control — default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty — render đúng và quan sát được qua computed style trong focused test.
+  2. Popup (Dropdown/Tooltip/Popover/Select/DatePicker) flip/shift khi gần mép viewport, đóng khi click ngoài và khi Escape, focus trở về anchor sau khi đóng.
+  3. Dialog/Modal/Drawer có focus trap: Tab không thoát khỏi dialog, Escape đóng, focus khôi phục về trigger.
+  4. Table/Form/DatePicker/Menu/Tooltip và control AI Office giữ nguyên event, copy validation và keyboard/focus — focused behavior test xanh.
+  5. Không có console error khi chuyển trạng thái control trên Chrome (dev build).
 
-**Wave 3** *(blocked on Wave 2)*
+**UI hint**: yes
 
-- [x] 50-03-PLAN.md — Sóng 2 settings: import barrel + static API → hook, giữ copy validation byte-for-byte (ADOPT-01/02, U2)
-- [x] 50-04-PLAN.md — Sóng 3 CR/notes: FormItem mirror, Modal contextHolder, StatusTag token map (ADOPT-01/02, U3/U4)
+### Phase 55: Full Surface Adoption & Theme/Offline Parity
 
-**Wave 4** *(blocked on Wave 3)*
+**Goal:** Mọi bề mặt UI chạy trên control native, đổi theme cập nhật ngay, và app vẫn local/offline trên Tauri.
+**Depends on:** Phase 54
+**Requirements**: NAT-03, NAT-04
+**Success Criteria** (what must be TRUE):
 
-- [x] 50-05-PLAN.md — Sóng 4 AI/chat: import barrel + static API → hook, sửa 3 lỗi hooks ChatMessageBubble (ADOPT-01/02/04, U6)
-- [x] 50-07-PLAN.md — Views: 22 màn hình cấp cao import barrel + hook (ADOPT-01/02)
+  1. Mọi màn hình, tool window, settings, CR, notes, AI Office và modal dùng wrapper TaskMate; caller không sửa để thích nghi; không còn import AntD trực tiếp trong `src` và không còn code control chết.
+  2. Token light/dark vẫn tập trung tại `src/styles/tokens.ts` và CSS variables; đổi theme cập nhật ngay mọi control không reload, giữ lựa chọn hiện tại của user.
+  3. App chạy local/offline trên Tauri; không thêm runtime server; hành vi local/offline không đổi.
+  4. Focused smoke test trên các luồng đại diện (quick-add, settings CRUD, CR detail, modal form, AI chat) xanh ở cả light và dark.
+  5. `tsc --noEmit` + lint + build xanh.
 
-**Wave 5** *(blocked on Waves 4)*
+**UI hint**: yes
 
-- [x] 50-08-PLAN.md — Đuôi 52 file components/utils/services + notify callback cho 3 file .ts phi-React (ADOPT-01/02)
+### Phase 56: AntD Removal, Guardrails & Focused Verification
 
-**Wave 6** *(blocked on Wave 5)*
+**Goal:** AntD biến mất khỏi dependency và source, guard chặn tái diễn, cổng focused test xanh — không chạy full Vitest suite.
+**Depends on:** Phase 55
+**Requirements**: CLEAN-01, CLEAN-02, CLEAN-03
+**Success Criteria** (what must be TRUE):
 
-- [x] 50-09-PLAN.md — Cổng tổng hợp: lint = eslint src, xóa lint:adoption, e2e 6 luồng light/dark, 50-UAT.md + VALIDATION sign-off (ADOPT-03/04)
+  1. `antd` và `@ant-design/icons` bị gỡ khỏi `package.json` và lockfile; `npm ci`, lint, build và focused test vẫn xanh.
+  2. ESLint guard chặn mọi import trực tiếp `antd` / `@ant-design/icons` trong `src`; file vi phạm mẫu làm lint fail.
+  3. Focused test kiểm tra wrapper render đúng token light/dark, accessible name, API tương thích, popup/keyboard/focus/validation policy; full Vitest suite không được chạy.
+  4. `grep` repo trả về zero import `antd` / `@ant-design/icons` trong source đã build.
+  5. Cổng tổng hợp (typecheck + lint + focused test + build) xanh một lần, ghi vào `.planning/phases/56-antd-removal-guardrails-focused-verification/56-VALIDATION.md`.
+
+**UI hint**: yes
+
+### Phase 57: Chrome Visual & Behavior Sweep
+
+**Goal:** Tôi tự seed dummy data và quét exhaustively từng route/màn hình/feature nhỏ trên Chrome ở light và dark, đo style, chụp ảnh, log pass/fail — sếp không duyệt thay.
+**Depends on:** Phase 56
+**Requirements**: VIS-01, VIS-02, VIS-03, VIS-04
+**Success Criteria** (what must be TRUE):
+
+  1. Dummy data được seed (CR, task, notes, AI team/chat, settings) rồi app chạy trên Chrome; mọi route/view/tool window/settings/CR/notes/AI Office/modal/drawer/menu/tooltip/feature nhỏ được quét ở cả light và dark.
+  2. Với mỗi màn hình/control, computed style và geometry (padding, margin, height, radius, font, border, shadow, alignment, overflow) được đo đối chiếu baseline OpenIDEA/proof; mọi lệch được ghi thành defect.
+  3. Screenshot và log pass/fail được lưu cho từng màn hình và từng trạng thái control trong artifact planning của phase.
+  4. Behavior kiểm tra bằng tương tác thật trên Chrome: Tab/Arrow/Enter/Escape, mở/đóng popup, focus trap, validation, click, đổi theme — không console error gây lỗi UI.
+  5. Báo cáo sweep ghi rõ số màn hình, số control, số trạng thái đã quét và số defect tìm thấy.
+
+**UI hint**: yes
+
+### Phase 58: Defect Closure & Milestone Sign-off
+
+**Goal:** Mọi defect render/behavior từ sweep được sửa và re-quét; milestone chỉ đóng khi báo cáo sạch.
+**Depends on:** Phase 57
+**Requirements**: VIS-05
+**Success Criteria** (what must be TRUE):
+
+  1. Mọi defect render/behavior từ báo cáo sweep được sửa và re-quét trên Chrome ở cả light và dark; không còn defect mở.
+  2. Báo cáo sweep cuối cập nhật pass cho mọi màn hình/control/trạng thái, kèm screenshot đối chiếu baseline.
+  3. Cổng tổng hợp cuối (typecheck + lint + focused test + build) xanh sau lần sửa cuối.
+  4. Ký duyệt milestone ghi trong artifact planning; sếp không phải tự duyệt từng tính năng hay từng màn hình.
 
 **UI hint**: yes
 
@@ -130,8 +160,31 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 9/9 | Complete   | 2026-11-21 |
+| 51. Control Inventory & Surface Audit | 0/TBD | Not started | — |
+| 52. OpenIDEA Mapping & Design Contract | 0/TBD | Not started | — |
+| 53. Native Core & Form Controls | 0/TBD | Not started | — |
+| 54. Native Overlay & Complex Controls | 0/TBD | Not started | — |
+| 55. Full Surface Adoption & Theme/Offline Parity | 0/TBD | Not started | — |
+| 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
+| 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
+| 58. Defect Closure & Milestone Sign-off | 0/TBD | Not started | — |
+
+## Previous Milestone: v1.5 Design System & UI Consistency
+
+- Phase 49: Design System Foundation — IntelliJ-only shell, unified light/dark tokens, all AntD wrappers, ESLint/CI guard (COMPLETE — verified 2026-11-21)
+- Phase 50: Full App Adoption — migrate every surface to wrappers, remove token-valued inline styles, Chrome UAT light+dark (COMPLETE — verified 2026-11-21)
+
+## Previous Milestone: v1.4 Unified AI Office
+
+- Phase 35: Shared-primitive extraction + SDLC behavior removal (COMPLETE)
+- Phase 36: Data model, multi-chat identity, backup/migration (COMPLETE — verified 2026-11-11)
+- Phase 37: Runtime reliability + concurrency
+- Phase 38: Hard token budget + accurate measurement (COMPLETE — verified 2026-11-14)
+- Phase 39: Skill versioning + enrichment approval (COMPLETE — verified 2026-11-14)
+- Phase 40: Explorer UX, CRUD correctness, observed walkthrough
+- Phase 41: AI Office team docs zones — per-team folder tree, agent-scoped doc write (INSERTED)
+- Phase 42: Read-only git inspection for the reviewer agent (INSERTED)
+- Phase 43: Repo reading that scales — grep, paged read, remote headless exploration (COMPLETE — verified 2026-11-17)
 
 ## Previous Milestone: v1.3
 
