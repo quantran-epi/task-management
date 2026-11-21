@@ -567,7 +567,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
           {currentNoteId ? (
             <Tag
               color={saveStatus === 'saved' ? 'green' : saveStatus === 'saving' ? 'processing' : 'warning'}
-              style={{ fontSize: 11, margin: 0, padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              style={{ fontSize: 'var(--font-size-xs)', margin: 0, padding: '0 6px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
               <CloudSyncOutlined />
               {saveStatus === 'saved' ? 'Đã lưu' : saveStatus === 'saving' ? 'Đang lưu...' : 'Chưa lưu'}
@@ -685,7 +685,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
             style={{
               padding: 10,
               background: token.colorFillAlter,
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               border: `1px solid ${token.colorBorderSecondary}`,
               display: 'flex',
               flexDirection: 'column',
@@ -693,7 +693,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontWeight: 600, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <RobotOutlined style={{ color: token.colorPrimary }} />
                 <span>AI Diagram Fixer & Enhancer</span>
               </span>
@@ -740,7 +740,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 <Tooltip title="Thu nhỏ (-)">
                   <Button size="small" icon={<ZoomOutOutlined />} onClick={handleZoomOut} />
                 </Tooltip>
-                <span style={{ fontSize: 12, fontWeight: 500, minWidth: 46, textAlign: 'center' }}>
+                <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, minWidth: 46, textAlign: 'center' }}>
                   {Math.round(scale * 100)}%
                 </span>
                 <Tooltip title="Phóng to (+)">
@@ -782,7 +782,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 message="Lỗi cú pháp Mermaid"
                 description={
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <Text type="danger" style={{ fontSize: 12 }}>
+                    <Text type="danger" style={{ fontSize: 'var(--font-size-small)' }}>
                       {error}
                     </Text>
                     <div>
@@ -858,7 +858,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
         style={{ top: 40, maxWidth: 900 }}
         footer={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+            <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
               Mẹo: Nhấn <b>Cmd + Enter</b> (hoặc <b>Ctrl + Enter</b>) để gửi AI ngay.
             </span>
             <Space>
@@ -898,7 +898,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               fontSize: 14,
               lineHeight: 1.6,
               resize: 'vertical',
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               fontFamily: 'inherit',
             }}
           />

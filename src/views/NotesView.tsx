@@ -663,7 +663,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           border: hideFolderTree ? 'none' : '1px solid #f0f0f0',
           borderRadius: hideFolderTree ? 0 : 8,
           overflow: 'hidden',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--bg-island)',
           width: '100%',
         }}
       >
@@ -748,7 +748,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: 32,
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--bg-island)',
               }}
             >
               <Empty
@@ -768,7 +768,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
                   type="primary"
                   icon={<PlusOutlined />}
                   onClick={() => handleCreateDocument()}
-                  style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                  style={{ backgroundColor: 'var(--accent)', marginTop: 12 }}
                 >
                   Tạo tài liệu mới
                 </Button>

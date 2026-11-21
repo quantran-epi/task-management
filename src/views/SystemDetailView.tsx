@@ -30,7 +30,7 @@ export interface SystemDetailViewProps {
 }
 
 const CR_TYPE_COLOR: Record<CrType, string> = {
-  NEW_FEATURE: '#1677ff',
+  NEW_FEATURE: 'var(--accent)',
   ENHANCEMENT: '#52c41a',
   BUGFIX: '#faad14',
 };
@@ -294,7 +294,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
             key: 'repoPath',
             label: 'Đường dẫn Repository',
             children: system.remoteRepoPath ? (
-              <Text code copyable style={{ fontSize: 12 }}>
+              <Text code copyable style={{ fontSize: 'var(--font-size-small)' }}>
                 {system.remoteRepoPath}
               </Text>
             ) : (
@@ -377,7 +377,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
               key: 'remoteRepoPath',
               render: (path?: string) =>
                 path ? (
-                  <Text code style={{ fontSize: 11 }}>
+                  <Text code style={{ fontSize: 'var(--font-size-xs)' }}>
                     {path}
                   </Text>
                 ) : (
@@ -398,7 +398,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
           description={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <Text strong>Hệ thống này chưa có subsystem con nào</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Subsystem là đơn vị deploy gắn đúng một repo remote SSH. Thêm subsystem để bắt đầu
                 cấu hình.
               </Text>
@@ -468,7 +468,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
               <Text strong>
                 Chưa có Change Request nào ảnh hưởng hệ thống này
               </Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 {isLogicalParent(system)
                   ? 'CR sẽ xuất hiện ở đây khi subsystem con được chọn làm target.'
                   : 'CR sẽ xuất hiện ở đây khi subsystem này được chọn làm target.'}
@@ -510,7 +510,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
           description={
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <Text strong>Subsystem chưa cấu hình SSH/Repo</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Cấu hình SSH và đường dẫn repo trong System Catalog để xem nhánh và commit.
               </Text>
             </div>
@@ -523,7 +523,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       ) : (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Space size={8}>
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
               Nhánh hiện tại:
             </Text>
             <Tag color="blue" style={{ fontFamily: 'monospace' }}>
@@ -541,7 +541,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
                 dataIndex: 'name',
                 key: 'name',
                 render: (name: string) => (
-                  <Text code style={{ fontSize: 12 }}>
+                  <Text code style={{ fontSize: 'var(--font-size-small)' }}>
                     {name}
                   </Text>
                 ),
@@ -554,7 +554,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
                 render: (sha?: string) =>
                   sha ? (
                     <Tooltip title={sha}>
-                      <Text code style={{ fontSize: 12 }}>
+                      <Text code style={{ fontSize: 'var(--font-size-small)' }}>
                         {sha.slice(0, 8)}
                       </Text>
                     </Tooltip>
@@ -644,8 +644,8 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
           alignItems: 'flex-start',
           gap: 16,
           padding: '16px 20px',
-          background: 'var(--bg-island, #ffffff)',
-          borderRadius: 8,
+          background: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
         }}
       >

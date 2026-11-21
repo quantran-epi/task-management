@@ -355,7 +355,7 @@ export const TelegramMonitorView: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <Space orientation="vertical" size={2}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <SendOutlined style={{ fontSize: 24, color: '#4f46e5' }} />
+              <SendOutlined style={{ fontSize: 24, color: 'var(--accent)' }} />
               <Title level={4} style={{ margin: 0 }}>
                 Telegram AI Gateway
               </Title>
@@ -479,7 +479,7 @@ export const TelegramMonitorView: React.FC = () => {
                           style={{
                             padding: '12px 16px',
                             background: '#f8fafc',
-                            borderRadius: 8,
+                            borderRadius: 'var(--radius-control)',
                             border: '1px solid #e2e8f0',
                           }}
                         >
@@ -503,8 +503,8 @@ export const TelegramMonitorView: React.FC = () => {
                                 fontSize: 13,
                                 lineHeight: 1.6,
                                 padding: '8px 12px',
-                                background: '#ffffff',
-                                borderRadius: 6,
+                                background: 'var(--bg-island)',
+                                borderRadius: 'var(--radius-control)',
                                 border: '1px solid #e2e8f0',
                               }}
                             >
@@ -522,9 +522,9 @@ export const TelegramMonitorView: React.FC = () => {
                                 color: '#0f172a',
                                 fontSize: 13,
                                 lineHeight: 1.6,
-                                background: '#ffffff',
+                                background: 'var(--bg-island)',
                                 padding: '10px 14px',
-                                borderRadius: 6,
+                                borderRadius: 'var(--radius-control)',
                                 border: '1px solid #e2e8f0',
                               }}
                             >
@@ -542,10 +542,10 @@ export const TelegramMonitorView: React.FC = () => {
                         key: 'createdAt',
                         width: 140,
                         render: (val: string) => (
-                          <Text style={{ fontSize: 12 }}>
+                          <Text style={{ fontSize: 'var(--font-size-small)' }}>
                             {new Date(val).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                             <br />
-                            <span style={{ color: '#888' }}>{val.slice(0, 10)}</span>
+                            <span style={{ color: 'var(--fg-muted)' }}>{val.slice(0, 10)}</span>
                           </Text>
                         ),
                       },
@@ -560,7 +560,7 @@ export const TelegramMonitorView: React.FC = () => {
                             <Space size={4}>
                               <Text
                                 copyable
-                                style={{ fontSize: 12, color: '#4f46e5', cursor: 'pointer' }}
+                                style={{ fontSize: 'var(--font-size-small)', color: 'var(--accent)', cursor: 'pointer' }}
                                 onClick={() => setLogChatFilter(r.chatId)}
                               >
                                 {r.chatId}
@@ -569,7 +569,7 @@ export const TelegramMonitorView: React.FC = () => {
                                 <Button
                                   type="text"
                                   size="small"
-                                  icon={<SendOutlined style={{ fontSize: 12, color: '#4f46e5' }} />}
+                                  icon={<SendOutlined style={{ fontSize: 'var(--font-size-small)', color: 'var(--accent)' }} />}
                                   onClick={() => handleOpenSendModal(r.chatId)}
                                 />
                               </Tooltip>
@@ -617,7 +617,7 @@ export const TelegramMonitorView: React.FC = () => {
                               {r.dataScopeUsed}
                             </Tag>
                             {Boolean(r.tokenCount) && (
-                              <div style={{ marginTop: 4, fontSize: 12, color: '#888' }}>
+                              <div style={{ marginTop: 4, fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>
                                 ~{r.tokenCount} tokens
                               </div>
                             )}
@@ -679,7 +679,7 @@ export const TelegramMonitorView: React.FC = () => {
                         marginBottom: 20,
                         borderColor: '#fed7aa',
                         backgroundColor: '#fffbeb',
-                        borderRadius: 8,
+                        borderRadius: 'var(--radius-control)',
                       }}
                       title={
                         <Space>
@@ -700,8 +700,8 @@ export const TelegramMonitorView: React.FC = () => {
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               padding: '10px 12px',
-                              background: '#ffffff',
-                              borderRadius: 6,
+                              background: 'var(--bg-island)',
+                              borderRadius: 'var(--radius-control)',
                               border: '1px solid #fde68a',
                               flexWrap: 'wrap',
                               gap: 8,
@@ -711,11 +711,11 @@ export const TelegramMonitorView: React.FC = () => {
                               <Space>
                                 <strong style={{ fontSize: 14 }}>{p.name || 'Người dùng mới'}</strong>
                                 <Tag color="warning">Pending</Tag>
-                                <Text copyable style={{ fontSize: 12, color: '#4f46e5' }}>
+                                <Text copyable style={{ fontSize: 'var(--font-size-small)', color: 'var(--accent)' }}>
                                   {p.chatId}
                                 </Text>
                               </Space>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
+                              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                                 Đăng ký lúc: {new Date(p.createdAt).toLocaleString()}
                               </Text>
                             </Space>
@@ -852,7 +852,7 @@ export const TelegramMonitorView: React.FC = () => {
                           const hasSpam = (r.overQuotaAttempts ?? 0) > 0;
                           return (
                             <div style={{ minWidth: 120 }}>
-                              <div style={{ fontSize: 12, marginBottom: 2 }}>
+                              <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 2 }}>
                                 {r.usedToday} / {r.dailyLimit} reqs
                               </div>
                               <Progress
@@ -862,7 +862,7 @@ export const TelegramMonitorView: React.FC = () => {
                               />
                               {hasSpam && (
                                 <div style={{ marginTop: 4 }}>
-                                  <Tag color={(r.overQuotaAttempts ?? 0) > 3 ? 'red' : 'volcano'} style={{ fontSize: 11 }}>
+                                  <Tag color={(r.overQuotaAttempts ?? 0) > 3 ? 'red' : 'volcano'} style={{ fontSize: 'var(--font-size-xs)' }}>
                                     Spam over-quota: {r.overQuotaAttempts} lần
                                   </Tag>
                                 </div>
@@ -890,7 +890,7 @@ export const TelegramMonitorView: React.FC = () => {
                           model ? (
                             <Tag color="purple">{model}</Tag>
                           ) : (
-                            <Text type="secondary" style={{ fontSize: 12 }}>
+                            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                               Mặc định
                             </Text>
                           ),
@@ -903,7 +903,7 @@ export const TelegramMonitorView: React.FC = () => {
                             <Tooltip title="Gửi tin nhắn Telegram cho người dùng này">
                               <Button
                                 size="small"
-                                icon={<SendOutlined style={{ color: '#4f46e5' }} />}
+                                icon={<SendOutlined style={{ color: 'var(--accent)' }} />}
                                 onClick={() => handleOpenSendModal(r.chatId)}
                               />
                             </Tooltip>
@@ -1120,7 +1120,7 @@ export const TelegramMonitorView: React.FC = () => {
       <Modal
         title={
           <Space>
-            <SendOutlined style={{ color: '#4f46e5' }} />
+            <SendOutlined style={{ color: 'var(--accent)' }} />
             <span>Gửi tin nhắn Telegram</span>
           </Space>
         }

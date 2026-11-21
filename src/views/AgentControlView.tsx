@@ -138,7 +138,7 @@ export const AgentControlView: React.FC = () => {
         style={{
           height: '100%',
           boxShadow: token.boxShadowSecondary,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-control)',
           overflow: 'hidden',
           backgroundColor: token.colorBgContainer,
         }}
@@ -184,13 +184,13 @@ export const AgentControlView: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: '#1e1e1e',
-                color: '#888',
+                color: 'var(--fg-muted)',
               }}
             >
               <Empty
                 image={EmptyImageSimple}
                 description={
-                  <span style={{ color: '#888' }}>
+                  <span style={{ color: 'var(--fg-muted)' }}>
                     Chưa có phiên Ghost Dev nào được chọn
                   </span>
                 }
@@ -235,7 +235,7 @@ export const AgentControlView: React.FC = () => {
       <Drawer
         title={
           <Space>
-            <HistoryOutlined style={{ color: '#4f46e5' }} />
+            <HistoryOutlined style={{ color: 'var(--accent)' }} />
             <span>Chi tiết Audit: {selectedAuditRecord?.taskTitle}</span>
           </Space>
         }
@@ -262,7 +262,7 @@ export const AgentControlView: React.FC = () => {
               <DescriptionsItem label="Models">
                 <Space>
                   <Tag color="#722ed1">Master: {selectedAuditRecord.masterModel}</Tag>
-                  <Tag color="#1677ff">Worker: {selectedAuditRecord.workerModel}</Tag>
+                  <Tag color="var(--accent)">Worker: {selectedAuditRecord.workerModel}</Tag>
                 </Space>
               </DescriptionsItem>
               <DescriptionsItem label="Thời gian bắt đầu">
@@ -308,9 +308,9 @@ export const AgentControlView: React.FC = () => {
                 style={{
                   backgroundColor: '#f8fafc',
                   border: '1px solid #e2e8f0',
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-control)',
                   padding: 12,
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   whiteSpace: 'pre-wrap',
                   maxHeight: 250,
                   overflowY: 'auto',
@@ -340,7 +340,7 @@ export const AgentControlView: React.FC = () => {
                         padding: 10,
                         backgroundColor: '#fafafa',
                         border: '1px solid #f0f0f0',
-                        borderRadius: 8,
+                        borderRadius: 'var(--radius-control)',
                       }}
                     >
                       {/* User Feedback Bubble */}
@@ -357,12 +357,12 @@ export const AgentControlView: React.FC = () => {
                           }}
                         >
                           <Space size={4}>
-                            <UserOutlined style={{ color: '#0369a1', fontSize: 12 }} />
-                            <Text strong style={{ fontSize: 12, color: '#0369a1' }}>
+                            <UserOutlined style={{ color: '#0369a1', fontSize: 'var(--font-size-small)' }} />
+                            <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#0369a1' }}>
                               Chỉ đạo #{idx + 1}
                             </Text>
                           </Space>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
+                          <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                             {new Date(fb.timestamp).toLocaleTimeString()}
                           </Text>
                         </div>
@@ -392,8 +392,8 @@ export const AgentControlView: React.FC = () => {
                             }}
                           >
                             <Space size={4}>
-                              <RobotOutlined style={{ color: '#7e22ce', fontSize: 12 }} />
-                              <Text strong style={{ fontSize: 12, color: '#7e22ce' }}>
+                              <RobotOutlined style={{ color: '#7e22ce', fontSize: 'var(--font-size-small)' }} />
+                              <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#7e22ce' }}>
                                 Phản hồi từ AI
                               </Text>
                             </Space>
@@ -405,7 +405,7 @@ export const AgentControlView: React.FC = () => {
                           </Paragraph>
                         </Card>
                       ) : (
-                        <div style={{ marginLeft: 20, fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+                        <div style={{ marginLeft: 20, fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
                           (AI đã nhận chỉ đạo và thực hiện trực tiếp vào mã nguồn)
                         </div>
                       )}

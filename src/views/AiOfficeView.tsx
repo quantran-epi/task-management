@@ -155,8 +155,8 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
     <div
       style={{
         padding: '48px 16px',
-        background: 'var(--bg-island, #ffffff)',
-        borderRadius: 8,
+        background: 'var(--bg-island)',
+        borderRadius: 'var(--radius-control)',
         border: '1px solid var(--border, #e9eaee)',
         textAlign: 'center',
       }}
@@ -247,8 +247,8 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
               alignItems: 'center',
               gap: 12,
               padding: '10px 14px',
-              background: 'var(--bg-island, #ffffff)',
-              borderRadius: 8,
+              background: 'var(--bg-island)',
+              borderRadius: 'var(--radius-control)',
               border: '1px solid var(--border, #e9eaee)',
             }}
           >

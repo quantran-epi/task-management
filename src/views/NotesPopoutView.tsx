@@ -327,7 +327,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
         <Input
           size="small"
           placeholder="Tìm nội dung, ảnh, ghi chú..."
-          prefix={<SearchOutlined style={{ color: '#8c8c8c' }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted)' }} />}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           allowClear
@@ -343,7 +343,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
               size="small"
               icon={<CloseCircleOutlined />}
               onClick={() => setActiveFilter(null)}
-              style={{ padding: 0, height: 'auto', fontSize: 12 }}
+              style={{ padding: 0, height: 'auto', fontSize: 'var(--font-size-small)' }}
             >
               Xem tất cả
             </Button>
@@ -393,7 +393,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                 key={note.id}
                 size="small"
                 style={{
-                  borderLeft: note.isPinned ? '3px solid #1677ff' : undefined,
+                  borderLeft: note.isPinned ? '3px solid var(--accent)' : undefined,
                   background: note.isPinned ? '#fafcff' : '#fff',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
@@ -419,7 +419,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                         {note.title}
                       </Text>
                     ) : (
-                      <Text type="secondary" italic style={{ fontSize: 12 }}>
+                      <Text type="secondary" italic style={{ fontSize: 'var(--font-size-small)' }}>
                         (Không tiêu đề)
                       </Text>
                     )}
@@ -442,9 +442,9 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                         size="small"
                         icon={
                           note.isPinned ? (
-                            <PushpinFilled style={{ color: '#1677ff', fontSize: 12 }} />
+                            <PushpinFilled style={{ color: 'var(--accent)', fontSize: 'var(--font-size-small)' }} />
                           ) : (
-                            <PushpinOutlined style={{ fontSize: 12 }} />
+                            <PushpinOutlined style={{ fontSize: 'var(--font-size-small)' }} />
                           )
                         }
                         onClick={(event) => {
@@ -457,7 +457,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                       <Button
                         type="text"
                         size="small"
-                        icon={<EditOutlined style={{ fontSize: 12 }} />}
+                        icon={<EditOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                         onClick={(event) => {
                           event.stopPropagation();
                           setEditingNote(note);
@@ -475,7 +475,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                         type="text"
                         danger
                         size="small"
-                        icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                        icon={<DeleteOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                         onClick={(event) => event.stopPropagation()}
                       />
                     </Popconfirm>
@@ -484,7 +484,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
 
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-small)',
                     color: '#434343',
                     maxHeight: 140,
                     overflowY: 'auto',

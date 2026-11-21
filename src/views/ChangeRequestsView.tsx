@@ -143,12 +143,12 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
           alignItems: 'center',
           padding: '10px 14px',
           background: '#f9f9fb',
-          borderRadius: 6,
+          borderRadius: 'var(--radius-control)',
           border: '1px solid #e9eaee',
         }}
       >
         <Input
-          prefix={<SearchOutlined style={{ color: '#8c8c8c' }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted)' }} />}
           placeholder="Tìm theo tên hoặc mã CR..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}

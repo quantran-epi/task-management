@@ -26,7 +26,7 @@ export interface ChangeRequestDetailViewProps {
 export const UNATTACHED_OPTION = '__none__';
 
 export const CR_TYPE_LABEL: Record<CrType, { label: string; color: string; icon: React.ReactNode }> = {
-  NEW_FEATURE: { label: 'Tạo mới', color: '#1677ff', icon: <ThunderboltOutlined /> },
+  NEW_FEATURE: { label: 'Tạo mới', color: 'var(--accent)', icon: <ThunderboltOutlined /> },
   ENHANCEMENT: { label: 'Nâng cấp', color: '#52c41a', icon: <ToolOutlined /> },
   BUGFIX: { label: 'Sửa lỗi', color: '#faad14', icon: <BugOutlined /> },
 };
@@ -55,7 +55,7 @@ const isOverdue = (deadline: string | undefined): boolean => {
   return deadline < today;
 };
 
-const mutedStyle: React.CSSProperties = { color: 'var(--fg-muted, #8c8c8c)', fontSize: 12 };
+const mutedStyle: React.CSSProperties = { color: 'var(--fg-muted)', fontSize: 'var(--font-size-small)' };
 
 export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = ({
   changeRequestId,
@@ -206,7 +206,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         cr.documentLinks && cr.documentLinks.length > 0 ? (
           <Space direction="vertical" size={2}>
             {cr.documentLinks.map((link) => (
-              <a key={link} href={link} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+              <a key={link} href={link} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--font-size-small)' }}>
                 {link}
               </a>
             ))}
@@ -224,7 +224,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         cr.reminders && cr.reminders.length > 0 ? (
           <Space direction="vertical" size={2}>
             {cr.reminders.map((r) => (
-              <span key={r.id} style={{ fontSize: 12 }}>
+              <span key={r.id} style={{ fontSize: 'var(--font-size-small)' }}>
                 {r.date}
                 {r.time ? ` ${r.time}` : ''}
                 {r.note ? ` — ${r.note}` : ''}
@@ -232,7 +232,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             ))}
           </Space>
         ) : cr.reminderDate ? (
-          <span style={{ fontSize: 12 }}>
+          <span style={{ fontSize: 'var(--font-size-small)' }}>
             {cr.reminderDate}
             {cr.reminderNote ? ` — ${cr.reminderNote}` : ''}
           </span>
@@ -262,8 +262,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           alignItems: 'flex-start',
           gap: 16,
           padding: '16px 20px',
-          background: 'var(--bg-island, #ffffff)',
-          borderRadius: 8,
+          background: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
         }}
       >
@@ -271,7 +271,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <Tag
               color="blue"
-              style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 8px', margin: 0 }}
+              style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)', padding: '2px 8px', margin: 0 }}
             >
               {cr.code}
             </Tag>
@@ -290,7 +290,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             {targetSystems.length > 0 ? (
               targetSystems.map((sys) => (
                 <Tooltip key={sys.id} title={`${sys.name} (${sys.type})`}>
-                  <Tag color="cyan" icon={<BranchesOutlined />} style={{ margin: 0, fontFamily: 'monospace', fontSize: 12 }}>
+                  <Tag color="cyan" icon={<BranchesOutlined />} style={{ margin: 0, fontFamily: 'monospace', fontSize: 'var(--font-size-small)' }}>
                     {sys.code}
                   </Tag>
                 </Tooltip>
@@ -322,8 +322,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       {/* 3c. Flat task table */}
       <div
         style={{
-          background: 'var(--bg-island, #ffffff)',
-          borderRadius: 8,
+          background: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
           padding: 12,
         }}
@@ -367,7 +367,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                           record.status === 'Done'
                             ? '#52c41a'
                             : record.status === 'In Progress'
-                              ? '#1677ff'
+                              ? 'var(--accent)'
                               : '#d1d3d9',
                       }}
                     />
@@ -439,7 +439,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               {block.header}
               {block.count > 0 && (
-                <Tag color="blue" style={{ margin: 0, fontSize: 11, lineHeight: '16px' }}>
+                <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
                   {block.count}
                 </Tag>
               )}

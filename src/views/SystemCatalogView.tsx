@@ -128,8 +128,8 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
           alignItems: 'center',
           gap: 12,
           padding: '10px 14px',
-          background: 'var(--bg-island, #ffffff)',
-          borderRadius: 8,
+          background: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border, #e9eaee)',
         }}
       >
@@ -167,8 +167,8 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
         <div
           style={{
             padding: '48px 16px',
-            background: 'var(--bg-island, #ffffff)',
-            borderRadius: 8,
+            background: 'var(--bg-island)',
+            borderRadius: 'var(--radius-control)',
             border: '1px solid var(--border, #e9eaee)',
             textAlign: 'center',
           }}

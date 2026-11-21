@@ -199,7 +199,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
               color: token.colorTextSecondary,
             }}
           >
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
               Không có bộ đếm nào đang chạy
             </Text>
           </div>
@@ -257,7 +257,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                         type="secondary"
                         data-testid="popout-hierarchy-subtitle"
                         style={{
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-xs)',
                           lineHeight: 1.1,
                         }}
                       >
@@ -359,7 +359,7 @@ export const TimerPopoutView: React.FC<TimerPopoutViewProps> = ({
                         <Text
                           ellipsis
                           style={{
-                            fontSize: 12,
+                            fontSize: 'var(--font-size-small)',
                             fontWeight: 500,
                             lineHeight: 1.2,
                           }}

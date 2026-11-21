@@ -58,7 +58,7 @@ const PRIORITY_TAG_COLORS: Record<string, string> = {
 };
 
 const CR_TYPE_COLORS: Record<string, string> = {
-  NEW_FEATURE: '#1677ff',
+  NEW_FEATURE: 'var(--accent)',
   ENHANCEMENT: '#52c41a',
   BUGFIX: '#faad14',
 };
@@ -553,7 +553,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
 
             <Button
               type="default"
-              icon={<RobotOutlined style={{ color: '#1677ff' }} />}
+              icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
               onClick={handleAskAI}
               aria-label="Hỏi AI về mục này"
             >
@@ -721,7 +721,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         <Card
           title={
             <Space>
-              <ExclamationCircleOutlined style={{ color: '#1677ff' }} />
+              <ExclamationCircleOutlined style={{ color: 'var(--accent)' }} />
               <span>Gợi ý & Phân tích trước khi thực hiện</span>
             </Space>
           }

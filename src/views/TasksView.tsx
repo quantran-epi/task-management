@@ -381,7 +381,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
 
           {/* CR combobox filter */}
           <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
               CR:
             </Text>
             <Select
@@ -410,7 +410,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
 
           {/* Task Select */}
           <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
               Tác vụ:
             </Text>
             <Select
@@ -443,7 +443,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '2px 0' }}>
                     <Text style={{ lineHeight: 1.3 }}>{option.label}</Text>
                     {crName && (
-                      <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', lineHeight: 1.2 }}>
                         {crName}
                       </Text>
                     )}

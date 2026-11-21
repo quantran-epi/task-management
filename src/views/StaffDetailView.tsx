@@ -199,7 +199,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               {staffRecord.name || `Chi tiết ${noun}`}
             </h2>
-            <div style={{ fontSize: 12, color: 'var(--fg-secondary, #5f6269)' }}>
+            <div style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary, #5f6269)' }}>
               {isEmployee ? 'Nhân viên AI thực thi' : 'AI Lead điều phối'} • ID: {staffId}
             </div>
           </div>
@@ -223,7 +223,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
 
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Tên</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>Tên</div>
           <Input
             value={form.name}
             maxLength={60}
@@ -234,7 +234,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Vai trò</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>Vai trò</div>
           <Input
             value={form.role}
             maxLength={60}
@@ -245,7 +245,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>
             Mô tả năng lực (lead nhìn thấy để giao việc)
           </div>
           <TextArea
@@ -259,19 +259,19 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Persona (Prompt hệ thống)</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>Persona (Prompt hệ thống)</div>
           <TextArea
             rows={8}
             value={form.persona}
             onChange={(e) => setField('persona', e.target.value)}
             aria-label="Persona"
-            style={{ fontFamily: CODE_FONT, fontSize: 12 }}
+            style={{ fontFamily: CODE_FONT, fontSize: 'var(--font-size-small)' }}
             placeholder="Nhập system prompt chi tiết quy định phong cách làm việc..."
           />
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Mô hình AI</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>Mô hình AI</div>
           <Select
             showSearch
             style={{ width: '100%' }}
@@ -293,7 +293,7 @@ export const StaffDetailView: React.FC<StaffDetailViewProps> = ({
 
         {isEmployee && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Kỹ năng quy trình (Skill)</div>
+            <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, marginBottom: 4 }}>Kỹ năng quy trình (Skill)</div>
             <Select
               allowClear
               showSearch
