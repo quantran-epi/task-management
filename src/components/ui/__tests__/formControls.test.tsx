@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Form, FormItem } from '../form';
 import { Radio, RadioButton, RadioGroup } from '../radio';
+import { Switch } from '../switch';
 
 describe('RadioGroup event parity (CR-02 / WR-01)', () => {
   it('emits a real change event with target.value from RadioButton', () => {
@@ -63,5 +64,24 @@ describe('RadioGroup event parity (CR-02 / WR-01)', () => {
     fireEvent.click(screen.getByText('Submit'));
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalled());
     expect(onFinish.mock.calls[0]![0].type).toBe('b');
+  });
+});
+
+describe('Switch content and uncontrolled state (WR-02)', () => {
+  it('renders checkedChildren/unCheckedChildren without leaking DOM attributes', () => {
+    const { container } = render(<Switch checked={false} checkedChildren={<span>ONX</span>} unCheckedChildren={<span>OFFX</span>} />);
+    expect(screen.getByText('OFFX')).toBeInTheDocument();
+    expect(container.querySelector('[checkedchildren]')).toBeNull();
+    expect(container.querySelector('[uncheckedchildren]')).toBeNull();
+  });
+
+  it('toggles uncontrolled defaultChecked and reports the next value', () => {
+    const onChange = vi.fn();
+    render(<Switch defaultChecked onChange={onChange} />);
+    const control = screen.getByRole('switch');
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(control);
+    expect(onChange.mock.calls[0]![0]).toBe(false);
+    expect(control).toHaveAttribute('aria-checked', 'false');
   });
 });

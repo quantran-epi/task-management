@@ -1,5 +1,5 @@
 import type { SwitchProps as AntSwitchProps } from 'antd';
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { classNames } from './native/classNames';
 import checkStyles from './openidea/Checkbox.module.css';
 import { getSharedControlTokens } from './tokens.contract';
@@ -7,9 +7,24 @@ import { getSharedControlTokens } from './tokens.contract';
 export type SwitchProps = AntSwitchProps & { 'aria-label'?: string };
 
 /** Single swap point for AntD Switch; height/radius from shared control tokens. */
-export function Switch({ style, className, checked, defaultChecked, disabled, loading, 'aria-label': ariaLabel, onChange, ...rest }: SwitchProps) {
+export function Switch({
+  style,
+  className,
+  checked,
+  defaultChecked,
+  disabled,
+  loading,
+  checkedChildren,
+  unCheckedChildren,
+  'aria-label': ariaLabel,
+  onChange,
+  ...rest
+}: SwitchProps) {
   const { controlHeight, borderRadius, fontSize } = getSharedControlTokens();
-  const on = checked ?? defaultChecked ?? false;
+  const [innerChecked, setInnerChecked] = useState(defaultChecked === true);
+  const on = checked ?? innerChecked;
+  const busy = loading === true;
+  const children: ReactNode = on ? checkedChildren : unCheckedChildren;
   return (
     <button
       {...(rest as object)}
@@ -17,8 +32,8 @@ export function Switch({ style, className, checked, defaultChecked, disabled, lo
       role="switch"
       aria-checked={on}
       aria-label={ariaLabel}
-      aria-busy={loading === true ? 'true' : undefined}
-      disabled={disabled === true || loading === true}
+      aria-busy={busy ? 'true' : undefined}
+      disabled={disabled === true || busy}
       className={classNames(checkStyles.switch, on && checkStyles.switchOn, className)}
       style={
         {
@@ -31,11 +46,15 @@ export function Switch({ style, className, checked, defaultChecked, disabled, lo
       data-oi-control="switch"
       data-state={on ? 'on' : 'off'}
       onClick={(event) => {
-        onChange?.(!on, event);
+        const next = !on;
+        if (checked === undefined) setInnerChecked(next);
+        if (!busy) onChange?.(next, event);
       }}
     >
       <span className={checkStyles.knob} aria-hidden="true" />
-      <span className={checkStyles.knobLabel} aria-hidden="true">{on ? 'ON' : 'OFF'}</span>
+      <span className={checkStyles.knobLabel} aria-hidden="true">
+        {children ?? (on ? 'ON' : 'OFF')}
+      </span>
     </button>
   );
 }
