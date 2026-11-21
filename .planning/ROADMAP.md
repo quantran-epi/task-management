@@ -103,8 +103,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 50-02-PLAN.md — Sóng 1 tasks/planner: import barrel + static API → hook + dọn inline token (ADOPT-01/02, U1)
-- [ ] 50-06-PLAN.md — Sóng 5 tool windows: IconButton aria-label, actionRegistry nhận notify callback, dọn inline token (ADOPT-01/02/03, U5)
+- [x] 50-02-PLAN.md — Sóng 1 tasks/planner: import barrel + static API → hook + dọn inline token (ADOPT-01/02, U1)
+- [x] 50-06-PLAN.md — Sóng 5 tool windows: IconButton aria-label, actionRegistry nhận notify callback, dọn inline token (ADOPT-01/02/03, U5)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 1/9 | In Progress|  |
+| 50. Full App Adoption | 3/9 | In Progress|  |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 1/9 plans executed
+**Plans:** 3/9 plans executed
 
 Plans:
 **Wave 1**
