@@ -1,4 +1,5 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { createElement } from 'react';
+import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const tauri = vi.hoisted(() => {
@@ -147,6 +148,23 @@ describe('theme broadcast + useThemeMode', () => {
     unmount();
     act(() => { handler({ payload: { mode: 'light' } }); });
     expect(result.current.mode).toBe('dark');
+  });
+
+  it('propagates a toggle to every consumer in the same window (CR-01)', () => {
+    function Consumer({ label }: { label: string }) {
+      const { mode, toggle } = useThemeMode();
+      return createElement('button', { type: 'button', 'data-testid': label, onClick: toggle }, mode);
+    }
+    render(createElement('div', null,
+      createElement(Consumer, { label: 'toggler' }),
+      createElement(Consumer, { label: 'observer' }),
+    ));
+    expect(screen.getByTestId('observer').textContent).toBe('light');
+    act(() => { screen.getByTestId('toggler').click(); });
+    expect(screen.getByTestId('toggler').textContent).toBe('dark');
+    expect(screen.getByTestId('observer').textContent).toBe('dark');
+    act(() => { screen.getByTestId('toggler').click(); });
+    expect(screen.getByTestId('observer').textContent).toBe('light');
   });
 
   it('honours localStorage override, OS fallback and ignores tampered values', () => {

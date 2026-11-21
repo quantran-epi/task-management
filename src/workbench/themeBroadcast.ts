@@ -15,6 +15,8 @@ import { TIMER_POPOUT_LABEL } from '../utils/timerPopout';
 import type { ThemeMode } from '../styles/tokens';
 
 export const THEME_MODE_EVENT = 'taskmate:theme-mode';
+/** Same-window fan-out: the storage event never fires in the document that wrote it (CR-01). */
+export const THEME_LOCAL_EVENT = 'taskmate:theme-mode-local';
 export const THEME_STORAGE_KEY = 'taskmate_theme';
 
 const POPOUT_LABELS = [TIMER_POPOUT_LABEL, NOTES_POPOUT_LABEL, AI_POPOUT_LABEL, CODING_ZONE_LABEL] as const;
@@ -32,6 +34,10 @@ export function isValidThemeModePayload(value: unknown): value is { mode: ThemeM
 
 export function broadcastThemeMode(mode: ThemeMode): void {
   if (!isValidThemeMode(mode)) return;
+  // Deliver to every hook in this same window before the cross-window channels.
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(THEME_LOCAL_EVENT, { detail: { mode } }));
+  }
   if (isTauriApp()) {
     void Promise.all(POPOUT_LABELS.map((label) => emitTo(label, THEME_MODE_EVENT, { mode })))
       .catch(() => { /* popout may not exist yet — non-fatal */ });
@@ -54,7 +60,11 @@ export function subscribeToThemeBroadcast(onMode: (mode: ThemeMode) => void): ()
     // Validate through the same enum gate as IPC — a tampered value never reaches state.
     deliver({ mode: event.newValue });
   };
-  if (typeof window !== 'undefined') window.addEventListener('storage', onStorage);
+  const onLocal = (event: Event) => deliver((event as CustomEvent).detail);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(THEME_LOCAL_EVENT, onLocal);
+  }
 
   let unlistenTauri: (() => void) | undefined;
   if (isTauriApp()) {
@@ -68,7 +78,10 @@ export function subscribeToThemeBroadcast(onMode: (mode: ThemeMode) => void): ()
 
   return () => {
     closed = true;
-    if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener(THEME_LOCAL_EVENT, onLocal);
+    }
     unlistenTauri?.();
   };
 }
