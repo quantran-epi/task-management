@@ -24,7 +24,7 @@
 ## Phases
 
 - [x] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all AntD wrappers, ESLint + local checks guard, focused token+wrapper tests. (completed 2026-11-21)
-- [ ] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green.
+- [x] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green. (completed 2026-11-21)
 
 ## Phase Details
 
@@ -122,7 +122,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 50-09-PLAN.md — Cổng tổng hợp: lint = eslint src, xóa lint:adoption, e2e 6 luồng light/dark, 50-UAT.md + VALIDATION sign-off (ADOPT-03/04)
+- [x] 50-09-PLAN.md — Cổng tổng hợp: lint = eslint src, xóa lint:adoption, e2e 6 luồng light/dark, 50-UAT.md + VALIDATION sign-off (ADOPT-03/04)
 
 **UI hint**: yes
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 8/9 | In Progress|  |
+| 50. Full App Adoption | 9/9 | Complete   | 2026-11-21 |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 8/9 plans executed
+**Plans:** 9/9 plans complete
 
 Plans:
 **Wave 1**
