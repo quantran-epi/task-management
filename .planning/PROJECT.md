@@ -14,6 +14,8 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 
 ## Current Milestone: v1.5 Design System & UI Consistency
 
+**Progress:** Phase 49 complete — IntelliJ-only shell, unified light/dark tokens, all AntD controls wrapped, ESLint guard + local checks green (2026-11-21). Phase 50 (full-app adoption + Chrome UAT) pending.
+
 **Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: tất cả control AntD đều được wrap tại một nơi, token dùng chung cho light và dark, xóa shell AntD cũ, và guard bằng ESLint + kiểm tra local bắt buộc để không tái diễn import trực tiếp.
 **Target features:**
 - **Shell đơn nhất**: chỉ khởi động shell IntelliJ; xóa hẳn shell AntD, flag chuyển đổi và PWA prompts; không migration.
@@ -152,4 +154,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-11-21 for Milestone v1.5 Design System & UI Consistency kickoff*
+*Last updated: 2026-11-21 after Phase 49 completion*
