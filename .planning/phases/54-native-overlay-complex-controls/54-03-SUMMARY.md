@@ -87,7 +87,7 @@ Each task was committed atomically:
 4. **Task 3: TreeSelect + DatePicker + focused suite** - `1327f3b6` (feat)
 5. **Controlled-value and payload regression fixes** - `1757a6b0` (fix, preserves Task 2/3 API)
 
-**Plan metadata:** pending (this commit)
+**Plan metadata:** `15c83808` (docs: complete plan)
 
 ## Files Created/Modified
 

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: executing
-stopped_at: Completed 54-02-PLAN.md
-last_updated: "2026-11-21T23:11:53.400Z"
+stopped_at: Completed 54-03-PLAN.md
+last_updated: "2026-11-21T23:42:29.063Z"
 last_activity: 2026-11-21 -- Phase 54 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 17
-  completed_plans: 12
+  completed_plans: 13
   percent: 38
 ---
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 ## Current Position
 
 Phase: 54 (native-overlay-complex-controls) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-11-21 -- Phase 54 execution started
 
@@ -55,8 +55,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T23:11:53.394Z
-Stopped at: Completed 54-02-PLAN.md
+Last session: 2026-11-21T23:42:22.335Z
+Stopped at: Completed 54-03-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -312,6 +312,7 @@ Progress: [█████░░░░░] 50%
 - [Phase 53]: Monochrome vendored SVG paths are normalized to currentColor so D-12 tone and caller style win — Raw OpenIDEA greys otherwise override token-derived color
 - [Phase 53]: --ui-spin-accent keeps reading getStatusTokens('accent', mode) = #3871e1 — D-12 spinner accent contract must stay separate from control accent palette
 - [Phase 54]: Menu items are plain AntD ItemType objects; statics are React elements — collectItems must read props from either shape — Focused test caught divider/danger items missing from native Menu render
+- [Phase 54-native-overlay-complex-controls]: Popup wrappers share the native BODY-portal helper with wrapper-specific control hooks; DatePicker uses select-popup for the Phase 57 Chrome measurement hook. — Keeps Phase 57 selectors stable and avoids reimplementing floating-ui positioning
 
 ## Performance Metrics
 
@@ -375,6 +376,7 @@ Progress: [█████░░░░░] 50%
 | Phase 53 P05 | ~6m | 2 tasks | 5 files |
 | Phase 54 P01 | ~5 min | 3 tasks | 4 files |
 | Phase 54 P02 | ~24 min | 3 tasks | 6 files |
+| Phase 54-native-overlay-complex-controls P03 | 26min | 3 tasks | 8 files |
 
 ### Blockers
 
