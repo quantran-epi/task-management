@@ -82,6 +82,8 @@ import {
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
   extractRepoHintsFromText,
+  listLinkedSystems,
+  repoPathTail,
   type TeamToolContext,
 } from './teamTools';
 import {
@@ -289,6 +291,10 @@ export interface TeamRunCoordinatorOptions {
   loadRoster?: (() => Promise<TurnRoster>) | undefined;
 }
 
+type AgentDeveloperWorktreeTarget = NonNullable<
+  TeamRunCoordinatorOptions['agentDeveloperWorktree']
+>;
+
 export interface TeamRunCoordinator {
   /**
    * 37.1 §1.1: the single chat box, always usable. The message is appended to the log first,
@@ -297,6 +303,14 @@ export interface TeamRunCoordinator {
    * leader answers instead); `'blocked'` means the coordinator is disposed.
    */
   send(text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
+  /**
+   * 261121-s4k: push a live resolver result into a coordinator that is ALREADY alive. A running
+   * developer turn refuses the swap; a changed target on an idle developer drops its stale
+   * descriptor so the next turn provisions from the new system.
+   */
+  setAgentDeveloperWorktree(target?: AgentDeveloperWorktreeTarget): boolean;
+  /** 261121-s4k: candidate names for the lead's ambiguity question; empty clears the prompt. */
+  setWorktreeAmbiguousSystems(names: readonly string[]): void;
   /**
    * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
    * and `abortAll` call it; exported so the "exactly one report row under concurrency"
@@ -603,6 +617,14 @@ export function createTeamRunCoordinator(
   let memberFolderIds = new Map<string, string>();
   /** Phase 39: read-only MCP tools for the CURRENT turn; refreshed at every turn start. */
   let mcpTools: AiToolDefinition[] = options.mcpTools ?? [];
+
+  /**
+   * 261121-s4k CR-01/WR-02: the resolver keeps changing after construction. The coordinator
+   * reads these mutable values at send/provision time so no target swap rebuilds the run.
+   */
+  let currentWorktreeTarget: AgentDeveloperWorktreeTarget | undefined =
+    options.agentDeveloperWorktree;
+  let worktreeAmbiguousSystems: readonly string[] = options.worktreeAmbiguousSystems ?? [];
 
   /**
    * D-03/D-07: the roster a turn runs with. With a `loadRoster` seam it starts EMPTY, so no
@@ -1449,13 +1471,46 @@ export function createTeamRunCoordinator(
   }
 
   /**
+   * 261121-s4k CR-01: never swap a worktree under a running verb. Runtime state is the
+   * authority (the same liveness check `send` uses), not the ledger or a stale descriptor.
+   */
+  function developerIsRunning(): boolean {
+    const id = developerAgentId();
+    if (!id) return false;
+    if (registry.peek(id)?.isRunning() === true) return true;
+    const state = agents.get(id);
+    return state !== undefined && !TERMINAL_STATUSES.includes(state.status);
+  }
+
+  /** 261121-s4k CR-01/WR-02: live-resolver push, no coordinator rebuild (WR-06). */
+  function setAgentDeveloperWorktree(target?: AgentDeveloperWorktreeTarget): boolean {
+    if (developerIsRunning()) return false;
+    const previous = currentWorktreeTarget;
+    currentWorktreeTarget = target;
+    const changedIdentity =
+      !previous ||
+      !target ||
+      previous.sshConfigId !== target.sshConfigId ||
+      previous.remoteRepoPath !== target.remoteRepoPath;
+    if (changedIdentity) {
+      const developerId = developerAgentId();
+      if (developerId) provisionedWorktrees.delete(developerId);
+    }
+    return true;
+  }
+
+  function setWorktreeAmbiguousSystems(names: readonly string[]): void {
+    worktreeAmbiguousSystems = names;
+  }
+
+  /**
    * Phase 48 D-08/D-09: session start owns provisioning. No activation until the descriptor
    * with a real `remoteWorktreePath` exists; failure throws a truthful refusal.
    */
   async function provisionAgentSession(agentId: string): Promise<void> {
     if (agentId !== developerAgentId()) return;
     if (provisionedWorktrees.has(agentId)) return;
-    const target = options.agentDeveloperWorktree;
+    const target = currentWorktreeTarget;
     if (!target?.sshConfigId || !target.remoteRepoPath) {
       throw new LocalWorktreeError('WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.');
     }
@@ -1497,7 +1552,7 @@ export function createTeamRunCoordinator(
     const folderId = isLead ? undefined : memberFolderIds.get(agentId);
     // WR-05: the capability follows the stable developer id and the request-bound target,
     // never the display name. `remoteTarget`/`codeEditAllowed` are both gated by this.
-    const codeEditGranted = !isLead && agentId === developerAgentId() && !!options.agentDeveloperWorktree;
+    const codeEditGranted = !isLead && agentId === developerAgentId() && !!currentWorktreeTarget;
     return {
       db,
       teamId,
@@ -1514,9 +1569,9 @@ export function createTeamRunCoordinator(
       ...(repoHints.length > 0 ? { repoHints: [...repoHints] } : {}),
       ...(codeEditGranted
         ? { remoteTarget: {
-            sshConfigId: options.agentDeveloperWorktree!.sshConfigId,
-            repoPath: options.agentDeveloperWorktree!.remoteRepoPath,
-            branch: options.agentDeveloperWorktree!.baseRef ?? '',
+            sshConfigId: currentWorktreeTarget!.sshConfigId,
+            repoPath: currentWorktreeTarget!.remoteRepoPath,
+            branch: currentWorktreeTarget!.baseRef ?? '',
           } }
         : {}),
       ...(codeEditGranted ? { codeEditAllowed: true } : {}),
@@ -2450,7 +2505,7 @@ export function createTeamRunCoordinator(
         mode,
         // Same gate as `toolContext` (1486): the third prompt exception exists only for the
         // developer whose request actually carries a worktree descriptor.
-        ...(employee.id === developerAgentId() && !!options.agentDeveloperWorktree
+        ...(employee.id === developerAgentId() && !!currentWorktreeTarget
           ? { codeEditAllowed: true }
           : {}),
       });
@@ -2729,11 +2784,11 @@ export function createTeamRunCoordinator(
       });
       // 261121-qpp: ambiguity is a prompt-only fact. Names are user-authored data, so each
       // enters through wrapUntrusted; no sshConfigId or repo path reaches the model.
-      const worktreeAmbiguitySegment = options.worktreeAmbiguousSystems?.length
+      const worktreeAmbiguitySegment = worktreeAmbiguousSystems.length > 0
         ? [
             WORKTREE_AMBIGUITY_LINE,
             '[CÁC HỆ THỐNG ỨNG VIÊN]',
-            ...options.worktreeAmbiguousSystems.map(
+            ...worktreeAmbiguousSystems.map(
               (name) => `- ${wrapUntrusted('TÊN HỆ THỐNG', name)}`
             ),
           ].join('\n')
@@ -3232,6 +3287,35 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
+
+    // 261121-s4k CR-01: recoverable ambiguity. The user's NEXT message names one of the
+    // already-linked systems; resolve it BEFORE the message starts any turn. Only catalog rows
+    // may be selected — never a raw path scraped from text. A temporary db failure stays silent
+    // and leaves the prompt asking again rather than dropping the message.
+    if (worktreeAmbiguousSystems.length > 0) {
+      try {
+        const usable = (await listLinkedSystems(teamId, db)).filter(
+          (row) => row.sshConfigId && row.remoteRepoPath
+        );
+        const hints = extractRepoHintsFromText(text, usable);
+        const hintKeys = new Set(hints.map((hint) => hint.toLocaleLowerCase()));
+        const matches = usable.filter((row) =>
+          [row.name, row.code, repoPathTail(row.remoteRepoPath ?? '')].some((term) =>
+            hintKeys.has(term.trim().toLocaleLowerCase())
+          )
+        );
+        if (matches.length === 1) {
+          const chosen = matches[0]!;
+          setAgentDeveloperWorktree({
+            sshConfigId: chosen.sshConfigId!,
+            remoteRepoPath: chosen.remoteRepoPath!,
+          });
+          setWorktreeAmbiguousSystems([]);
+        }
+      } catch {
+        /* resolver failure must not block the message; the lead asks again next turn */
+      }
+    }
 
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
     // `to[]` is who must RESPOND; everyone reads it, so the leader can see a message the user
@@ -4623,6 +4707,8 @@ export function createTeamRunCoordinator(
 
   return {
     send,
+    setAgentDeveloperWorktree,
+    setWorktreeAmbiguousSystems,
     finalizeAttempt,
     runBatch: dispatchBatch,
     retryAssignment,

@@ -13,6 +13,8 @@ vi.mock('../../../../src/components/ai/AiChatWidget', () => ({
 }));
 
 const coordinatorOptionsMock = vi.fn();
+const setAgentDeveloperWorktreeMock = vi.fn(() => true);
+const setWorktreeAmbiguousSystemsMock = vi.fn();
 vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/services/ai/office/teamRunCoordinator')>();
   return {
@@ -21,6 +23,8 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
       coordinatorOptionsMock(options);
       return {
         send: vi.fn(async () => 'started' as const),
+        setAgentDeveloperWorktree: setAgentDeveloperWorktreeMock,
+        setWorktreeAmbiguousSystems: setWorktreeAmbiguousSystemsMock,
         stopAgent: vi.fn(), abortAll: vi.fn(), resolvePlan: vi.fn(), resolveApproval: vi.fn(),
         topUp: vi.fn(async () => undefined), dispose: vi.fn(async () => undefined),
         setTeamSettings: vi.fn(), setTeamBudget: vi.fn(), setTeamThresholdPct: vi.fn(), setGlobalThresholdPct: vi.fn(),

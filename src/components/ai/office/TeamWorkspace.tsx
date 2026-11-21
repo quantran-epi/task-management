@@ -619,6 +619,23 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => resolveAgentDeveloperWorktree(team.id, db),
     [db, team.id]
   );
+  // 261121-s4k WR-02: push live resolver changes into the ALIVE coordinator. Primitive deps only
+  // — no array identity, no `getOrCreateRun`, so the creation effect (WR-06) never re-runs.
+  const ambiguityKey = (worktreeResolution?.ambiguousSystemNames ?? []).join('|');
+  useEffect(() => {
+    if (!coordinator) return;
+    coordinator.setWorktreeAmbiguousSystems(ambiguityKey ? ambiguityKey.split('|') : []);
+    const sshConfigId = worktreeResolution?.worktree?.sshConfigId;
+    const remoteRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
+    if (sshConfigId && remoteRepoPath) {
+      coordinator.setAgentDeveloperWorktree({ sshConfigId, remoteRepoPath });
+    }
+  }, [
+    coordinator,
+    worktreeResolution?.worktree?.sshConfigId,
+    worktreeResolution?.worktree?.remoteRepoPath,
+    ambiguityKey,
+  ]);
   const codingZoneSshConfigId = worktreeResolution?.worktree?.sshConfigId;
   const codingZoneRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
   const codingZoneDescriptor = useMemo(() => {
