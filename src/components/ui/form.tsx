@@ -21,11 +21,11 @@ export function formStyle(): CSSProperties {
 
 /** Single swap point for AntD Form plus its mirrored statics (no empty sub-wrapper). */
 export function Form({ labelPolicy = 'top', style, ...rest }: FormProps) {
-  const layout = labelPolicy === 'inline' ? 'inline' : labelPolicy === 'left' ? 'horizontal' : 'vertical';
+  const policyLayout = labelPolicy === 'inline' ? 'inline' : labelPolicy === 'left' ? 'horizontal' : 'vertical';
   return (
     <AntForm
       {...rest}
-      layout={layout}
+      layout={rest.layout ?? policyLayout}
       requiredMark={rest.requiredMark ?? true}
       style={{ ...formStyle(), ...style }}
     />

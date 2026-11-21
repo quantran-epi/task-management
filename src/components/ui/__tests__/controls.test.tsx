@@ -21,6 +21,7 @@ import { useNotification } from '../notification';
 import { getSharedControlTokens, type StatusKind } from '../tokens.contract';
 import { CheckCircleFilled } from '../icon';
 import { Spin } from '../spin';
+import { Form } from '../form';
 
 vi.mock('@tauri-apps/api/event', () => ({
   emitTo: vi.fn(async () => {}),
@@ -165,6 +166,29 @@ describe('overlay policy', () => {
     expect(screen.getByText('thông báo')).toBeInTheDocument();
     fireEvent.click(screen.getByText('confirm'));
     expect(screen.getAllByText('chắc chứ').length).toBeGreaterThan(1);
+  });
+});
+
+describe('Form wrapper layout policy', () => {
+  function formClass(ui: React.ReactElement): string {
+    const { container, unmount } = render(ui);
+    const cls = (container.querySelector('form') as HTMLElement | null)?.className ?? '';
+    unmount();
+    return cls;
+  }
+
+  it('uses the labelPolicy default when caller omits layout', () => {
+    expect(formClass(<Form labelPolicy="top" />)).toContain('ant-form-vertical');
+    expect(formClass(<Form labelPolicy="left" />)).toContain('ant-form-horizontal');
+    expect(formClass(<Form labelPolicy="inline" />)).toContain('ant-form-inline');
+  });
+
+  it('honours an explicit caller layout over labelPolicy (WR-01)', () => {
+    // Regression: GitHubSyncCard passes layout="inline"; the wrapper used to
+    // overwrite it with the vertical policy default.
+    expect(formClass(<Form layout="inline" />)).toContain('ant-form-inline');
+    expect(formClass(<Form labelPolicy="left" layout="inline" />)).toContain('ant-form-inline');
+    expect(formClass(<Form labelPolicy="inline" layout="vertical" />)).toContain('ant-form-vertical');
   });
 });
 
