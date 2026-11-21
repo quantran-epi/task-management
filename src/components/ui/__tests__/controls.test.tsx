@@ -205,7 +205,7 @@ describe('status-aware wrappers follow the active mode (WR-01)', () => {
     const expected = statusColorMap[mode as ThemeMode].accent;
     const icon = container.querySelector('[aria-label="ok"]') as HTMLElement;
     expect(icon.style.color.replace(/\s/g, '')).toBe(hexToRgb(expected));
-    const spin = container.querySelector('.ant-spin') as HTMLElement;
+    const spin = container.querySelector('[data-oi-control="spinner"]') as HTMLElement;
     expect(spin.style.getPropertyValue('--ui-spin-accent').trim()).toBe(expected);
     unmount();
   });
