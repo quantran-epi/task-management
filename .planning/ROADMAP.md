@@ -118,7 +118,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 4)*
 
-- [ ] 50-08-PLAN.md — Đuôi 52 file components/utils/services + notify callback cho 3 file .ts phi-React (ADOPT-01/02)
+- [x] 50-08-PLAN.md — Đuôi 52 file components/utils/services + notify callback cho 3 file .ts phi-React (ADOPT-01/02)
 
 **Wave 6** *(blocked on Wave 5)*
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 7/9 | In Progress|  |
+| 50. Full App Adoption | 8/9 | In Progress|  |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 7/9 plans executed
+**Plans:** 8/9 plans executed
 
 Plans:
 **Wave 1**
