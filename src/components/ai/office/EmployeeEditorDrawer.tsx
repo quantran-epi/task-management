@@ -202,7 +202,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
 
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Tên</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Tên</div>
             <Input
               value={form.name}
               maxLength={60}
@@ -212,7 +212,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
           </div>
 
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Vai trò</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Vai trò</div>
             <Input
               value={form.role}
               maxLength={60}
@@ -223,7 +223,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
           </div>
 
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Mô tả năng lực (lead nhìn thấy)</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Mô tả năng lực (lead nhìn thấy)</div>
             <TextArea
               rows={2}
               maxLength={300}
@@ -234,18 +234,18 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
           </div>
 
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Persona</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Persona</div>
             <TextArea
               rows={8}
               value={form.persona}
               onChange={(e) => set('persona', e.target.value)}
               aria-label="Persona"
-              style={{ fontFamily: CODE_FONT, fontSize: 12 }}
+              style={{ fontFamily: CODE_FONT, fontSize: 'var(--font-size-small)' }}
             />
           </div>
 
           <div>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Mô hình</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Mô hình</div>
             <Select
               showSearch
               style={{ width: '100%' }}
@@ -266,7 +266,7 @@ const AgentEditorShell: React.FC<AgentEditorShellProps> = ({
 
           {isEmployee && (
             <div>
-              <div style={{ fontSize: 12, marginBottom: 4 }}>Kỹ năng</div>
+              <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Kỹ năng</div>
               <Select
                 allowClear
                 showSearch

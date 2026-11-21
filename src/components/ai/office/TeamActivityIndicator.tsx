@@ -67,10 +67,10 @@ const StepRow: React.FC<{ step: AgentLiveStep }> = ({ step }) => {
           cursor: hasDetail ? 'pointer' : 'default',
         }}
       >
-        <Typography.Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap' }}>
           {dayjs(step.at).format('HH:mm:ss')}
         </Typography.Text>
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
           {step.label}
           {hasDetail ? (open ? ' ▾' : ' ▸') : ''}
         </Typography.Text>
@@ -166,13 +166,13 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
         };
         return (
           <div key={row.agentId} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography.Text strong style={{ fontSize: 12 }}>
+            <Typography.Text strong style={{ fontSize: 'var(--font-size-small)' }}>
               {agent.name}
             </Typography.Text>
             {row.steps && row.steps.length > 0 ? (
               row.steps.map((step) => <StepRow key={step.id} step={step} />)
             ) : (
-              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                 Chưa có bước nào
               </Typography.Text>
             )}
@@ -200,9 +200,9 @@ export const TeamActivityIndicator: React.FC<TeamActivityIndicatorProps> = ({
         type="text"
         size="small"
         data-testid="team-activity-indicator"
-        style={{ fontSize: 12, height: 22, padding: '0 6px', alignSelf: 'flex-start' }}
+        style={{ fontSize: 'var(--font-size-small)', height: 22, padding: '0 6px', alignSelf: 'flex-start' }}
       >
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
           {line}
         </Typography.Text>
       </Button>

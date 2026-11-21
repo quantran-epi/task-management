@@ -177,10 +177,10 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.Rea
           alignItems: 'center',
           gap: 4,
           padding: '4px 8px',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           background: token.colorFillAlter,
           border: `1px solid ${token.colorBorderSecondary}`,
-          borderRadius: 8,
+          borderRadius: 'var(--radius-control)',
           cursor: 'pointer',
           color: token.colorTextSecondary,
         }}
@@ -200,10 +200,10 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.Rea
           style={{
             marginTop: 4,
             padding: '8px 16px',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             lineHeight: 1.5,
             background: token.colorFillAlter,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
             wordBreak: 'break-word',
             maxHeight: 240,
             overflowY: 'auto',
@@ -211,10 +211,10 @@ const ToolEventBadge: React.FC<{ event: ChatTurnToolEvent; extension?: React.Rea
         >
           {event.args && (
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Tham số
               </Typography.Text>
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 12 }}>{event.args}</pre>
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 'var(--font-size-small)' }}>{event.args}</pre>
             </div>
           )}
           <div
@@ -347,22 +347,22 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         </Typography.Text>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {turn.status === 'tool-limit' && (
-            <Tag color="default" icon={<StopOutlined />} style={{ margin: 0, fontSize: 12 }}>
+            <Tag color="default" icon={<StopOutlined />} style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
               Đã dừng thu thập bằng chứng
             </Tag>
           )}
           {turn.pendingApproval && (
-            <Tag color="warning" style={{ margin: 0, fontSize: 12 }}>
+            <Tag color="warning" style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
               Chờ phê duyệt
             </Tag>
           )}
           {isTurnActive && turn.streamingStatusLabel && !turn.pendingApproval && (
-            <Tag color="processing" style={{ margin: 0, fontSize: 12 }}>
+            <Tag color="processing" style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
               {turn.streamingStatusLabel}
             </Tag>
           )}
           {toolbox.analysisMode && (
-            <Tag color="purple" style={{ margin: 0, fontSize: 12 }}>
+            <Tag color="purple" style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
               Phân tích
             </Tag>
           )}
@@ -440,11 +440,11 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
                   minHeight: 32,
                   marginBottom: 4,
                   padding: '4px 8px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   color: token.colorTextSecondary,
                   background: token.colorFillAlter,
                   border: `1px solid ${token.colorBorderSecondary}`,
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius-control)',
                   cursor: 'pointer',
                 }}
               >
@@ -527,7 +527,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
               onClick={() => onSubmit(prompt.prompt)}
               style={{
                 padding: '4px 8px',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 color: token.colorPrimary,
                 background: token.colorFillAlter,
                 border: `1px solid ${token.colorPrimaryBorder}`,

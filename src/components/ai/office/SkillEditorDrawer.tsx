@@ -387,7 +387,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         <Tag
           color="warning"
           data-testid="skill-editor-pending-badge"
-          style={{ marginLeft: 8, fontSize: 12 }}
+          style={{ marginLeft: 8, fontSize: 'var(--font-size-small)' }}
         >
           {`${pendingCount} chờ duyệt`}
         </Tag>
@@ -407,7 +407,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
       title={title}
       footer={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             {`Đang dùng bởi ${agentCount} nhân viên`}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -451,13 +451,13 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         )}
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Tên</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Tên</div>
           <Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Tên" />
         </div>
 
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Mô tả (nhân viên chỉ thấy phần này)</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Mô tả (nhân viên chỉ thấy phần này)</div>
           <TextArea
             rows={2}
             maxLength={300}
@@ -468,18 +468,18 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Nội dung</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Nội dung</div>
           <TextArea
             rows={14}
             value={body}
             onChange={(e) => setBody(e.target.value)}
             aria-label="Nội dung"
-            style={{ fontFamily: CODE_FONT, fontSize: 12, whiteSpace: 'pre' }}
+            style={{ fontFamily: CODE_FONT, fontSize: 'var(--font-size-small)', whiteSpace: 'pre' }}
           />
         </div>
 
         {skill !== null && (
-          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             Lưu thay đổi (nếu có) sẽ tạo một phiên bản mới trong lịch sử.
           </div>
         )}
@@ -541,7 +541,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                 data-testid={`skill-pending-unresolved-${row.id}`}
                 style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}
               >
-                <span style={{ fontSize: 12, color: token.colorTextSecondary, flex: 1 }}>
+                <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, flex: 1 }}>
                   Đề xuất này không xem được bản diff — hãy từ chối để dọn hàng chờ.
                 </span>
                 {/* WR-02: a failed reject used to be completely silent — the click looked dead.
@@ -549,7 +549,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                 {error.get(row.id) !== undefined && (
                   <span
                     role="alert"
-                    style={{ fontSize: 12, color: token.colorError, flexBasis: '100%' }}
+                    style={{ fontSize: 'var(--font-size-small)', color: token.colorError, flexBasis: '100%' }}
                   >
                     {error.get(row.id)}
                   </span>
@@ -582,7 +582,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
               {`Lịch sử phiên bản (${historyRows.length})`}
             </div>
             {historyRows.length === 0 ? (
-              <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+              <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                 Chưa có phiên bản nào — lần lưu đầu tiên sẽ lưu nội dung hiện tại thành phiên
                 bản 1.
               </div>
@@ -606,7 +606,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                             borderRadius: 4,
                             padding: '0 4px',
                             lineHeight: '16px',
-                            fontSize: 12,
+                            fontSize: 'var(--font-size-small)',
                             fontWeight: 600,
                           }}
                         >
@@ -615,7 +615,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                       ) : (
                         // D-14: a rejected row has no number — never `v0` / `vundefined`.
                         <span
-                          style={{ fontSize: 12, fontWeight: 600, color: token.colorTextSecondary }}
+                          style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorTextSecondary }}
                         >
                           Đề xuất bị từ chối
                         </span>
@@ -623,7 +623,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                       <span
                         title={row.name}
                         style={{
-                          fontSize: 13.5,
+                          fontSize: 'var(--font-size-ui)',
                           flex: 1,
                           minWidth: 0,
                           whiteSpace: 'nowrap',
@@ -635,7 +635,7 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                       </span>
                       <span
                         style={{
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-small)',
                           color: token.colorTextSecondary,
                           whiteSpace: 'nowrap',
                         }}
@@ -654,12 +654,12 @@ export const SkillEditorDrawer: React.FC<SkillEditorDrawerProps> = ({
                   children: (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{row.name}</div>
-                      <div style={{ fontSize: 13.5 }}>{row.description}</div>
+                      <div style={{ fontSize: 'var(--font-size-ui)' }}>{row.description}</div>
                       <MarkdownContentRenderer content={row.body} />
                       {row.evidence !== undefined && row.evidence.trim() !== '' && (
                         <div
                           style={{
-                            fontSize: 13.5,
+                            fontSize: 'var(--font-size-ui)',
                             whiteSpace: 'pre-wrap',
                             color: token.colorTextSecondary,
                           }}

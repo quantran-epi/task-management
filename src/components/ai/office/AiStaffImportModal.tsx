@@ -173,7 +173,7 @@ export const AiStaffImportModal: React.FC<AiStaffImportModalProps> = ({
 
         <UploadDragger {...uploadProps} style={{ padding: '8px 0' }}>
           <p className="ant-upload-drag-icon">
-            <InboxOutlined style={{ fontSize: 32, color: '#1677ff' }} />
+            <InboxOutlined style={{ fontSize: 32, color: 'var(--accent)' }} />
           </p>
           <p className="ant-upload-text">Chọn hoặc kéo thả tệp JSON</p>
           {fileName && <p className="ant-upload-hint">{fileName}</p>}

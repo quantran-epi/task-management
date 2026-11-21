@@ -77,7 +77,7 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
             borderColor: token.colorInfo,
             color: token.colorInfo,
             fontWeight: 600,
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
           }}
         >
           INFERRED
@@ -86,7 +86,7 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
       {isDirect && resolved.length > 0 && (
         <Tooltip
           title={
-            <div style={{ fontSize: 12 }}>
+            <div style={{ fontSize: 'var(--font-size-small)' }}>
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Phân loại bằng chứng:</div>
               {resolved.map((c) => (
                 <div key={c.citationId}>
@@ -105,7 +105,7 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
                 borderColor: token.colorPrimary,
                 color: token.colorSuccess,
                 fontWeight: 600,
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
               }}
             >
               BUSINESS_APPROVED
@@ -119,7 +119,7 @@ export const ClaimBlock: React.FC<ClaimBlockProps> = ({
                 borderColor: token.colorSuccess,
                 color: token.colorSuccess,
                 fontWeight: 600,
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
               }}
             >
               <span

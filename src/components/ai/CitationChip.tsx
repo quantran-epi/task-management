@@ -94,7 +94,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
       padding: '0 6px',
       borderRadius: token.borderRadiusSM ?? 4,
       fontWeight: 600,
-      fontSize: 12,
+      fontSize: 'var(--font-size-small)',
       lineHeight: '20px',
       height: 20,
       display: 'inline-flex',
@@ -133,12 +133,12 @@ export const CitationChip: React.FC<CitationChipProps> = ({
     );
 
     const tooltipContent = (
-      <div style={{ maxWidth: 300, fontSize: 12, lineHeight: 1.4 }}>
+      <div style={{ maxWidth: 300, fontSize: 'var(--font-size-small)', lineHeight: 1.4 }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>{label} Live MCP Tool</div>
         <div>Máy chủ: <strong>{serverLabel}</strong></div>
         <div>Công cụ: <strong>{toolLabel}</strong></div>
         {sectionAnchor && (
-          <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 11, color: token.colorTextSecondary }}>
+          <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary }}>
             Tham số: {sectionAnchor}
           </div>
         )}
@@ -171,7 +171,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
       padding: '0 6px',
       borderRadius: token.borderRadiusSM ?? 4,
       fontWeight: 600,
-      fontSize: 12,
+      fontSize: 'var(--font-size-small)',
       lineHeight: '20px',
       height: 20,
       display: 'inline-flex',
@@ -220,7 +220,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
     );
 
     const tooltipContent = (
-      <div style={{ maxWidth: 280, fontSize: 12, lineHeight: 1.4 }}>
+      <div style={{ maxWidth: 280, fontSize: 'var(--font-size-small)', lineHeight: 1.4 }}>
         <div style={{ fontWeight: 600, marginBottom: 2 }}>{effectiveTitle}</div>
         {effectiveHeading && (
           <div style={{ color: token.colorTextSecondary, marginBottom: 2 }}>§ {effectiveHeading}</div>
@@ -253,7 +253,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
         padding: '1px 8px',
         borderRadius: 12,
         fontWeight: 500,
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
         display: 'inline-flex',
         alignItems: 'center',
         verticalAlign: 'baseline',
@@ -281,7 +281,7 @@ export const CitationChip: React.FC<CitationChipProps> = ({
     return (
       <Tooltip
         title={
-          <div style={{ maxWidth: 300, maxHeight: 150, overflowY: 'auto', fontSize: 12, wordBreak: 'break-word' }}>
+          <div style={{ maxWidth: 300, maxHeight: 150, overflowY: 'auto', fontSize: 'var(--font-size-small)', wordBreak: 'break-word' }}>
             <div style={{ fontWeight: 600, marginBottom: 4 }}>{displayLabel}</div>
             <div style={{ whiteSpace: 'pre-wrap', opacity: 0.9 }}>{snippet.trim()}</div>
           </div>

@@ -30,7 +30,7 @@ export const MutationApprovalCard: React.FC<MutationApprovalCardProps> = ({
         padding: '16px',
         backgroundColor: token.colorWarningBg,
         border: `1px solid ${token.colorWarningBorder}`,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         display: 'flex',
         flexDirection: 'column',
         gap: 8,

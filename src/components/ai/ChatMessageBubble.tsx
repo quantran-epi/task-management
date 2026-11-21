@@ -15,6 +15,7 @@ import {
 } from './office/AgentAttributionRow';
 import { APP_NAME, APP_SLUG } from '../../constants/app';
 import { renderSafeMarkdown } from '../../utils/markdown';
+// ponytail: white glyph on colored swatch/bubble is a fixed contrast pair, not a theme token
 import {
   exportContentAsFile,
   saveFileWithPicker,
@@ -164,16 +165,16 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
       parts.push(
         <Tag
           key={`task-pill-${taskId}-${match.index}`}
-          icon={<CheckSquareOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          icon={<CheckSquareOutlined style={{ color: '#ffffff', marginRight: 4 }} /* ponytail: fixed white on colored swatch */ />}
           style={{
             margin: '0 3px',
             verticalAlign: 'middle',
             borderRadius: 4,
             fontWeight: 500,
             backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            color: '#ffffff',
+            color: '#ffffff', // ponytail: fixed white on colored swatch
             border: '1px solid rgba(255, 255, 255, 0.45)',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             padding: '1px 6px',
           }}
         >
@@ -190,9 +191,9 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
           key={`${isSystem ? 'system' : 'cr'}-pill-${crId}-${match.index}`}
           icon={
             isSystem ? (
-              <ApartmentOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+              <ApartmentOutlined style={{ color: '#ffffff', marginRight: 4 }} /* ponytail: fixed white on colored swatch */ />
             ) : (
-              <BranchesOutlined style={{ color: '#ffffff', marginRight: 4 }} />
+              <BranchesOutlined style={{ color: '#ffffff', marginRight: 4 }} /* ponytail: fixed white on colored swatch */ />
             )
           }
           style={{
@@ -201,9 +202,9 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
             borderRadius: 4,
             fontWeight: 500,
             backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            color: '#ffffff',
+            color: '#ffffff', // ponytail: fixed white on colored swatch
             border: '1px solid rgba(255, 255, 255, 0.45)',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             padding: '1px 6px',
           }}
         >
@@ -217,16 +218,16 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
       parts.push(
         <Tag
           key={`doc-pill-${docId}-${match.index}`}
-          icon={<FileTextOutlined style={{ color: '#ffffff', marginRight: 4 }} />}
+          icon={<FileTextOutlined style={{ color: '#ffffff', marginRight: 4 }} /* ponytail: fixed white on colored swatch */ />}
           style={{
             margin: '0 3px',
             verticalAlign: 'middle',
             borderRadius: 4,
             fontWeight: 500,
             backgroundColor: 'rgba(255, 255, 255, 0.22)',
-            color: '#ffffff',
+            color: '#ffffff', // ponytail: fixed white on colored swatch
             border: '1px solid rgba(255, 255, 255, 0.45)',
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             padding: '1px 6px',
           }}
         >
@@ -249,7 +250,7 @@ export function renderUserMessageWithMentions(content: string): React.ReactNode 
             backgroundColor: agentBg,
             color: agentTextColorFor(agentBg),
             border: `1px solid ${agentBg}`,
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             padding: '1px 6px',
           }}
         >
@@ -510,7 +511,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
       const fullText = formattedConclusion || formattedClaims.join('\n\n');
       const chipBg = token.colorPrimaryBg ?? '#e6f4ff';
       const chipBorder = token.colorPrimaryBorder ?? '#91caff';
-      const chipColor = token.colorPrimary ?? '#1677ff';
+      const chipColor = token.colorPrimary ?? 'var(--accent)';
 
       const applyCitationChips = (html: string) => {
         if (activeCitations.length === 0) return html;
@@ -565,7 +566,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
 
             {activeCitations.length > 0 && (
               <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px dashed ${token.colorBorderSecondary}` }}>
-                <span style={{ fontSize: 11, color: token.colorTextSecondary, marginRight: 6 }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary, marginRight: 6 }}>
                   Nguồn tài liệu:
                 </span>
                 <span
@@ -590,7 +591,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                           <div style={{ maxWidth: 360, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                             <div style={{ fontWeight: 600 }}>{c.documentTitle || ''}</div>
                             {c.relevanceReason && (
-                              <div style={{ marginTop: 4, fontSize: 12 }}>
+                              <div style={{ marginTop: 4, fontSize: 'var(--font-size-small)' }}>
                                 💡 Căn cứ: {c.relevanceReason}
                               </div>
                             )}
@@ -606,7 +607,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                             padding: '0 6px',
                             borderRadius: 4,
                             fontWeight: 600,
-                            fontSize: 11,
+                            fontSize: 'var(--font-size-xs)',
                             lineHeight: '18px',
                             height: 18,
                             maxWidth: 220,
@@ -646,7 +647,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               }}
             >
               {formattedTime && (
-                <Text type="secondary" style={{ fontSize: 11 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                   {formattedTime}
                 </Text>
               )}
@@ -658,7 +659,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 >
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       color: token.colorTextQuaternary,
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -678,7 +679,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                 >
                   <span
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       color: token.colorTextQuaternary,
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -868,7 +869,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             }}
           >
             {formattedTime && (
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                 {formattedTime}
               </Text>
             )}
@@ -880,7 +881,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               >
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     color: token.colorTextQuaternary,
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -900,7 +901,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               >
                 <span
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     color: token.colorTextQuaternary,
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -951,9 +952,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     setNoteSaved(true);
   };
 
-  const hasMarkdownTable = useMemo(() => {
-    return /\|.+?\|.+?\|/.test(msg.content);
-  }, [msg.content]);
+  const hasMarkdownTable = /\|.+?\|.+?\|/.test(msg.content);
 
   const handleExportFile = async (format: ExportFormat, directDownload: boolean = false) => {
     try {
@@ -1128,15 +1127,9 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
     ];
   };
 
-  const directDownloadMenuItems = useMemo(
-    () => buildExportMenuItems(true),
-    [hasMarkdownTable, token.colorPrimary, msg.content]
-  );
+  const directDownloadMenuItems = buildExportMenuItems(true);
 
-  const saveAsMenuItems = useMemo(
-    () => buildExportMenuItems(false),
-    [hasMarkdownTable, token.colorPrimary, msg.content]
-  );
+  const saveAsMenuItems = buildExportMenuItems(false);
 
   const messageTextRegion = (
     <>
@@ -1159,7 +1152,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           <Tag
             icon={<SyncOutlined spin />}
             color="processing"
-            style={{ borderRadius: 10, padding: '2px 8px', fontSize: 11 }}
+            style={{ borderRadius: 10, padding: '2px 8px', fontSize: 'var(--font-size-xs)' }}
           >
             {streamingStatus || 'Đang tạo câu trả lời...'}
           </Tag>
@@ -1203,7 +1196,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
         <div
           data-testid={`addressed-to-${msg.id}`}
           style={{
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             color: token.colorTextSecondary,
             marginBottom: 2,
             alignSelf: isUser ? 'flex-end' : 'flex-start',
@@ -1231,7 +1224,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             : isLeadVoice
               ? token.colorPrimaryBg
               : token.colorBgContainer,
-          color: isUser ? '#ffffff' : token.colorText,
+          color: isUser ? '#ffffff' : token.colorText, // ponytail: fixed white on colored swatch
           borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
           // Every side is declared explicitly. Writing `border` and then `borderLeft: undefined`
           // made React remove the left side only, so a worker bubble rendered with three
@@ -1282,7 +1275,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               borderLeft: `2px solid ${isUser ? 'rgba(255,255,255,0.6)' : token.colorBorder}`,
               borderRadius: 4,
               background: isUser ? 'rgba(255,255,255,0.14)' : token.colorFillQuaternary,
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               lineHeight: 1.4,
               cursor: 'pointer',
               opacity: 0.9,
@@ -1313,7 +1306,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               <Text strong style={{ fontSize: 13, color: token.colorText }}>
                 {streamingStatus || 'Đang suy nghĩ câu trả lời...'}
               </Text>
-              <Text type="secondary" style={{ fontSize: 11 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                 {streamingStatus ? `${APP_NAME} AI Harness` : 'Đang xử lý qua 9router...'}
               </Text>
             </div>
@@ -1372,7 +1365,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                   key={file.id}
                   style={{
                     padding: '8px 12px',
-                    borderRadius: 8,
+                    borderRadius: 'var(--radius-control)',
                     border: `1px solid ${token.colorBorderSecondary}`,
                     backgroundColor: token.colorFillAlter,
                   }}
@@ -1380,12 +1373,12 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                   <img
                     src={file.content}
                     alt={file.filename}
-                    style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, display: 'block' }}
+                    style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 'var(--radius-control)', display: 'block' }}
                   />
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, gap: 12 }}>
                     <Text strong ellipsis style={{ fontSize: 13 }}>{file.filename}</Text>
                     <a href={file.content} download={file.filename}>
-                      <Button size="small" icon={<DownloadOutlined />} style={{ fontSize: 12, height: 26 }}>
+                      <Button size="small" icon={<DownloadOutlined />} style={{ fontSize: 'var(--font-size-small)', height: 26 }}>
                         Tải về
                       </Button>
                     </a>
@@ -1420,7 +1413,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '8px 12px',
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius-control)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   backgroundColor: token.colorFillAlter,
                   gap: 12,
@@ -1432,7 +1425,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     <Text strong ellipsis style={{ fontSize: 13 }}>
                       {file.filename}
                     </Text>
-                    <Text type="secondary" style={{ fontSize: 11 }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                       {formatSize(file.sizeBytes)}{file.slideCount ? ` · ${file.slideCount} slides` : ''}
                     </Text>
                   </div>
@@ -1442,7 +1435,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     size="small"
                     icon={<DownloadOutlined />}
                     onClick={() => handleDownloadGeneratedFile(file, true)}
-                    style={{ fontSize: 12, height: 26 }}
+                    style={{ fontSize: 'var(--font-size-small)', height: 26 }}
                     title="Tải tệp trực tiếp qua trình duyệt"
                   >
                     Tải về
@@ -1452,7 +1445,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
                     size="small"
                     icon={<FolderOpenOutlined />}
                     onClick={() => handleDownloadGeneratedFile(file, false)}
-                    style={{ fontSize: 12, height: 26 }}
+                    style={{ fontSize: 'var(--font-size-small)', height: 26 }}
                     title="Lưu tệp và chọn thư mục (Save As)"
                   >
                     Lưu tệp...
@@ -1482,7 +1475,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               icon={checklistAdded ? <CheckOutlined style={{ color: token.colorSuccess }} /> : <CheckSquareOutlined />}
               onClick={handleAddToChecklist}
               disabled={checklistAdded}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+              style={{ fontSize: 'var(--font-size-small)', height: 24, padding: '0 8px' }}
             >
               {checklistAdded ? 'Đã thêm vào Checklist' : 'Thêm vào Checklist'}
             </Button>
@@ -1494,7 +1487,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               icon={noteSaved ? <CheckOutlined style={{ color: token.colorSuccess }} /> : <FileAddOutlined />}
               onClick={handleSaveStickyNote}
               disabled={noteSaved}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+              style={{ fontSize: 'var(--font-size-small)', height: 24, padding: '0 8px' }}
             >
               {noteSaved ? 'Đã lưu vào Ghi chú' : 'Lưu vào Sticky Notes'}
             </Button>
@@ -1505,7 +1498,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
               size="small"
               icon={<CodeOutlined />}
               onClick={onRunClaudeCode}
-              style={{ fontSize: 12, height: 24, padding: '0 8px' }}
+              style={{ fontSize: 'var(--font-size-small)', height: 24, padding: '0 8px' }}
             >
               Chạy với Claude Code
             </Button>
@@ -1524,7 +1517,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           minHeight: 20,
           paddingLeft: isUser ? 0 : 4,
           paddingRight: isUser ? 4 : 0,
-          fontSize: 11,
+          fontSize: 'var(--font-size-xs)',
           color: token.colorTextTertiary,
         }}
       >
@@ -1567,7 +1560,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
           >
             <Typography.Text
               data-testid={`seen-${msg.id}`}
-              style={{ fontSize: 11, color: token.colorPrimary, cursor: 'default' }}
+              style={{ fontSize: 'var(--font-size-xs)', color: token.colorPrimary, cursor: 'default' }}
             >
               ✓✓
             </Typography.Text>
@@ -1583,7 +1576,7 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             <Button
               type="text"
               size="small"
-              icon={copied ? <CheckOutlined style={{ color: token.colorSuccess, fontSize: 12 }} /> : <CopyOutlined style={{ fontSize: 12 }} />}
+              icon={copied ? <CheckOutlined style={{ color: token.colorSuccess, fontSize: 'var(--font-size-small)' }} /> : <CopyOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
               onClick={handleCopy}
               aria-label="Sao chép nội dung"
               style={{ minHeight: 20, minWidth: 20, padding: 0 }}

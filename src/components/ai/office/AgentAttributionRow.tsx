@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Avatar, Button, Tag, useAntdToken } from '../../ui';
 import { CrownOutlined, HourglassOutlined, PauseCircleOutlined, StopOutlined, SyncOutlined } from '../../ui/icon';
 import type { AgentRunStatus, AiTeamAssignmentRunStatus } from '../../../types/aiOffice';
+// ponytail: fixed white glyph on colored swatch/bubble; contrast pair, not a theme token
 
 /** UI-SPEC §Avatar & Identity Treatment — fixed six-entry palette. */
 const AGENT_PALETTE = ['#5b4fe8', '#22d3ee', '#338555', '#a56906', '#c54e58', '#6c707e'] as const;
@@ -24,7 +25,7 @@ export function agentColorFor(agentId: string): string {
 }
 
 export function agentTextColorFor(color: string): string {
-  return DARK_GLYPH_SWATCHES.includes(color) ? '#1f2328' : '#ffffff';
+  return DARK_GLYPH_SWATCHES.includes(color) ? '#1f2328' : '#ffffff'; // ponytail: fixed white on colored swatch
 }
 
 function initialOf(name: string): string {
@@ -52,9 +53,9 @@ export const AgentAttributionRow: React.FC<AgentAttributionRowProps> = ({ agent,
       >
         {initialOf(agent.name)}
       </Avatar>
-      <span style={{ fontSize: 12, fontWeight: 600, color: token.colorText }}>{agent.name}</span>
-      <span style={{ fontSize: 12, fontWeight: 400, color: token.colorTextSecondary }}>{agent.role}</span>
-      {agent.isLead && <CrownOutlined style={{ fontSize: 11, color: token.colorPrimary }} />}
+      <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: token.colorText }}>{agent.name}</span>
+      <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 400, color: token.colorTextSecondary }}>{agent.role}</span>
+      {agent.isLead && <CrownOutlined style={{ fontSize: 'var(--font-size-xs)', color: token.colorPrimary }} />}
       {kindLabel && (
         <span
           data-testid={`agent-kind-${agent.agentId}`}
@@ -180,7 +181,7 @@ export const AgentStatusRow: React.FC<AgentStatusRowProps> = ({
           <Button
             type="text"
             size="small"
-            style={{ height: 22, padding: '0 6px', fontSize: 12 }}
+            style={{ height: 22, padding: '0 6px', fontSize: 'var(--font-size-small)' }}
             data-testid={`${idPrefix}-retry-${assignmentId}`}
             tabIndex={actionsVisible ? 0 : -1}
             onClick={onRetry}

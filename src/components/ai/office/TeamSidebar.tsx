@@ -57,7 +57,7 @@ function fmtCompact(value: number): string {
 }
 
 const SECTION_LABEL: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--font-size-small)',
   fontWeight: 600,
   marginBottom: 8,
   textTransform: 'uppercase',
@@ -174,7 +174,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
                 borderRadius: 9,
                 background: token.colorError,
                 color: '#fff',
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 fontWeight: 600,
                 letterSpacing: 0,
                 textTransform: 'none',
@@ -230,10 +230,10 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
                 </Avatar>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {agent.name}
                     </span>
-                    <span style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {agent.role}
                     </span>
                   </div>
@@ -345,7 +345,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
         </div>
         <div
           data-testid="team-usage-line"
-          style={{ fontSize: 11, color: token.colorTextSecondary, margin: '3px 0 8px', fontVariantNumeric: 'tabular-nums' }}
+          style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary, margin: '3px 0 8px', fontVariantNumeric: 'tabular-nums' }}
           title={`${fmt(teamUsedIn)} vào / ${fmt(teamUsedOut)} ra · còn ${fmt(teamRemaining)}`}
         >
           {`${fmtCompact(teamUsed)} / ${fmtCompact(teamTotal)} · ${teamPercent}%`}
@@ -368,7 +368,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <span style={{ ...SECTION_LABEL, marginBottom: 0, color: token.colorTextSecondary }}>Liên kết</span>
-          <Button size="small" type="text" icon={<PlusOutlined />} onClick={onAddLink} data-testid="team-add-link" style={{ fontSize: 12 }}>
+          <Button size="small" type="text" icon={<PlusOutlined />} onClick={onAddLink} data-testid="team-add-link" style={{ fontSize: 'var(--font-size-small)' }}>
             Thêm
           </Button>
         </div>
@@ -380,7 +380,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
         style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${token.colorBorderSecondary}`, paddingTop: 12 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12 }}>Tự động chia việc</span>
+          <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động chia việc</span>
           <Switch
             size="small"
             checked={team.autoSplitEnabled === true}
@@ -389,7 +389,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12 }}>Tự động duyệt thay đổi</span>
+          <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động duyệt thay đổi</span>
           <Switch
             size="small"
             checked={team.autoApproveMutations === true}
@@ -397,7 +397,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
             aria-label="Tự động duyệt thay đổi"
           />
         </div>
-        <Button size="small" type="text" onClick={onOpenSettings} data-testid="team-open-settings" style={{ alignSelf: 'flex-start', paddingLeft: 0, fontSize: 12 }}>
+        <Button size="small" type="text" onClick={onOpenSettings} data-testid="team-open-settings" style={{ alignSelf: 'flex-start', paddingLeft: 0, fontSize: 'var(--font-size-small)' }}>
           Cài đặt nhóm →
         </Button>
       </div>

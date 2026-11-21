@@ -73,7 +73,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         marginBottom: 8,
       }}
     >
-      <span style={{ fontSize: 12, fontWeight: 500, color: token.colorTextSecondary }}>
+      <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, color: token.colorTextSecondary }}>
         Đang tra cứu:
       </span>
 
@@ -85,7 +85,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         style={{
           cursor: 'pointer',
           margin: 0,
-          fontSize: 11,
+          fontSize: 'var(--font-size-xs)',
           fontWeight: 600,
           background: token.colorBgContainer,
           borderColor: token.colorBorder,
@@ -103,7 +103,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
           style={{
             cursor: 'pointer',
             margin: 0,
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
             background: token.colorBgContainer,
             borderColor: token.colorBorder,
@@ -122,7 +122,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
           style={{
             cursor: 'pointer',
             margin: 0,
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
             background: token.colorBgContainer,
             borderColor: token.colorBorder,
@@ -142,7 +142,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
           style={{
             cursor: 'pointer',
             margin: 0,
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
           }}
         >
@@ -157,7 +157,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         onKeyDown={handleKeyDown}
         style={{
           cursor: 'pointer',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           color: token.colorPrimary,
           display: 'inline-flex',
           alignItems: 'center',
@@ -166,7 +166,7 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         }}
         aria-label="Chỉnh sửa phạm vi tra cứu"
       >
-        <EditOutlined style={{ fontSize: 11 }} />
+        <EditOutlined style={{ fontSize: 'var(--font-size-xs)' }} />
       </span>
     </div>
   );

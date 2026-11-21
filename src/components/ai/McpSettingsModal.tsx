@@ -154,7 +154,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
                 key={server.id}
                 style={{
                   padding: '12px 14px',
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius-control)',
                   border: `1px solid ${token.colorBorderSecondary}`,
                   background: token.colorFillAlter,
                   marginBottom: 10,
@@ -192,7 +192,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
                 </div>
 
                 <div style={{ marginTop: 6 }}>
-                  <Text code style={{ fontSize: 11, wordBreak: 'break-all' }}>
+                  <Text code style={{ fontSize: 'var(--font-size-xs)', wordBreak: 'break-all' }}>
                     {server.url}
                   </Text>
                 </div>
@@ -210,7 +210,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
                       textOverflow: 'ellipsis',
                     }}
                   >
-                    <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'pre-line' }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', whiteSpace: 'pre-line' }}>
                       {server.instruction.slice(0, 120)}
                       {server.instruction.length > 120 ? '...' : ''}
                     </Text>
@@ -224,7 +224,7 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
                       showIcon
                       icon={testRes.ok ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
                       message={testRes.message}
-                      style={{ padding: '2px 8px', fontSize: 11 }}
+                      style={{ padding: '2px 8px', fontSize: 'var(--font-size-xs)' }}
                     />
                   </div>
                 )}

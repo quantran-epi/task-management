@@ -55,7 +55,7 @@ export const ScopeVariationCard: React.FC<ScopeVariationCardProps> = ({
               borderColor: token.colorBorderSecondary,
               color: token.colorTextSecondary,
               fontWeight: 600,
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
             }}
           >
             {overrideRel ?? dimension}
@@ -94,7 +94,7 @@ export const ScopeVariationCard: React.FC<ScopeVariationCardProps> = ({
               <Tag
                 style={{
                   margin: 0,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   fontWeight: 600,
                   background: token.colorFillSecondary,
                   borderColor: token.colorBorder,

@@ -19,17 +19,17 @@ const STAGE_LABELS: Readonly<Record<StageName, string>> = {
 
 function renderStatusTag(status: string) {
   if (status === 'ok') {
-    return <Tag color="success" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>OK</Tag>;
+    return <Tag color="success" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>OK</Tag>;
   }
   if (status === 'degraded' || status === 'truncated') {
     return (
-      <Tag color="warning" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>
+      <Tag color="warning" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>
         {status.toUpperCase()}
       </Tag>
     );
   }
   return (
-    <Tag color="error" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>
+    <Tag color="error" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>
       {status.toUpperCase()}
     </Tag>
   );
@@ -68,16 +68,16 @@ export const StageDiagnosticsList: React.FC<StageDiagnosticsListProps> = ({ stag
               {STAGE_LABELS[stage.stage]}
             </span>
             {renderStatusTag(stage.status)}
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
               {stage.latencyMs}ms · {stage.accepted} chấp nhận / {stage.rejected} loại bỏ
             </Text>
             {stage.truncated && (
-              <Tag color="warning" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>
+              <Tag color="warning" style={{ margin: 0, fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
                 Đã cắt bớt
               </Tag>
             )}
             {stage.fallback && (
-              <Tag color="warning" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>
+              <Tag color="warning" style={{ margin: 0, fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
                 Dùng phạm vi dự phòng
               </Tag>
             )}

@@ -119,7 +119,7 @@ function SortableChatTabItem({
     if (resolvedStatus === 'complete') {
       return <Badge status="success" style={{ flexShrink: 0 }} />;
     }
-    return <MessageOutlined style={{ fontSize: 11, color: token.colorTextTertiary, flexShrink: 0 }} />;
+    return <MessageOutlined style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary, flexShrink: 0 }} />;
   };
 
   const style: React.CSSProperties = {
@@ -128,7 +128,7 @@ function SortableChatTabItem({
     backgroundColor: isActive ? token.colorBgContainer : 'transparent',
     color: isActive ? token.colorText : token.colorTextSecondary,
     fontWeight: isActive ? 600 : 500,
-    fontSize: 12,
+    fontSize: 'var(--font-size-small)',
     display: 'flex',
     alignItems: 'center',
     gap: 5,
@@ -198,7 +198,7 @@ function SortableChatTabItem({
               cancelEditing();
             }
           }}
-          style={{ flex: 1, minWidth: 60, height: 22, fontSize: 12 }}
+          style={{ flex: 1, minWidth: 60, height: 22, fontSize: 'var(--font-size-small)' }}
         />
       ) : (
         <span
@@ -607,7 +607,7 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
             e.currentTarget.style.color = token.colorTextSecondary;
           }}
         >
-          <PlusOutlined style={{ fontSize: 11 }} />
+          <PlusOutlined style={{ fontSize: 'var(--font-size-xs)' }} />
         </button>
       </Tooltip>
     </div>

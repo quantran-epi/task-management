@@ -440,7 +440,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- WR-06: the roster is read per turn via loadRoster, so it must not be an effect dependency
   }, [team.id, db, createRuntimeDeps]);
 
   useEffect(() => {
@@ -905,7 +904,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   // `streamingText` otherwise reuses the stale array and the panel never re-renders.
   // One JSON.stringify per agent keeps this O(n) — no per-render deep comparison.
   const agentsSignature = agentSnapshotSignature(snapshot.agents);
-  const stableAgents = useMemo(() => snapshot.agents, [agentsSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ponytail: signature-based identity keeps memoized subtrees stable; exhaustive-deps would defeat it.
+  const stableAgents = useMemo(() => snapshot.agents, [agentsSignature]);
 
   // Stable identity: an inline element here changed on every composer keystroke and forced the
   // whole widget subtree (indicator, plan card, proposals) to re-render (ai-chat-input-lag).
@@ -956,7 +956,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       <Splitter
         style={{
           height: '100%',
-          borderRadius: 8,
+          borderRadius: 'var(--radius-control)',
           overflow: 'hidden',
           background: token.colorBgContainer,
         }}
@@ -1004,20 +1004,20 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               <span style={{ fontSize: 16, fontWeight: 600 }}>{team.name}</span>
               {lead ? (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 12, color: token.colorTextTertiary }}>›</span>
+                  <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary }}>›</span>
                   <Avatar
                     size={18}
                     shape="square"
-                    style={{ backgroundColor: agentColorFor(lead.id), color: '#ffffff' }}
+                    style={{ backgroundColor: agentColorFor(lead.id), color: '#ffffff' }} // ponytail: fixed white on colored swatch
                   >
                     {initialOf(lead.name)}
                   </Avatar>
-                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{lead.name}</span>
+                  <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>{lead.name}</span>
                 </span>
               ) : (
                 <span
                   data-testid="team-header-no-lead"
-                  style={{ fontSize: 12, color: token.colorTextSecondary }}
+                  style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}
                 >
                   Chưa chọn lead
                 </span>
@@ -1050,7 +1050,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   color: token.colorTextSecondary,
                   background: token.colorFillQuaternary,
                   borderRadius: 999,
@@ -1169,7 +1169,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               ) : !coordinator ? (
                 // A composer that silently drops input would read as a hang; wait for the
                 // coordinator instead of rendering a dead widget.
-                <div style={{ padding: 16, fontSize: 12, color: token.colorTextSecondary }}>
+                <div style={{ padding: 16, fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                   Đang chuẩn bị nhóm...
                 </div>
               ) : (

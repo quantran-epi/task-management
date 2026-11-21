@@ -318,7 +318,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
           padding: '8px 14px',
           backgroundColor: token.colorFillAlter,
           borderBottom: `1px solid ${token.colorBorderSecondary}`,
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
         }}
       >
         <span style={{ fontWeight: 600, color: token.colorTextSecondary, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -333,7 +333,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               aria-label="view-source"
               icon={viewSource ? <EyeOutlined /> : <CodeOutlined />}
               onClick={() => setViewSource((v) => !v)}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 'var(--font-size-small)' }}
             />
           </Tooltip>
           <Tooltip title="Sao chép cú pháp">
@@ -343,7 +343,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               aria-label="copy-code"
               icon={copied ? <CheckOutlined style={{ color: token.colorSuccess }} /> : <CopyOutlined />}
               onClick={handleCopyCode}
-              style={{ fontSize: 12 }}
+              style={{ fontSize: 'var(--font-size-small)' }}
             />
           </Tooltip>
           {showOpenInStudio && (
@@ -354,7 +354,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                 aria-label="open-in-studio"
                 icon={<ExportOutlined />}
                 onClick={handleOpenInStudio}
-                style={{ fontSize: 12 }}
+                style={{ fontSize: 'var(--font-size-small)' }}
               />
             </Tooltip>
           )}
@@ -367,7 +367,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                   aria-label="download-svg"
                   icon={<DownloadOutlined />}
                   onClick={handleDownloadSvg}
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: 'var(--font-size-small)' }}
                 />
               </Tooltip>
               <Tooltip title="Tải về file PNG">
@@ -377,7 +377,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                   aria-label="download-png"
                   icon={<PictureOutlined />}
                   onClick={handleDownloadPng}
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: 'var(--font-size-small)' }}
                 />
               </Tooltip>
               <Tooltip title="Xem toàn màn hình & Phóng to">
@@ -390,7 +390,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                     handleResetZoom();
                     setShowModal(true);
                   }}
-                  style={{ fontSize: 12 }}
+                  style={{ fontSize: 'var(--font-size-small)' }}
                 />
               </Tooltip>
             </>
@@ -426,8 +426,8 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                       margin: 0,
                       padding: 8,
                       background: token.colorFillSecondary,
-                      borderRadius: 6,
-                      fontSize: 11,
+                      borderRadius: 'var(--radius-control)',
+                      fontSize: 'var(--font-size-xs)',
                       maxHeight: 120,
                       overflowY: 'auto',
                     }}
@@ -461,8 +461,8 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
                         margin: 0,
                         padding: 8,
                         background: token.colorFillSecondary,
-                        borderRadius: 6,
-                        fontSize: 11,
+                        borderRadius: 'var(--radius-control)',
+                        fontSize: 'var(--font-size-xs)',
                         overflowX: 'auto',
                       }}
                     >
@@ -478,10 +478,10 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
             style={{
               margin: 0,
               padding: 12,
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               fontFamily: 'Consolas, monospace',
               backgroundColor: token.colorFillSecondary,
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               overflowX: 'auto',
             }}
           >
@@ -529,7 +529,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
             <Tooltip title="Thu nhỏ (-)">
               <Button size="small" aria-label="zoom-out" icon={<ZoomOutOutlined />} onClick={handleZoomOut} />
             </Tooltip>
-            <span style={{ fontSize: 12, fontWeight: 500, minWidth: 46, textAlign: 'center' }}>
+            <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, minWidth: 46, textAlign: 'center' }}>
               {Math.round(scale * 100)}%
             </span>
             <Tooltip title="Phóng to (+)">
@@ -542,7 +542,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
               <Button size="small" aria-label="reset-zoom" icon={<UndoOutlined />} onClick={handleResetZoom} />
             </Tooltip>
           </Space>
-          <span style={{ fontSize: 12, color: token.colorTextTertiary, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <DragOutlined /> Kéo để di chuyển · Ctrl + cuộn để zoom
           </span>
         </div>
@@ -561,7 +561,7 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
             height: '72vh',
             overflow: 'auto',
             background: token.colorFillAlter,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
             cursor: isDragging ? 'grabbing' : 'grab',
             userSelect: 'none',
           }}

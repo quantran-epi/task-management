@@ -143,7 +143,6 @@ export function useChatTurn({ scopeKey, deps, background = false }: UseChatTurnO
       globalScopeTurnRuntimes.set(scopeKey, created);
     }
     return created;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey, background]);
 
   // Sync state whenever scopeKey changes (e.g. switching chat scopes)

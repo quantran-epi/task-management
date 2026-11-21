@@ -28,7 +28,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
       style={{
         background: token.colorBgContainer,
         border: `1px solid ${hovered ? token.colorBorder : token.colorBorderSecondary}`,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         padding: 16,
         display: 'flex',
         flexDirection: 'column',
@@ -41,7 +41,7 @@ export const SkillCard: React.FC<SkillCardProps> = ({
 
       <div
         style={{
-          fontSize: 13.5,
+          fontSize: 'var(--font-size-ui)',
           color: token.colorTextSecondary,
           display: '-webkit-box',
           WebkitLineClamp: 2,
@@ -56,13 +56,13 @@ export const SkillCard: React.FC<SkillCardProps> = ({
         <Tag
           color="warning"
           data-testid={`skill-card-pending-${skill.id}`}
-          style={{ fontSize: 12, margin: 0 }}
+          style={{ fontSize: 'var(--font-size-small)', margin: 0 }}
         >
           {`${pendingCount} chờ duyệt`}
         </Tag>
       )}
 
-      <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+      <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
         {`Đang dùng bởi ${agentCount} nhân viên`}
       </div>
 

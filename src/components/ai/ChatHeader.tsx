@@ -108,7 +108,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
         <JetBrainsAIIcon size={14} />
-        <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
+        <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
           Trợ lý AI
         </span>
 
@@ -132,7 +132,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 fontWeight: 500,
                 color: currentScope.type === 'global' ? token.colorTextSecondary : token.colorPrimary,
               }}
@@ -148,7 +148,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 size="small"
                 onClick={onOpenScopePicker}
                 aria-label="Đổi phạm vi ngữ cảnh"
-                style={{ padding: 0, height: 'auto', fontSize: 11 }}
+                style={{ padding: 0, height: 'auto', fontSize: 'var(--font-size-xs)' }}
               >
                 Đổi
               </Button>

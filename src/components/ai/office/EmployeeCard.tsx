@@ -12,7 +12,7 @@ function cardSurface(token: AntdToken, hovered: boolean): React.CSSProperties {
   return {
     background: token.colorBgContainer,
     border: `1px solid ${hovered ? token.colorBorder : token.colorBorderSecondary}`,
-    borderRadius: 8,
+    borderRadius: 'var(--radius-control)',
     padding: 16,
     display: 'flex',
     flexDirection: 'column',
@@ -57,21 +57,21 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
         </Avatar>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{employee.name}</div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{employee.role}</div>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>{employee.role}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        <Tag style={{ fontSize: 12 }}>{employee.model}</Tag>
+        <Tag style={{ fontSize: 'var(--font-size-small)' }}>{employee.model}</Tag>
         {skillName ? (
-          <Tag style={{ fontSize: 12, background: token.colorFillAlter }}>{skillName}</Tag>
+          <Tag style={{ fontSize: 'var(--font-size-small)', background: token.colorFillAlter }}>{skillName}</Tag>
         ) : (
-          <Tag style={{ fontSize: 12 }}>Không dùng kỹ năng</Tag>
+          <Tag style={{ fontSize: 'var(--font-size-small)' }}>Không dùng kỹ năng</Tag>
         )}
       </div>
 
       <div>
-        <Tag style={{ fontSize: 12 }}>{teamCount} nhóm</Tag>
+        <Tag style={{ fontSize: 'var(--font-size-small)' }}>{teamCount} nhóm</Tag>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -123,16 +123,16 @@ export const LeadCard: React.FC<LeadCardProps> = ({ lead, onEdit, onDelete }) =>
         </Avatar>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <CrownOutlined style={{ fontSize: 11, color: token.colorPrimary }} />
+            <CrownOutlined style={{ fontSize: 'var(--font-size-xs)', color: token.colorPrimary }} />
             <span style={{ fontSize: 14, fontWeight: 600 }}>{lead.name}</span>
           </div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>{lead.role}</div>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>{lead.role}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        <Tag style={{ fontSize: 12 }}>{lead.model}</Tag>
-        <Tag style={{ fontSize: 12 }}>Lead</Tag>
+        <Tag style={{ fontSize: 'var(--font-size-small)' }}>{lead.model}</Tag>
+        <Tag style={{ fontSize: 'var(--font-size-small)' }}>Lead</Tag>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

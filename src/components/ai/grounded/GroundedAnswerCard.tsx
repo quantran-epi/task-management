@@ -256,7 +256,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
           </div>
           <div
             aria-label={`Thực thể: ${counts.entity} · Cạnh: ${counts.edge} · Đường dẫn: ${counts.path}`}
-            style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: token.colorText }}
+            style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8, color: token.colorText }}
           >
             Thực thể: {counts.entity} · Cạnh: {counts.edge} · Đường dẫn: {counts.path}
           </div>
@@ -576,7 +576,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                         flexWrap: 'wrap',
                       }}
                     >
-                      <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                      <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                         Nguồn trích dẫn:
                       </span>
                       <CitationGroup
@@ -618,7 +618,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                 </div>
                 <div
                   style={{
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-small)',
                     color: token.colorTextSecondary,
                     marginBottom: 8,
                     fontStyle: 'italic',
@@ -637,7 +637,7 @@ export const GroundedAnswerCard: React.FC<GroundedAnswerCardProps> = ({
                       }}
                     >
                       <strong>{h.id}:</strong> {h.text}{' '}
-                      <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+                      <span style={{ color: token.colorTextSecondary, fontSize: 'var(--font-size-small)' }}>
                         ({h.justification})
                       </span>
                     </div>

@@ -210,7 +210,7 @@ export const PendingSkillProposals: React.FC<PendingSkillProposalsProps> = ({
         </div>
       ))}
       {overflow > 0 && (
-        <div data-testid="skill-pending-overflow" style={{ fontSize: 12, color: token.colorTextSecondary }}>
+        <div data-testid="skill-pending-overflow" style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
           {`Còn ${overflow} đề xuất chờ duyệt — xem trong AI Staff › Kỹ năng.`}
         </div>
       )}

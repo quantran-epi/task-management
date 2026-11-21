@@ -188,7 +188,6 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     setThresholdPct(team.budgetWarnThresholdPct);
     setThresholdTouched(false);
     setPinnedContext(team.pinnedContext ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seeded once per open
   }, [open, team.id]);
 
   /** First edit freezes the under-allocation the persisted rows already imply. */
@@ -266,7 +265,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
     >
       <div data-testid="team-settings-drawer" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div data-testid="team-roster-block">
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Thành viên</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Thành viên</div>
           {rosterError && (
             <Alert
               type="warning"
@@ -280,7 +279,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {members.length === 0 && (
-              <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+              <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                 Nhóm chưa có thành viên nào.
               </div>
             )}
@@ -303,7 +302,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                     {initialOf(name)}
                   </Avatar>
                   <span style={{ fontSize: 13 }}>{name}</span>
-                  <Tag style={{ fontSize: 11 }}>{isLead ? 'Lead' : 'Nhân viên'}</Tag>
+                  <Tag style={{ fontSize: 'var(--font-size-xs)' }}>{isLead ? 'Lead' : 'Nhân viên'}</Tag>
                   {!isLead && (
                     <Popconfirm
                       title={`Gỡ «${name}» khỏi nhóm? Tin nhắn và phân công cũ vẫn được giữ.`}
@@ -328,7 +327,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Thêm nhân viên</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Thêm nhân viên</div>
             <Select
               showSearch
               style={{ width: '100%' }}
@@ -347,7 +346,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, marginBottom: 4 }}>Leader</div>
+            <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Leader</div>
             <Select
               showSearch
               style={{ width: '100%' }}
@@ -360,7 +359,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               disabled={Boolean(team.leaderLockedAt)}
             />
             {team.leaderLockedAt ? (
-              <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
                 Leader đã khóa từ lượt chạy đầu tiên và cố định suốt đời nhóm. Cần leader khác thì
                 tạo nhóm mới.
               </div>
@@ -369,7 +368,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ngân sách token</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Ngân sách token</div>
           <InputNumber
             min={0}
             step={1000}
@@ -431,20 +430,20 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
                 title: 'Đã dùng',
                 dataIndex: 'usedTokens',
                 render: (value: number) => (
-                  <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                  <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
                     {value.toLocaleString()}
                   </span>
                 ),
               },
             ]}
           />
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
             {`Chia đều ${total.toLocaleString()} token cho ${rows.length} thành viên — sửa từng dòng nếu cần.`}
           </div>
         </div>
 
         <div data-testid="team-threshold-block">
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Ngưỡng cảnh báo</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Ngưỡng cảnh báo</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <InputNumber
               min={1}
@@ -459,7 +458,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               aria-label="Ngưỡng cảnh báo ngân sách"
               data-testid="team-threshold-input"
             />
-            <span style={{ fontSize: 12 }}>%</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>%</span>
             <Button
               size="small"
               type="text"
@@ -472,7 +471,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               Dùng mặc định toàn cục
             </Button>
           </div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
             {thresholdPct === null || thresholdPct === undefined
               ? `Đang kế thừa mặc định toàn cục (${globalThresholdPct ?? DEFAULT_BUDGET_WARN_THRESHOLD_PCT}%).`
               : `Đang dùng ngưỡng riêng của nhóm (${thresholdPct}%).`}
@@ -480,7 +479,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         </div>
 
         <div data-testid="team-pinned-context-block">
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Pinned Team Context</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Pinned Team Context</div>
           <TextArea
             value={pinnedContext}
             onChange={(event) => setPinnedContext(event.target.value)}
@@ -489,7 +488,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             aria-label="Pinned Team Context"
             data-testid="team-pinned-context-input"
           />
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
             Nội dung này chỉ áp dụng cho nhóm và được đưa vào mọi lượt của leader lẫn nhân viên. Việc
             nêu tên môi trường DB ở đây chỉ định hướng agent chọn kết nối Oracle — không thay đổi
             kết nối đang dùng chung của toàn ứng dụng.
@@ -497,14 +496,14 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Liên kết mục</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Liên kết mục</div>
           <LinkedItemsList items={links} />
         </div>
 
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Chạy đồng thời</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 8 }}>Chạy đồng thời</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12 }}>Số nhân viên chạy đồng thời</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>Số nhân viên chạy đồng thời</span>
             <InputNumber
               min={MIN_TEAM_CONCURRENCY}
               max={MAX_TEAM_CONCURRENCY}
@@ -522,15 +521,15 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               data-testid="team-concurrency-limit"
             />
           </div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
             {`Từ ${MIN_TEAM_CONCURRENCY} đến ${MAX_TEAM_CONCURRENCY} nhân viên chạy cùng lúc; thay đổi áp dụng ngay cho lô đang chạy.`}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Chế độ</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>Chế độ</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12 }}>Tự động chia việc</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động chia việc</span>
             <Switch
               size="small"
               checked={autoSplit}
@@ -539,7 +538,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12 }}>Tự động duyệt thay đổi</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động duyệt thay đổi</span>
             <Switch
               size="small"
               checked={autoApprove}
@@ -550,9 +549,9 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Công cụ AI theo nhóm</div>
+          <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>Công cụ AI theo nhóm</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12 }}>SSH File System</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>SSH File System</span>
             <Switch
               size="small"
               checked={sshFsToolsEnabled}
@@ -562,7 +561,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 12 }}>Oracle SQLcl</span>
+            <span style={{ fontSize: 'var(--font-size-small)' }}>Oracle SQLcl</span>
             <Switch
               size="small"
               checked={oracleToolsEnabled}
@@ -571,7 +570,7 @@ export const TeamSettingsDrawer: React.FC<TeamSettingsDrawerProps> = ({
               data-testid="team-oracle-tools-enabled"
             />
           </div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             Cấu hình kết nối được quản lý chung trong Settings; bật/tắt ở đây áp dụng cho nhóm chat này.
           </div>
         </div>

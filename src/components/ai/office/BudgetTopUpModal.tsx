@@ -75,7 +75,7 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
         </Descriptions>
 
         <div>
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginBottom: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginBottom: 4 }}>
             Token cấp thêm
           </div>
           <InputNumber
@@ -90,7 +90,7 @@ export const BudgetTopUpModal: React.FC<BudgetTopUpModalProps> = ({
           />
         </div>
 
-        <div style={{ fontSize: 12, color: token.colorTextSecondary }}>
+        <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
           {`Ngân sách mới: ${(budget + added).toLocaleString()} token — lượt chạy tiếp tục ngay sau khi xác nhận.`}
         </div>
       </div>

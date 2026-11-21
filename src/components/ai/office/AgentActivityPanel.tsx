@@ -111,7 +111,7 @@ const previewStyle: React.CSSProperties = {
   maxHeight: 180,
   overflowY: 'auto',
   overflowX: 'hidden',
-  fontSize: 11,
+  fontSize: 'var(--font-size-xs)',
   lineHeight: 1.5,
 };
 
@@ -218,7 +218,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
       data-agent-id={row.agentId}
       style={{
         border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         background: token.colorBgContainer,
         overflow: 'hidden',
         minWidth: 0,
@@ -244,7 +244,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
           minWidth: 0,
         }}
       >
-        <span aria-hidden="true" style={{ color: statusMeta.color, fontSize: 12 }}>
+        <span aria-hidden="true" style={{ color: statusMeta.color, fontSize: 'var(--font-size-small)' }}>
           {statusMeta.icon}
         </span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
@@ -253,7 +253,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
               style={{
                 display: 'block',
                 fontFamily: 'monospace',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 fontWeight: 600,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -266,7 +266,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
           </Tooltip>
           <span
             style={{
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               color: token.colorTextTertiary,
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -277,7 +277,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
             {`${agentName} · ${statusMeta.label} · ${dayjs(step.startedAt ?? step.at).format('HH:mm:ss')}`}
           </span>
         </span>
-        <span style={{ fontSize: 11, color: token.colorTextTertiary, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary, whiteSpace: 'nowrap' }}>
           {duration}
         </span>
       </button>
@@ -289,7 +289,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
       >
         {args.text && (
           <div style={{ marginBottom: 8, minWidth: 0 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>Tham số</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>Tham số</Typography.Text>
             <pre data-testid="activity-preview" className="activity-preview" style={previewStyle}>
               {args.text}
             </pre>
@@ -297,16 +297,16 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
         )}
         {result.text ? (
           <div style={{ minWidth: 0 }}>
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>Kết quả</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>Kết quả</Typography.Text>
             <pre data-testid="activity-preview" className="activity-preview" style={previewStyle}>
               {result.text}
             </pre>
           </div>
         ) : status === 'running' ? (
-          <Typography.Text type="secondary" style={{ fontSize: 11 }}>{NO_RESULT_COPY}</Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>{NO_RESULT_COPY}</Typography.Text>
         ) : null}
         {status === 'error' ? (
-          <Typography.Text type="danger" style={{ fontSize: 11, display: 'block', marginTop: 4 }} data-testid="activity-error-copy">
+          <Typography.Text type="danger" style={{ fontSize: 'var(--font-size-xs)', display: 'block', marginTop: 4 }} data-testid="activity-error-copy">
             {parseToolRefusal(step.resultPreview)?.message ?? ERROR_COPY}
           </Typography.Text>
         ) : null}
@@ -347,7 +347,7 @@ const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => voi
       data-testid="activity-progress-card"
       style={{
         border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         padding: 8,
         marginBottom: 8,
         background: token.colorFillAlter,
@@ -355,16 +355,16 @@ const ProgressCard: React.FC<{ row: TimelineRow; onCancel?: ((id: string) => voi
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-        <strong style={{ fontSize: 12, minWidth: 0 }}>{row.toolName}</strong>
-        <span data-testid="activity-progress-clock" style={{ fontSize: 11, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+        <strong style={{ fontSize: 'var(--font-size-small)', minWidth: 0 }}>{row.toolName}</strong>
+        <span data-testid="activity-progress-clock" style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
           {`Đang chạy · đã chạy ${formatClock(elapsedMs)}`}
         </span>
       </div>
-      <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', minWidth: 0 }}>
+      <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', display: 'block', minWidth: 0 }}>
         {`${row.agentName}${snippet ? ` · “${snippet}”` : ''}`}
       </Typography.Text>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 11, minWidth: 0 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', minWidth: 0 }}>
           {RUNNING_NOTE}
         </Typography.Text>
         <Button
@@ -399,7 +399,7 @@ const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, i
       style={{
         padding: 8,
         border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         background: token.colorFillAlter,
         marginBottom: 8,
         minWidth: 0,
@@ -409,15 +409,15 @@ const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, i
         <Tag color="blue" data-testid="activity-prompt-kind">
           {`${log.agentKind.toUpperCase()}: ${log.agentName}`}
         </Tag>
-        <Typography.Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', whiteSpace: 'nowrap' }}>
           {log.timestamp}
         </Typography.Text>
       </div>
-      <div style={{ fontSize: 12, marginBottom: 4, minWidth: 0 }}>
+      <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4, minWidth: 0 }}>
         <strong>Model:</strong> {log.model} | <strong>Tools:</strong> {log.toolNames.join(', ') || 'none'}
       </div>
       <div style={{ marginBottom: 4, minWidth: 0 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
           <strong>User / Instruction Input:</strong>
         </Typography.Text>
         <pre data-testid="activity-prompt-text" className="activity-preview" style={previewStyle}>
@@ -425,7 +425,7 @@ const PromptLogEntry: React.FC<{ log: TeamDebugLog; index: number }> = ({ log, i
         </pre>
       </div>
       <div style={{ minWidth: 0 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
           <strong>System Prompt:</strong>
         </Typography.Text>
         {log.systemMessages.length === 0 ? null : log.systemMessages.map((sm, smIdx) => (
@@ -555,7 +555,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
       <div style={{ padding: 12, borderBottom: `1px solid ${token.colorBorderSecondary}`, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: token.colorPrimary }}>
+            <div style={{ fontSize: 'var(--font-size-xs)', letterSpacing: '0.1em', textTransform: 'uppercase', color: token.colorPrimary }}>
               Live inspection
             </div>
             <h2 style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.2, margin: 0 }}>Hoạt động agent</h2>
@@ -621,7 +621,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
                 borderBottom: `2px solid ${selected ? token.colorPrimary : 'transparent'}`,
                 background: 'none',
                 padding: '8px 0',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 fontWeight: selected ? 600 : 400,
                 color: selected ? token.colorText : token.colorTextSecondary,
                 cursor: 'pointer',
@@ -642,7 +642,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         style={{ flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', padding: 12 }}
       >
         {runningExplore ? <ProgressCard row={runningExplore} onCancel={onCancelToolCall} /> : null}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 8, fontSize: 11, color: token.colorTextTertiary }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 8, fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary }}>
           <span>✓ xong</span>
           <span>› đang chạy</span>
           <span>! lỗi</span>

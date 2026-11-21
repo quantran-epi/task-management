@@ -261,7 +261,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
             maxHeight: 380,
             overflowY: 'auto',
             border: `1px solid ${token.colorBorderSecondary}`,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
           }}
         >
           {filteredItems.length === 0 ? (
@@ -314,7 +314,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
                           <Text
                             type="secondary"
                             style={{
-                              fontSize: 11,
+                              fontSize: 'var(--font-size-xs)',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',

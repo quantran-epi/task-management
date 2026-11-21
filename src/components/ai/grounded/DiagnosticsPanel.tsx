@@ -28,12 +28,12 @@ export interface DiagnosticsPanelProps {
 
 function renderStatusTag(status: string) {
   if (status === 'ok') {
-    return <Tag color="success" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>OK</Tag>;
+    return <Tag color="success" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>OK</Tag>;
   }
   if (status === 'degraded' || status === 'truncated') {
-    return <Tag color="warning" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>{status.toUpperCase()}</Tag>;
+    return <Tag color="warning" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>{status.toUpperCase()}</Tag>;
   }
-  return <Tag color="error" style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>{status.toUpperCase()}</Tag>;
+  return <Tag color="error" style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>{status.toUpperCase()}</Tag>;
 }
 
 /**
@@ -65,7 +65,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       children: diagnostics?.fulltext ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {renderStatusTag(diagnostics.fulltext.status)}
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.fulltext.latencyMs}ms ({diagnostics.fulltext.itemCount} mục)
           </Text>
         </span>
@@ -77,7 +77,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       children: diagnostics?.vector ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {renderStatusTag(diagnostics.vector.status)}
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.vector.latencyMs}ms ({diagnostics.vector.itemCount} mục)
           </Text>
         </span>
@@ -89,7 +89,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       children: diagnostics?.graph ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {renderStatusTag(diagnostics.graph.status)}
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {diagnostics.graph.latencyMs}ms ({diagnostics.graph.itemCount} mục)
           </Text>
         </span>
@@ -101,7 +101,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
             key: 'graphCounts',
             label: 'Thực thể / Cạnh / Đường dẫn',
             children: (
-              <Text style={{ fontSize: 12 }}>
+              <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 Thực thể: {graphCounts.entity} · Cạnh: {graphCounts.edge} · Đường dẫn:{' '}
                 {graphCounts.path}
               </Text>
@@ -115,7 +115,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
             key: 'graphBeforeFusion',
             label: 'Trước hợp nhất',
             children: (
-              <Text style={{ fontSize: 12 }}>
+              <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 Trước hợp nhất: {graphBeforeFusion.entity} thực thể / {graphBeforeFusion.edge}{' '}
                 cạnh / {graphBeforeFusion.path} đường dẫn
               </Text>
@@ -129,7 +129,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
             key: 'graphAfterFusion',
             label: 'Sau hợp nhất',
             children: (
-              <Text style={{ fontSize: 12 }}>
+              <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 Sau hợp nhất: {graphAfterFusion.entity} thực thể / {graphAfterFusion.edge} cạnh /{' '}
                 {graphAfterFusion.path} đường dẫn
               </Text>
@@ -141,7 +141,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'routerSource',
       label: 'Nguồn định tuyến',
       children: (
-        <Tag style={{ margin: 0, fontSize: 11, fontWeight: 600 }}>
+        <Tag style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>
           {routerSource ?? (scope?.routedScope ? 'semantic' : 'default')}
         </Tag>
       ),
@@ -152,7 +152,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       children: (
         <Tag
           color={fallbackReason === 'NONE' ? 'default' : 'warning'}
-          style={{ margin: 0, fontSize: 11, fontWeight: 600 }}
+          style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontWeight: 600 }}
         >
           {fallbackReason}
         </Tag>
@@ -162,7 +162,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'versions',
       label: 'Phiên bản / Sửa lỗi',
       children: (
-        <Text style={{ fontSize: 12 }}>
+        <Text style={{ fontSize: 'var(--font-size-small)' }}>
           Schema v{schemaVersion} · Prompt {promptVersion} · {repairs} lần sửa
         </Text>
       ),
@@ -182,7 +182,7 @@ export const DiagnosticsPanel: React.FC<DiagnosticsPanelProps> = ({
       key: 'warnings',
       label: 'Cảnh báo phạm vi',
       children: (
-        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: token.colorWarningText }}>
+        <ul style={{ margin: 0, paddingLeft: 16, fontSize: 'var(--font-size-small)', color: token.colorWarningText }}>
           {coverageWarnings.map((w, idx) => (
             <li key={idx}>{w}</li>
           ))}

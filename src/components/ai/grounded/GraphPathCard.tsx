@@ -25,7 +25,7 @@ function renderHopClassificationBadge(
         color="success"
         style={{
           margin: 0,
-          fontSize: 11,
+          fontSize: 'var(--font-size-xs)',
           fontWeight: 600,
           lineHeight: '18px',
         }}
@@ -41,7 +41,7 @@ function renderHopClassificationBadge(
         icon={<CheckCircleOutlined />}
         style={{
           margin: 0,
-          fontSize: 11,
+          fontSize: 'var(--font-size-xs)',
           fontWeight: 600,
           lineHeight: '18px',
           borderColor: token.colorPrimary,
@@ -58,7 +58,7 @@ function renderHopClassificationBadge(
       icon={<InfoCircleOutlined />}
       style={{
         margin: 0,
-        fontSize: 11,
+        fontSize: 'var(--font-size-xs)',
         fontWeight: 600,
         lineHeight: '18px',
         borderStyle: 'dashed',
@@ -146,17 +146,17 @@ const PathRow: React.FC<PathRowProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {prefixLabel && (
-            <Tag style={{ margin: 0, fontWeight: 600, fontSize: 11 }}>{prefixLabel}</Tag>
+            <Tag style={{ margin: 0, fontWeight: 600, fontSize: 'var(--font-size-xs)' }}>{prefixLabel}</Tag>
           )}
           {isPrimary && (
             <Tag
               color="processing"
-              style={{ margin: 0, fontWeight: 600, fontSize: 11 }}
+              style={{ margin: 0, fontWeight: 600, fontSize: 'var(--font-size-xs)' }}
             >
               Đường chính
             </Tag>
           )}
-          <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             {hopCount} bước
           </span>
         </div>
@@ -176,7 +176,7 @@ const PathRow: React.FC<PathRowProps> = ({
             style={{
               cursor: firstCitation ? 'pointer' : 'default',
               margin: 0,
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               fontWeight: 600,
               color: token.colorError,
               borderColor: token.colorErrorBorder ?? token.colorError,
@@ -215,15 +215,15 @@ const PathRow: React.FC<PathRowProps> = ({
                 marginBottom: 4,
               }}
             >
-              <code style={{ fontSize: 12, background: token.colorFillTertiary, padding: '2px 4px', borderRadius: 4 }}>
+              <code style={{ fontSize: 'var(--font-size-small)', background: token.colorFillTertiary, padding: '2px 4px', borderRadius: 4 }}>
                 {sourceUrn}
               </code>
               <span style={{ margin: '0 6px', color: token.colorPrimary, fontWeight: 600 }}>→</span>
-              <span style={{ fontSize: 12, color: token.colorTextSecondary, fontStyle: 'italic', marginRight: 6 }}>
+              <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, fontStyle: 'italic', marginRight: 6 }}>
                 [{edgeKey.slice(0, 12)}…]
               </span>
               <span style={{ margin: '0 6px', color: token.colorPrimary, fontWeight: 600 }}>→</span>
-              <code style={{ fontSize: 12, background: token.colorFillTertiary, padding: '2px 4px', borderRadius: 4 }}>
+              <code style={{ fontSize: 'var(--font-size-small)', background: token.colorFillTertiary, padding: '2px 4px', borderRadius: 4 }}>
                 {targetUrn}
               </code>
             </div>
@@ -342,7 +342,7 @@ export const GraphPathCard: React.FC<GraphPathCardProps> = ({
                 <span style={{ fontWeight: 600, fontSize: 13 }}>
                   Bản chụp đồ thị: {snapLabel}…
                 </span>
-                <span style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary }}>
                   ({snapshotPaths.length} đường dẫn)
                 </span>
               </div>
@@ -453,7 +453,7 @@ export const GraphPathCard: React.FC<GraphPathCardProps> = ({
                         setShowAlternatives((prev) => ({ ...prev, [snapshotId]: true }));
                       }
                     }}
-                    style={{ fontSize: 12, color: token.colorPrimary, cursor: 'pointer' }}
+                    style={{ fontSize: 'var(--font-size-small)', color: token.colorPrimary, cursor: 'pointer' }}
                   >
                     Xem {alternativeNormalPaths.length} đường thay thế
                   </a>

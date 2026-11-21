@@ -118,7 +118,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Typography.Text strong style={{ fontSize: 12 }}>
+          <Typography.Text strong style={{ fontSize: 'var(--font-size-small)' }}>
             Máy chủ MCP
           </Typography.Text>
           <Switch
@@ -134,7 +134,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
             size="small"
             icon={<SettingOutlined />}
             onClick={onOpenMcpSettings}
-            style={{ padding: 0, fontSize: 11 }}
+            style={{ padding: 0, fontSize: 'var(--font-size-xs)' }}
           >
             Cài đặt
           </Button>
@@ -142,7 +142,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       </div>
 
       {mcpServers.length === 0 ? (
-        <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', padding: '8px 0' }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', padding: '8px 0' }}>
           Chưa có máy chủ MCP nào. Thêm trong Cài đặt.
         </Typography.Text>
       ) : (
@@ -160,7 +160,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               <div style={{ minWidth: 0, flex: 1, marginRight: 8 }}>
                 <Typography.Text
                   style={{
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-small)',
                     fontWeight: 500,
                     display: 'block',
                     overflow: 'hidden',
@@ -294,7 +294,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
         background: token.colorFillAlter,
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
         gap: 8,
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
         boxSizing: 'border-box',
       }}
     >
@@ -302,7 +302,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 180, flexShrink: 0, flex: 1 }}>
         {onModelChange ? (
           <>
-            <span style={{ fontSize: 11, color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
+            <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary, flexShrink: 0 }}>Mô hình:</span>
             <Select
               size="small"
               value={selectedModel}
@@ -368,7 +368,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     aria-label="Quản lý máy chủ MCP"
                     data-testid="tab-mcp-manage-btn"
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       padding: '0 6px',
                       height: 22,
                       display: 'inline-flex',
@@ -405,7 +405,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   icon={analysisMode ? <ExperimentFilled data-testid="analysis-mode-header-tag" /> : <ExperimentOutlined />}
                   onClick={() => onToggleAnalysisMode(activeTabId)}
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     padding: '0 6px',
                     height: 22,
                     display: 'inline-flex',
@@ -441,7 +441,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                     data-testid="tab-mcp-btn"
                     data-manage-testid="tab-mcp-manage-btn"
                     style={{
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       padding: '0 6px',
                       height: 22,
                       display: 'inline-flex',
@@ -466,7 +466,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   icon={autoApproveMutations ? <ThunderboltFilled /> : <ThunderboltOutlined />}
                   onClick={() => onToggleAutoApproveMutations(activeTabId)}
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     padding: '0 6px',
                     height: 22,
                     display: 'inline-flex',
@@ -496,7 +496,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   aria-label="Cấu hình Oracle SQLcl"
                   data-testid="tab-oracle-btn"
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     padding: '0 6px',
                     height: 22,
                     display: 'inline-flex',
@@ -526,7 +526,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                   aria-label="Cấu hình SSH File System"
                   data-testid="tab-ssh-fs-btn"
                   style={{
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     padding: '0 6px',
                     height: 22,
                     display: 'inline-flex',

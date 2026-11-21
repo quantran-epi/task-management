@@ -100,7 +100,7 @@ export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, on
 
         <div style={{ maxHeight: 360, overflowY: 'auto' }} role="list">
           {filtered.length === 0 ? (
-            <div style={{ fontSize: 12, color: token.colorTextSecondary, padding: '8px 0' }}>
+            <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, padding: '8px 0' }}>
               Không có mục nào phù hợp.
             </div>
           ) : (
@@ -112,7 +112,7 @@ export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, on
               >
                 <span
                   style={{
-                    fontSize: 13.5,
+                    fontSize: 'var(--font-size-ui)',
                     flex: 1,
                     minWidth: 0,
                     overflow: 'hidden',

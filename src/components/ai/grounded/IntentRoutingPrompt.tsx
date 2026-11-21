@@ -32,7 +32,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
         margin: '8px 0',
         borderColor: token.colorInfoBorder ?? '#91caff',
         backgroundColor: token.colorInfoBg ?? '#e6f4ff',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         width: '100%',
       }}
       styles={{
@@ -42,7 +42,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space orientation="horizontal" size={6}>
-            <QuestionCircleOutlined style={{ color: token.colorInfo ?? '#1677ff', fontSize: 15 }} />
+            <QuestionCircleOutlined style={{ color: token.colorInfo ?? 'var(--accent)', fontSize: 15 }} />
             <Text strong style={{ fontSize: 13, color: token.colorText }}>
               Cần thêm thông tin để xử lý chính xác
             </Text>
@@ -51,7 +51,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<CloseOutlined style={{ fontSize: 12 }} />}
+              icon={<CloseOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
               onClick={onCancel}
               aria-label="Hủy làm rõ"
               style={{ color: token.colorTextSecondary }}
@@ -62,7 +62,7 @@ export const IntentRoutingPrompt: React.FC<ClarificationPromptCardProps> = ({
         </div>
 
         {originalQuery && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             Dựa trên yêu cầu: <em>"{originalQuery}"</em>
           </Text>
         )}

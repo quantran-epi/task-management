@@ -488,7 +488,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
         top: position.y,
         zIndex: 2000,
         backgroundColor: token.colorBgElevated,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         boxShadow: '0 6px 20px rgba(0, 0, 0, 0.15)',
         border: `1px solid ${token.colorBorderSecondary}`,
         padding: isAskingInline ? 12 : 4,
@@ -507,7 +507,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
           justifyContent: 'space-between',
           padding: '2px 6px',
           borderBottom: `1px solid ${token.colorSplit}`,
-          fontSize: 11,
+          fontSize: 'var(--font-size-xs)',
           color: token.colorTextSecondary,
         }}
       >
@@ -709,7 +709,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
                 padding: '6px 8px',
                 borderRadius: 4,
                 backgroundColor: token.colorFillAlter,
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 lineHeight: 1.5,
               }}
             >
@@ -717,7 +717,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
                 <div
                   style={{
                     color: token.colorTextTertiary,
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     marginBottom: 4,
                     display: 'flex',
                     alignItems: 'center',
@@ -731,7 +731,7 @@ ${currentPayload.fullContextText ? `\n[DỮ LIỆU ĐẦY ĐỦ CỦA THỰC TH�
               {isLoadingInline && !inlineResponse && !inlineStatus && <Spin size="small" style={{ marginRight: 6 }} />}
               <div
                 className="chat-markdown-body"
-                style={{ fontSize: 12 }}
+                style={{ fontSize: 'var(--font-size-small)' }}
                 dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(inlineResponse) }}
               />
             </div>

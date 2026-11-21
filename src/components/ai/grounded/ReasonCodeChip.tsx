@@ -47,7 +47,7 @@ export const ReasonCodeChip: React.FC<ReasonCodeChipProps> = ({ code }) => {
         color={isFallbackOrLimit ? 'warning' : 'default'}
         style={{
           margin: 0,
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           fontWeight: 600,
           lineHeight: '17px',
           color: token.colorText,

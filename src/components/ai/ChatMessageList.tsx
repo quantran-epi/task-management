@@ -328,12 +328,12 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
               style={{
                 margin: '16px 0',
                 color: token.colorTextSecondary,
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 borderColor: token.colorBorderSecondary,
               }}
             >
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <SyncOutlined spin={false} style={{ fontSize: 11 }} />
+                <SyncOutlined spin={false} style={{ fontSize: 'var(--font-size-xs)' }} />
                 {isCompacted ? 'Đã tóm tắt ngữ cảnh trước đó' : 'Ngữ cảnh đã được đặt lại'}
               </span>
             </Divider>
@@ -397,7 +397,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
                   alignItems: 'center',
                   gap: 10,
                   margin: '4px 0 12px',
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   color: token.colorTextTertiary,
                 }}
               >
@@ -411,7 +411,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
               <div>
                 <Divider
                   data-testid="team-new-divider"
-                  style={{ margin: '8px 0', fontSize: 12, color: token.colorError }}
+                  style={{ margin: '8px 0', fontSize: 'var(--font-size-small)', color: token.colorError }}
                 >
                   Tin mới
                 </Divider>
@@ -489,7 +489,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
             padding: '12px 16px',
             backgroundColor: token.colorWarningBg,
             border: `1px solid ${token.colorWarningBorder}`,
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -538,7 +538,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = React.memo(({
               alignItems: 'center',
               justifyContent: 'space-between',
               marginTop: 4,
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               color: token.colorTextSecondary,
             }}
           >

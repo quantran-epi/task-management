@@ -174,7 +174,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
         }
         return (
           <Tooltip title={snap}>
-            <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{snap.slice(0, 7)}…</span>
+            <span style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-xs)' }}>{snap.slice(0, 7)}…</span>
           </Tooltip>
         );
       },
@@ -202,7 +202,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
         return (
           <div>
             <div style={{ fontWeight: 600, color: token.colorText }}>{server}</div>
-            <Typography.Text type="secondary" code style={{ fontSize: 11 }}>
+            <Typography.Text type="secondary" code style={{ fontSize: 'var(--font-size-xs)' }}>
               {tool}
             </Typography.Text>
           </div>
@@ -215,7 +215,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       key: 'sectionAnchor',
       ellipsis: true,
       render: (args: string | null) => (
-        <Typography.Text code ellipsis style={{ maxWidth: 220, fontSize: 11 }}>
+        <Typography.Text code ellipsis style={{ maxWidth: 220, fontSize: 'var(--font-size-xs)' }}>
           {args || '{}'}
         </Typography.Text>
       ),
@@ -227,7 +227,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       ellipsis: true,
       render: (excerpt: string, record) => (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography.Text ellipsis style={{ flex: 1, fontSize: 12, marginRight: 8 }}>
+          <Typography.Text ellipsis style={{ flex: 1, fontSize: 'var(--font-size-small)', marginRight: 8 }}>
             {excerpt}
           </Typography.Text>
           <Button
@@ -254,9 +254,9 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
       {coverage && coverage.length > 0 && (
         <div
           data-testid="sources-coverage"
-          style={{ marginBottom: 12, padding: '6px 10px', borderRadius: 6, background: token.colorFillQuaternary }}
+          style={{ marginBottom: 12, padding: '6px 10px', borderRadius: 'var(--radius-control)', background: token.colorFillQuaternary }}
         >
-          <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 4, color: token.colorTextSecondary }}>
+          <div style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', marginBottom: 4, color: token.colorTextSecondary }}>
             Phạm vi tìm kiếm bộ tài liệu
           </div>
           <Space size={[4, 6]} wrap>
@@ -281,7 +281,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
             pagination={false}
             expandable={{
               expandedRowRender: (record) => (
-                <div data-testid="source-detail" style={{ fontSize: 11, color: token.colorTextSecondary }}>
+                <div data-testid="source-detail" style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextSecondary }}>
                   <div>Snapshot: {record.snapshotId ?? 'none'}</div>
                   {(record.setMemberships ?? []).map((m) => (
                     <div key={m.setId} data-testid="source-set-id">{m.setName} — {m.setId}</div>
@@ -389,7 +389,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                     background: token.colorFillTertiary,
                     padding: 8,
                     borderRadius: 4,
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     maxHeight: 120,
                     overflowY: 'auto',
                   }}
@@ -405,7 +405,7 @@ export const SourcesPanel: React.FC<SourcesPanelProps> = ({
                   background: token.colorFillTertiary,
                   padding: 8,
                   borderRadius: 4,
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   whiteSpace: 'pre-wrap',
                   maxHeight: 300,
                   overflowY: 'auto',

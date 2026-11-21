@@ -45,7 +45,7 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
         margin: '8px 0',
         padding: 12,
         flexShrink: 0,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         border: `1px solid ${token.colorBorderSecondary}`,
         background: token.colorBgContainer,
         borderLeft: `3px solid ${token.colorPrimary}`,
@@ -87,9 +87,9 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
               >
                 {Array.from(item.agentName.trim())[0]?.toUpperCase() ?? '?'}
               </Avatar>
-              <span style={{ fontSize: 13.5, fontWeight: 400 }}>{item.agentName}</span>
-              {item.skillName && <Tag style={{ fontSize: 12 }}>{item.skillName}</Tag>}
-              <span style={{ fontSize: 13.5, fontWeight: 400, flex: 1, whiteSpace: 'pre-wrap' }}>
+              <span style={{ fontSize: 'var(--font-size-ui)', fontWeight: 400 }}>{item.agentName}</span>
+              {item.skillName && <Tag style={{ fontSize: 'var(--font-size-small)' }}>{item.skillName}</Tag>}
+              <span style={{ fontSize: 'var(--font-size-ui)', fontWeight: 400, flex: 1, whiteSpace: 'pre-wrap' }}>
                 {item.task}
               </span>
             </div>
@@ -98,14 +98,14 @@ export const AssignmentPlanCard: React.FC<AssignmentPlanCardProps> = ({
       </div>
 
       {decision ? (
-        <div role="status" style={{ fontSize: 12, color: token.colorTextSecondary }}>
+        <div role="status" style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
           {decision === 'approved'
             ? 'Đã chấp thuận — lô việc đang chạy.'
             : 'Đã từ chối — không nhân viên nào được giao việc.'}
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+          <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
             Duyệt để bắt đầu lô việc này.
           </span>
           <div style={{ display: 'flex', gap: 8 }}>

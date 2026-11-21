@@ -29,7 +29,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
           <div
             style={{
               padding: 12,
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               border: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorFillAlter,
             }}
@@ -89,13 +89,13 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
             <div
               style={{
                 padding: 12,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: `1px solid ${token.colorBorderSecondary}`,
                 background: token.colorFillAlter,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <CalendarOutlined style={{ color: '#1677ff' }} />
+                <CalendarOutlined style={{ color: 'var(--accent)' }} />
                 <Text code strong style={{ fontSize: 14 }}>/plan</Text>
                 <Text strong>Lập kế hoạch trong ngày</Text>
               </div>
@@ -107,7 +107,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
             <div
               style={{
                 padding: 12,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: `1px solid ${token.colorBorderSecondary}`,
                 background: token.colorFillAlter,
               }}
@@ -125,7 +125,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
             <div
               style={{
                 padding: 12,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: `1px solid ${token.colorBorderSecondary}`,
                 background: token.colorFillAlter,
               }}
@@ -143,7 +143,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
             <div
               style={{
                 padding: 12,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: `1px solid ${token.colorBorderSecondary}`,
                 background: token.colorFillAlter,
               }}
@@ -194,7 +194,7 @@ export const AITaskPlannerInstructionsModal: React.FC<AITaskPlannerInstructionsM
           <div
             style={{
               padding: 12,
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               border: `1px solid ${token.colorBorderSecondary}`,
               background: token.colorFillAlter,
             }}

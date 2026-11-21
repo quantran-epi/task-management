@@ -227,12 +227,12 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
             onClick={() => handleOpenChat(turn)}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-              <SyncOutlined spin style={{ fontSize: 12, color: token.colorPrimary }} />
+              <SyncOutlined spin style={{ fontSize: 'var(--font-size-small)', color: token.colorPrimary }} />
               <div style={{ minWidth: 0 }}>
-                <Typography.Text strong ellipsis style={{ fontSize: 12, display: 'block' }}>
+                <Typography.Text strong ellipsis style={{ fontSize: 'var(--font-size-small)', display: 'block' }}>
                   {turn.title}
                 </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                   {statusText}
                 </Typography.Text>
               </div>
@@ -242,7 +242,7 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
               <Typography.Text
                 style={{
                   fontVariantNumeric: 'tabular-nums',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   fontWeight: 600,
                   color: token.colorPrimary,
                 }}
@@ -254,7 +254,7 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
                   type="text"
                   size="small"
                   danger
-                  icon={<StopOutlined style={{ fontSize: 12 }} />}
+                  icon={<StopOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     aiTurnManager.abortTurn(turn.id);

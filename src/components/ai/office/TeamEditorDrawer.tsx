@@ -106,7 +106,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         {error && <Alert type="error" showIcon message={error} />}
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Tên nhóm</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Tên nhóm</div>
           <Input
             value={name}
             maxLength={60}
@@ -116,7 +116,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Lead</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Lead</div>
           <Select
             showSearch
             style={{ width: '100%' }}
@@ -141,7 +141,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Nhân viên</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Nhân viên</div>
           <Select
             mode="multiple"
             style={{ width: '100%' }}
@@ -179,7 +179,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
         </div>
 
         <div>
-          <div style={{ fontSize: 12, marginBottom: 4 }}>Tổng ngân sách nhóm</div>
+          <div style={{ fontSize: 'var(--font-size-small)', marginBottom: 4 }}>Tổng ngân sách nhóm</div>
           <InputNumber
             min={0}
             step={1000}
@@ -190,7 +190,7 @@ export const TeamEditorDrawer: React.FC<TeamEditorDrawerProps> = ({
             parser={(value) => Number((value ?? '').replace(/,/g, ''))}
             aria-label="Tổng ngân sách nhóm"
           />
-          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+          <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, marginTop: 4 }}>
             {`Chia đều ${total.toLocaleString()} token cho ${memberCount} thành viên — sửa từng dòng nếu cần.`}
           </div>
         </div>

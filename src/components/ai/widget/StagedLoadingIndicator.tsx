@@ -31,7 +31,7 @@ export const StagedLoadingIndicator: React.FC<StagedLoadingIndicatorProps> = ({
         alignItems: 'center',
         gap: 8,
         padding: stage === 'tool' && toolName ? '4px 0' : 0,
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
       }}
     >
       {stage === 'tool' && toolName && (
@@ -44,7 +44,7 @@ export const StagedLoadingIndicator: React.FC<StagedLoadingIndicatorProps> = ({
             )
           }
           color={toolPhase === 'result' ? 'success' : 'processing'}
-          style={{ margin: 0, fontSize: 12 }}
+          style={{ margin: 0, fontSize: 'var(--font-size-small)' }}
         >
           {`[Công cụ] ${toolName}`}
         </Tag>

@@ -57,7 +57,7 @@ export const RemoteCitationChips: React.FC<RemoteCitationChipsProps> = ({ citati
             data-testid="remote-citation-chip"
             title={`Open ${key} in the remote file viewer`}
             onClick={() => onActivate(citation)}
-            style={{ fontSize: 11, padding: '0 4px', height: 20 }}
+            style={{ fontSize: 'var(--font-size-xs)', padding: '0 4px', height: 20 }}
           >
             {key}
           </Button>

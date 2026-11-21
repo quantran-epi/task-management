@@ -47,7 +47,7 @@ const COMMANDS = [
   },
   {
     name: 'plan',
-    icon: <CalendarOutlined style={{ color: '#1677ff' }} />,
+    icon: <CalendarOutlined style={{ color: 'var(--accent)' }} />,
     title: '/plan',
     description: 'Đề xuất kế hoạch phân bổ thời gian hôm nay',
   },
@@ -77,7 +77,7 @@ const COMMANDS = [
   },
   {
     name: 'doc',
-    icon: <FileTextOutlined style={{ color: '#1677ff' }} />,
+    icon: <FileTextOutlined style={{ color: 'var(--accent)' }} />,
     title: '/doc',
     description: 'Tham chiếu tài liệu tri thức (@doc:)',
   },
@@ -134,13 +134,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       update(externalValue);
       onExternalValueConsumed?.();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalValue, onExternalValueConsumed]);
 
   // The controlled value is authoritative; keep the local mirror in step after remounts.
   useEffect(() => {
     if (typeof value === 'string' && value !== internalValue) setInternalValue(value);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   const [searchInfo, setSearchInfo] = useState<{ text: string; prefix: string }>({
     text: '',
@@ -433,7 +431,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                  <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+                  <FileTextOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
                   <span
                     style={{
                       fontWeight: 500,
@@ -504,7 +502,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {agent.name}
                 </span>
-                <span style={{ fontSize: 11, color: '#8c8c8c' }}>{agent.role}</span>
+                <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)' }}>{agent.role}</span>
                 {agent.isLead && (
                   <Tag style={{ margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>Lead</Tag>
                 )}
@@ -543,7 +541,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                <CheckSquareOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+                <CheckSquareOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
                 <span
                   style={{
                     fontWeight: 500,
@@ -599,8 +597,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               paddingTop: 4,
             }}
           >
-            <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
-            <span style={{ fontWeight: 500, color: '#1677ff' }}>Tham chiếu tài liệu tri thức... (@doc:)</span>
+            <FileTextOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
+            <span style={{ fontWeight: 500, color: 'var(--accent)' }}>Tham chiếu tài liệu tri thức... (@doc:)</span>
           </div>
         ),
       };
@@ -741,7 +739,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           >
             {cmd.icon}
             <span style={{ fontWeight: 600, minWidth: 65 }}>{cmd.title}</span>
-            <span style={{ color: '#8c8c8c', fontSize: 12 }}>{cmd.description}</span>
+            <span style={{ color: 'var(--fg-secondary)', fontSize: 'var(--font-size-small)' }}>{cmd.description}</span>
           </div>
         ),
       }));
@@ -787,8 +785,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                     display: 'inline-flex',
                     alignItems: 'center',
                     padding: '2px 8px',
-                    borderRadius: 6,
-                    fontSize: 12,
+                    borderRadius: 'var(--radius-control)',
+                    fontSize: 'var(--font-size-small)',
                     maxWidth: 240,
                     margin: 0,
                   }}
@@ -852,7 +850,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             },
             textarea: {
               fontSize: 14,
-              borderRadius: 8,
+              borderRadius: 'var(--radius-control)',
               lineHeight: '22px',
               padding: '4px 11px',
               resize: 'none',
@@ -860,7 +858,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }}
           style={{
             width: '100%',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
             fontSize: 14,
           }}
         />
@@ -936,7 +934,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         }}
         footer={
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: token.colorTextSecondary }}>
+            <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>
               Mẹo: Nhấn <b>Cmd + Enter</b> (hoặc <b>Ctrl + Enter</b>) để gửi trực tiếp.
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -977,7 +975,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             fontSize: 15,
             lineHeight: 1.6,
             resize: 'vertical',
-            borderRadius: 8,
+            borderRadius: 'var(--radius-control)',
           }}
         />
       </Modal>

@@ -59,7 +59,7 @@ export const SeedEntityCard: React.FC<SeedEntityCardProps> = ({
           color="processing"
           style={{
             margin: 0,
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             fontWeight: 600,
             lineHeight: '17px',
             borderColor: token.colorPrimaryBorder,
@@ -69,14 +69,14 @@ export const SeedEntityCard: React.FC<SeedEntityCardProps> = ({
           Loại: {kindLabel}
         </Tag>
         {entity.evidenceClass && (
-          <Tag color="success" style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>
+          <Tag color="success" style={{ margin: 0, fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
             {entity.evidenceClass}
           </Tag>
         )}
       </div>
       <code
         style={{
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           background: token.colorFillTertiary,
           borderRadius: 4,
           padding: '2px 4px',
@@ -86,7 +86,7 @@ export const SeedEntityCard: React.FC<SeedEntityCardProps> = ({
       >
         Định danh: {entity.urn}
       </code>
-      <div aria-label={countsLine} style={{ fontSize: 12, fontWeight: 600 }}>
+      <div aria-label={countsLine} style={{ fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
         {countsLine}
       </div>
       <div>

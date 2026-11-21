@@ -30,7 +30,7 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
         margin: '12px 0',
         borderColor: token.colorErrorBorder,
         backgroundColor: token.colorErrorBg,
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
       }}
       styles={{
         body: { padding: '14px 16px' },
@@ -56,7 +56,7 @@ export const InlineApiErrorCard: React.FC<InlineApiErrorCardProps> = ({
         </Paragraph>
 
         {errorMessage && errorMessage !== 'Trợ lý AI tạm thời không khả dụng' && (
-          <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', fontStyle: 'italic' }}>
             Chi tiết lỗi: {errorMessage}
           </Text>
         )}

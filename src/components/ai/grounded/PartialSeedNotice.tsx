@@ -29,7 +29,7 @@ export const PartialSeedNotice: React.FC<PartialSeedNoticeProps> = ({
         borderRadius: token.borderRadius,
         padding: 8,
         marginBottom: 8,
-        fontSize: 12,
+        fontSize: 'var(--font-size-small)',
         lineHeight: 1.4,
         color: token.colorText,
       }}
@@ -47,7 +47,7 @@ export const PartialSeedNotice: React.FC<PartialSeedNoticeProps> = ({
         type="link"
         size="small"
         onClick={onOpenDiagnostics}
-        style={{ padding: 0, height: 'auto', marginTop: 4, fontSize: 12 }}
+        style={{ padding: 0, height: 'auto', marginTop: 4, fontSize: 'var(--font-size-small)' }}
       >
         Xem chi tiết chẩn đoán
       </Button>

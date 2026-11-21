@@ -245,7 +245,7 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
 
   return (
     <div>
-      <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 12 }}>
+      <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-small)', marginBottom: 12 }}>
         Mỗi kết nối là một profile riêng (SIT/UAT/...). AI chọn profile theo tên, môi trường hoặc id;
         khi không chỉ định thì dùng profile đang hoạt động. Mọi truy vấn đều bị ép chế độ <b>CHỈ ĐỌC</b>.
       </Paragraph>
@@ -312,11 +312,11 @@ export const OracleProfileManager: React.FC<OracleProfileManagerProps> = ({
               }
               description={
                 <Space size={8} wrap>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                     id: {profile.id}
                   </Text>
                   {profile.lastTestStatus && (
-                    <Text type="secondary" style={{ fontSize: 11 }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                       Test: {redact(profile.lastTestStatus)}
                     </Text>
                   )}
