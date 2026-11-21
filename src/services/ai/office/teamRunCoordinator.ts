@@ -1052,6 +1052,9 @@ export function createTeamRunCoordinator(
             claimedLeadReplyIds.delete(message.id);
             continue;
           }
+          // The claim is now owned by this turn: release it synchronously so `drainInbox`
+          // accepts the row as consumed. No await between the epoch check and the release.
+          takeLeadReply(message.id);
           await runLeadTurn(message.content, undefined, 'lead-thinking', message.id, epoch);
         }
       } finally {
@@ -2776,6 +2779,23 @@ export function createTeamRunCoordinator(
       leadWaitingOnAgentIds.clear();
       agentDeferreds.delete(lead.id);
       replyTargetByAgent.delete(lead.id);
+      // Seen receipt for a follow-up that ended without a tool round: no drain ran to advance
+      // the cursor past its trigger, so do it here. Only released claims qualify (queued
+      // follow-up + idle-lead paths); synthesized turns have no trigger and Stop-cancelled
+      // claims never enter `releasedLeadReplyIds` for this turn.
+      if (
+        triggerMessageId !== undefined &&
+        releasedLeadReplyIds.has(triggerMessageId) &&
+        !disposed &&
+        roster.lead
+      ) {
+        try {
+          const row = await db.teamMessages.get(triggerMessageId);
+          if (row) await advanceCursor(teamId, roster.lead.id, row.seq, db);
+        } catch {
+          /* seen receipt must never break the turn */
+        }
+      }
       notify();
     }
   }
