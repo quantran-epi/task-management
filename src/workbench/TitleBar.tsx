@@ -5,7 +5,6 @@ import {
   SettingOutlined,
   DesktopOutlined,
   CodeOutlined,
-  SwapOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -52,17 +51,6 @@ export function TitleBar({
     } else {
       message.info('DevTools available in Tauri desktop application');
     }
-  };
-
-  const handleSwitchShell = (shell: 'default' | 'intellij') => {
-    try {
-      if (shell === 'default') {
-        localStorage.removeItem('taskmate_ui_shell');
-      } else {
-        localStorage.setItem('taskmate_ui_shell', 'intellij');
-      }
-    } catch {}
-    window.location.reload();
   };
 
   const dragStyle: CSSProperties = {
@@ -322,7 +310,7 @@ export function TitleBar({
           </div>
 
           {/* Tauri Desktop Runtime Check Trigger Button */}
-          <Tooltip title={isTauri ? 'Tauri Desktop Runtime (Click to inspect / switch shell)' : 'Web Browser Runtime (Click to switch shell)'}>
+          <Tooltip title={isTauri ? 'Tauri Desktop Runtime (Click to inspect)' : 'Web Browser Runtime'}>
             <Button
               type="text"
               size="small"
@@ -417,13 +405,6 @@ export function TitleBar({
               </Button>
             )}
 
-            <Button
-              icon={<SwapOutlined />}
-              onClick={() => handleSwitchShell('default')}
-              block
-            >
-              Switch to Classic Ant Design Shell
-            </Button>
           </div>
         </div>
       </Modal>
