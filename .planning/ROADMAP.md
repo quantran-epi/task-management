@@ -39,7 +39,16 @@
   3. Mọi control AntD dùng trong app (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip, ~60 components) có wrapper TaskMate tại `src/components/ui/`; mỗi wrapper áp token defaults và policy riêng — không re-export rỗng, đổi implementation tại một điểm.
   4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; `npm run lint` + `npm run build` + focused test chạy local sau mỗi lần sửa, vi phạm làm lint fail. Không dùng GitHub Actions CI.
   5. Focused Vitest xanh cho wrapper và token ở cả light và dark: giá trị token, accessible name của icon button, policy footer/close của modal, bảng màu status tag, và phát hiện drift giữa ConfigProvider và CSS token.
-**Plans**: TBD
+**Plans**: 7 plans in 7 waves
+
+Plans:
+- [ ] 49-01-PLAN.md — Xóa shell AntD/flag/PWA; hard-boot IntelliJ, giữ lại side effect + coding-zone popout (SHELL-01..03)
+- [ ] 49-02-PLAN.md — Một nguồn `tokens.ts` cho ConfigProvider + CSS vars; toggle light/dark, localStorage override, broadcast popout (TOKEN-01..04)
+- [ ] 49-03-PLAN.md — Khung wrapper: `tokens.contract.ts`, Button/IconButton (aria-label), 144 icon, scanner tồn kho AntD (CTRL-01/02/06)
+- [ ] 49-04-PLAN.md — Wrapper nhóm input và overlay; holder giữ theme cho message/notification/modal (CTRL-03/04)
+- [ ] 49-05-PLAN.md — Wrapper status + mọi control phức tạp/utility còn lại, chốt barrel (CTRL-01/05/06)
+- [ ] 49-06-PLAN.md — ESLint Babel-parser guard + npm script local, checkpoint xác nhận package SUS, test coverage D-04 (GUARD-01..03)
+- [ ] 49-07-PLAN.md — Cổng tổng hợp lint+build+focused test, ký Nyquist và UI-SPEC (toàn bộ 16 requirement)
 **UI hint**: yes
 
 ### Phase 50: Full App Adoption
@@ -60,7 +69,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Design System Foundation | 0/TBD | Not started | - |
+| 49. Design System Foundation | 0/7 | Ready to execute | - |
 | 50. Full App Adoption | 0/TBD | Not started | - |
 
 ## Previous Milestone: v1.3
