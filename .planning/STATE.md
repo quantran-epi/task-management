@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: executing
-stopped_at: Phase 52 complete — ready for verification
-last_updated: "2026-11-21T19:01:47.081Z"
-last_activity: 2026-11-21 -- Phase 53 planning complete
+stopped_at: Completed 53-01-PLAN.md
+last_updated: "2026-11-21T19:14:34.503Z"
+last_activity: "2026-11-21 -- Phase 53 execution started"
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 25
+  total_plans: 10
+  completed_plans: 6
+  percent: 50
 ---
 
 # Project State: TaskMate — Milestone v1.6
@@ -19,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Thay toàn bộ AntD bằng bộ control tự build theo OpenIDEA (PyCharm Islands), light+dark, API/behavior/a11y giữ nguyên; gỡ hoàn toàn `antd` + `@ant-design/icons`.
-**Current focus:** Phase 52 — openidea-mapping-design-contract
+**Current focus:** Phase 53 — native-core-form-controls
 
 ## Current Position
 
-Phase: 53
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-11-21 -- Phase 53 planning complete
+Phase: 53 (native-core-form-controls) — EXECUTING
+Plan: 2 of 5
+Status: Executing Phase 53
+Last activity: 2026-11-21 -- Phase 53 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -55,11 +55,11 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T18:26:42.729Z
-Stopped at: Phase 52 complete — ready for verification
+Last session: 2026-11-21T19:13:32.194Z
+Stopped at: Completed 53-01-PLAN.md
 Resume file: None
 
-Progress: [█████████░] 91%
+Progress: [█████░░░░░] 50%
 
 ## Preserved Context — feature/intellij-workbench (phase 45 line)
 
@@ -303,6 +303,7 @@ Progress: [█████████░] 91%
 - [Phase 51]: Tồn kho §3 tách riêng năm dạng import: 139 dòng/97 file tổng hợp, 76 dòng runtime, 31 dòng import type, 13 dòng export type + 22 dòng deep type, 8 icon deep-import; static call xếp theo receiver binding (0 unbound, 86 file context-bound) chứ không theo import. — scanConsumedAntd() bỏ import type và không thấy static API; gộp nhóm sẽ làm Phase 56 gỡ dependency sót type/deep import và nhầm 86 notification context-bound thành AntD static.
 - [Phase 51]: Mỗi file wrapper có đúng một nhóm implementation theo quy tắc ưu tiên overlay > domain > core; 26/28/2 không trùng, date-picker thuộc overlay, status-dot/empty thuộc adoption. — Tránh gán nhóm chéo giữa PATTERNS cũ và INV-03; phase 53/54/55 cần một nhóm duy nhất để khóa API.
 - [Phase 52]: 52-01 khóa 52-UI-SPEC.md làm design contract duy nhất; 56 mapping = 56 API = 56 wrapper, 22 MAP-01/34 MAP-02, 25 baseline rows, 56/56 API identical, focused test 3 file/12 test xanh. — Phase 53/54/55 implement từ contract đã duyệt, không hỏi lại metric/API; mọi drift ở Phase 57 sửa về PROOF/token nguồn.
+- [Phase 53-native-core-form-controls]: D-53-01: control-level invalid color is scoped via [data-oi-control] to --danger-control, preserving D-12 status map globally — Input.module.css .invalid must measure #c54e58/#f57e84 without changing Tag/Badge status colors
 
 ## Performance Metrics
 
@@ -359,6 +360,7 @@ Progress: [█████████░] 91%
 | Phase 51 P02 | 5 min | 2 tasks | 3 files |
 | Phase 51 P03 | 3 min | 2 tasks | 2 files |
 | Phase 52 P01 | ~2 min | 3 tasks | 4 files |
+| Phase 53-native-core-form-controls P01 | ~7 min | 3 tasks | 38 files |
 
 ### Blockers
 
