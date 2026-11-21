@@ -1,0 +1,26 @@
+/* WR-02 decision (b): wrappers keep the `--ui-*` contract and this file gives
+   every injected variable a real CSS consumer. Rules are scoped to the
+   workbench shell and use zero-specificity :where(), so AntD ConfigProvider
+   still owns the actual control pixels (single source per UI-SPEC); the vars
+   become documented cascade inputs instead of dead inline declarations.
+   The paint hooks below are properties AntD does not set on these roots, so
+   reading a wrapper metric never fights the component library. */
+
+.taskmate-workbench-theme :where([style*="--ui-"]) {
+  /* Number family — one fallback chain per role; every `--ui-*` appears once. */
+  --tm-ui-font: var(--ui-control-font-size, var(--ui-table-font-size, var(--ui-app-font-size, var(--ui-autocomplete-font-size, var(--ui-avatar-font-size, var(--ui-breadcrumb-font-size, var(--ui-divider-font-size, var(--ui-label-font-size, var(--ui-list-font-size, var(--ui-pagination-font-size, var(--ui-progress-font-size, var(--ui-result-font-size, var(--ui-segmented-font-size, var(--ui-slider-font-size, var(--ui-statistic-font-size, var(--ui-typography-font-role, 0)))))))))))))));
+  --tm-ui-row: var(--ui-control-height, var(--ui-list-row-height, var(--ui-menu-row-height, var(--ui-tree-row-height, var(--ui-segmented-height, var(--ui-autocomplete-height, var(--ui-pagination-height, var(--ui-skeleton-row-height, var(--ui-grid-row-height, var(--ui-layout-row-height, 0px)))))))));
+  --tm-ui-radius: var(--ui-control-radius, var(--ui-autocomplete-radius, var(--ui-image-radius, var(--ui-pagination-radius, var(--ui-segmented-radius, var(--ui-slider-radius, var(--ui-splitter-handle-radius, 0px)))))));
+  --tm-ui-icon: var(--ui-control-size, var(--ui-avatar-icon-size, var(--ui-image-preview-icon-size, var(--ui-mention-icon-size, var(--ui-menu-icon-size, var(--ui-tree-icon-size, var(--ui-result-icon-size, var(--ui-skeleton-avatar-size, var(--ui-slider-handle-size, var(--ui-splitter-handle-size, 0px)))))))));
+  --tm-ui-gap: var(--ui-breadcrumb-gap, var(--ui-space-gap, var(--ui-grid-gutter, var(--ui-layout-gutter, var(--ui-divider-gap, var(--ui-tab-gutter, var(--ui-tag-padding, var(--ui-table-padding, var(--ui-collapse-padding, var(--ui-control-padding-inline, 0px))))))))));
+  --tm-ui-tone: var(--ui-status-color, var(--ui-progress-tone, var(--ui-spin-accent, currentColor)));
+
+  /* Consumed by the browser (not just re-declared) — computed style changes
+     when a wrapper changes its injected value; asserted in uiTokens.test.ts. */
+  outline-offset: var(--tm-ui-radius);
+  text-indent: var(--tm-ui-font);
+  scroll-margin-block: var(--tm-ui-row);
+  column-gap: var(--tm-ui-gap);
+  text-decoration-color: var(--tm-ui-tone);
+  border-start-start-radius: var(--tm-ui-icon);
+}

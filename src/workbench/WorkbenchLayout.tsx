@@ -36,6 +36,7 @@ import {
 } from '../components/icons/JetBrainsIcons';
 import { AppstoreOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
+import '../components/ui/ui-tokens.css';
 
   export interface WorkbenchLayoutProps {
   children?: React.ReactNode;
