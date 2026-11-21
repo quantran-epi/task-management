@@ -25,12 +25,12 @@ export interface WrapperPolicy {
  * must never spell a hex or raw metric themselves (CTRL-06, D-02, D-10).
  */
 export function getSharedControlTokens(): WrapperPolicy {
-  const { controlHeight, borderRadius, fontSize, buttonPaddingInline } = sharedTokens;
+  const { controlHeight, borderRadius, fontSize, buttonPaddingInlinePrimary } = sharedTokens;
   return {
     controlHeight,
     borderRadius,
     fontSize,
-    paddingInline: buttonPaddingInline,
+    paddingInline: buttonPaddingInlinePrimary,
     iconSize: sharedTokens.spacing.md,
   };
 }
