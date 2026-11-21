@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { UtilityToolPanel } from '../toolwindows/UtilityToolPanel';
+import { computeFoldRanges } from '../toolwindows/LineNumberedPane';
 
 const mocks = vi.hoisted(() => ({
   queue: [] as string[],
@@ -242,6 +243,53 @@ describe('UtilityToolPanel AI assistant wiring', () => {
     await waitFor(() => expect(within(dialog).getByText('giải thích')).toBeDefined());
     expect(within(dialog).queryByRole('button', { name: /Áp dụng/ })).toBeNull();
     expect(editor.value).toBe('# giữ nguyên');
+  });
+});
+
+describe('computeFoldRanges', () => {
+  it('ignores braces inside JSON strings and skips single-line objects/arrays', () => {
+    const text = [
+      '{',
+      '  "a": "{ not a block }",',
+      '  "b": [1, 2],',
+      '  "c": {',
+      '    "d": [',
+      '      1',
+      '    ]',
+      '  }',
+      '}',
+    ].join('\n');
+    expect(computeFoldRanges(text, 'json')).toEqual([
+      { openLine: 0, closeLine: 8 },
+      { openLine: 3, closeLine: 7 },
+      { openLine: 4, closeLine: 6 },
+    ]);
+  });
+
+  it('handles XML multiline elements and skips self-closing, comments and CDATA', () => {
+    const text = [
+      '<root>',
+      '  <!-- <ghost> -->',
+      '  <![CDATA[<raw>]]>',
+      '  <empty />',
+      '  <item>',
+      '    <value>x</value>',
+      '  </item>',
+      '</root>',
+    ].join('\n');
+    expect(computeFoldRanges(text, 'xml')).toEqual([
+      { openLine: 0, closeLine: 7 },
+      { openLine: 4, closeLine: 6 },
+    ]);
+  });
+
+  it('matches closing tags against the latest same-name open tag', () => {
+    const text = ['<a>', '  <b>', '  </b>', '  <b>', '  </b>', '</a>'].join('\n');
+    expect(computeFoldRanges(text, 'xml')).toEqual([
+      { openLine: 0, closeLine: 5 },
+      { openLine: 1, closeLine: 2 },
+      { openLine: 3, closeLine: 4 },
+    ]);
   });
 });
 
