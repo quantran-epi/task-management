@@ -5,11 +5,13 @@ import {
   CopyOutlined,
   DeleteOutlined,
   DiffOutlined,
+  FileTextOutlined,
   FormatPainterOutlined,
   MinusOutlined,
   SwapOutlined,
 } from '@ant-design/icons';
 import type { EditorViewType } from '../store/layoutStore';
+import { renderSafeMarkdown } from '../../utils/markdown';
 
 type Indent = '2' | '4' | 'tab';
 
@@ -112,7 +114,7 @@ function highlight(code: string, kind: 'json' | 'xml'): string {
  * Two-column panes scroll together vertically. The guard prevents the mirrored
  * scroll event from bouncing back and fighting the user's wheel/trackpad.
  */
-function useSyncedScroll<TLeft extends HTMLElement, TRight extends HTMLElement>() {
+export function useSyncedScroll<TLeft extends HTMLElement, TRight extends HTMLElement>() {
   const leftRef = useRef<TLeft | null>(null);
   const rightRef = useRef<TRight | null>(null);
   const syncing = useRef(false);
@@ -521,6 +523,39 @@ function TextCompare() {
   );
 }
 
+function MarkdownViewer() {
+  const [source, setSource] = useState('');
+  const rendered = useMemo(() => renderSafeMarkdown(source), [source]);
+  const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLDivElement>();
+
+  return (
+    <div style={panelStyle}>
+      <div style={toolbarStyle}>
+        <Tooltip title="Copy source">
+          <Button icon={<CopyOutlined />} onClick={() => copyToClipboard(source)}>Copy</Button>
+        </Tooltip>
+        <Tooltip title="Clear">
+          <Button icon={<DeleteOutlined />} onClick={() => setSource('')}>Clear</Button>
+        </Tooltip>
+        <span style={{ marginLeft: 'auto', fontSize: 'var(--font-size-small, 12px)', color: 'var(--fg-muted, #6c707e)' }}>
+          {source.length} ký tự · {source.trim() ? 'Đã cập nhật' : 'Sẵn sàng'}
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1, background: 'var(--border, #e9eaee)', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
+          <div style={colHeadStyle}>SOẠN</div>
+          <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="Markdown editor" spellCheck={false} style={editorStyle} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Dán Markdown vào đây..." />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
+          <div style={colHeadStyle}>XEM TRƯỚC</div>
+          <div ref={rightRef} onScroll={onRightScroll} aria-label="Markdown preview" className="markdown-rendered-view" style={{ ...outputStyle, whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: rendered }} />
+        </div>
+      </div>
+      <div style={footerStyle}><span>Markdown · UTF-8</span><span>{rendered ? 'Đã render' : 'Chưa có nội dung'}</span></div>
+    </div>
+  );
+}
+
 export function UtilityToolPanel({ viewType }: { viewType: EditorViewType }) {
   switch (viewType) {
     case 'json_formatter':
@@ -529,6 +564,8 @@ export function UtilityToolPanel({ viewType }: { viewType: EditorViewType }) {
       return <XmlFormatter />;
     case 'text_compare':
       return <TextCompare />;
+    case 'markdown_viewer':
+      return <MarkdownViewer />;
     default:
       return null;
   }
@@ -542,6 +579,8 @@ export function utilityToolIcon(viewType: EditorViewType, size = 13): React.Reac
       return <CodeOutlined style={{ fontSize: size, color: 'var(--accent, #3871e1)' }} />;
     case 'text_compare':
       return <DiffOutlined style={{ fontSize: size, color: 'var(--accent, #3871e1)' }} />;
+    case 'markdown_viewer':
+      return <FileTextOutlined style={{ fontSize: size, color: 'var(--accent, #3871e1)' }} />;
     default:
       return null;
   }

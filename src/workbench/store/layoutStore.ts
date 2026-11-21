@@ -28,7 +28,8 @@ export type EditorViewType =
   // Utility tools opened from the Tool Explorer right stripe.
   | 'json_formatter'
   | 'xml_formatter'
-  | 'text_compare';
+  | 'text_compare'
+  | 'markdown_viewer';
 
 export interface EditorTab {
   id: string;

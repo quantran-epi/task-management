@@ -33,4 +33,11 @@ export const UTILITY_TOOLS: UtilityTool[] = [
     viewType: 'text_compare',
     icon: (size = 16) => <DiffOutlined style={{ fontSize: size }} />,
   },
+  {
+    id: 'markdown_viewer',
+    title: 'Markdown Viewer',
+    description: 'Soạn Markdown và xem trước',
+    viewType: 'markdown_viewer',
+    icon: (size = 16) => <FileTextOutlined style={{ fontSize: size }} />,
+  },
 ];
