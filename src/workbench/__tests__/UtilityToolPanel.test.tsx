@@ -22,6 +22,17 @@ vi.mock('../../services/ai/nineRouterTokenService', () => ({
   DEFAULT_NINEROUTER_MODEL: 'gpt-4o',
 }));
 
+const saveMocks = vi.hoisted(() => ({
+  createNote: vi.fn(async () => ({ id: 'doc-1' })),
+  createObjectURL: vi.fn((_blob: Blob) => 'blob:test'),
+  revokeObjectURL: vi.fn(),
+  click: vi.fn(),
+}));
+
+vi.mock('../../db/repositories/noteRepo', () => ({
+  createNote: saveMocks.createNote,
+}));
+
 vi.mock('../../services/ai/nineRouterClient', () => ({
   stripThinkingBlocks: (raw: string) =>
     raw
@@ -38,9 +49,13 @@ beforeEach(() => {
   mocks.getConfig.mockResolvedValue(mocks.config);
   mocks.getKey.mockResolvedValue('test-key');
   useUtilityToolContent.getState().resetAll();
+  saveMocks.createNote.mockClear();
+  Object.defineProperty(globalThis.URL, 'createObjectURL', { configurable: true, value: saveMocks.createObjectURL });
+  Object.defineProperty(globalThis.URL, 'revokeObjectURL', { configurable: true, value: saveMocks.revokeObjectURL });
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 });
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('UtilityToolPanel', () => {
   it.each(['json_formatter', 'xml_formatter', 'text_compare', 'markdown_viewer'] as const)(
@@ -336,6 +351,45 @@ describe('UtilityToolPanel content persistence', () => {
     render(<UtilityToolPanel viewType="json_formatter" />);
     expect((screen.getByLabelText('JSON input') as HTMLTextAreaElement).value).toBe('');
     expect(screen.getByLabelText('JSON output').textContent).toBe('');
+  });
+});
+
+describe('UtilityToolPanel Save as', () => {
+  it.each([
+    { viewType: 'json_formatter' as const, extension: 'json', editor: 'JSON input', content: '{"a":1}' },
+    { viewType: 'xml_formatter' as const, extension: 'xml', editor: 'XML input', content: '<a/>' },
+    { viewType: 'text_compare' as const, extension: 'txt', editor: 'Text B', content: 'plain text' },
+    { viewType: 'markdown_viewer' as const, extension: 'md', editor: 'Markdown editor', content: '# md' },
+  ])('opens the modal and downloads .$extension from $viewType via Blob URL', async ({ viewType, editor, content }) => {
+    render(<UtilityToolPanel viewType={viewType} />);
+    fireEvent.change(screen.getByLabelText(editor), { target: { value: content } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as' }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByLabelText('Định dạng')).toBeDefined();
+
+    fireEvent.change(screen.getByLabelText('Tên file/doc'), { target: { value: 'my-file' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tải về máy' }));
+    await waitFor(() => expect(saveMocks.createObjectURL).toHaveBeenCalledTimes(1));
+    const blob = saveMocks.createObjectURL.mock.calls[0]![0];
+    expect(await blob.text()).toBe(content);
+    expect(saveMocks.revokeObjectURL).toHaveBeenCalledWith('blob:test');
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+    expect(saveMocks.createNote).not.toHaveBeenCalled();
+  });
+
+  it('saves JSON output content as a document in Docs', async () => {
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    fireEvent.change(screen.getByLabelText('JSON input'), { target: { value: '{"a":1}' } });
+    fireEvent.click(screen.getByRole('button', { name: /format-painter Format/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save as' }));
+    fireEvent.change(screen.getByLabelText('Tên file/doc'), { target: { value: 'my-doc' } });
+    fireEvent.click(screen.getByLabelText('Lưu vào Docs'));
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu vào Docs' }));
+    await waitFor(() => expect(saveMocks.createNote).toHaveBeenCalledTimes(1));
+    expect(saveMocks.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'document', title: 'my-doc.json', body: '{\n  "a": 1\n}' }),
+      expect.anything()
+    );
   });
 });
 

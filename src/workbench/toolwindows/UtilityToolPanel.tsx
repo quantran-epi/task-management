@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Checkbox, Segmented, Select, Tooltip, message } from 'antd';
+import { Button, Checkbox, Input, Modal, Radio, Segmented, Select, Tooltip, message } from 'antd';
 import {
   CodeOutlined,
   CopyOutlined,
@@ -8,12 +8,14 @@ import {
   FileTextOutlined,
   FormatPainterOutlined,
   MinusOutlined,
+  SaveOutlined,
   SwapOutlined,
   RobotOutlined,
 } from '@ant-design/icons';
 import type { EditorViewType } from '../store/layoutStore';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
+import { createNote } from '../../db/repositories/noteRepo';
 import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
 import { LineNumberedPane, computeFoldRanges } from './LineNumberedPane';
 import { useUtilityContent, type Indent } from './utilityToolContentStore';
@@ -308,6 +310,92 @@ function escapeHtml(s: string) {
 
 const ELLIPSIS_MARKUP = ' <span style="color:var(--fg-muted)">…</span>';
 
+type SaveKind = 'download' | 'docs';
+type SaveFormat = { extension: string; content: () => string };
+
+type SaveAsModalProps = {
+  open: boolean;
+  defaultName: string;
+  formats: SaveFormat[];
+  db: TaskPlannerDatabase;
+  onClose: () => void;
+};
+
+function SaveAsModal({ open, defaultName, formats, db, onClose }: SaveAsModalProps) {
+  const [kind, setKind] = useState<SaveKind>('download');
+  const [extension, setExtension] = useState(formats[0]?.extension ?? '');
+  const [name, setDefaultName] = useState(defaultName);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setKind('download');
+      setExtension(formats[0]?.extension ?? '');
+      setDefaultName(defaultName);
+    }
+  }, [open, defaultName, formats]);
+
+  const save = async () => {
+    const trimmed = name.trim();
+    const format = formats.find((f) => f.extension === extension) ?? formats[0];
+    if (!trimmed || !format) {
+      message.error('Nhập tên file/doc');
+      return;
+    }
+    const content = format.content();
+    setSaving(true);
+    try {
+      if (kind === 'download') {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${trimmed}.${format.extension}`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+        message.success('Đã tải file xuống');
+      } else {
+        await createNote({
+          type: 'document',
+          title: `${trimmed}.${format.extension}`,
+          body: content,
+          tags: ['utility-tool'],
+        }, db);
+        message.success('Đã lưu vào Docs');
+      }
+      onClose();
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Save as"
+      open={open}
+      onOk={save}
+      confirmLoading={saving}
+      okText={kind === 'download' ? 'Tải về máy' : 'Lưu vào Docs'}
+      cancelText="Hủy"
+      onCancel={onClose}
+      destroyOnClose
+    >
+      <Radio.Group value={kind} onChange={(e) => setKind(e.target.value)} style={{ marginBottom: 16 }}>
+        <Radio value="download">Tải về máy</Radio>
+        <Radio value="docs">Lưu vào Docs</Radio>
+      </Radio.Group>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Input aria-label="Tên file/doc" value={name} onChange={(e) => setDefaultName(e.target.value)} placeholder="Tên file/doc" />
+        <Select aria-label="Định dạng" value={extension} onChange={setExtension} style={{ width: 110 }} options={formats.map((f) => ({ value: f.extension, label: `.${f.extension}` }))} />
+      </div>
+    </Modal>
+  );
+}
+
 type FoldingCodeViewProps = {
   text: string;
   kind: 'json' | 'xml';
@@ -369,6 +457,7 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
 }
 
 function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
+  const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('json_formatter');
   const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
@@ -415,6 +504,9 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
+        <Tooltip title="Save as">
+          <Button aria-label="Save as" icon={<SaveOutlined />} onClick={() => setSaveOpen(true)}>Save as</Button>
+        </Tooltip>
         <Tooltip title="AI · JSON Formatter">
           <Button aria-label="AI · JSON Formatter" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
         </Tooltip>
@@ -436,6 +528,13 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
         </div>
       </div>
       <div style={footerStyle}><span>JSON · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <SaveAsModal
+        open={saveOpen}
+        defaultName="formatted"
+        formats={[{ extension: 'json', content: () => output || input }]}
+        db={db}
+        onClose={() => setSaveOpen(false)}
+      />
       <UtilityToolAIAssistant
         open={aiOpen}
         toolId="json_formatter"
@@ -449,6 +548,7 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
+  const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('xml_formatter');
   const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
@@ -494,6 +594,9 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
           style={{ width: 100 }}
           options={[{ value: '2', label: '2 spaces' }, { value: '4', label: '4 spaces' }, { value: 'tab', label: 'Tab' }]}
         />
+        <Tooltip title="Save as">
+          <Button aria-label="Save as" icon={<SaveOutlined />} onClick={() => setSaveOpen(true)}>Save as</Button>
+        </Tooltip>
         <Tooltip title="AI · XML Formatter">
           <Button aria-label="AI · XML Formatter" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
         </Tooltip>
@@ -515,6 +618,13 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
         </div>
       </div>
       <div style={footerStyle}><span>XML · UTF-8</span><span>{output ? output.split('\n').length : 0} dòng</span></div>
+      <SaveAsModal
+        open={saveOpen}
+        defaultName="formatted"
+        formats={[{ extension: 'xml', content: () => output || input }]}
+        db={db}
+        onClose={() => setSaveOpen(false)}
+      />
       <UtilityToolAIAssistant
         open={aiOpen}
         toolId="xml_formatter"
@@ -528,6 +638,7 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function TextCompare({ db }: { db: TaskPlannerDatabase }) {
+  const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('text_compare');
   const { a, b, mode, ignoreCase, ignoreSpace } = content;
   const setA = (a: string) => patchContent({ a });
@@ -575,6 +686,9 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
         <Tooltip title="Xóa cả hai">
           <Button aria-label="Clear" icon={<DeleteOutlined />} onClick={clearContent} />
         </Tooltip>
+        <Tooltip title="Save as">
+          <Button aria-label="Save as" icon={<SaveOutlined />} onClick={() => setSaveOpen(true)}>Save as</Button>
+        </Tooltip>
         <Tooltip title="AI · Text Compare">
           <Button aria-label="AI · Text Compare" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
         </Tooltip>
@@ -620,6 +734,13 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
           )}
         </div>
       </div>
+      <SaveAsModal
+        open={saveOpen}
+        defaultName="comparison"
+        formats={[{ extension: 'txt', content: () => b }]}
+        db={db}
+        onClose={() => setSaveOpen(false)}
+      />
       <UtilityToolAIAssistant
         open={aiOpen}
         toolId="text_compare"
@@ -635,6 +756,7 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
 }
 
 function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
+  const [saveOpen, setSaveOpen] = useState(false);
   const [content, patchContent, clearContent] = useUtilityContent('markdown_viewer');
   const { source } = content;
   const setSource = (source: string) => patchContent({ source });
@@ -650,6 +772,9 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
         </Tooltip>
         <Tooltip title="Clear">
           <Button icon={<DeleteOutlined />} onClick={clearContent}>Clear</Button>
+        </Tooltip>
+        <Tooltip title="Save as">
+          <Button aria-label="Save as" icon={<SaveOutlined />} onClick={() => setSaveOpen(true)}>Save as</Button>
         </Tooltip>
         <Tooltip title="AI · Markdown Viewer">
           <Button aria-label="AI · Markdown Viewer" icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>AI</Button>
@@ -674,6 +799,13 @@ function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
         </div>
       </div>
       <div style={footerStyle}><span>Markdown · UTF-8</span><span>{rendered ? 'Đã render' : 'Chưa có nội dung'}</span></div>
+      <SaveAsModal
+        open={saveOpen}
+        defaultName="document"
+        formats={[{ extension: 'md', content: () => source }]}
+        db={db}
+        onClose={() => setSaveOpen(false)}
+      />
       <UtilityToolAIAssistant
         open={aiOpen}
         toolId="markdown_viewer"
