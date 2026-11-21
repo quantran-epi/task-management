@@ -7,7 +7,8 @@ import popupStyles from '../openidea/Popup.module.css';
 export interface PopupProps {
   open: boolean;
   anchorRef: RefObject<HTMLElement | null>;
-  onClose: () => void;
+  /** Called on Escape/outside-click. `code` lets owners restore focus only for keyboard dismissal. */
+  onClose: (reason?: 'escape' | 'outside') => void;
   className?: string;
   children: ReactNode;
   label?: string;
@@ -79,14 +80,15 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
       if (popups.length > 0 && popups[popups.length - 1] !== popupRef.current) return;
       event.preventDefault();
       event.stopPropagation();
-      onCloseRef.current();
+      onCloseRef.current('escape');
       anchorRef.current?.focus();
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (popupRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
-      onCloseRef.current();
+      onCloseRef.current('outside');
+      anchorRef.current?.focus();
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown, true);
