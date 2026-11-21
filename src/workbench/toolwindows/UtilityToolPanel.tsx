@@ -15,6 +15,19 @@ import { renderSafeMarkdown } from '../../utils/markdown';
 
 type Indent = '2' | '4' | 'tab';
 
+const splitPaneStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) 1px minmax(0, 1fr)',
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  overflow: 'hidden',
+};
+
+function PaneDivider() {
+  return <div role="separator" aria-orientation="vertical" style={{ background: 'var(--border-strong, #d1d3d9)' }} />;
+}
+
 const panelStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -347,11 +360,12 @@ function JsonFormatter() {
           {error ? `❌ ${error}` : formatted ? '✓ JSON hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1, background: 'var(--border, #e9eaee)', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
           <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="JSON input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán JSON vào đây, ví dụ: {"name":"TaskMate","ok":true}'} />
         </div>
+        <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>OUTPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>đã format</span></div>
           <pre ref={rightRef} onScroll={onRightScroll} aria-label="JSON output" style={outputStyle} dangerouslySetInnerHTML={{ __html: error ? escapeHtml(`❌ ${error}`) : highlight(output, 'json') }} />
@@ -420,11 +434,12 @@ function XmlFormatter() {
           {error ? `❌ ${error}` : formatted ? '✓ XML hợp lệ' : input.trim() ? 'Đã thay đổi · bấm Format' : 'Sẵn sàng'}
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1, background: 'var(--border, #e9eaee)', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>INPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{input.length} ký tự</span></div>
           <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="XML input" spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={'Dán XML vào đây, ví dụ: <note><to>Quan</to></note>'} />
         </div>
+        <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>OUTPUT <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>đã format</span></div>
           <pre ref={rightRef} onScroll={onRightScroll} aria-label="XML output" style={outputStyle} dangerouslySetInnerHTML={{ __html: error ? escapeHtml(`❌ ${error}`) : highlight(output, 'xml') }} />
@@ -489,11 +504,12 @@ function TextCompare() {
             : `${result.truncated ? '⚠ Quá lớn · so sánh trực tiếp, ' : ''}${result.changes ? `⚠ ${result.changes} thay đổi` : '✓ Hai đoạn giống hệt'}`}
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1, background: 'var(--border, #e9eaee)', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>A — GỐC <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countA} {unit}</span></div>
           <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="Text A" spellCheck={false} style={editorStyle} value={a} onChange={(e) => setA(e.target.value)} placeholder="Text gốc..." />
         </div>
+        <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>B — MỚI <span style={{ marginLeft: 'auto', fontWeight: 400, color: 'var(--fg-muted)' }}>{countB} {unit}</span></div>
           <textarea ref={rightRef} onScroll={onRightScroll} aria-label="Text B" spellCheck={false} style={editorStyle} value={b} onChange={(e) => setB(e.target.value)} placeholder="Text cần so sánh..." />
@@ -541,11 +557,12 @@ function MarkdownViewer() {
           {source.length} ký tự · {source.trim() ? 'Đã cập nhật' : 'Sẵn sàng'}
         </span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 1, background: 'var(--border, #e9eaee)', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>SOẠN</div>
           <textarea ref={leftRef} onScroll={onLeftScroll} aria-label="Markdown editor" spellCheck={false} style={editorStyle} value={source} onChange={(e) => setSource(e.target.value)} placeholder="Dán Markdown vào đây..." />
         </div>
+        <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-island, #fff)' }}>
           <div style={colHeadStyle}>XEM TRƯỚC</div>
           <div ref={rightRef} onScroll={onRightScroll} aria-label="Markdown preview" className="markdown-rendered-view" style={{ ...outputStyle, whiteSpace: 'normal' }} dangerouslySetInnerHTML={{ __html: rendered }} />

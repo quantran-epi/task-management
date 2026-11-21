@@ -3,6 +3,17 @@ import { describe, it, expect } from 'vitest';
 import { UtilityToolPanel } from '../toolwindows/UtilityToolPanel';
 
 describe('UtilityToolPanel', () => {
+  it.each(['json_formatter', 'xml_formatter', 'text_compare', 'markdown_viewer'] as const)(
+    'shows a divider between panes in %s',
+    (viewType) => {
+      render(<UtilityToolPanel viewType={viewType} />);
+      const separators = screen.getAllByRole('separator');
+      expect(separators).toHaveLength(1);
+      expect(separators[0].getAttribute('aria-orientation')).toBe('vertical');
+      expect(separators[0].style.background).toContain('var(--border-strong');
+    }
+  );
+
   it('formats JSON with syntax-colored output and reports invalid input', () => {
     render(<UtilityToolPanel viewType="json_formatter" />);
     const input = screen.getByLabelText('JSON input') as HTMLTextAreaElement;
