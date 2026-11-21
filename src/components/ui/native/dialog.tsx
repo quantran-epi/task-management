@@ -104,8 +104,7 @@ export function DialogSurface({
         return;
       }
       if (event.key !== 'Tab') return;
-      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE))
-        .filter((element) => element.offsetParent !== null || document.activeElement === element);
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE));
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (!first || !last) {
