@@ -22,8 +22,13 @@ const VARIANT_PROPS: Record<ButtonVariant, Pick<AntButtonProps, 'type' | 'danger
 };
 
 function controlStyle(): CSSProperties {
-  const { fontSize } = getSharedControlTokens();
-  return { fontSize };
+  const { controlHeight, borderRadius, fontSize, paddingInline } = getSharedControlTokens();
+  return {
+    '--ui-control-height': `${controlHeight}px`,
+    '--ui-control-radius': `${borderRadius}px`,
+    '--ui-control-font-size': `${fontSize}px`,
+    '--ui-control-padding-inline': `${paddingInline}px`,
+  } as CSSProperties;
 }
 
 /** Single swap point for every AntD Button. Caller props win; metrics come from the contract. */

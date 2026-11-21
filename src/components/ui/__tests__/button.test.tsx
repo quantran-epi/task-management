@@ -10,7 +10,8 @@ describe('Button wrapper', () => {
   it('applies token-derived metrics, not a hand-typed font size', () => {
     render(<Button>Save</Button>);
     const button = screen.getByRole('button', { name: 'Save' });
-    expect(button.getAttribute('style')).toContain(`font-size: ${metrics.fontSize}px`);
+    expect(button.getAttribute('style')).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
+    expect(button.getAttribute('style')).not.toMatch(/(^|;\s*)font-size:/);
   });
 
   it('maps variant danger to AntD danger semantics', () => {
@@ -32,7 +33,8 @@ describe('IconButton wrapper', () => {
     const button = screen.getByRole('button', { name: 'Tìm kiếm' });
     expect(button).not.toHaveClass('ant-btn-sm', 'ant-btn-lg');
     expect(button).toHaveClass('ant-btn-icon-only');
-    expect(button.getAttribute('style')).toContain(`font-size: ${metrics.fontSize}px`);
+    expect(button.getAttribute('style')).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
+    expect(button.getAttribute('style')).not.toMatch(/(^|;\s*)font-size:/);
   });
 
   it('requires aria-label at compile time', () => {
