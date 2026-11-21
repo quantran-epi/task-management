@@ -62,7 +62,7 @@ All commands below were re-executed on 2026-11-21 in one session. `✅ PASS (exi
 | 49-08-02 | 08 | 7 | GUARD-01, GUARD-02, D-19 | lint green; bad fixture fails, good fixture (import type) passes | lint | `npm run lint && ! npx eslint tests/fixtures/guard/bad-import.tsx && npx eslint tests/fixtures/guard/good-import.tsx` | W0 | ✅ PASS (exit=0, 2026-11-21) |
 | 49-08-03 | 08 | 7 | CTRL-01, GUARD-02, D-04 | D-04 live coverage gate + local-only config assertions | unit/lint | `npx vitest run src/components/ui/__tests__/coverage.test.ts src/components/ui/__tests__/guardConfig.test.ts --bail=1 && npm run lint` | W0 | ✅ PASS (exit=0, 2026-11-21) |
 | 49-09-01 | 09 | 8 | all 16 | Combined gate: lint + build + all scoped tests green together | gate | `npm run lint && npm run build && npm run test:foundation && npx vitest run src/components/ui/__tests__/coverage.test.ts --bail=1` | W0 | ✅ PASS (exit=0, 2026-11-21) |
-| 49-09-02 | 09 | 8 | all 16, D-01..D-19 | Source-safety sweep + six UI-SPEC dimensions + SUS advisory | source assert | `node -e "const fs=require('fs');for(const p of ['src/App.tsx','src/hooks/usePWAInstall.ts','src/context/ServiceWorkerContext.tsx']){if(fs.existsSync(p))process.exit(1)} const s=fs.readFileSync('.planning/phases/49-design-system-foundation/49-UI-SPEC.md','utf8');if((s.match(/- \[x\] Dimension/g)\|\|[]).length!==6)process.exit(1)"` | W0 | 🔄 awaiting Task 2 UI-SPEC sign-off |
+| 49-09-02 | 09 | 8 | all 16, D-01..D-19 | Source-safety sweep + six UI-SPEC dimensions + SUS advisory | source assert | `node -e "const fs=require('fs');for(const p of ['src/App.tsx','src/hooks/usePWAInstall.ts','src/context/ServiceWorkerContext.tsx']){if(fs.existsSync(p))process.exit(1)} const s=fs.readFileSync('.planning/phases/49-design-system-foundation/49-UI-SPEC.md','utf8');if((s.match(/- \[x\] Dimension/g)\|\|[]).length!==6)process.exit(1)"` | W0 | ✅ PASS (exit=0, 2026-11-21) |
 
 ## Executed Gates (2026-11-21, one session)
 
@@ -75,6 +75,8 @@ All commands below were re-executed on 2026-11-21 in one session. `✅ PASS (exi
 | 5 | `! npx eslint tests/fixtures/guard/bad-import.tsx` | 0 (negated) | raw ESLint exit 1 with two `no-restricted-imports` errors for `antd` and `@ant-design/icons` |
 
 No full-suite Vitest invocation was run. `npm run lint:adoption` is not a Phase-49 gate; it stays expected-red at the Phase-49/50 boundary (404 app files not yet migrated) and is Phase-50 adoption debt, not a Phase-49 failure.
+
+Task 2 deviation (Rule 1 bug, commit `75b62392`): the UI-SPEC typography sweep found `sharedTokens.fontSize = 13.5` in `src/styles/tokens.ts`, a fractional size forbidden by D-10 and the locked 4-size scale. Fixed to `13` with matching test assertions; lint/build/foundation re-run green. The corrected source-safety gate patterns and re-confirmed SUS-package `npm view` result are recorded in `49-UI-SPEC.md` §Checker Sign-Off.
 
 ## Wave 0 Requirements
 

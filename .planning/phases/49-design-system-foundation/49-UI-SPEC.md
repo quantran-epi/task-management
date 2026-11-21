@@ -1,7 +1,7 @@
 ---
 phase: 49
 slug: design-system-foundation
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-11-21
@@ -160,11 +160,44 @@ Mọi copy UI (tooltip, aria-label, title) tuân quy ước tiếng Việt: xưn
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+Chạy 2026-11-21 sau khi implementation plans 01-08 hoàn tất. Mọi dimension chỉ PASS khi có bằng chứng sweep quan sát được (không đọc code để suy diễn).
 
-**Approval:** pending
+| Gate | Lệnh | Kết quả quan sát |
+|------|------|------------------|
+| G1 shell residue | `grep -v '^#' src/main.tsx \| grep -cE 'shouldBootIntelliJ\|taskmate_ui_shell\|from ["'"'"']\./App["'"'"']'` | `0` (chỉ còn `import AppIntelliJ from './AppIntelliJ'`, không khớp pattern cũ) |
+| G2 PWA residue | `grep -rv '^#' src tests vite.config.ts package.json --exclude='shellRemoval.test.ts' \| grep -c 'VitePWA\|vite-plugin-pwa\|virtual:pwa-register\|usePWAInstall\|useRegisterSW\|ServiceWorkerProvider'` | `0` (4 hit còn lại nằm trong negative assertions của `shellRemoval.test.ts`, là bằng chứng guard chứ không phải residue) |
+| G3 accent hardcode | `grep -c '#2f62d8\|#6a9bff' src/workbench/AntdThemeAdapter.tsx` | `0` (chỉ `src/styles/tokens.ts` giữ hex làm nguồn duy nhất) |
+| G4 static overlays | `grep -rv '^#' src/components/ui/ \| grep -c 'Modal.confirm(\|message.success(\|notification.open('` | `0` |
+| G5 typescript-eslint | `grep -c 'typescript-eslint' eslint.config.mjs package.json` | `0` trên cả hai file |
+| G6 lint/test CI | `ls .github/workflows/` | chỉ `desktop-build.yml`, `knowledge-server-docker.yml`; `git status --short .github/workflows/` sạch (byte-identical), không có workflow lint/test/design/guard mới |
+| G7 stale surfaces | tồn tại `src/App.tsx`, `src/hooks/usePWAInstall.ts`, `src/context/ServiceWorkerContext.tsx` | cả ba ABSENT |
+
+Lưu ý G1/G2: plan gốc dùng `from .*./App.` (khớp nhầm `AppIntelliJ`) và grep PWA không loại negative assertions trong guard test. Pattern ở bảng trên là phiên bản chính xác, vẫn giữ nguyên ý định "filter comment trước khi đếm, expected = 0". Không có violation thực sự; chỉ false positive của regex.
+
+Cross-check 16 requirement IDs có assertion/test implementation trong plans 01-08 (xem `49-VALIDATION.md` §Per-Task Verification Map):
+- SHELL-01/02/03 → `mainBoot.test.ts`, `shellRemoval.test.ts` (boot, PWA/path residue, guard)
+- TOKEN-01/02/03/04 → `tokens.test.ts`, `AntdThemeAdapter.test.tsx`, `themeBroadcast.test.ts` (single source, mode parity, precedence/persistence, no drift)
+- CTRL-01/02/03/04/05/06 → `coverage.test.ts`, `antdInventory.test.ts`, `button.test.tsx`, `controls.test.tsx` + source assertions cho mọi wrapper family (D-04 live scan, aria-label, input/overlay/status policy, contract helpers)
+- GUARD-01/02/03 → `guardConfig.test.ts`, `bad-import.tsx`/`good-import.tsx` subprocess fixtures, `antdInventory.test.ts`
+
+- [x] Dimension 1 Copywriting: PASS — copy VN theme toggle tại `src/workbench/TitleBar.tsx` (`Giao diện: Sáng` / `Giao diện: Tối`; aria-label `Chuyển đổi giao diện sáng/tối`).
+- [x] Dimension 2 Visuals: PASS — một shell `AppIntelliJ`; PWA/App cũ absent (G1/G2/G6/G7); mọi control AntD đi qua `src/components/ui/`.
+- [x] Dimension 3 Color: PASS — G3 = 0; hex chỉ ở `src/styles/tokens.ts`; D-12 `statusColorMap` một nguồn cho Tag/Badge/StatusDot (đã sửa ở plan 05-01, assertion trong map).
+- [x] Dimension 4 Typography: PASS — `sharedTokens.fontSize` đã được sửa từ `13.5` → `13` (commit `75b62392`) theo UI-SPEC §Typography; token CSS 11/12/13px; không còn fractional size trong nguồn token Phase 49. Các `13.5px` rời rạc còn lại thuộc app info surfaces (Phase 50 migration scope, D-11), không phải nguồn token.
+- [x] Dimension 5 Spacing: PASS — scale `4/8/16/24/32/48/64px` + exception `--island-gap: 6px` trong `src/styles/tokens.ts` / `workbench-tokens.css`.
+- [x] Dimension 6 Registry Safety: PASS — shadcn không khởi tạo; bốn package SUS đã được plan 08 verify tự động bằng `npm view` pin + repository URL và re-confirm 2026-11-21; typescript-eslint bị loại (G5 = 0), không có registry/block bên thứ ba.
+
+## Package legitimacy advisory
+
+Lưu ý KHÔNG CHẶN cho sếp (`human_verify_mode: end-of-phase`): bốn package bị seam đánh dấu SUS chỉ vì "too-new" (version publish gần đây), không phải slopsquat. Plan 08 đã verify tự động trước khi cài; re-confirm bằng `npm view <pkg>@<pin> version repository.url --json` ngày 2026-11-21 cho kết quả:
+
+| Package (pin) | Repository chính thức | Kết quả verify |
+|---------------|-----------------------|----------------|
+| `eslint@10.11.0` | `github.com/eslint/eslint` | version khớp, `git+https://github.com/eslint/eslint.git` |
+| `globals@17.14.0` | `github.com/sindresorhus/globals` | version khớp, `git+https://github.com/sindresorhus/globals.git` |
+| `@babel/eslint-parser@8.1.2` | `github.com/babel/babel` | version khớp, `https://github.com/babel/babel.git` |
+| `@babel/core@8.1.3` | `github.com/babel/babel` | version khớp, `https://github.com/babel/babel.git` |
+
+Tất cả có owner repo chính thức, download cao, không postinstall script. Plan 08 ghi nhận repo/pin check xanh; nếu check fail lúc cài thì install đã dừng. Sếp có thể rà soát advisory này cuối phase; KHÔNG cần tạm dừng hay phê duyệt riêng. Theo D-16, Chrome UAT đúng nghĩa thuộc Phase 50 (ADOPT-03); advisory này chỉ là awareness.
+
+**Approval:** approved 2026-11-21
