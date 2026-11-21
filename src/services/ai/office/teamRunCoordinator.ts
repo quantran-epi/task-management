@@ -482,6 +482,30 @@ function boundedDiagnostic(err: unknown): string {
   return err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 300) : 'unknown';
 }
 
+/**
+ * 261121-r78 / T-r78-01: every marker here traces to a real throw site in our own app code
+ * (`provisionAgentSession`, `requireProvisionedWorktree`, `provisionWorktree`,
+ * `getWorktreeConfig`). Markers with no app throw site are deliberately absent — matching
+ * arbitrary text would let provider copy reach `content`. Code prefixes anchor the message
+ * start; Vietnamese phrases are pinned literals.
+ */
+const LOCAL_ERROR_CODE_PREFIXES: readonly string[] = ['WORKTREE_NOT_AVAILABLE'];
+const LOCAL_ERROR_PHRASES: readonly string[] = [
+  'Tính năng SSH worktree chỉ hoạt động',
+  'Không tìm thấy SSH config',
+];
+
+/** Truthful bounded report for an app-local throw; `undefined` keeps provider sanitization. */
+function truthfulLocalReport(err: unknown): string | undefined {
+  if (!(err instanceof Error)) return undefined;
+  const message = err.message;
+  const isLocal =
+    LOCAL_ERROR_CODE_PREFIXES.some((prefix) => message.startsWith(prefix)) ||
+    LOCAL_ERROR_PHRASES.some((phrase) => message.includes(phrase));
+  if (!isLocal) return undefined;
+  return `Không thể chuẩn bị môi trường làm việc: ${message}`.slice(0, 300);
+}
+
 const PLAN_REJECTED = JSON.stringify({
   cancelled: true,
   message: 'Người dùng đã từ chối kế hoạch phân việc. Không nhân viên nào được giao việc.',
@@ -2589,6 +2613,11 @@ export function createTeamRunCoordinator(
         agentDeferreds.delete(employee.id);
         throw err;
       }
+      // 261121-r78: classify once. Local app throws get a truthful bounded bubble; everything
+      // else keeps the sanitized copy. Local errors keep 'provider' only because the union has
+      // no local stop reason — report text carries the truth; provider text still never reaches
+      // content.
+      const truthfulReport = truthfulLocalReport(err);
       try {
         if (attempt) {
           // `from` must be a literal status, so read the row and branch rather than passing
@@ -2600,7 +2629,7 @@ export function createTeamRunCoordinator(
               'queued',
               'error',
               'provider',
-              SANITIZED_TURN_ERROR,
+              truthfulReport ?? SANITIZED_TURN_ERROR,
               boundedDiagnostic(err)
             );
           } else if (current === 'running') {
@@ -2609,13 +2638,13 @@ export function createTeamRunCoordinator(
               'running',
               'error',
               'provider',
-              SANITIZED_TURN_ERROR,
+              truthfulReport ?? SANITIZED_TURN_ERROR,
               boundedDiagnostic(err)
             );
           }
         }
       } finally {
-        settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR, attempt?.assignmentId);
+        settleAgent(employee.id, 'error', truthfulReport ?? SANITIZED_TURN_ERROR, attempt?.assignmentId);
       }
       throw err;
     } finally {
