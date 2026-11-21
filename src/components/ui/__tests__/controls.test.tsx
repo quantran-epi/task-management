@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfigProvider } from 'antd';
 import { AntdThemeAdapter } from '../../../workbench/AntdThemeAdapter';
 import { THEME_STORAGE_KEY } from '../../../workbench/themeBroadcast';
-import { getAntdTheme } from '../../../styles/tokens';
+import { getAntdTheme, statusColorMap, type ThemeMode } from '../../../styles/tokens';
+import { StatusTag } from '../tag';
+import { Badge } from '../badge';
+import { StatusDot } from '../status-dot';
 import { Input } from '../input';
 import { Textarea, DEFAULT_TEXTAREA_MIN_ROWS } from '../textarea';
 import { Select } from '../select';
@@ -13,7 +18,7 @@ import { Drawer } from '../drawer';
 import { Popconfirm } from '../popconfirm';
 import { ThemeAppHolder, useMessage } from '../message';
 import { useNotification } from '../notification';
-import { getSharedControlTokens } from '../tokens.contract';
+import { getSharedControlTokens, type StatusKind } from '../tokens.contract';
 
 vi.mock('@tauri-apps/api/event', () => ({
   emitTo: vi.fn(async () => {}),
@@ -141,5 +146,76 @@ describe('overlay policy', () => {
     expect(screen.getByText('thông báo')).toBeInTheDocument();
     fireEvent.click(screen.getByText('confirm'));
     expect(screen.getAllByText('chắc chứ').length).toBeGreaterThan(1);
+  });
+});
+
+const statuses = Object.keys(statusColorMap.light) as StatusKind[];
+
+/** jsdom keeps custom properties verbatim but normalizes color values to `rgb()`. */
+function styleOf(element: Element): CSSStyleDeclaration {
+  return (element as HTMLElement).style;
+}
+
+function hexToRgb(hex: string): string {
+  const value = hex.replace('#', '');
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgb(${r},${g},${b})`;
+}
+
+describe('D-12 status-map parity across three surfaces', () => {
+  it.each(modes)('renders the exact %s hex on StatusTag, Badge and StatusDot', (mode) => {
+    const { container } = shell(
+      mode,
+      <div>
+        {statuses.map((status) => (
+          <div key={status} data-status={status}>
+            <StatusTag status={status}>{status}</StatusTag>
+            <Badge status={status} count={status} />
+            <StatusDot status={status} label={status} />
+          </div>
+        ))}
+      </div>,
+    );
+
+    for (const status of statuses) {
+      const expected = statusColorMap[mode as ThemeMode][status];
+      const expectedRgb = hexToRgb(expected);
+      const row = container.querySelector(`[data-status="${status}"]`);
+      expect(row).not.toBeNull();
+
+      const tag = row!.querySelector('.ant-tag') as HTMLElement;
+      expect(styleOf(tag).color.replace(/\s/g, '')).toBe(expectedRgb);
+      expect(styleOf(tag).borderColor.replace(/\s/g, '')).toBe(expectedRgb);
+      expect(styleOf(tag).getPropertyValue('--ui-status-color').trim()).toBe(expected);
+
+      const badgeCount = row!.querySelector('.ant-badge-count') as HTMLElement | null;
+      const badgeDot = row!.querySelector('.ant-badge-dot') as HTMLElement | null;
+      const badgeSurface = badgeCount ?? badgeDot;
+      expect(badgeSurface).not.toBeNull();
+      expect(styleOf(badgeSurface!).getPropertyValue('--ui-status-color').trim()).toBe(expected);
+      if (badgeDot) {
+        expect(styleOf(badgeDot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);
+      }
+
+      const dot = row!.querySelector('[role="img"]') as HTMLElement;
+      expect(styleOf(dot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);
+      expect(styleOf(dot).getPropertyValue('--ui-status-color').trim()).toBe(expected);
+    }
+  });
+
+  it('keeps all three surfaces on the single map with no literal status hex in source', () => {
+    const ROOT = resolve(__dirname, '../../../..');
+    const surfaces = ['tag.tsx', 'badge.tsx', 'status-dot.tsx'];
+    for (const file of surfaces) {
+      const code = readFileSync(resolve(ROOT, 'src/components/ui', file), 'utf8');
+      const executable = code
+        .split('\n')
+        .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
+        .join('\n');
+      expect(executable).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+      expect(executable).toMatch(/getStatusTokens/);
+    }
   });
 });
