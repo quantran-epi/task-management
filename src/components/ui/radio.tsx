@@ -156,7 +156,9 @@ export function RadioGroup({ controlSize = 'middle', style, className, children,
 export function RadioButton({ style, className, children, value, disabled, checked, defaultChecked, onChange, ...rest }: RadioButtonProps) {
   const group = useContext(RadioGroupContext);
   const ownChecked = useState(defaultChecked === true)[0];
-  const isChecked = checked ?? (group !== null && value !== undefined && keyOf(group.checkedValue) === keyOf(value)) ?? ownChecked;
+  const isChecked = checked ?? (group !== null && value !== undefined
+    ? keyOf(group.checkedValue) === keyOf(value)
+    : ownChecked);
   const inputName = group?.name;
 
   return (

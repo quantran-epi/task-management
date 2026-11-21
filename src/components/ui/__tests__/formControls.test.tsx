@@ -44,6 +44,13 @@ describe('RadioGroup event parity (CR-02 / WR-01)', () => {
     }).not.toThrow();
   });
 
+  it('honours standalone RadioButton defaultChecked (RR-03)', () => {
+    const { container } = render(<RadioButton value="x" defaultChecked>X</RadioButton>);
+    const input = container.querySelector('input[type="radio"]') as HTMLInputElement;
+    expect(input.checked).toBe(true);
+    expect(input.closest('[data-oi-control="radio-button"]')).toHaveAttribute('data-state', 'checked');
+  });
+
   it('tracks defaultValue without caller rerender and keeps groups isolated', () => {
     const { container } = render(
       <>
