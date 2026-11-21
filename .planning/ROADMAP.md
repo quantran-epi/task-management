@@ -113,8 +113,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 50-05-PLAN.md — Sóng 4 AI/chat: import barrel + static API → hook, sửa 3 lỗi hooks ChatMessageBubble (ADOPT-01/02/04, U6)
-- [ ] 50-07-PLAN.md — Views: 22 màn hình cấp cao import barrel + hook (ADOPT-01/02)
+- [x] 50-05-PLAN.md — Sóng 4 AI/chat: import barrel + static API → hook, sửa 3 lỗi hooks ChatMessageBubble (ADOPT-01/02/04, U6)
+- [x] 50-07-PLAN.md — Views: 22 màn hình cấp cao import barrel + hook (ADOPT-01/02)
 
 **Wave 5** *(blocked on Waves 4)*
 
@@ -131,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 5/9 | In Progress|  |
+| 50. Full App Adoption | 7/9 | In Progress|  |
 
 ## Previous Milestone: v1.3
 
@@ -180,7 +180,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 5/9 plans executed
+**Plans:** 7/9 plans executed
 
 Plans:
 **Wave 1**
