@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Badge, Button, Dropdown, MenuProps, Popconfirm, Tooltip, Typography, theme } from 'antd';
+import { Badge, Button, Dropdown, type MenuProps, Popconfirm, Tooltip, Typography, theme } from 'antd';
 import { SyncOutlined, StopOutlined, CloseCircleOutlined, TeamOutlined } from '@ant-design/icons';
 import { aiTurnManager, useActiveAiTurns, type ActiveAiTurn } from '../../services/ai/aiTurnManager';
 import { formatElapsedTicker } from '../../utils/time';
