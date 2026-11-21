@@ -273,6 +273,8 @@ export interface BuildLeadTurnRequestInput {
   conventionsSegment?: string | undefined;
   /** Phase 45 D-16/D-17: coordinator-framed untrusted pinned-context segment. */
   pinnedContextSegment?: string | undefined;
+  /** 261121-qpp: coordinator-framed worktree ambiguity; builder stays pure. */
+  worktreeAmbiguitySegment?: string | undefined;
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
@@ -307,6 +309,13 @@ export const EMPLOYEE_WRITE_DOC_LINE =
 /** Exported so the test pins the exact delegation rule instead of a paraphrase. */
 export const LEAD_CODE_DELEGATION_LINE =
   '14. Việc cần sửa code (code_edit trong worktree) thì giao cho Agent Developer qua delegate_batch, dùng agentId từ [DANH SÁCH NHÂN VIÊN]; nếu nhóm không có Agent Developer thì báo người dùng. Bạn không tự sửa code và không giao việc sửa code cho nhân viên khác.';
+
+/**
+ * 261121-qpp: shown only when multiple linked systems carry a usable worktree. The model
+ * never picks a repo path — it asks the user to name the system first, then delegates.
+ */
+export const WORKTREE_AMBIGUITY_LINE =
+  'Có nhiều hệ thống trong nhóm đều có cấu hình worktree đầy đủ. Bạn KHÔNG tự chọn repo hay hệ thống. Hãy hỏi người dùng tên hệ thống cần làm việc, nhận câu trả lời, rồi mới ủy thác sửa code cho Agent Developer.';
 
 /**
  * Phase 42 D-12 / Phase 43 D-05: the reviewer's read order over a remote repository.
@@ -348,6 +357,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     batchResults,
     conventionsSegment,
     pinnedContextSegment,
+    worktreeAmbiguitySegment,
     ledger,
     docsFolderId,
     memberFolders,
@@ -382,6 +392,8 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ...(conventionsSegment ? [conventionsSegment] : []),
     // Phase 45 D-16/D-17: the team pin follows conventions as framed untrusted data.
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
+    // 261121-qpp: only present when the coordinator detected >1 usable worktree.
+    ...(worktreeAmbiguitySegment ? [worktreeAmbiguitySegment] : []),
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),

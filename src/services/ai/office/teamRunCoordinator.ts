@@ -69,6 +69,8 @@ import { buildConventionsSegment, buildPinnedContextSegment } from '../conventio
 import {
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
+  wrapUntrusted,
+  WORKTREE_AMBIGUITY_LINE,
   type BatchResult,
   type LinkedItemIndexEntry,
 } from './teamPrompts';
@@ -278,6 +280,8 @@ export interface TeamRunCoordinatorOptions {
     remoteRepoPath: string;
     baseRef?: string | undefined;
   } | undefined;
+  /** 261121-qpp: candidate system names when >1 linked system is worktree-capable. */
+  worktreeAmbiguousSystems?: readonly string[] | undefined;
   /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
@@ -2673,6 +2677,17 @@ export function createTeamRunCoordinator(
         const folderId = memberFolderIds.get(row.id);
         return folderId ? [{ agentName: row.name, folderId }] : [];
       });
+      // 261121-qpp: ambiguity is a prompt-only fact. Names are user-authored data, so each
+      // enters through wrapUntrusted; no sshConfigId or repo path reaches the model.
+      const worktreeAmbiguitySegment = options.worktreeAmbiguousSystems?.length
+        ? [
+            WORKTREE_AMBIGUITY_LINE,
+            '[CÁC HỆ THỐNG ỨNG VIÊN]',
+            ...options.worktreeAmbiguousSystems.map(
+              (name) => `- ${wrapUntrusted('TÊN HỆ THỐNG', name)}`
+            ),
+          ].join('\n')
+        : '';
       const prompt = buildLeadTurnRequest({
         lead,
         team: roster.teamRow ?? team,
@@ -2683,6 +2698,7 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         ...(conventionsSegment ? { conventionsSegment } : {}),
         ...(pinnedContextSegment ? { pinnedContextSegment } : {}),
+        ...(worktreeAmbiguitySegment ? { worktreeAmbiguitySegment } : {}),
         ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
         ...(memberFolders.length > 0 ? { memberFolders } : {}),
         ...(batchHistory.length > 0 ? { batchHistory } : {}),
