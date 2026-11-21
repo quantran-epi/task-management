@@ -627,9 +627,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     coordinator.setWorktreeAmbiguousSystems(ambiguityKey ? ambiguityKey.split('|') : []);
     const sshConfigId = worktreeResolution?.worktree?.sshConfigId;
     const remoteRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
-    if (sshConfigId && remoteRepoPath) {
-      coordinator.setAgentDeveloperWorktree({ sshConfigId, remoteRepoPath });
-    }
+    // Always push, including `undefined`: when the live resolver becomes ambiguous or loses
+    // its usable system, the alive coordinator must drop the stale target instead of keeping
+    // code_edit granted for a repo that is no longer selected.
+    coordinator.setAgentDeveloperWorktree(
+      sshConfigId && remoteRepoPath ? { sshConfigId, remoteRepoPath } : undefined
+    );
   }, [
     coordinator,
     worktreeResolution?.worktree?.sshConfigId,

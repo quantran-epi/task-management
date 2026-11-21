@@ -3310,11 +3310,13 @@ export function createTeamRunCoordinator(
         );
         if (matches.length === 1) {
           const chosen = matches[0]!;
-          setAgentDeveloperWorktree({
+          // Only clear the question when the target was ACTUALLY applied. A running developer
+          // refuses the swap; clearing here would lose the answer and leave provisioning empty.
+          const applied = setAgentDeveloperWorktree({
             sshConfigId: chosen.sshConfigId!,
             remoteRepoPath: chosen.remoteRepoPath!,
           });
-          setWorktreeAmbiguousSystems([]);
+          if (applied) setWorktreeAmbiguousSystems([]);
         }
       } catch {
         /* resolver failure must not block the message; the lead asks again next turn */
