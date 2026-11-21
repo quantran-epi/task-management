@@ -256,16 +256,14 @@ describe('D-12 status-map parity across three surfaces', () => {
       const row = container.querySelector(`[data-status="${status}"]`);
       expect(row).not.toBeNull();
 
-      const tag = row!.querySelector('.ant-tag') as HTMLElement;
+      const tag = row!.querySelector('[data-oi-control="chip"][data-state="' + status + '"]') as HTMLElement;
       expect(styleOf(tag).color.replace(/\s/g, '')).toBe(expectedRgb);
       expect(styleOf(tag).borderColor.replace(/\s/g, '')).toBe(expectedRgb);
       expect(styleOf(tag).getPropertyValue('--ui-status-color').trim()).toBe(expected);
 
-      const badgeCount = row!.querySelector('.ant-badge-count') as HTMLElement | null;
-      const badgeDot = row!.querySelector('.ant-badge-dot') as HTMLElement | null;
-      const badgeSurface = badgeCount ?? badgeDot;
-      expect(badgeSurface).not.toBeNull();
-      expect(styleOf(badgeSurface!).getPropertyValue('--ui-status-color').trim()).toBe(expected);
+      const chipSurface = row!.querySelector('[data-oi-control="chip"][data-state="' + status + '"]') as HTMLElement;
+      const badgeDot = row!.querySelector('[data-oi-control="badge-dot"]') as HTMLElement | null;
+      expect(styleOf(chipSurface).getPropertyValue('--ui-status-color').trim()).toBe(expected);
       if (badgeDot) {
         expect(styleOf(badgeDot).backgroundColor.replace(/\s/g, '')).toBe(expectedRgb);
       }
