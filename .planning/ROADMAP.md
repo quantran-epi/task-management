@@ -37,7 +37,7 @@
   1. Ứng dụng chỉ khởi động shell IntelliJ/workbench; repo không còn code shell AntD cũ, flag chuyển đổi trong `main.tsx`, hay PWA install prompts, và không có migration cho cấu hình shell cũ.
   2. Một nguồn token duy nhất (màu, radius, chiều cao control, font, spacing) drive cả AntD `ConfigProvider` lẫn CSS/workbench; đổi theme cập nhật ngay mọi control không reload và giữ nguyên lựa chọn hiện tại của user.
   3. Mọi control AntD dùng trong app (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip, ~60 components) có wrapper TaskMate tại `src/components/ui/`; mỗi wrapper áp token defaults và policy riêng — không re-export rỗng, đổi implementation tại một điểm.
-  4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; CI chạy lint + build và làm pipeline fail khi có vi phạm.
+  4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; `npm run lint` + `npm run build` + focused test chạy local sau mỗi lần sửa, vi phạm làm lint fail. Không dùng GitHub Actions CI.
   5. Focused Vitest xanh cho wrapper và token ở cả light và dark: giá trị token, accessible name của icon button, policy footer/close của modal, bảng màu status tag, và phát hiện drift giữa ConfigProvider và CSS token.
 **Plans**: TBD
 **UI hint**: yes

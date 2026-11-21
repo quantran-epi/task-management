@@ -30,7 +30,7 @@
 ### Guardrails (GUARD)
 
 - [ ] **GUARD-01**: ESLint rule chặn import trực tiếp `antd`/`@ant-design/icons` trong toàn bộ `src` ngoài `src/components/ui/`; không có ngoại lệ, wrapper là nơi duy nhất được phép.
-- [ ] **GUARD-02**: CI chạy lint và build như điều kiện bắt buộc; vi phạm import trực tiếp làm pipeline fail.
+- [ ] **GUARD-02**: Quy trình local bắt buộc: `npm run lint` + `npm run build` + focused test sau mỗi lần sửa code; vi phạm import trực tiếp làm lint fail. Không dùng GitHub Actions CI.
 - [ ] **GUARD-03**: Test tập trung kiểm tra wrapper render đúng token ở cả light và dark, accessible name, và policy (footer/modal, status colors).
 
 ### Adoption & Verification (ADOPT)

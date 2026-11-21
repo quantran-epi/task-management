@@ -14,12 +14,12 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 
 ## Current Milestone: v1.5 Design System & UI Consistency
 
-**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: tất cả control AntD đều được wrap tại một nơi, token dùng chung cho light và dark, xóa shell AntD cũ, và guard bằng ESLint + CI để không tái diễn import trực tiếp.
+**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: tất cả control AntD đều được wrap tại một nơi, token dùng chung cho light và dark, xóa shell AntD cũ, và guard bằng ESLint + kiểm tra local bắt buộc để không tái diễn import trực tiếp.
 **Target features:**
 - **Shell đơn nhất**: chỉ khởi động shell IntelliJ; xóa hẳn shell AntD, flag chuyển đổi và PWA prompts; không migration.
 - **Token tập trung**: một nguồn token (màu/radius/height/font/spacing) cho cả ConfigProvider lẫn CSS; light + dark đầy đủ, đổi theme tức thì, giữ lựa chọn hiện tại của user.
 - **Wrapper toàn diện**: mọi control AntD (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip/...) đều có wrapper TaskMate tại `src/components/ui/`; mọi control có thể đổi/thay thế tại một điểm, không import trực tiếp.
-- **Guardrails**: ESLint `no-restricted-imports` chặn import AntD ngoài thư mục wrapper; CI chạy lint + build.
+- **Guardrails**: ESLint `no-restricted-imports` chặn import AntD ngoài thư mục wrapper; chạy lint + build + focused test local sau mỗi lần sửa (không dùng GitHub Actions CI).
 - **Adoption & verify**: migrate mọi màn hình/tool window/settings/CR/notes/AI Office, xóa style trùng token, UAT Chrome ở cả light và dark, tsc + lint + focused test + build xanh.
 
 

@@ -16,7 +16,7 @@
 - Single IntelliJ shell only; delete legacy AntD shell, switch flag, and PWA prompts. No migration.
 - One token source (`src/styles/tokens.ts` + `workbench-tokens.css` derived or unified) drives AntD `ConfigProvider` component tokens and CSS variables for both light/dark.
 - EVERY AntD component used in the app (about 60 distinct components: Button, Input, Select, Table, Form, DatePicker, Modal, Drawer, Card, Menu, Tooltip, Popover, Tag, Badge, etc.) gets a TaskMate wrapper in `src/components/ui/`. No exceptions, no pass-through-only imports. Every wrapper is the single place where that control can be reconfigured or replaced.
-- ESLint `no-restricted-imports` block direct AntD imports outside `src/components/ui/`; CI runs lint.
+- ESLint `no-restricted-imports` blocks direct AntD imports outside `src/components/ui/`; local `npm run lint` + `npm run build` + focused tests after every change. No GitHub Actions CI.
 - Verification: focused Vitest for wrappers/tokens + Chrome DevTools UAT in both light and dark across representative surfaces.
 
 ## Watch out for
