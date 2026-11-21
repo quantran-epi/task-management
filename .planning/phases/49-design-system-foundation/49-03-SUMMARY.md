@@ -64,7 +64,7 @@ completed: 2026-11-21
 - **Started:** 2026-11-21T08:02:46Z
 - **Completed:** 2026-11-21T08:16:37Z
 - **Tasks:** 3/3
-- **Files modified:** 8 across 6 commits
+- **Files modified:** 8 across 5 implementation commits
 
 ## Accomplishments
 
@@ -81,7 +81,7 @@ completed: 2026-11-21
 3. **Task 2: Wrap all AntD icons in one policy file** — `7b3fefe7` (feat)
 4. **Task 2 follow-up: scope icon inventory to current working tree (141 icons)** — `1835db8a` (fix)
 5. **Task 3: Build the AntD inventory scanner and its self-tests** — `faccf4d7` (test)
-6. **Plan metadata** — pending final docs commit
+6. **Plan metadata** — `367354ff` (docs)
 
 _Note: Task 1 and Task 2 each required a follow-up fix before their acceptance gates cleared._
 
