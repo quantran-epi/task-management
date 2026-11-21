@@ -6,14 +6,13 @@ import { getSharedControlTokens } from './tokens.contract';
 
 export type AvatarProps = AntAvatarProps;
 
-/** Migrate AvatarGroup statics with real DOM: overlap by -6px, gap 4. */
-export function AvatarGroup({ style, className, children, size, max, ...rest }: NonNullable<AntAvatarProps['children']> extends never ? never : { style?: CSSProperties; className?: string; children?: ReactNode; size?: number | string; max?: number }) {
+/** Migrate AvatarGroup statics with real DOM: gap 4, overlap -6 on adjacent avatars. */
+export function AvatarGroup({ style, className, children }: { style?: CSSProperties; className?: string; children?: ReactNode }) {
   return (
     <div
       className={className}
       style={{ display: 'flex', gap: 4, ...style }}
       data-oi-control="avatar-group"
-      {...(rest as object)}
     >
       {children}
     </div>
@@ -53,6 +52,3 @@ export function Avatar({ style, className, children, icon, src, alt, size, shape
     </span>
   );
 }
-
-/** Avatar.Group static mirrored for callers that use the namespace form. */
-Avatar.Group = AvatarGroup;
