@@ -63,7 +63,7 @@ import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import { getGlobalConventions } from '../../conventionService';
 import { cancelToolCall, getSshConfigById, getSshSecret } from '../../sshService';
-import { provisionWorktree, requireProvisionedWorktree } from '../../sshWorktreeService';
+import { LocalWorktreeError, provisionWorktree, requireProvisionedWorktree } from '../../sshWorktreeService';
 import type { WorktreeDescriptor } from '../../../types/codingZone';
 import { buildConventionsSegment, buildPinnedContextSegment } from '../conventionsSegment';
 import {
@@ -483,27 +483,13 @@ function boundedDiagnostic(err: unknown): string {
 }
 
 /**
- * 261121-r78 / T-r78-01: every marker here traces to a real throw site in our own app code
- * (`provisionAgentSession`, `requireProvisionedWorktree`, `provisionWorktree`,
- * `getWorktreeConfig`). Markers with no app throw site are deliberately absent — matching
- * arbitrary text would let provider copy reach `content`. Code prefixes anchor the message
- * start; Vietnamese phrases are pinned literals.
+ * 261121-s4k / T-s4k-01: classification is TYPE-based, not text-based. Only `LocalWorktreeError`
+ * thrown by our own provisioning sites is truthful; matching provider text by marker would let
+ * untrusted provider copy reach `content`.
  */
-const LOCAL_ERROR_CODE_PREFIXES: readonly string[] = ['WORKTREE_NOT_AVAILABLE'];
-const LOCAL_ERROR_PHRASES: readonly string[] = [
-  'Tính năng SSH worktree chỉ hoạt động',
-  'Không tìm thấy SSH config',
-];
-
-/** Truthful bounded report for an app-local throw; `undefined` keeps provider sanitization. */
 function truthfulLocalReport(err: unknown): string | undefined {
-  if (!(err instanceof Error)) return undefined;
-  const message = err.message;
-  const isLocal =
-    LOCAL_ERROR_CODE_PREFIXES.some((prefix) => message.startsWith(prefix)) ||
-    LOCAL_ERROR_PHRASES.some((phrase) => message.includes(phrase));
-  if (!isLocal) return undefined;
-  return `Không thể chuẩn bị môi trường làm việc: ${message}`.slice(0, 300);
+  if (!(err instanceof LocalWorktreeError)) return undefined;
+  return `Không thể chuẩn bị môi trường làm việc: ${err.message}`.slice(0, 300);
 }
 
 const PLAN_REJECTED = JSON.stringify({
@@ -1471,11 +1457,11 @@ export function createTeamRunCoordinator(
     if (provisionedWorktrees.has(agentId)) return;
     const target = options.agentDeveloperWorktree;
     if (!target?.sshConfigId || !target.remoteRepoPath) {
-      throw new Error('WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.');
+      throw new LocalWorktreeError('WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.');
     }
     const config = await getSshConfigById(target.sshConfigId, db);
     if (!config) {
-      throw new Error('WORKTREE_NOT_AVAILABLE: SSH config của Agent Developer không tồn tại.');
+      throw new LocalWorktreeError('WORKTREE_NOT_AVAILABLE: SSH config của Agent Developer không tồn tại.');
     }
     const secret = (await getSshSecret(config.id)) ?? undefined;
     const descriptor = await provisionWorktree({
@@ -2469,6 +2455,18 @@ export function createTeamRunCoordinator(
           : {}),
       });
 
+      // WR-03 (261121-s4k): compute the reply recipient BEFORE provisioning. A `send_message`
+      // trigger row names the peer/leader who asked; a provisioning throw must address that
+      // sender, never fall back to USER_PARTICIPANT_ID in the catch bubble below.
+      const replyTarget = triggerMessageId ?? attempt?.instructionMessageId;
+      if (replyTarget !== undefined) replyTargetByAgent.set(employee.id, replyTarget);
+      else replyTargetByAgent.delete(employee.id);
+      const replyFrom =
+        replyTarget !== undefined ? (await db.teamMessages.get(replyTarget))?.from : undefined;
+      const replyRecipient = replyFrom ?? roster.lead?.id;
+      if (replyRecipient !== undefined) replyRecipientByAgent.set(employee.id, replyRecipient);
+      else replyRecipientByAgent.delete(employee.id);
+
       // D-08/D-09: provision BEFORE the turn is advertised or any verb can run. No descriptor
       // means no active session — the catch path settles this agent with a truthful refusal.
       // WR-05: capability follows the STABLE developer marker, not the display name.
@@ -2515,11 +2513,6 @@ export function createTeamRunCoordinator(
       await measureProvisionalInput(employee.id, request);
       // D-13: the batch's employees are only known here, so this is where they claim live use.
       claimLiveUse(employee.id, employee.skillId);
-      // 37.1 R14: what this turn is answering. A dispatch answers its instruction row; a
-      // mention-started turn answers the user's message. Cleared in the `finally` below.
-      const replyTarget = triggerMessageId ?? attempt?.instructionMessageId;
-      if (replyTarget !== undefined) replyTargetByAgent.set(employee.id, replyTarget);
-      else replyTargetByAgent.delete(employee.id);
       updateAgent(employee.id, {
         status: 'running',
         streamingText: '',
@@ -2527,16 +2520,6 @@ export function createTeamRunCoordinator(
         steps: [],
       });
       registerAgentTurn(employee.id, employee.name);
-      // Who the answer addresses. Read from the trigger row's sender: the user for a mention,
-      // the peer for `send_message`, the leader for a dispatch. One read, no extra parameter
-      // on four call sites, and it cannot disagree with the row the answer quotes.
-      // AFTER the status write: a lead parked in `send_message` is what the UI shows first,
-      // and this read must not delay the agent's own `running` transition.
-      const triggerFrom =
-        replyTarget !== undefined ? (await db.teamMessages.get(replyTarget))?.from : undefined;
-      const replyRecipient = triggerFrom ?? roster.lead?.id;
-      if (replyRecipient !== undefined) replyRecipientByAgent.set(employee.id, replyRecipient);
-      else replyRecipientByAgent.delete(employee.id);
 
       // D-18/T-39-12: a turn with no attempt (mention, `send_message`) has no pin and reads
       // the current `aiSkills` row. Clearing first makes the map deterministic for this turn.
@@ -2613,10 +2596,10 @@ export function createTeamRunCoordinator(
         agentDeferreds.delete(employee.id);
         throw err;
       }
-      // 261121-r78: classify once. Local app throws get a truthful bounded bubble; everything
-      // else keeps the sanitized copy. Local errors keep 'provider' only because the union has
-      // no local stop reason — report text carries the truth; provider text still never reaches
-      // content.
+      // 261121-s4k: classify once by TYPE. Only `instanceof LocalWorktreeError` gets a truthful
+      // bounded bubble; everything else keeps the sanitized copy. Local errors keep 'provider'
+      // only because the union has no local stop reason — report text carries the truth, and
+      // provider text (same words included) still never reaches `content`.
       const truthfulReport = truthfulLocalReport(err);
       try {
         if (attempt) {

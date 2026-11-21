@@ -23,6 +23,16 @@ export function deriveWorktreeBranch(sessionKey: string): string {
   return `taskmate/agent-developer-${safeSessionId(sessionKey)}`;
 }
 
+/** Only app-owned provisioning throws carry this type; provider copy never does. */
+export class LocalWorktreeError extends Error {
+  readonly code = 'WORKTREE_NOT_AVAILABLE';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'LocalWorktreeError';
+  }
+}
+
 export function worktreeUnavailableRefusal(): { code: string; message: string } {
   return {
     code: 'WORKTREE_NOT_AVAILABLE',
@@ -40,7 +50,7 @@ export function requireProvisionedWorktree(
 ): WorktreeDescriptor {
   if (!descriptor?.remoteWorktreePath || !descriptor.sshConfigId) {
     const refusal = worktreeUnavailableRefusal();
-    throw new Error(`${refusal.code}: ${refusal.message}`);
+    throw new LocalWorktreeError(`${refusal.code}: ${refusal.message}`);
   }
   return descriptor;
 }
@@ -62,7 +72,7 @@ export interface ProvisionWorktreeParams {
  */
 export async function provisionWorktree(params: ProvisionWorktreeParams): Promise<WorktreeDescriptor> {
   if (!isTauriApp()) {
-    throw new Error('Tính năng SSH worktree chỉ hoạt động trên môi trường Desktop Tauri.');
+    throw new LocalWorktreeError('Tính năng SSH worktree chỉ hoạt động trên môi trường Desktop Tauri.');
   }
   const { invoke } = await import('@tauri-apps/api/core');
   return invoke<WorktreeDescriptor>('ssh_worktree_provision', {
