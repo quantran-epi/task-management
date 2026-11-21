@@ -90,10 +90,10 @@ export function Select<
   const selectedValueKey = multiple
     ? JSON.stringify(Array.isArray(current) ? (current as unknown[]).map(valueKey) : [])
     : (current === undefined || current === null ? '' : valueKey(current));
+  // `current` can be a fresh array each render; selectedValueKey is its stable snapshot.
   const selectedKeys = useMemo(() => multiple
     ? new Set(Array.isArray(current) ? (current as unknown[]).map(valueKey) : [])
     : new Set(current === undefined || current === null ? [] : [valueKey(current)]),
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- current can be a fresh array each render; selectedValueKey is its stable snapshot.
   [multiple, selectedValueKey]);
   const disabled = rest.disabled === true || rest.loading === true;
   const invalid = status === 'error' || rest['aria-invalid'] === true;
