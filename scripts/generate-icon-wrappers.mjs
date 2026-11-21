@@ -1,9 +1,11 @@
 // One-shot generator for src/components/ui/icon.tsx — derives names from the
 // repository's live icon usage intersected with @ant-design/icons declarations.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = process.cwd();
+// IN-02: derive the root from this script so a wrong cwd cannot scan another tree.
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const declarations = new Set(
   [...readFileSync(join(root, 'node_modules/@ant-design/icons/lib/icons/index.d.ts'), 'utf8')
     .matchAll(/export \{ default as ([A-Za-z0-9_]+) \}/g)].map((m) => m[1]),
@@ -23,6 +25,10 @@ function walk(dir) {
 
 const used = new Set();
 for (const file of walk(root)) {
+  // IN-02: icon.tsx is generated from this inventory — scanning it would be
+  // self-reinforcing (stale icons survive, alias-only icons are missed).
+  // The inventory is a snapshot: review the generated export list by hand.
+  if (file.endsWith('/src/components/ui/icon.tsx')) continue;
   const source = readFileSync(file, 'utf8');
   for (const match of source.matchAll(/<([A-Z][A-Za-z0-9_]*)\b/g)) {
     if (declarations.has(match[1])) used.add(match[1]);
@@ -37,6 +43,7 @@ lines.push('import {');
 for (const name of names) lines.push(`  ${name} as ${name}Component,`);
 lines.push("} from '@ant-design/icons';");
 lines.push('');
+lines.push("import { useThemeMode } from '../../hooks/useThemeMode';");
 lines.push("import { getSharedControlTokens, getStatusTokens, type StatusKind } from './tokens.contract';");
 lines.push('');
 lines.push('type AntIconComponent = (props: Record<string, unknown>) => ReactNode;');
@@ -61,11 +68,12 @@ lines.push(' * Defaults come from tokens.contract; tone maps to the shared statu
 lines.push(' */');
 lines.push('export function wrapIcon(Component: AntIconComponent): WrappedIcon {');
 lines.push('  return function PolicyIcon({ size, tone, style, ...rest }: WrappedIconProps) {');
+lines.push('    const { mode } = useThemeMode();');
 lines.push('    const metrics = getSharedControlTokens();');
 lines.push('    const resolvedStyle = {');
 lines.push('      \'--ui-control-height\': `${metrics.controlHeight}px`,');
 lines.push('      fontSize: typeof size === \'number\' ? `${size}px` : size ?? metrics.iconSize,');
-lines.push('      ...(tone ? { color: getStatusTokens(tone) } : {}),');
+lines.push('      ...(tone ? { color: getStatusTokens(tone, mode) } : {}),');
 lines.push('      ...style,');
 lines.push('    } as CSSProperties;');
 lines.push('    return <Component {...rest} style={resolvedStyle} />;');
