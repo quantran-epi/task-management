@@ -1,58 +1,59 @@
-# Requirements: TaskMate — Milestone v1.5 Design System & UI Consistency
+# Requirements: TaskMate — Milestone v1.6 Native UI Controls
 
 **Defined:** 2026-11-21
 **Core Value:** Make planned work realistically fit available time by exposing overload early and suggesting feasible daily workload distributions.
 
 ## v1 Requirements
 
-### Single Runtime Shell (SHELL)
+### Control Inventory (INV)
 
-- [x] **SHELL-01**: Ứng dụng chỉ khởi động một shell IntelliJ/workbench; không còn lựa chọn shell AntD hay flag chuyển đổi.
-- [x] **SHELL-02**: Toàn bộ code của shell AntD cũ, cờ chuyển đổi trong `main.tsx`, và PWA install prompts bị xóa khỏi repo; không còn đường dẫn code chết.
-- [x] **SHELL-03**: Không có migration cho cấu hình shell cũ; dữ liệu test được bỏ theo nguyên tắc C-16.
+- [ ] **INV-01**: Mọi control/UI surface TaskMate đang dùng được liệt kê từ `src/components/ui/` và mọi import `antd` / `@ant-design/icons` còn sót trong `src`, kèm file, props, state, event, keyboard/focus, validation và a11y.
+- [ ] **INV-02**: Danh mục bao phủ toàn bộ UI surface: route/view, tool window, settings, CR, notes, AI Office, modal/drawer/popconfirm, form/table, menu/context menu, tooltip/popover, notification, và các trạng thái empty/error/loading.
+- [ ] **INV-03**: Mỗi control được phân loại theo nhóm implementation và độ phức tạp, xác định wrapper cần thay, control còn thiếu, và tiêu chí behavior phải giữ nguyên.
 
-### Design Tokens & Themes (TOKEN)
+### OpenIDEA Mapping & Design (MAP)
 
-- [x] **TOKEN-01**: Một nguồn định nghĩa token duy nhất (màu, radius, chiều cao control, font, spacing) được dùng bởi cả AntD `ConfigProvider` và CSS/workbench.
-- [x] **TOKEN-02**: Cả light mode và dark mode có bộ token hoàn chỉnh, đổi theme lập tức cập nhật mọi control mà không reload.
-- [x] **TOKEN-03**: Lựa chọn theme hiện tại của user được giữ làm mặc định; không ép đổi sang light hay dark.
-- [x] **TOKEN-04**: Không còn giá trị màu/font/size hardcoded trong components ứng dụng cho những giá trị đã có token; test phát hiện drift giữa ConfigProvider và CSS token.
+- [ ] **MAP-01**: Với mỗi control có tương đương trong OpenIDEA, bản thiết kế map rõ token, metric, DOM/class, CSS module gốc, trạng thái và behavior; nguồn tham chiếu được ghi lại.
+- [ ] **MAP-02**: Với mỗi control không có tương đương trong OpenIDEA, thiết kế control mới theo ngôn ngữ OpenIDEA: font 13px, control height 28px, radius 4px, focus ring, popup portal cách anchor 4px, list row 24px, dialog radius 10px — áp cho cả light và dark.
+- [ ] **MAP-03**: Bản thiết kế ghi rõ props/API wrapper hiện tại được giữ nguyên; event, controlled/uncontrolled behavior, validation, keyboard/focus và accessible name không đổi.
 
-### Control Wrappers (CTRL)
+### Native Implementation (NAT)
 
-- [x] **CTRL-01**: Mọi control AntD không có ngoại lệ (Button, Input, Select, Table, Form, DatePicker, Drawer, Modal, Card, Menu, Tooltip, Popover, Tag, Badge, v.v.) đều có wrapper TaskMate tại `src/components/ui/`; mọi dùng trong app đều đi qua wrapper đó.
-- [x] **CTRL-02**: Wrapper Button/IconButton áp thống nhất size, font, màu, trạng thái loading/disabled/danger, và yêu cầu accessible name cho icon button.
-- [x] **CTRL-03**: Wrapper Input/Select/Textarea/InputNumber áp thống nhất chiều cao, font, placeholder, trạng thái error/disabled và độ rộng mặc định theo ngữ cảnh.
-- [x] **CTRL-04**: Wrapper Modal/Drawer/Popconfirm áp thống nhất width scale, footer, close/mask policy, và tiêu đề.
-- [x] **CTRL-05**: Wrapper Tag/StatusTag/Badge áp thống nhất bảng màu trạng thái, font, padding; không còn map màu rời rạc trong các view.
-- [x] **CTRL-06**: Mọi wrapper, kể cả control phức tạp (Table/Form/DatePicker...), đều là điểm cấu hình duy nhất: nhận default từ token dùng chung và cho phép đổi/thay thế implementation chỉ tại một chỗ. Không có re-export rỗng hay import AntD trực tiếp outside `src/components/ui/`.
+- [ ] **NAT-01**: Mọi wrapper trong `src/components/ui/` được thay bằng control tự build bằng React/CSS variables/CSS module/Web API; không import `antd` hay `@ant-design/icons`, không thêm thư viện UI runtime khác.
+- [ ] **NAT-02**: Mọi trạng thái control được giữ behavior: default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty; popup flip/shift, ngoài-click đóng, Escape đóng, focus trap cho dialog.
+- [ ] **NAT-03**: Toàn bộ UI surface dùng wrapper TaskMate; caller không phải sửa từng màn hình để thích nghi; không còn import AntD trực tiếp trong `src` và không còn code control chết.
+- [ ] **NAT-04**: Token light/dark vẫn tập trung tại `src/styles/tokens.ts` và CSS variables; đổi theme cập nhật ngay mọi control; app vẫn chạy local/offline trên Tauri, không thêm runtime server.
 
-### Guardrails (GUARD)
+### Cleanup & Guardrails (CLEAN)
 
-- [x] **GUARD-01**: ESLint rule chặn import trực tiếp `antd`/`@ant-design/icons` trong toàn bộ `src` ngoài `src/components/ui/`; không có ngoại lệ, wrapper là nơi duy nhất được phép.
-- [x] **GUARD-02**: Quy trình local bắt buộc: `npm run lint` + `npm run build` + focused test sau mỗi lần sửa code; vi phạm import trực tiếp làm lint fail. Không dùng GitHub Actions CI.
-- [x] **GUARD-03**: Test tập trung kiểm tra wrapper render đúng token ở cả light và dark, accessible name, và policy (footer/modal, status colors).
+- [ ] **CLEAN-01**: Gỡ hoàn toàn `antd` và `@ant-design/icons` khỏi `package.json` và lockfile; cài đặt, lint, build và focused test vẫn xanh.
+- [ ] **CLEAN-02**: ESLint guard chặn mọi import trực tiếp `antd` / `@ant-design/icons` trong `src`; vi phạm làm lint fail.
+- [ ] **CLEAN-03**: Focused test kiểm tra wrapper render đúng token light/dark, accessible name, API tương thích, popup/keyboard/focus/validation policy; không chạy full Vitest suite.
 
-### Adoption & Verification (ADOPT)
+### Visual & Browser Verification (VIS)
 
-- [ ] **ADOPT-01**: Mọi màn hình, tool window, settings, CR, notes, AI Office và modal trong shell IntelliJ dùng wrapper thay vì AntD trực tiếp.
-- [ ] **ADOPT-02**: Không còn style inline lặp lại các giá trị token trong các view đã migrate.
-- [ ] **ADOPT-03**: UAT trên Chrome ở cả light và dark cho các luồng đại diện: task quick-add, settings CRUD, CR detail actions, modal forms, toolbar icon buttons, AI chat controls — quan sát được, không chỉ đọc code.
-- [ ] **ADOPT-04**: `tsc --noEmit`, lint, focused Vitest và build đều xanh trước khi milestone đóng.
+- [ ] **VIS-01**: Seed dummy data rồi chạy app trên Chrome, tự quét từng route/view/tool window/settings/CR/notes/AI Office/modal/drawer/menu/tooltip ở cả light và dark, kể cả mọi feature nhỏ và mọi trạng thái control.
+- [ ] **VIS-02**: Với mỗi màn hình/control, đo computed style và geometry gồm padding, margin, height, radius, font, border, shadow, alignment và overflow đối chiếu baseline OpenIDEA/proof; mọi lệch phải được sửa.
+- [ ] **VIS-03**: Ghi log pass/fail kèm screenshot cho từng màn hình và từng trạng thái control; báo cáo sweep được lưu thành artifact planning.
+- [ ] **VIS-04**: Kiểm tra behavior trên Chrome bằng tương tác thật: Tab/Arrow/Enter/Escape, mở/đóng popup, focus trap, validation, click, đổi theme; không có console error làm lỗi UI.
+- [ ] **VIS-05**: Milestone chỉ đóng khi báo cáo sweep không còn defect render/behavior mở; sếp không phải tự duyệt từng tính năng hay từng màn hình.
 
 ## Future Requirements
 
-- Full component-level snapshot/visual regression suite khi design system ổn định.
-- Theme editor cho phép user tự đổi accent color.
+- Visual regression suite ở mức snapshot khi bộ control đã ổn định.
+- Theme editor cho phép đổi accent color mà không sửa source token.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Shell AntD cũ / PWA behavior | User chỉ dùng IntelliJ mode; PWA đã bị loại khỏi current work. |
-| Migration dữ liệu/cấu hình shell cũ | App chưa production (C-16). |
-| Đổi thư viện UI khác Ant Design | Thiết kế hiện tại dựa trên AntD 6; chỉ wrap, không thay stack. |
-| Tính năng sản phẩm mới | Milestone này chỉ refactor UI/UX nhất quán. |
+| Validation PWA/GitHub Pages | Milestone hiện tại chỉ nhắm Tauri desktop theo CLAUDE.md. |
+| Thay đổi feature/product behavior | Milestone này chỉ đổi hệ thống UI/control. |
+| Thêm thư viện UI khác | Mục tiêu là control native tự build, lightweight. |
+| Giữ tương thích runtime AntD | AntD bị gỡ hoàn toàn sau milestone. |
+| Thay đổi data model, ID, backup, sync | Không liên quan đến UI refactor; ID phải giữ ổn định. |
+| Hệ thống cộng tác/backend | App vẫn là personal offline-first. |
+| Full Vitest suite | Bị loại theo ràng buộc thời gian của dự án; dùng focused test. |
 
 ## Traceability
 
@@ -60,33 +61,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SHELL-01 | Phase 49 | Complete |
-| SHELL-02 | Phase 49 | Complete |
-| SHELL-03 | Phase 49 | Complete |
-| TOKEN-01 | Phase 49 | Complete |
-| TOKEN-02 | Phase 49 | Complete |
-| TOKEN-03 | Phase 49 | Complete |
-| TOKEN-04 | Phase 49 | Complete |
-| CTRL-01 | Phase 49 | Complete |
-| CTRL-02 | Phase 49 | Complete |
-| CTRL-03 | Phase 49 | Complete |
-| CTRL-04 | Phase 49 | Complete |
-| CTRL-05 | Phase 49 | Complete |
-| CTRL-06 | Phase 49 | Complete |
-| GUARD-01 | Phase 49 | Complete |
-| GUARD-02 | Phase 49 | Complete |
-| GUARD-03 | Phase 49 | Complete |
-| ADOPT-01 | Phase 50 | Pending |
-| ADOPT-02 | Phase 50 | Pending |
-| ADOPT-03 | Phase 50 | Pending |
-| ADOPT-04 | Phase 50 | Pending |
+| INV-01 | TBD | Pending |
+| INV-02 | TBD | Pending |
+| INV-03 | TBD | Pending |
+| MAP-01 | TBD | Pending |
+| MAP-02 | TBD | Pending |
+| MAP-03 | TBD | Pending |
+| NAT-01 | TBD | Pending |
+| NAT-02 | TBD | Pending |
+| NAT-03 | TBD | Pending |
+| NAT-04 | TBD | Pending |
+| CLEAN-01 | TBD | Pending |
+| CLEAN-02 | TBD | Pending |
+| CLEAN-03 | TBD | Pending |
+| VIS-01 | TBD | Pending |
+| VIS-02 | TBD | Pending |
+| VIS-03 | TBD | Pending |
+| VIS-04 | TBD | Pending |
+| VIS-05 | TBD | Pending |
 
 **Coverage:**
 
-- v1 requirements: 20 total
-- Mapped to phases: 20
-- Unmapped: 0
+- v1 requirements: 18 total
+- Mapped to phases: 0
+- Unmapped: 18 ⚠️
 
 ---
 *Requirements defined: 2026-11-21*
-*Last updated: 2026-11-21 after milestone v1.5 definition*
+*Last updated: 2026-11-21 after milestone v1.6 definition*
