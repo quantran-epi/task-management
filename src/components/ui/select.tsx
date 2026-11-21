@@ -85,9 +85,16 @@ export function Select<
   const multiple = mode === 'multiple' || mode === 'tags';
   const controlled = rest.value !== undefined;
   const current = controlled ? rest.value : innerValue;
-  const selectedKeys = multiple
+  // Depend on a primitive snapshot, not a fresh Set: setLead rerenders must not
+  // reset the keyboard lead back to the selected option (UI-SPEC §7.1 / §9).
+  const selectedValueKey = multiple
+    ? JSON.stringify(Array.isArray(current) ? (current as unknown[]).map(valueKey) : [])
+    : (current === undefined || current === null ? '' : valueKey(current));
+  const selectedKeys = useMemo(() => multiple
     ? new Set(Array.isArray(current) ? (current as unknown[]).map(valueKey) : [])
-    : new Set(current === undefined || current === null ? [] : [valueKey(current)]);
+    : new Set(current === undefined || current === null ? [] : [valueKey(current)]),
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- current can be a fresh array each render; selectedValueKey is its stable snapshot.
+  [multiple, selectedValueKey]);
   const disabled = rest.disabled === true || rest.loading === true;
   const invalid = status === 'error' || rest['aria-invalid'] === true;
 

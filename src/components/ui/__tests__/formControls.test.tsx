@@ -152,6 +152,31 @@ describe('Select event parity (WR-04)', () => {
     expect(onChange.mock.calls[0]![1]).toMatchObject({ value: 'banana', label: 'Banana' });
   });
 
+  it('keeps the lead across repeated ArrowDown and selects the second option on Enter (RR-01)', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <Select
+        aria-label="Chọn"
+        showSearch
+        placeholder="Chọn"
+        options={[
+          { value: 'a1', label: 'Alpha one' },
+          { value: 'a2', label: 'Alpha two' },
+          { value: 'a3', label: 'Alpha three' },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    const input = container.querySelector('input[aria-label="Chọn"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'alpha' } });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(document.querySelector('[data-lead]')).toHaveTextContent('Alpha two');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0]![0]).toBe('a2');
+  });
+
   it('removes only the tag whose onClose was clicked', () => {
     const onChange = vi.fn();
     render(
