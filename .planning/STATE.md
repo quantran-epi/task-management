@@ -4,7 +4,7 @@ milestone: v1.5
 milestone_name: Design System & UI Consistency
 status: Roadmap defined; not started
 stopped_at: Phase 49 UI-SPEC approved
-last_updated: "2026-11-21T07:04:13.301Z"
+last_updated: "2026-11-21T07:32:03.746Z"
 last_activity: 2026-11-21 — Milestone v1.5 started
 progress:
   total_phases: 2

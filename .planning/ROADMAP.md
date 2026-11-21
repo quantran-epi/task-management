@@ -23,7 +23,7 @@
 
 ## Phases
 
-- [ ] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all ~60 AntD wrappers, ESLint/CI guard, focused token+wrapper tests.
+- [ ] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all AntD wrappers, ESLint + local checks guard, focused token+wrapper tests.
 - [ ] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green.
 
 ## Phase Details
@@ -34,23 +34,52 @@
 **Depends on:** Nothing (first phase of v1.5; follows Phase 48 from prior milestone)
 **Requirements**: SHELL-01, SHELL-02, SHELL-03, TOKEN-01, TOKEN-02, TOKEN-03, TOKEN-04, CTRL-01, CTRL-02, CTRL-03, CTRL-04, CTRL-05, CTRL-06, GUARD-01, GUARD-02, GUARD-03
 **Success Criteria** (what must be TRUE):
+
   1. Ứng dụng chỉ khởi động shell IntelliJ/workbench; repo không còn code shell AntD cũ, flag chuyển đổi trong `main.tsx`, hay PWA install prompts, và không có migration cho cấu hình shell cũ.
   2. Một nguồn token duy nhất (màu, radius, chiều cao control, font, spacing) drive cả AntD `ConfigProvider` lẫn CSS/workbench; đổi theme cập nhật ngay mọi control không reload và giữ nguyên lựa chọn hiện tại của user.
   3. Mọi control AntD dùng trong app (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip, ~60 components) có wrapper TaskMate tại `src/components/ui/`; mỗi wrapper áp token defaults và policy riêng — không re-export rỗng, đổi implementation tại một điểm.
   4. ESLint `no-restricted-imports` chặn mọi import trực tiếp `antd`/`@ant-design/icons` ngoài `src/components/ui/`; `npm run lint` + `npm run build` + focused test chạy local sau mỗi lần sửa, vi phạm làm lint fail. Không dùng GitHub Actions CI.
   5. Focused Vitest xanh cho wrapper và token ở cả light và dark: giá trị token, accessible name của icon button, policy footer/close của modal, bảng màu status tag, và phát hiện drift giữa ConfigProvider và CSS token.
-**Plans**: 9 plans in 8 waves (plan 05 split into 05/06/07 after checker review; old 06→08, 07→09)
 
+**Plans**: 9 plans in 8 waves (plan 05 split into 05/06/07 after checker review; old 06→08, 07→09)
 Plans:
+**Wave 1**
+
 - [ ] 49-01-PLAN.md — Xóa shell AntD/flag/PWA; hard-boot IntelliJ, giữ lại side effect + coding-zone popout (SHELL-01..03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 49-02-PLAN.md — Một nguồn `tokens.ts` cho ConfigProvider + CSS vars; toggle light/dark, localStorage override, broadcast popout + subscriber re-render (TOKEN-01..04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 49-03-PLAN.md — Khung wrapper: `tokens.contract.ts`, Button/IconButton (aria-label), 144 icon, scanner tồn kho AntD (CTRL-01/02/06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 49-04-PLAN.md — Wrapper nhóm input và overlay; holder giữ theme cho message/notification/modal (CTRL-03/04)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 49-05-PLAN.md — Wrapper status + control phức tạp chính (Table/Form/DatePicker/Menu/Tooltip/Popover/Tree/...) (CTRL-01/05/06)
 - [ ] 49-06-PLAN.md — Wrapper control còn lại: Card/Descriptions/Grid/Typography/Space + utility lõi (CTRL-01/06) [wave 5, song song 05]
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 49-07-PLAN.md — Wrapper utility/layout cuối, chốt barrel + test parity D-12 + scanner coverage (CTRL-01/05/06)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
 - [ ] 49-08-PLAN.md — ESLint Babel-parser guard + npm script local, install package bản pin + verify repo tự động, test coverage D-04 (GUARD-01..03)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+
 - [ ] 49-09-PLAN.md — Cổng tổng hợp lint+build+focused test, ký Nyquist và UI-SPEC + advisory SUS (toàn bộ 16 requirement, 25 task)
+
+**Cross-cutting constraints:**
+
+- Every wrapper here calls a tokens.contract.ts helper; none is a bare re-export
+
 **UI hint**: yes
 
 ### Phase 50: Full App Adoption
@@ -59,11 +88,13 @@ Plans:
 **Depends on:** Phase 49
 **Requirements**: ADOPT-01, ADOPT-02, ADOPT-03, ADOPT-04
 **Success Criteria** (what must be TRUE):
+
   1. Mọi màn hình, tool window, settings, CR, notes, AI Office và modal trong shell IntelliJ render qua wrapper `src/components/ui/`; không còn import AntD trực tiếp bên ngoài thư mục wrapper.
   2. Không còn style inline lặp lại giá trị token trong các view đã migrate — màu, font, size, spacing lấy từ nguồn token chung.
   3. UAT Chrome quan sát được ở cả light và dark cho task quick-add, settings CRUD, CR detail actions, modal forms, toolbar icon buttons và AI chat controls; focus, keyboard nav và accessible name còn nguyên trên mọi control.
   4. Light/dark parity trên các luồng đại diện: cùng một control ở hai theme chỉ khác giá trị token, không có control nào lệch màu/font/size.
   5. `tsc --noEmit`, lint, focused Vitest và build đều xanh.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -71,7 +102,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Design System Foundation | 0/7 | Ready to execute | - |
+| 49. Design System Foundation | 0/9 | Ready to execute | - |
 | 50. Full App Adoption | 0/TBD | Not started | - |
 
 ## Previous Milestone: v1.3
