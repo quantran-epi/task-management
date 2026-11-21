@@ -2645,6 +2645,44 @@ export function createTeamRunCoordinator(
         }
       } finally {
         settleAgent(employee.id, 'error', truthfulReport ?? SANITIZED_TURN_ERROR, attempt?.assignmentId);
+        // 261121-r78: a mention-started turn owns no assignment, so `finalizeAttempt` inserts
+        // no bubble. Persist the same truthful copy here so the agent's error is visible in
+        // the transcript. Provider throws get no bubble here — they keep `onError`'s sanitized
+        // copy and must never reach `content`.
+        if (truthfulReport !== undefined && attempt === undefined) {
+          try {
+            const reportId = generateId();
+            const createdAt = new Date().toISOString();
+            await insertReportMessage(
+              {
+                id: reportId,
+                threadId: options.threadId,
+                content: truthfulReport,
+                createdAt,
+                agentId: employee.id,
+                agentName: employee.name,
+                runStatus: 'error',
+                incomplete: true,
+              },
+              db
+            );
+            await appendForExistingMessage(
+              {
+                id: reportId,
+                teamId,
+                from: employee.id,
+                to: [replyRecipientByAgent.get(employee.id) ?? USER_PARTICIPANT_ID],
+                content: truthfulReport,
+                kind: 'report',
+                createdAt,
+              },
+              db
+            );
+            notifyAIChatSync({ type: 'message_saved', threadId: options.threadId });
+          } catch {
+            /* a transcript write must not mask the original provisioning failure */
+          }
+        }
       }
       throw err;
     } finally {
