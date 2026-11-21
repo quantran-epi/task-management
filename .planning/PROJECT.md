@@ -12,17 +12,19 @@ Make planned work realistically fit available time by exposing overload early an
 
 Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Shipped v1.1 Banking IT Enhancements. Phase 16 knowledge server foundation and Phase 17 pilot ontology & Neo4j graph projection complete (all 5 plans in Phase 17 executed, GRAPH-01..GRAPH-06 satisfied). Codebase features closed ontology contracts, deterministic AST extraction, bounded LLM prose fallback, factKey deduplication, parameterized Neo4j adapter, Fastify inspection endpoints, and DocumentSetDrawer graph controls with PlannerMate offline isolation.
 
-## Current Milestone: v1.5 Design System & UI Consistency
+## Current Milestone: v1.6 Native UI Controls
 
-**Progress:** Phase 49 complete — IntelliJ-only shell, unified light/dark tokens, all AntD controls wrapped, ESLint guard + local checks green (2026-11-21). Phase 50 (full-app adoption + Chrome UAT) pending.
+**Progress:** Phase 50 complete (2026-11-21). Proof control clone theo OpenIDEA đã được sếp duyệt (`scratchpad/oi-prototype/PROOF.md`): dùng CSS module gốc + DOM/class khớp source, portal popup, checkbox SVG, computed-style parity light/dark, keyboard/focus behavior pass. Chưa đụng repo TaskMate.
 
-**Goal:** Refactor toàn bộ UI TaskMate thành một design system duy nhất theo phong cách IntelliJ: tất cả control AntD đều được wrap tại một nơi, token dùng chung cho light và dark, xóa shell AntD cũ, và guard bằng ESLint + kiểm tra local bắt buộc để không tái diễn import trực tiếp.
+**Goal:** Thay toàn bộ AntD bằng bộ control tự build theo ngôn ngữ thiết kế OpenIDEA (PyCharm Islands), light + dark, áp dụng tập trung tại wrapper TaskMate; giữ nguyên props/API/event/keyboard/focus/validation/a11y; gỡ hẳn dependency `antd` + `@ant-design/icons` khi hoàn tất.
+
 **Target features:**
-- **Shell đơn nhất**: chỉ khởi động shell IntelliJ; xóa hẳn shell AntD, flag chuyển đổi và PWA prompts; không migration.
-- **Token tập trung**: một nguồn token (màu/radius/height/font/spacing) cho cả ConfigProvider lẫn CSS; light + dark đầy đủ, đổi theme tức thì, giữ lựa chọn hiện tại của user.
-- **Wrapper toàn diện**: mọi control AntD (kể cả Table/Form/DatePicker/Modal/Drawer/Card/Menu/Tooltip/...) đều có wrapper TaskMate tại `src/components/ui/`; mọi control có thể đổi/thay thế tại một điểm, không import trực tiếp.
-- **Guardrails**: ESLint `no-restricted-imports` chặn import AntD ngoài thư mục wrapper; chạy lint + build + focused test local sau mỗi lần sửa (không dùng GitHub Actions CI).
-- **Adoption & verify**: migrate mọi màn hình/tool window/settings/CR/notes/AI Office, xóa style trùng token, UAT Chrome ở cả light và dark, tsc + lint + focused test + build xanh.
+- **Inventory control (Phase 51)**: quét mọi control/UI surface TaskMate đang dùng từ `src/components/ui/` và mọi import AntD còn sót; lập danh mục props/behavior/a11y, phân loại theo nhóm.
+- **Mapping & design**: với mỗi control, map sang control tương đương trong OpenIDEA; control không có thì thiết kế mới theo ngôn ngữ OpenIDEA (token, metric, radius, focus ring, popup portal, DOM/class pattern), kể cả Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form.
+- **Native implementation**: thay wrapper bằng control tự build (React + CSS module/CSS vars + Web API), không runtime AntD, không thư viện UI khác; giữ nguyên API wrapper để app không sửa từng màn hình.
+- **Removal & guardrails**: xóa import AntD trong wrapper, ESLint guard chặn import trực tiếp, gỡ `antd`/`@ant-design/icons` khỏi `package.json`; lint + build + focused test + UAT Chrome light/dark xanh.
+
+**Previous milestone (v1.5) features:** shell IntelliJ đơn nhất, token tập trung light/dark, wrapper toàn diện mọi control AntD, ESLint guard, adoption toàn app.
 
 
 **Previous milestone (v1.4) features:**
