@@ -28,7 +28,7 @@ describe('tokens — single source parity', () => {
     }
     expect(built.token?.borderRadius).toBe(4);
     expect(built.token?.controlHeight).toBe(30);
-    expect(built.token?.fontSize).toBe(13.5);
+    expect(built.token?.fontSize).toBe(13);
   });
 
   it('changes only colors between modes — metrics stay identical', () => {
@@ -44,7 +44,7 @@ describe('tokens — single source parity', () => {
     // Locked metrics from 49-UI-SPEC — explicit values, not read back from the object under test.
     expect(lightTokens.borderRadius).toBe(4);
     expect(lightTokens.controlHeight).toBe(30);
-    expect(lightTokens.fontSize).toBe(13.5);
+    expect(lightTokens.fontSize).toBe(13);
     expect(lightTokens.buttonPaddingInline).toBe(12);
     expect(lightTokens.tablePadding).toBe(8);
     expect(lightTokens.tableFontSize).toBe(13);

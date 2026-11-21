@@ -12,7 +12,7 @@ export type ThemeMode = 'light' | 'dark';
 export const sharedTokens = {
   borderRadius: 4,
   controlHeight: 30,
-  fontSize: 13.5,
+  fontSize: 13, // UI-SPEC §Typography — Body/UI token (no fractional sizes).
   fontFamily: 'var(--font-ui, "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
   buttonPaddingInline: 12,
   tablePadding: 8,
