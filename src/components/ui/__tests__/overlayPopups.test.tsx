@@ -4,6 +4,8 @@ import type { ReactElement } from 'react';
 import { Dropdown, DropdownButton } from '../dropdown';
 import { Tooltip } from '../tooltip';
 import { Popover, WIDTH_SCALE } from '../popover';
+import { Popconfirm } from '../popconfirm';
+import { AutoComplete, AutoCompleteOption } from '../auto-complete';
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -172,5 +174,90 @@ describe('S-MNU/Dropdown native popup', () => {
   it('keeps DropdownButton self-built and widths scaled', () => {
     expect(typeof DropdownButton).toBe('function');
     expect(WIDTH_SCALE).toEqual({ md: 18, lg: 28 });
+  });
+});
+
+describe('Popconfirm native confirm bubble', () => {
+  it('keeps Vietnamese copy, danger tone and live native event payload', () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const view = render(
+      <Popconfirm open tone="danger" title="Xóa?" onConfirm={onConfirm} onCancel={onCancel}>
+        {anchor('Xóa')}
+      </Popconfirm>,
+    );
+    const ok = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Xác nhận')!;
+    const cancel = Array.from(document.querySelectorAll('button')).find((button) => button.textContent === 'Hủy')!;
+    expect(ok.className).toContain('danger');
+    expect(ok.style.getPropertyValue('--ui-status-color')).not.toBe('');
+    const info = { nativeEvent: undefined as unknown };
+    ok.addEventListener('click', (event) => { info.nativeEvent = event; });
+    fireEvent.click(ok);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    const payload = onConfirm.mock.calls[0]![0];
+    expect(typeof payload.stopPropagation).toBe('function');
+    expect(payload.key).toBeUndefined();
+    expect(payload.domEvent).toBeDefined();
+    expect(() => payload.preventDefault()).not.toThrow();
+    fireEvent.click(cancel);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
+  it('calls onCancel on Escape and restores the trigger anchor', () => {
+    const onCancel = vi.fn();
+    const view = render(
+      <Popconfirm title="Chắc chứ?" onCancel={onCancel}>
+        {anchor('Xóa')}
+      </Popconfirm>,
+    );
+    const trigger = view.getByText('Xóa');
+    fireEvent.click(trigger);
+    const anchorNode = trigger.parentElement as HTMLElement;
+    anchorNode.tabIndex = 0;
+    anchorNode.focus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalled();
+    expect(document.activeElement).toBe(anchorNode);
+    view.unmount();
+  });
+});
+
+describe('S-SEL native AutoComplete', () => {
+  it('moves ArrowDown lead without resetting and commits onChange/onSelect payloads', () => {
+    const onChange = vi.fn();
+    const onSelect = vi.fn();
+    const view = render(
+      <AutoComplete
+        options={[{ value: 'a1', label: 'Alpha one' }, { value: 'a2', label: 'Alpha two' }, { value: 'b1', label: 'Beta' }]}
+        onChange={onChange}
+        onSelect={onSelect}
+      />,
+    );
+    const input = view.container.querySelector('input')!;
+    fireEvent.focus(input);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    const rows = document.querySelectorAll('[data-oi-control="list-row"]');
+    expect(rows.length).toBe(3);
+    const lead = document.querySelector('[data-lead]') as HTMLElement;
+    expect(lead.textContent).toBe('Beta');
+    expect(lead.style.height).toBe('24px');
+    expect(input.getAttribute('aria-activedescendant')).toBe(lead.id);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('b1', expect.objectContaining({ value: 'b1' }));
+    expect(onSelect).toHaveBeenCalledWith('b1', expect.objectContaining({ value: 'b1' }));
+    view.unmount();
+  });
+
+  it('keeps caller styles.root, disabled suppression and self-built option static', () => {
+    expect(typeof AutoCompleteOption).toBe('function');
+    const view = render(<AutoComplete disabled styles={{ root: { maxWidth: '222px' } }} options={[{ value: 'a' }]} />);
+    const input = view.container.querySelector('input') as HTMLInputElement;
+    expect(input.disabled).toBe(true);
+    expect(input.style.maxWidth).toBe('222px');
+    fireEvent.focus(input);
+    expect(installedPopup()).toBeNull();
+    view.unmount();
   });
 });
