@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 
 /** 0-based line interval of a foldable block, computed on the formatted output. */
 export type FoldRange = { openLine: number; closeLine: number };
@@ -86,7 +86,32 @@ export type LineNumberedPaneProps = {
   children?: React.ReactNode;
 };
 
-/** Gutter + content row. Caller owns the child ref; the gutter mirrors its scrollTop. */
+type FoldButtonProps = {
+  lineIndex: number;
+  collapsed: boolean;
+  onToggleFold: ((lineIndex: number) => void) | undefined;
+};
+
+const FoldButton = memo(function FoldButton({ lineIndex, collapsed, onToggleFold }: FoldButtonProps) {
+  const number = lineIndex + 1;
+  return (
+    <button
+      type="button"
+      aria-label={`${collapsed ? 'Mở rộng' : 'Thu gọn'} dòng ${number}`}
+      aria-expanded={!collapsed}
+      onClick={() => onToggleFold?.(lineIndex)}
+      style={{ position: 'absolute', right: 2, top: lineIndex * 20, height: 20, border: 'none', background: 'transparent', color: 'var(--fg-muted, #6c707e)', padding: '0 2px', font: 'inherit', cursor: 'pointer', lineHeight: '20px' }}
+    >
+      {collapsed ? '▸' : '▾'}
+    </button>
+  );
+});
+
+/**
+ * Gutter + content. Line numbers are ONE text node (`<pre>`) instead of N divs —
+ * long documents stay cheap to re-render. Fold buttons are absolute-positioned
+ * only on foldable lines.
+ */
 export function LineNumberedPane({
   scrollRef,
   totalLines,
@@ -114,36 +139,32 @@ export function LineNumberedPane({
     () => visibleLines ?? Array.from({ length: Math.max(0, totalLines) }, (_, i) => i),
     [visibleLines, totalLines]
   );
-  const gutterRows = useMemo(
-    () => lines.map((lineIndex) => {
-      const foldable = foldableLines?.has(lineIndex) ?? false;
-      const collapsed = collapsedLines?.has(lineIndex) ?? false;
-      const number = lineIndex + 1;
-      return (
-        <div key={lineIndex} style={{ height: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 0 6px' }}>
-          <span style={{ color: 'var(--fg-muted, #6c707e)' }}>{number}</span>
-          {foldable && (
-            <button
-              type="button"
-              aria-label={`${collapsed ? 'Mở rộng' : 'Thu gọn'} dòng ${number}`}
-              aria-expanded={!collapsed}
-              onClick={() => onToggleFold?.(lineIndex)}
-              style={{ border: 'none', background: 'transparent', color: 'var(--fg-muted, #6c707e)', padding: '0 2px', font: 'inherit', cursor: 'pointer', lineHeight: '20px' }}
-            >
-              {collapsed ? '▸' : '▾'}
-            </button>
-          )}
-        </div>
-      );
-    }),
+  // One string, one DOM node. Building 500 <div>+<span> per keystroke was the lag.
+  const numbersText = useMemo(
+    () => lines.map((lineIndex) => String(lineIndex + 1)).join('\n'),
+    [lines]
+  );
+  const foldButtons = useMemo(
+    () => lines
+      .filter((lineIndex) => foldableLines?.has(lineIndex))
+      .map((lineIndex) => (
+        <FoldButton
+          key={lineIndex}
+          lineIndex={lineIndex}
+          collapsed={collapsedLines?.has(lineIndex) ?? false}
+          onToggleFold={onToggleFold}
+        />
+      )),
     [lines, foldableLines, collapsedLines, onToggleFold]
   );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
       <div
         ref={gutterRef}
         data-testid="line-gutter"
         style={{
+          position: 'relative',
           overflow: 'hidden',
           flex: `0 0 ${gutterWidth}px`,
           background: 'var(--bg-elev, #f7f8fa)',
@@ -153,7 +174,8 @@ export function LineNumberedPane({
           color: 'var(--fg-muted, #6c707e)',
         }}
       >
-        {gutterRows}
+        <pre style={{ margin: 0, padding: '0 0 0 6px', font: 'inherit' }}>{numbersText}</pre>
+        {foldButtons}
       </div>
       {children}
     </div>

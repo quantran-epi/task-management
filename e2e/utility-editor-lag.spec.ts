@@ -92,6 +92,31 @@ test.describe('utility editors stay responsive', () => {
     await expect.poll(() => gutter.evaluate((el: HTMLElement) => el.scrollTop)).toBeGreaterThan(0);
   });
 
+  test('500-line document: typing and Format stay under the regression budget', async ({ page }) => {
+    await openTool(page, 'XML Formatter');
+    const latency = await page.evaluate(() => {
+      const el = document.querySelector('textarea[aria-label="XML input"]') as HTMLTextAreaElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
+      const big = '<root>\n' + Array.from({ length: 500 }, (_, i) => `<item id="${i}"><name>n${i}</name></item>`).join('\n') + '\n</root>';
+      return new Promise<{ typeMs: number; fmtMs: number }>((resolve) => {
+        setter.call(el, big);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          const t0 = performance.now();
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            const typeMs = performance.now() - t0;
+            const fmt = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Format'))!;
+            const t1 = performance.now();
+            fmt.click();
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve({ typeMs, fmtMs: performance.now() - t1 })));
+          }));
+        }));
+      });
+    });
+    expect(latency.typeMs).toBeLessThan(150);
+    expect(latency.fmtMs).toBeLessThan(400);
+  });
+
   test('AI assistant opens for each tool without blocking the editor', async ({ page }) => {
     for (const { tool, aiName } of [
       { tool: 'JSON Formatter', aiName: /AI · JSON Formatter/ },
