@@ -5,6 +5,8 @@ import {
   SettingOutlined,
   DesktopOutlined,
   CodeOutlined,
+  SunOutlined,
+  MoonOutlined,
 } from '@ant-design/icons';
 import { TaskMateLogo } from '../components/TaskMateLogo';
 import {
@@ -17,6 +19,7 @@ import {
 } from '../components/icons/JetBrainsIcons';
 import { isTauriApp } from '../utils/timerPopout';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
+import { useThemeMode } from '../hooks/useThemeMode';
 import type { EditorViewType } from './store/layoutStore';
 
 export interface TitleBarProps {
@@ -36,6 +39,7 @@ export function TitleBar({
 }: TitleBarProps) {
   const [tauriModalOpen, setTauriModalOpen] = useState(false);
   const isTauri = isTauriApp();
+  const { mode, toggle } = useThemeMode();
 
   const { pendingCount } = useTelegramPendingUsers();
 
@@ -308,6 +312,27 @@ export function TitleBar({
               </Button>
             </Tooltip>
           </div>
+
+          {/* Theme toggle — light/dark swap is instant across the app and popouts (D-05/D-07). */}
+          <Tooltip title={mode === 'dark' ? 'Giao diện: Sáng' : 'Giao diện: Tối'}>
+            <Button
+              type="text"
+              size="small"
+              icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+              onClick={toggle}
+              aria-label="Chuyển đổi giao diện sáng/tối"
+              style={{
+                width: 28,
+                height: 28,
+                minWidth: 28,
+                padding: 0,
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          </Tooltip>
 
           {/* Tauri Desktop Runtime Check Trigger Button */}
           <Tooltip title={isTauri ? 'Tauri Desktop Runtime (Click to inspect)' : 'Web Browser Runtime'}>

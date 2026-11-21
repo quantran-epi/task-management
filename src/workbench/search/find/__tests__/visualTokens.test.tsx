@@ -31,13 +31,15 @@ describe('46.1 visual tokens — single source of truth', () => {
     sources = Object.fromEntries(TOUCHED_COMPONENTS.map((path) => [path, read(path)]));
   });
 
-  it('declares the draft accent and match tokens in both light and dark blocks', () => {
-    expect(tokenCss).toMatch(/--accent:\s*#2f62d8/);
-    expect(tokenCss).toMatch(/--accent:\s*#6a9bff/);
-    expect(tokenCss).toMatch(/--match:/);
-    expect(tokenCss).toMatch(/--match-ink:/);
-    expect(tokenCss).toContain('prefers-color-scheme: dark');
-    expect(tokenCss).toContain(':root[data-theme="dark"]');
+  it('sources the draft accent and match tokens from tokens.ts and keeps structural CSS', () => {
+    // 49-02: palette moved to the single tokens.ts source and is injected at runtime.
+    const tokensSource = read('src/styles/tokens.ts');
+    expect(tokensSource).toMatch(/#2f62d8/);
+    expect(tokensSource).toMatch(/#6a9bff/);
+    expect(tokensSource).toMatch(/'--match':/);
+    expect(tokensSource).toMatch(/'--match-ink':/);
+    expect(tokenCss).toContain('src/styles/tokens.ts');
+    expect(tokenCss).toMatch(/--handle-line-color:\s*var\(--border-strong\)/);
   });
 
   it('scopes the viewport overflow lock to the workbench, not the default shell (IN-02)', () => {
@@ -48,6 +50,7 @@ describe('46.1 visual tokens — single source of truth', () => {
   });
 
   it('declares every compact row/control token consumed by the Find dialog', () => {
+    const tokensSource = read('src/styles/tokens.ts');
     for (const name of [
       '--row', '--tree-indent', '--tree-icon-size', '--tree-guide-width',
       '--find-field-height', '--find-toggle-height', '--find-pane-head-height',
@@ -55,7 +58,7 @@ describe('46.1 visual tokens — single source of truth', () => {
       '--find-dialog-width', '--find-dialog-top', '--find-dialog-radius',
       '--find-code-line-height', '--find-gutter-width',
     ]) {
-      expect(tokenCss).toMatch(new RegExp(`${name}\\s*:`));
+      expect(tokensSource).toMatch(new RegExp(`'${name}':`));
     }
   });
 

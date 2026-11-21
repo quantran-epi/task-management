@@ -99,7 +99,8 @@ export interface CodePreviewProps {
 }
 
 export function CodePreview({ content, pattern, options, activeLine }: CodePreviewProps) {
-  const isDark = useThemeMode();
+  const { mode } = useThemeMode();
+  const isDark = mode === 'dark';
   const lines = content.split('\n');
   const marks = previewMatchRanges(content, pattern, options);
   const markByLine = new Map<number, Array<[number, number]>>();

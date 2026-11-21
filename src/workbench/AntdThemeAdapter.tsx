@@ -1,15 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { ConfigProvider } from 'antd';
 import { useThemeMode } from '../hooks/useThemeMode';
-import { applyCssVariables, getAntdTheme, type ThemeMode } from '../styles/tokens';
+import { applyCssVariables, getAntdTheme } from '../styles/tokens';
 
 export interface AntdThemeAdapterProps {
   children: React.ReactNode;
 }
 
 export function AntdThemeAdapter({ children }: AntdThemeAdapterProps) {
-  const isDark = useThemeMode();
-  const mode: ThemeMode = isDark ? 'dark' : 'light';
+  const { mode } = useThemeMode();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
