@@ -69,7 +69,7 @@ export function LeftToolWindow({
         flexDirection: 'column',
         height: '100%',
         width: '100%',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
         overflow: 'hidden',
       }}
     >
@@ -115,7 +115,7 @@ export function LeftToolWindow({
                 color: 'var(--fg-muted, #6c707e)',
               }}
             >
-              <MinusOutlined style={{ fontSize: 12 }} />
+              <MinusOutlined style={{ fontSize: 'var(--font-size-small)' }} />
             </button>
           </Tooltip>
         </div>

@@ -372,7 +372,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     background: isActive ? 'var(--bg-popup)' : 'transparent',
                     color: isActive ? 'var(--fg-strong)' : 'var(--fg-secondary)',
                     fontWeight: isActive ? 600 : 400,
-                    fontSize: 12,
+                    fontSize: 'var(--font-size-small)',
                     cursor: 'pointer',
                     boxShadow: isActive ? 'var(--shadow)' : 'none',
                     transition: 'all 0.15s ease',
@@ -399,7 +399,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               alignItems: 'center',
             }}
           >
-            <CloseOutlined style={{ fontSize: 12 }} />
+            <CloseOutlined style={{ fontSize: 'var(--font-size-small)' }} />
           </button>
         </div>
 
@@ -427,7 +427,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               flex: 1,
               border: 'none',
               outline: 'none',
-              fontSize: 13.5,
+              fontSize: 'var(--font-size-ui)',
               fontFamily: 'inherit',
               color: 'var(--fg-strong)',
               background: 'transparent',
@@ -446,7 +446,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                 color: 'var(--fg-muted)',
               }}
             >
-              <CloseOutlined style={{ fontSize: 12 }} />
+              <CloseOutlined style={{ fontSize: 'var(--font-size-small)' }} />
             </button>
           )}
         </div>
@@ -459,7 +459,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               padding: '24px 16px',
               textAlign: 'center',
               color: 'var(--fg-muted)',
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               height: 120,
             }}
           >
@@ -512,7 +512,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
                     {item.subtitle && (
                       <span
                         style={{
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-xs)',
                           color: 'var(--fg-muted)',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',

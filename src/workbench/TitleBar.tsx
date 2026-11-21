@@ -87,7 +87,7 @@ export function TitleBar({
           }}
         >
           {/* Logo badge with colorful multi-color SVG icon */}
-          <TaskMateLogo size={22} style={{ borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.18)' }} />
+          <TaskMateLogo size={22} style={{ borderRadius: 'var(--radius-control)', boxShadow: '0 2px 6px rgba(0,0,0,0.18)' }} />
 
           <span
             style={{
@@ -118,7 +118,7 @@ export function TitleBar({
             style={{
               width: '100%',
               height: 28,
-              background: 'var(--bg-island, #ffffff)',
+              background: 'var(--bg-island)',
               border: '1px solid var(--border-strong, #d1d3d9)',
               borderRadius: 'var(--radius-control, 4px)',
               display: 'flex',
@@ -167,7 +167,7 @@ export function TitleBar({
             style={{
               display: 'flex',
               alignItems: 'center',
-              background: 'var(--bg-island, #ffffff)',
+              background: 'var(--bg-island)',
               border: '1px solid var(--border-strong, #d1d3d9)',
               borderRadius: 'var(--radius-control, 4px)',
               padding: 2,
@@ -184,7 +184,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'dashboard' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'dashboard' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
@@ -205,7 +205,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'tasks' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'tasks' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
@@ -226,7 +226,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'planner' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'planner' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
@@ -247,7 +247,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'telegram' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'telegram' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
@@ -274,7 +274,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'analytics' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'analytics' ? 'var(--bg-selected, #d0dffe)' : 'transparent',
@@ -295,7 +295,7 @@ export function TitleBar({
                 style={{
                   height: 24,
                   padding: '0 7px',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   borderRadius: 3,
                   color: activeView === 'config-profiles' ? 'var(--accent, #3871e1)' : 'var(--fg-secondary, #5f6269)',
                   background: activeView === 'config-profiles' ? 'var(--bg-selected, #d0dffe)' : 'transparent',

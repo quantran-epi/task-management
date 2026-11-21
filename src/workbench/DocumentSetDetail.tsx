@@ -652,7 +652,7 @@ export function DocumentSetDetail({
                       'Đồ thị tri thức chưa thể tạo. Kiểm tra tài liệu đã xuất bản hoặc LLM server rồi bấm Thử lại.'}
                   </Text>
                   {graphStatus.error?.details && (
-                    <Text type="secondary" style={{ fontSize: 12, display: 'block', wordBreak: 'break-all' }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', wordBreak: 'break-all' }}>
                       Chi tiết: {graphStatus.error.details}
                     </Text>
                   )}
@@ -692,7 +692,7 @@ export function DocumentSetDetail({
                     <Space style={{ justifyContent: 'space-between', width: '100%', marginBottom: 4 }}>
                       <Text strong>Giai đoạn: {STAGE_LABELS[graphStatus?.currentStage ?? 'Preparing']}</Text>
                       {graphStatus?.progress?.totalChunks ? (
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                           Phần: {graphStatus.progress.processedChunks}/{graphStatus.progress.totalChunks}
                         </Text>
                       ) : (
@@ -705,11 +705,11 @@ export function DocumentSetDetail({
                       size="small"
                     />
                     {graphStatus?.progress?.stageMessage && (
-                      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
+                      <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginTop: 2 }}>
                         {graphStatus.progress.stageMessage}
                       </Text>
                     )}
-                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4, color: token.colorTextTertiary }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', display: 'block', marginTop: 4, color: token.colorTextTertiary }}>
                       Đồ thị đang hoạt động trước đó vẫn khả dụng cho đến khi ứng viên hoàn tất.
                     </Text>
                   </div>
@@ -810,7 +810,7 @@ export function DocumentSetDetail({
               key: 'updatedAt',
               width: 180,
               ellipsis: true,
-              render: (value: string) => <Text style={{ fontSize: 12 }}>{value}</Text>,
+              render: (value: string) => <Text style={{ fontSize: 'var(--font-size-small)' }}>{value}</Text>,
             },
           ]}
         />
@@ -946,9 +946,9 @@ export function DocumentSetDetail({
                 ellipsis: true,
                 render: (text) =>
                   text ? (
-                    <Text type="danger" style={{ fontSize: 12 }}>{text}</Text>
+                    <Text type="danger" style={{ fontSize: 'var(--font-size-small)' }}>{text}</Text>
                   ) : (
-                    <Text type="secondary" style={{ fontSize: 12 }}>-</Text>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>-</Text>
                   ),
               },
               {

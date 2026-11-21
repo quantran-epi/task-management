@@ -96,7 +96,7 @@ const paneHeaderStyle: React.CSSProperties = {
   background: 'var(--bg-elev, #f3f4f6)',
   borderBottom: '1px solid var(--border, #e5e7eb)',
   fontWeight: 600,
-  fontSize: 12,
+  fontSize: 'var(--font-size-small)',
   color: 'var(--fg-secondary, #4b5563)',
 };
 const paneBodyStyle: React.CSSProperties = {
@@ -276,7 +276,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
       }
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             {isStreaming ? (
               <Space><Spin size="small" /> AI đang phản hồi...</Space>
             ) : mode === 'edit' ? (
@@ -307,7 +307,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
         {error && <Alert type="warning" showIcon message="AI không thể hoàn tất" description={error} />}
 
         {contextContent && (
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             Ngữ cảnh: {contextLabel || 'tham khảo'} — chỉ đọc, không bị sửa.
           </Text>
         )}
@@ -328,7 +328,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
         {mode === 'ask' ? (
           <div
             className="markdown-rendered-view"
-            style={{ minHeight: 360, maxHeight: 480, overflowY: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 6, padding: 16 }}
+            style={{ minHeight: 360, maxHeight: 480, overflowY: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 'var(--radius-control)', padding: 16 }}
             dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(stripThinkingBlocks(accumulated)) }}
           />
         ) : (
@@ -345,13 +345,13 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
             />
             {viewMode === 'split' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, height: 400 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border, #e5e7eb)', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border, #e5e7eb)', borderRadius: 'var(--radius-control)', overflow: 'hidden' }}>
                   <div style={paneHeaderStyle}>Nội dung gốc</div>
                   <div style={{ ...paneBodyStyle, background: 'var(--bg-elev, #fafafa)' }}>
                     {content || <Text type="secondary">(Không có nội dung)</Text>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #bae6fd', borderRadius: 6, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #bae6fd', borderRadius: 'var(--radius-control)', overflow: 'hidden' }}>
                   <div style={{ ...paneHeaderStyle, background: '#f0f9ff', color: '#0369a1' }}>Đề xuất từ AI</div>
                   <div style={{ ...paneBodyStyle, background: 'var(--bg-island, #fff)' }}>
                     {proposed || <Text type="secondary">{isStreaming ? 'Đang tạo nội dung...' : '(Chưa có đề xuất)'}</Text>}
@@ -360,7 +360,7 @@ export const UtilityToolAIAssistant: React.FC<UtilityToolAIAssistantProps> = ({
               </div>
             )}
             {viewMode === 'preview' && (
-              <div className="markdown-rendered-view" style={{ height: 400, overflowY: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 6, padding: 16 }}>
+              <div className="markdown-rendered-view" style={{ height: 400, overflowY: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 'var(--radius-control)', padding: 16 }}>
                 {proposed ? (
                   <div dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(proposed) }} />
                 ) : (

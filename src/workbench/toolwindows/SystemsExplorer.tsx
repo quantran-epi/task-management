@@ -282,7 +282,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
         }}
       >
         <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
           placeholder="Lọc hệ thống, subsystem..."
           allowClear
           size="small"
@@ -304,7 +304,7 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
             setModalOpen(true);
           }}
           title="Tạo hệ thống mới"
-          style={{ height: 24, padding: '0 8px', fontSize: 12 }}
+          style={{ height: 24, padding: '0 8px', fontSize: 'var(--font-size-small)' }}
         >
           Tạo
         </Button>

@@ -190,13 +190,13 @@ function SortableEditorTabItem({
     minWidth: isPinned ? 80 : 60,
     maxWidth: isPinned ? 240 : 200,
     background: isActive
-      ? 'var(--bg-island, #ffffff)'
+      ? 'var(--bg-island)'
       : 'var(--bg-elev, #f7f8fa)',
     borderRadius: 'var(--radius-tab, 6px) var(--radius-tab, 6px) 0 0',
     borderTop: isActive ? '2px solid var(--accent, #3871e1)' : '1px solid var(--border-strong, #d1d3d9)',
     borderLeft: '1px solid var(--border-strong, #d1d3d9)',
     borderRight: '1px solid var(--border-strong, #d1d3d9)',
-    borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid var(--border-strong, #d1d3d9)',
+    borderBottom: isActive ? '1px solid var(--bg-island)' : '1px solid var(--border-strong, #d1d3d9)',
     marginBottom: isActive ? -1 : 0,
     boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
     color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
@@ -272,9 +272,9 @@ function SortableEditorTabItem({
           }}
         >
           {isPinned ? (
-            <PushpinFilled style={{ fontSize: 11, pointerEvents: 'none' }} />
+            <PushpinFilled style={{ fontSize: 'var(--font-size-xs)', pointerEvents: 'none' }} />
           ) : (
-            <PushpinOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+            <PushpinOutlined style={{ fontSize: 'var(--font-size-xs)', pointerEvents: 'none' }} />
           )}
         </button>
 
@@ -331,7 +331,7 @@ function SortableEditorTabItem({
             flexShrink: 0,
           }}
         >
-          <CloseOutlined style={{ fontSize: 11, pointerEvents: 'none' }} />
+          <CloseOutlined style={{ fontSize: 'var(--font-size-xs)', pointerEvents: 'none' }} />
         </button>
       </div>
     </Dropdown>
@@ -396,7 +396,7 @@ export function EditorArea({ db }: EditorAreaProps) {
             {isPinned ? (
               <PushpinFilled
                 style={{
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   color: 'var(--accent, #3871e1)',
                   flexShrink: 0,
                 }}
@@ -455,7 +455,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                 color: isPinned ? 'var(--accent, #3871e1)' : 'var(--fg-muted, #6c707e)',
               }}
             >
-              {isPinned ? <PushpinFilled style={{ fontSize: 11 }} /> : <PushpinOutlined style={{ fontSize: 11 }} />}
+              {isPinned ? <PushpinFilled style={{ fontSize: 'var(--font-size-xs)' }} /> : <PushpinOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
             </button>
             <button
               type="button"
@@ -680,7 +680,7 @@ export function EditorArea({ db }: EditorAreaProps) {
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        background: 'var(--bg-app, #ffffff)',
+        background: 'var(--bg-app)',
       }}
     >
       {/* Editor Tab Bar */}
@@ -776,7 +776,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                 borderRadius: 'var(--radius-control, 4px)',
                 cursor: 'pointer',
                 color: 'var(--fg-secondary, #5f6269)',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
                 outline: 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -791,7 +791,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                 e.currentTarget.style.color = 'var(--fg-secondary, #5f6269)';
               }}
             >
-              <ReloadOutlined style={{ fontSize: 11 }} />
+              <ReloadOutlined style={{ fontSize: 'var(--font-size-xs)' }} />
             </button>
           </Tooltip>
 
@@ -823,7 +823,7 @@ export function EditorArea({ db }: EditorAreaProps) {
                   borderRadius: 'var(--radius-control, 4px)',
                   cursor: 'pointer',
                   color: 'var(--fg-secondary, #5f6269)',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   outline: 'none',
                   transition: 'all 0.15s ease',
                 }}
@@ -890,7 +890,7 @@ export function EditorArea({ db }: EditorAreaProps) {
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg, #000000)' }}>
                 No Tool Window Open
               </div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-size-small)', marginTop: 4 }}>
                 Press Double Shift to search everywhere, or press Alt+1 through Alt+5 to open tool windows.
               </div>
             </div>

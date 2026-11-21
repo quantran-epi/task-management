@@ -170,7 +170,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
         height: '100%',
         width: '100%',
         overflow: 'hidden',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
       }}
     >
       {/* Search and Action Bar */}
@@ -190,7 +190,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
-          style={{ flex: 1, fontSize: 12 }}
+          style={{ flex: 1, fontSize: 'var(--font-size-small)' }}
         />
         <Tooltip title="Tạo nhóm mới">
           <IconButton
@@ -231,7 +231,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '4px 6px',
-            fontSize: 11,
+            fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
             textTransform: 'uppercase',
             color: 'var(--fg-secondary, #5f6269)',
@@ -269,7 +269,7 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                   padding: '7px 8px',
                   borderRadius: 4,
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   marginBottom: 3,
                   transition: 'background 0.15s ease',
                   border: '1px solid var(--border-subtle, #f0f2f5)',
@@ -286,12 +286,12 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
                       ellipsis
-                      style={{ fontSize: 12.5, fontWeight: 600, display: 'block', lineHeight: 1.3 }}
+                      style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, display: 'block', lineHeight: 1.3 }}
                     >
                       {team.name}
                     </Typography.Text>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      <span style={{ fontSize: 11, color: 'var(--fg-secondary, #5f6269)' }}>
+                      <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary, #5f6269)' }}>
                         {leadName ? `Lead: ${leadName}` : 'Chưa chọn lead'}
                       </span>
                       <span style={{ fontSize: 10, color: 'var(--fg-muted, #8c8f9c)' }}>

@@ -49,7 +49,7 @@ export function Stripe({ slot, items, bottomItems }: StripeProps) {
             height: 30,
             padding: 0,
             border: 'none',
-            background: isActive ? 'var(--bg-island, #ffffff)' : 'transparent',
+            background: isActive ? 'var(--bg-island)' : 'transparent',
             borderRadius: 'var(--radius-control, 4px)',
             cursor: 'pointer',
             display: 'flex',

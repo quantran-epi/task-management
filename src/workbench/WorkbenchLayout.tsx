@@ -415,7 +415,7 @@ export function WorkbenchLayout({
                             flexDirection: 'column',
                             width: '100%',
                             height: '100%',
-                            background: 'var(--bg-island, #ffffff)',
+                            background: 'var(--bg-island)',
                           }
                         : {
                             overflow: 'hidden',

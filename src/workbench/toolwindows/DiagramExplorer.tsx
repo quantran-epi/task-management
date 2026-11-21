@@ -510,7 +510,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
             backgroundColor: isSelected ? '#d1fae5' : 'transparent',
             color: isSelected ? '#065f46' : '#374151',
             fontWeight: isSelected ? 600 : 400,
-            fontSize: 12.5,
+            fontSize: 'var(--font-size-small)',
             transition: 'all 0.15s ease',
             margin: '1px 0',
           }}
@@ -536,17 +536,17 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
 
             {diag.entityType === 'task' && (
               <Tooltip title="Gắn với tác vụ">
-                <CheckSquareOutlined style={{ fontSize: 11, color: '#1677ff', flexShrink: 0 }} />
+                <CheckSquareOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--accent)', flexShrink: 0 }} />
               </Tooltip>
             )}
             {diag.entityType === 'cr' && (
               <Tooltip title="Gắn với Change Request">
-                <ProjectOutlined style={{ fontSize: 11, color: '#ea580c', flexShrink: 0 }} />
+                <ProjectOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#ea580c', flexShrink: 0 }} />
               </Tooltip>
             )}
             {diag.entityType === 'system' && (
               <Tooltip title="Gắn với hệ thống">
-                <FlagOutlined style={{ fontSize: 11, color: '#8b5cf6', flexShrink: 0 }} />
+                <FlagOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#8b5cf6', flexShrink: 0 }} />
               </Tooltip>
             )}
           </div>
@@ -559,7 +559,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               <Button
                 type="text"
                 size="small"
-                icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
+                icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#9ca3af' }} />}
                 style={{ width: 18, height: 18, padding: 0 }}
               />
             </Dropdown>
@@ -611,7 +611,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '5px 8px 5px 4px',
-          borderRadius: 6,
+          borderRadius: 'var(--radius-control)',
           cursor: 'pointer',
           backgroundColor: 'transparent',
           color: '#262626',
@@ -647,11 +647,11 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         >
           <span
             style={{
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               padding: '1px 6px',
               borderRadius: 10,
               backgroundColor: '#f0f0f0',
-              color: '#8c8c8c',
+              color: 'var(--fg-secondary)',
             }}
           >
             {count}
@@ -662,7 +662,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               <Button
                 type="text"
                 size="small"
-                icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
+                icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#9ca3af' }} />}
                 style={{ width: 18, height: 18, padding: 0 }}
               />
             </Dropdown>
@@ -684,7 +684,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         {isExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {count === 0 ? (
-              <div style={{ padding: '4px 8px 4px 34px', fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>
+              <div style={{ padding: '4px 8px 4px 34px', fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
                 Trống
               </div>
             ) : (
@@ -719,7 +719,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                         justifyContent: 'space-between',
                         padding: '4px 8px 4px 28px',
                         color: '#9ca3af',
-                        fontSize: 12,
+                        fontSize: 'var(--font-size-small)',
                       }}
                     >
                       <span style={{ textDecoration: 'line-through', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -730,7 +730,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                           <Button
                             type="text"
                             size="small"
-                            icon={<UndoOutlined style={{ fontSize: 11, color: '#10b981' }} />}
+                            icon={<UndoOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#10b981' }} />}
                             onClick={() => handleRestoreItem(item)}
                             style={{ width: 18, height: 18, padding: 0 }}
                           />
@@ -739,7 +739,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                           <Button
                             type="text"
                             size="small"
-                            icon={<DeleteOutlined style={{ fontSize: 11, color: '#ef4444' }} />}
+                            icon={<DeleteOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#ef4444' }} />}
                             onClick={() => handlePermanentDeleteItem(item)}
                             style={{ width: 18, height: 18, padding: 0 }}
                           />
@@ -809,7 +809,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           justifyContent: 'space-between',
           padding: '5px 8px 5px 4px',
           paddingLeft: node.depth === 0 ? 4 : 4 + node.depth * 14,
-          borderRadius: 6,
+          borderRadius: 'var(--radius-control)',
           cursor: 'pointer',
           backgroundColor: 'transparent',
           color: '#262626',
@@ -845,11 +845,11 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         >
           <span
             style={{
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               padding: '1px 6px',
               borderRadius: 10,
               backgroundColor: '#f0f0f0',
-              color: '#8c8c8c',
+              color: 'var(--fg-secondary)',
             }}
           >
             {count}
@@ -858,7 +858,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
             <Button
               type="text"
               size="small"
-              icon={<PlusOutlined style={{ fontSize: 11, color: '#10b981' }} />}
+              icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#10b981' }} />}
               onClick={() => handleCreateDiagram(node.id)}
               style={{ width: 18, height: 18, padding: 0 }}
             />
@@ -867,7 +867,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
             <Button
               type="text"
               size="small"
-              icon={<MoreOutlined style={{ fontSize: 11, color: '#9ca3af' }} />}
+              icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#9ca3af' }} />}
               style={{ width: 18, height: 18, padding: 0 }}
             />
           </Dropdown>
@@ -893,7 +893,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               <div
                 style={{
                   padding: `4px 8px 4px ${34 + node.depth * 14}px`,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   color: '#9ca3af',
                   fontStyle: 'italic',
                 }}
@@ -914,7 +914,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         flexDirection: 'column',
         height: '100%',
         width: '100%',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
         overflow: 'hidden',
         boxSizing: 'border-box',
         padding: '8px 6px',
@@ -924,7 +924,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       {/* 1. Search Bar + Create Button */}
       <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
           placeholder="Tìm kiếm biểu đồ..."
           allowClear
           size="small"
@@ -932,7 +932,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{
             flex: 1,
-            fontSize: 12,
+            fontSize: 'var(--font-size-small)',
             borderRadius: 'var(--radius-control, 4px)',
           }}
         />
@@ -943,7 +943,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
           onClick={() => handleCreateDiagram(undefined)}
           data-testid="diagram-explorer-btn-new"
           title="Tạo biểu đồ mới"
-          style={{ height: 24, padding: '0 8px', fontSize: 12 }}
+          style={{ height: 24, padding: '0 8px', fontSize: 'var(--font-size-small)' }}
         >
           Tạo
         </Button>
@@ -954,7 +954,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
         {isSearching ? (
           /* Search results mode */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <div style={{ padding: '4px 8px', fontSize: 11, color: '#8c8c8c', fontWeight: 600 }}>
+            <div style={{ padding: '4px 8px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)', fontWeight: 600 }}>
               KẾT QUẢ TÌM KIẾM ({searchResults.length})
             </div>
             {searchResults.length > 0 ? (
@@ -991,7 +991,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                 <Button
                   type="text"
                   size="small"
-                  icon={<PlusOutlined style={{ fontSize: 11, color: '#10b981' }} />}
+                  icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#10b981' }} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCreateDiagram(undefined);
@@ -1021,14 +1021,14 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                   padding: '4px 8px',
                 }}
               >
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: '#8c8c8c' }}>
+                <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--fg-secondary)' }}>
                   THƯ MỤC
                 </span>
                 <Tooltip title="Thêm thư mục gốc">
                   <Button
                     type="text"
                     size="small"
-                    icon={<PlusOutlined style={{ fontSize: 11, color: '#8c8c8c' }} />}
+                    icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)' }} />}
                     onClick={() => handleOpenCreateFolder(undefined)}
                     style={{ width: 20, height: 20, padding: 0 }}
                   />
@@ -1041,11 +1041,11 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                     padding: '8px',
                     textAlign: 'center',
                     border: '1px dashed #e5e7eb',
-                    borderRadius: 6,
+                    borderRadius: 'var(--radius-control)',
                     margin: '2px 4px',
                   }}
                 >
-                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', display: 'block', marginBottom: 4 }}>
                     Chưa có thư mục
                   </Text>
                   <Button
@@ -1053,7 +1053,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                     type="dashed"
                     icon={<PlusOutlined />}
                     onClick={() => handleOpenCreateFolder(undefined)}
-                    style={{ fontSize: 11 }}
+                    style={{ fontSize: 'var(--font-size-xs)' }}
                   >
                     Tạo thư mục
                   </Button>
@@ -1137,7 +1137,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
               padding: '8px 12px',
               textAlign: 'left',
               border: '1px solid var(--border, #e9eaee)',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               background: movingDiagram?.parentId === undefined ? '#d1fae5' : 'transparent',
               color: movingDiagram?.parentId === undefined ? '#065f46' : 'inherit',
               cursor: 'pointer',
@@ -1155,7 +1155,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                 padding: '8px 12px',
                 textAlign: 'left',
                 border: '1px solid var(--border, #e9eaee)',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 background: movingDiagram?.parentId === f.id ? '#d1fae5' : 'transparent',
                 color: movingDiagram?.parentId === f.id ? '#065f46' : 'inherit',
                 cursor: 'pointer',
@@ -1183,7 +1183,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Loại đối tượng</div>
+            <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 4 }}>Loại đối tượng</div>
             <Select
               value={selectedEntityType || 'none'}
               onChange={(val) => {
@@ -1207,7 +1207,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
 
           {selectedEntityType && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+              <div style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, marginBottom: 4 }}>
                 Chọn {selectedEntityType === 'task' ? 'Tác vụ' : selectedEntityType === 'cr' ? 'Change Request' : 'Hệ thống'}
               </div>
               <Select

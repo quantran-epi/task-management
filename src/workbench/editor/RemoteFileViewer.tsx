@@ -191,7 +191,7 @@ export function RemoteFileViewer({
         height: '100%',
         width: '100%',
         overflow: 'hidden',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
       }}
     >
       {/* Header bar */}
@@ -214,7 +214,7 @@ export function RemoteFileViewer({
             title={filePath}
             style={{
               fontFamily: 'monospace',
-              fontSize: 12.5,
+              fontSize: 'var(--font-size-small)',
               fontWeight: 500,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -229,7 +229,7 @@ export function RemoteFileViewer({
             <Tag
               icon={<BranchesOutlined />}
               style={{
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 lineHeight: '18px',
                 borderRadius: 4,
                 margin: 0,
@@ -244,7 +244,7 @@ export function RemoteFileViewer({
             icon={<LockOutlined />}
             data-testid="readonly-badge"
             style={{
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               lineHeight: '18px',
               borderRadius: 4,
               margin: 0,
@@ -258,7 +258,7 @@ export function RemoteFileViewer({
             <Tag
               bordered={false}
               style={{
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 lineHeight: '18px',
                 margin: 0,
                 color: 'var(--fg-muted, #6c707e)',
@@ -279,7 +279,7 @@ export function RemoteFileViewer({
                 onClick={handleSaveDiagram}
                 loading={savingDiagram}
                 data-testid="save-diagram-studio-btn"
-                style={{ fontSize: 11.5, background: '#10b981' }}
+                style={{ fontSize: 'var(--font-size-small)', background: '#10b981' }}
               >
                 Save Diagram to Studio
               </Button>
@@ -360,7 +360,7 @@ export function RemoteFileViewer({
           type="error"
           message={error}
           showIcon
-          style={{ margin: 12, fontSize: 12 }}
+          style={{ margin: 12, fontSize: 'var(--font-size-small)' }}
         />
       )}
 
@@ -400,7 +400,7 @@ export function RemoteFileViewer({
               display: 'flex',
               minWidth: '100%',
               fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
-              fontSize: 12.5,
+              fontSize: 'var(--font-size-small)',
               lineHeight: '20px',
               padding: '8px 0',
             }}

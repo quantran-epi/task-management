@@ -167,7 +167,7 @@ export function BottomToolWindow({
         flexDirection: 'column',
         height: '100%',
         width: '100%',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
         overflow: 'hidden',
         borderTop: '1px solid var(--border, #e9eaee)',
       }}
@@ -210,7 +210,7 @@ export function BottomToolWindow({
                     ? 'var(--accent, #3871e1)'
                     : 'var(--fg-secondary, #5f6269)',
                   background: isActive
-                    ? 'var(--bg-island, #ffffff)'
+                    ? 'var(--bg-island)'
                     : 'transparent',
                   border: 'none',
                   borderBottom: isActive
@@ -220,7 +220,7 @@ export function BottomToolWindow({
                   borderRadius: '3px 3px 0 0',
                 }}
               >
-                <CodeOutlined style={{ fontSize: 12 }} />
+                <CodeOutlined style={{ fontSize: 'var(--font-size-small)' }} />
                 {editingTabId === tab.id ? (
                   <Input
                     size="small"
@@ -241,7 +241,7 @@ export function BottomToolWindow({
                     style={{
                       height: 20,
                       width: 100,
-                      fontSize: 11,
+                      fontSize: 'var(--font-size-xs)',
                       padding: '0 4px',
                       borderRadius: 2,
                     }}
@@ -299,7 +299,7 @@ export function BottomToolWindow({
               type="text"
               size="small"
               data-testid="new-terminal-tab-btn"
-              icon={<PlusOutlined style={{ fontSize: 11 }} />}
+              icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
               onClick={handleNewTab}
               style={{ width: 22, height: 22, padding: 0, marginLeft: 2 }}
             />
@@ -311,7 +311,7 @@ export function BottomToolWindow({
               size="small"
               value={activeConfig?.id}
               onChange={(newId) => setSelectedConfigId(newId || '')}
-              style={{ width: 140, marginLeft: 8, fontSize: 11 }}
+              style={{ width: 140, marginLeft: 8, fontSize: 'var(--font-size-xs)' }}
               options={configs.map((c) => ({
                 label: c.name || `${c.username}@${c.host}`,
                 value: c.id,
@@ -325,7 +325,7 @@ export function BottomToolWindow({
           {activeConfig && (
             <span
               style={{
-                fontSize: 11,
+                fontSize: 'var(--font-size-xs)',
                 color: 'var(--fg-muted, #8c8f9c)',
                 marginRight: 6,
                 display: 'inline-flex',
@@ -333,7 +333,7 @@ export function BottomToolWindow({
                 gap: 4,
               }}
             >
-              <CloudServerOutlined style={{ fontSize: 12, color: '#f59e0b' }} />
+              <CloudServerOutlined style={{ fontSize: 'var(--font-size-small)', color: '#f59e0b' }} />
               {activeConfig.username}@{activeConfig.host}
             </span>
           )}
@@ -343,7 +343,7 @@ export function BottomToolWindow({
               <Button
                 type="text"
                 size="small"
-                icon={<ClearOutlined style={{ fontSize: 12 }} />}
+                icon={<ClearOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                 onClick={onClear}
                 style={{ width: 22, height: 22, padding: 0 }}
               />
@@ -355,7 +355,7 @@ export function BottomToolWindow({
               <Button
                 type="text"
                 size="small"
-                icon={<ReloadOutlined style={{ fontSize: 12 }} />}
+                icon={<ReloadOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                 onClick={onReconnect}
                 style={{ width: 22, height: 22, padding: 0 }}
               />
@@ -368,9 +368,9 @@ export function BottomToolWindow({
               size="small"
               icon={
                 isBottomMaximized ? (
-                  <FullscreenExitOutlined style={{ fontSize: 12 }} />
+                  <FullscreenExitOutlined style={{ fontSize: 'var(--font-size-small)' }} />
                 ) : (
-                  <FullscreenOutlined style={{ fontSize: 12 }} />
+                  <FullscreenOutlined style={{ fontSize: 'var(--font-size-small)' }} />
                 )
               }
               onClick={handleToggleMaximize}
@@ -382,7 +382,7 @@ export function BottomToolWindow({
             <Button
               type="text"
               size="small"
-              icon={<CloseOutlined style={{ fontSize: 12 }} />}
+              icon={<CloseOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
               onClick={handleMinimize}
               data-testid="bottom-panel-close-btn"
               style={{ width: 22, height: 22, padding: 0 }}
@@ -403,7 +403,7 @@ export function BottomToolWindow({
                 height: '100%',
                 background: '#1e1f22',
                 color: '#8c8f9c',
-                fontSize: 12,
+                fontSize: 'var(--font-size-small)',
               }}
             >
               Loading terminal environment...

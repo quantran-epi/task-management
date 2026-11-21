@@ -39,7 +39,7 @@ const toolbarStyle: React.CSSProperties = {
 };
 const toolBtnStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px',
-  border: '1px solid var(--border-strong, #d1d3d9)', borderRadius: 6,
+  border: '1px solid var(--border-strong, #d1d3d9)', borderRadius: 'var(--radius-control)',
   background: 'var(--bg-island, #fff)', color: 'var(--fg, #1f2937)',
   font: 'inherit', fontSize: 'var(--font-size-small, 12px)', cursor: 'pointer',
 };

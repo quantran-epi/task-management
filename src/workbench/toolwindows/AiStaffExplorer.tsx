@@ -157,7 +157,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
         height: '100%',
         width: '100%',
         overflow: 'hidden',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
       }}
     >
       {contextHolder}
@@ -178,7 +178,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           allowClear
-          style={{ flex: 1, fontSize: 12 }}
+          style={{ flex: 1, fontSize: 'var(--font-size-small)' }}
         />
         <Tooltip title="Nhập JSON">
           <IconButton
@@ -239,7 +239,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '4px 6px',
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               fontWeight: 600,
               textTransform: 'uppercase',
               color: 'var(--fg-secondary, #5f6269)',
@@ -250,7 +250,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           </div>
 
           {filteredLeads.length === 0 ? (
-            <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--fg-muted, #8c8f9c)' }}>
+            <div style={{ padding: '6px 8px', fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #8c8f9c)' }}>
               Chưa có AI Lead
             </div>
           ) : (
@@ -273,7 +273,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   padding: '6px 8px',
                   borderRadius: 4,
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   marginBottom: 2,
                   transition: 'background 0.15s ease',
                 }}
@@ -289,14 +289,14 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
                       ellipsis
-                      style={{ fontSize: 12, fontWeight: 500, display: 'block', lineHeight: 1.3 }}
+                      style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, display: 'block', lineHeight: 1.3 }}
                     >
                       {lead.name}
                     </Typography.Text>
                     <Typography.Text
                       ellipsis
                       type="secondary"
-                      style={{ fontSize: 11, display: 'block', lineHeight: 1.2 }}
+                      style={{ fontSize: 'var(--font-size-xs)', display: 'block', lineHeight: 1.2 }}
                     >
                       {lead.role}
                     </Typography.Text>
@@ -319,7 +319,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '4px 6px',
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               fontWeight: 600,
               textTransform: 'uppercase',
               color: 'var(--fg-secondary, #5f6269)',
@@ -330,7 +330,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           </div>
 
           {filteredEmployees.length === 0 ? (
-            <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--fg-muted, #8c8f9c)' }}>
+            <div style={{ padding: '6px 8px', fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #8c8f9c)' }}>
               Chưa có nhân viên AI
             </div>
           ) : (
@@ -353,7 +353,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   padding: '6px 8px',
                   borderRadius: 4,
                   cursor: 'pointer',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   marginBottom: 2,
                   transition: 'background 0.15s ease',
                 }}
@@ -369,14 +369,14 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <Typography.Text
                       ellipsis
-                      style={{ fontSize: 12, fontWeight: 500, display: 'block', lineHeight: 1.3 }}
+                      style={{ fontSize: 'var(--font-size-small)', fontWeight: 500, display: 'block', lineHeight: 1.3 }}
                     >
                       {emp.name}
                     </Typography.Text>
                     <Typography.Text
                       ellipsis
                       type="secondary"
-                      style={{ fontSize: 11, display: 'block', lineHeight: 1.2 }}
+                      style={{ fontSize: 'var(--font-size-xs)', display: 'block', lineHeight: 1.2 }}
                     >
                       {emp.role}
                     </Typography.Text>
@@ -402,7 +402,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '4px 6px',
-              fontSize: 11,
+              fontSize: 'var(--font-size-xs)',
               fontWeight: 600,
               textTransform: 'uppercase',
               color: 'var(--fg-secondary, #5f6269)',
@@ -413,7 +413,7 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
           </div>
 
           {filteredSkills.length === 0 ? (
-            <div style={{ padding: '6px 8px', fontSize: 12, color: 'var(--fg-muted, #8c8f9c)' }}>
+            <div style={{ padding: '6px 8px', fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #8c8f9c)' }}>
               Chưa có kỹ năng nào
             </div>
           ) : (

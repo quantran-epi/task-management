@@ -62,7 +62,7 @@ export function RightToolWindow({
         flexDirection: 'column',
         height: '100%',
         width: '100%',
-        background: 'var(--bg-island, #ffffff)',
+        background: 'var(--bg-island)',
         overflow: 'hidden',
       }}
     >
@@ -109,7 +109,7 @@ export function RightToolWindow({
                   color: 'var(--fg-muted, #6c707e)',
                 }}
               >
-                <MinusOutlined style={{ fontSize: 12 }} />
+                <MinusOutlined style={{ fontSize: 'var(--font-size-small)' }} />
               </button>
             </Tooltip>
           </div>
@@ -122,7 +122,7 @@ export function RightToolWindow({
           flex: 1,
           overflow: 'hidden',
           position: 'relative',
-          background: 'var(--bg-app, #ffffff)',
+          background: 'var(--bg-app)',
         }}
       >
         {rightActiveId === 'ai_chat' ? (

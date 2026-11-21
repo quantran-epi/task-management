@@ -103,7 +103,7 @@ export function RemoteTerminalPanel({
         brightBlue: '#54a0ff',
         brightMagenta: '#d480aa',
         brightCyan: '#47c2c9',
-        brightWhite: '#ffffff',
+        brightWhite: 'var(--bg-island)',
       },
       convertEol: true,
     });
@@ -356,18 +356,18 @@ export function RemoteTerminalPanel({
           padding: '4px 8px',
           background: '#2b2d30',
           borderBottom: '1px solid #1e1f22',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           color: '#bcbec4',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Tag color={connected ? 'green' : connecting ? 'orange' : 'default'} style={{ margin: 0, fontSize: 11 }}>
+          <Tag color={connected ? 'green' : connecting ? 'orange' : 'default'} style={{ margin: 0, fontSize: 'var(--font-size-xs)' }}>
             {connected ? 'SSH Connected' : connecting ? 'Connecting...' : 'Disconnected'}
           </Tag>
           {config && (
             <span
               style={{
-                fontSize: 11.5,
+                fontSize: 'var(--font-size-small)',
                 color: '#8c8f9c',
                 fontFamily: 'monospace',
                 maxWidth: 320,
@@ -390,7 +390,7 @@ export function RemoteTerminalPanel({
               onClick={handleExtractDiagrams}
               loading={extracting}
               data-testid="extract-diagrams-btn"
-              style={{ fontSize: 11.5, background: '#3871e1' }}
+              style={{ fontSize: 'var(--font-size-small)', background: '#3871e1' }}
             >
               Extract Diagrams
             </Button>
@@ -399,7 +399,7 @@ export function RemoteTerminalPanel({
           <Tooltip title="Copy Terminal Buffer">
             <Button
               size="small"
-              icon={<CopyOutlined style={{ fontSize: 11 }} />}
+              icon={<CopyOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
               onClick={handleCopyLogs}
               style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}
             />
@@ -408,7 +408,7 @@ export function RemoteTerminalPanel({
           <Tooltip title="Clear Terminal">
             <Button
               size="small"
-              icon={<ClearOutlined style={{ fontSize: 11 }} />}
+              icon={<ClearOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
               onClick={handleClear}
               style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}
             />
@@ -417,7 +417,7 @@ export function RemoteTerminalPanel({
           <Tooltip title="Reconnect Terminal Session">
             <Button
               size="small"
-              icon={<ReloadOutlined style={{ fontSize: 11 }} />}
+              icon={<ReloadOutlined style={{ fontSize: 'var(--font-size-xs)' }} />}
               onClick={initTerminal}
               loading={connecting}
               style={{ background: 'transparent', color: '#bcbec4', borderColor: '#43454a' }}

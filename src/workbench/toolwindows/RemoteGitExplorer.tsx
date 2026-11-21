@@ -788,7 +788,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           <FolderViewOutlined style={{ color: 'var(--fg-muted)', fontSize: 13 }} />
           <Input
             size="small"
-            style={{ flex: 1, fontSize: 12 }}
+            style={{ flex: 1, fontSize: 'var(--font-size-small)' }}
             placeholder="/path/to/remote/repo"
             value={repoPath}
             onChange={(e) => setRepoPath(e.target.value)}
@@ -847,12 +847,12 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
 
         {/* Global whole-ref search (IntelliJ-style) — distinct from the subtree search below */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 11, color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
             Tìm toàn kho
           </span>
           <Input
             size="small"
-            style={{ flex: 1, fontSize: 12 }}
+            style={{ flex: 1, fontSize: 'var(--font-size-small)' }}
             prefix={<span style={{ color: 'var(--fg-muted)' }}>⌕</span>}
             placeholder="Tìm tệp/thư mục trong toàn kho"
             value={globalQuery}
@@ -873,7 +873,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           showIcon
           closable
           onClose={() => setError(null)}
-          style={{ margin: 8, fontSize: 12 }}
+          style={{ margin: 8, fontSize: 'var(--font-size-small)' }}
         />
       )}
 
@@ -890,7 +890,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         {globalQuery.trim() ? (
           <div data-testid="global-search-results" role="listbox" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {globalResults.length === 0 && !globalSearching ? (
-              <div style={{ padding: 12, fontSize: 12, color: 'var(--fg-muted)' }}>
+              <div style={{ padding: 12, fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>
                 Không có kết quả trong kho từ xa.
               </div>
             ) : (
@@ -914,7 +914,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
                       cursor: 'pointer',
                       padding: '4px 6px',
                       borderRadius: 4,
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       background: idx === globalActiveIndex ? 'var(--accent-soft)' : 'transparent',
                     }}
                   >
@@ -950,7 +950,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
               blockNode
               style={{
                 background: 'transparent',
-                fontSize: 12.5,
+                fontSize: 'var(--font-size-small)',
                 padding: '4px 6px',
               }}
             />

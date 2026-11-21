@@ -150,7 +150,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ db = defau
           onChange={(k) => setActiveTab(k as NotificationTabKey)}
           items={tabItems}
           size="small"
-          tabBarStyle={{ marginBottom: 0, fontSize: 12 }}
+          tabBarStyle={{ marginBottom: 0, fontSize: 'var(--font-size-small)' }}
         />
       </div>
 

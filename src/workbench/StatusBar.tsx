@@ -57,7 +57,7 @@ export function StatusBar({
       {/* Left: Active Center Item Focus & Storage Indicators */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <CheckCircleFilled style={{ color: 'var(--success, #338555)', fontSize: 11 }} />
+          <CheckCircleFilled style={{ color: 'var(--success, #338555)', fontSize: 'var(--font-size-xs)' }} />
           <Tooltip title={activeTab?.title ? `Active Item: ${activeTab.title}` : (activeRunningTask ? `Task: ${activeRunningTask}` : 'Ready')}>
             <Typography.Text
               style={{
@@ -100,7 +100,7 @@ export function StatusBar({
               cursor: 'default',
             }}
           >
-            <DatabaseOutlined style={{ fontSize: 12 }} />
+            <DatabaseOutlined style={{ fontSize: 'var(--font-size-small)' }} />
             <span>IndexedDB</span>
           </span>
         </Tooltip>
@@ -118,7 +118,7 @@ export function StatusBar({
               cursor: 'default',
             }}
           >
-            <ApiOutlined style={{ fontSize: 12 }} />
+            <ApiOutlined style={{ fontSize: 'var(--font-size-small)' }} />
             <span>Knowledge</span>
           </span>
         </Tooltip>
@@ -148,7 +148,7 @@ export function StatusBar({
               paddingLeft: 10,
             }}
           >
-            <CloudSyncOutlined style={{ fontSize: 12 }} />
+            <CloudSyncOutlined style={{ fontSize: 'var(--font-size-small)' }} />
             <span style={{ textTransform: 'capitalize' }}>{syncStatus}</span>
           </span>
         </Tooltip>

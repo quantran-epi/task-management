@@ -47,7 +47,7 @@ export function ToolExplorerPanel() {
                 width: '100%',
                 padding: 9,
                 border: 'none',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 background: 'transparent',
                 cursor: 'pointer',
                 textAlign: 'left',

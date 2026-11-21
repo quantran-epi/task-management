@@ -21,7 +21,7 @@ export interface CRExplorerProps {
 }
 
 export const CR_TYPE_ICON: Record<CrType, React.ReactNode> = {
-  NEW_FEATURE: <ThunderboltOutlined style={{ color: '#1677ff' }} />,
+  NEW_FEATURE: <ThunderboltOutlined style={{ color: 'var(--accent)' }} />,
   ENHANCEMENT: <ToolOutlined style={{ color: '#52c41a' }} />,
   BUGFIX: <BugOutlined style={{ color: '#faad14' }} />,
 };
@@ -41,7 +41,7 @@ const STATUS_TAG_COLORS: Record<CrStatus, string> = {
 };
 
 const MUTED_ROW_STYLE: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 'var(--font-size-small)',
   color: 'var(--fg-subtle, #8c8f9c)',
   fontStyle: 'normal',
 };
@@ -53,7 +53,7 @@ function MutedRow({ label }: { label: string }) {
 function TaskLeafTitle({ task }: { task: Task }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 6 }}>
-      <Typography.Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.2 }}>
+      <Typography.Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 'var(--font-size-ui)', lineHeight: 1.2 }}>
         {task.name}
       </Typography.Text>
     </span>
@@ -174,20 +174,20 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
                   {cr.code && (
                     <Tag
                       color="blue"
-                      style={{ margin: 0, padding: '0 4px', fontSize: 12, lineHeight: '16px', fontFamily: "'JetBrains Mono', monospace" }}
+                      style={{ margin: 0, padding: '0 4px', fontSize: 'var(--font-size-small)', lineHeight: '16px', fontFamily: "'JetBrains Mono', monospace" }}
                     >
                       {cr.code}
                     </Tag>
                   )}
-                  <Typography.Text ellipsis strong style={{ fontSize: 13.5, lineHeight: 1.2 }}>
+                  <Typography.Text ellipsis strong style={{ fontSize: 'var(--font-size-ui)', lineHeight: 1.2 }}>
                     {cr.name}
                   </Typography.Text>
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  <Tag color={STATUS_TAG_COLORS[cr.status] || 'default'} style={{ margin: 0, fontSize: 12, lineHeight: '16px' }}>
+                  <Tag color={STATUS_TAG_COLORS[cr.status] || 'default'} style={{ margin: 0, fontSize: 'var(--font-size-small)', lineHeight: '16px' }}>
                     {cr.status}
                   </Tag>
-                  <span style={{ fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>{crTasks.length}</span>
+                  <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #6c707e)' }}>{crTasks.length}</span>
                 </span>
               </div>
             </Dropdown>
@@ -235,13 +235,13 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
         }}
       >
         <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 12 }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
           placeholder="Lọc CR, tác vụ..."
           allowClear
           size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1, fontSize: 12, borderRadius: 'var(--radius-control, 4px)' }}
+          style={{ flex: 1, fontSize: 'var(--font-size-small)', borderRadius: 'var(--radius-control, 4px)' }}
         />
         <Button
           type="primary"
@@ -252,7 +252,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
             setCrModalOpen(true);
           }}
           data-testid="cr-explorer-btn-new-cr"
-          style={{ height: 24, padding: '0 8px', fontSize: 12 }}
+          style={{ height: 24, padding: '0 8px', fontSize: 'var(--font-size-small)' }}
         >
           Tạo CR
         </Button>
@@ -269,7 +269,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
             expandedKeys={effectiveExpandedKeys}
             onExpand={(keys) => setExpandedKeys(keys)}
             onSelect={handleSelect}
-            style={{ background: 'transparent', fontSize: 13.5 }}
+            style={{ background: 'transparent', fontSize: 'var(--font-size-ui)' }}
           />
         ) : (
           <Empty
@@ -277,7 +277,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
             description={
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Chưa có Change Request nào</span>
-                <span style={{ fontSize: 12, color: 'var(--fg-muted, #6c707e)' }}>
+                <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted, #6c707e)' }}>
                   Tạo CR đầu tiên để bắt đầu.
                 </span>
               </div>

@@ -134,7 +134,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
                     description={
                       <Space size={4} wrap>
                         <Tag>{set.documentIds.length} tài liệu</Tag>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
+                        <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                           {new Date(set.updatedAt).toLocaleDateString()}
                         </Text>
                       </Space>
