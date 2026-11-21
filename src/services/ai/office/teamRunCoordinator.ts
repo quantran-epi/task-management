@@ -242,6 +242,12 @@ export interface TurnRoster {
   memberAgentIds: string[];
 }
 
+export interface AgentDeveloperWorktreeTarget {
+  sshConfigId: string;
+  remoteRepoPath: string;
+  baseRef?: string | undefined;
+}
+
 export interface TeamRunCoordinatorOptions {
   db: TaskPlannerDatabase;
   team: AiTeam;
@@ -277,23 +283,19 @@ export interface TeamRunCoordinatorOptions {
    * Phase 48 D-08: request-bound Agent Developer worktree target. Identity only; session start
    * provisions the real worktree from it and no verb runs without the descriptor.
    */
-  agentDeveloperWorktree?: {
-    sshConfigId: string;
-    remoteRepoPath: string;
-    baseRef?: string | undefined;
-  } | undefined;
+  agentDeveloperWorktree?: AgentDeveloperWorktreeTarget | undefined;
   /** 261121-qpp: candidate system names when >1 linked system is worktree-capable. */
   worktreeAmbiguousSystems?: readonly string[] | undefined;
+  /** Test seam (261121-s4k): observe live setter calls that `send()` makes internally. */
+  onAgentDeveloperWorktreeSet?: ((target?: AgentDeveloperWorktreeTarget) => void) | undefined;
+  /** Test seam (261121-s4k): observe ambiguity clearing after a catalog-backed match. */
+  onWorktreeAmbiguousSystemsSet?: ((names: readonly string[]) => void) | undefined;
   /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
    */
   loadRoster?: (() => Promise<TurnRoster>) | undefined;
 }
-
-type AgentDeveloperWorktreeTarget = NonNullable<
-  TeamRunCoordinatorOptions['agentDeveloperWorktree']
->;
 
 export interface TeamRunCoordinator {
   /**
@@ -1496,11 +1498,13 @@ export function createTeamRunCoordinator(
       const developerId = developerAgentId();
       if (developerId) provisionedWorktrees.delete(developerId);
     }
+    options.onAgentDeveloperWorktreeSet?.(target);
     return true;
   }
 
   function setWorktreeAmbiguousSystems(names: readonly string[]): void {
     worktreeAmbiguousSystems = names;
+    options.onWorktreeAmbiguousSystemsSet?.(names);
   }
 
   /**

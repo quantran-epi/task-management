@@ -147,4 +147,27 @@ describe('TeamWorkspace wires the persisted agent-developer worktree target (CR-
       expect(opts.worktreeAmbiguousSystems).toEqual(expect.arrayContaining(['Core', 'Payments']));
     });
   });
+
+  it('pushes a changed resolver target into the live coordinator without recreating it (WR-02)', async () => {
+    const first = await addSystem('Core', '/srv/repo', 'ssh-1');
+    const firstLink = await addTeamLink({ teamId: team.id, itemType: 'system', itemId: first }, db);
+    renderWorkspace();
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith({
+        sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo',
+      });
+    });
+    const creationCount = coordinatorOptionsMock.mock.calls.length;
+
+    const second = await addSystem('Payments', '/srv/payments', 'ssh-2');
+    await addTeamLink({ teamId: team.id, itemType: 'system', itemId: second }, db);
+    await removeTeamLink(firstLink.id, db);
+
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith({
+        sshConfigId: 'ssh-2', remoteRepoPath: '/srv/payments',
+      });
+    });
+    expect(coordinatorOptionsMock.mock.calls.length).toBe(creationCount);
+  });
 });
