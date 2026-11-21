@@ -1,1 +1,0 @@
-- TypeScript full-project check is blocked by pre-existing AgentControlView/UseGhostDevDiffResult contract errors unrelated to Plan 16-14 (src/views/AgentControlView.tsx:100-102,222).
