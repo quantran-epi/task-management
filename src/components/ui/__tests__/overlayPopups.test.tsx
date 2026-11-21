@@ -347,3 +347,23 @@ describe('N-08 native DatePicker', () => {
     view.unmount();
   });
 });
+
+describe('controlled value regressions', () => {
+  it('lets a controlled AutoComplete keep a typed draft for custom values', () => {
+    const onChange = vi.fn();
+    const view = render(<AutoComplete value="" onChange={onChange} options={[{ value: 'a1', label: 'Alpha' }]} />);
+    const input = view.container.querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'flux-dev' } });
+    expect(input.value).toBe('flux-dev');
+    expect(onChange).toHaveBeenCalledWith('flux-dev', expect.objectContaining({ value: 'flux-dev' }));
+    view.unmount();
+  });
+
+  it('syncs DatePicker display when value changes externally', () => {
+    const view = render(<DatePicker value={dayjs('2026-01-05')} />);
+    view.rerender(<DatePicker value={dayjs('2026-02-09')} />);
+    const input = view.container.querySelector('input') as HTMLInputElement;
+    expect(input.value).toBe('2026-02-09');
+    view.unmount();
+  });
+});

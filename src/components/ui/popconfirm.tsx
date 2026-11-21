@@ -26,8 +26,8 @@ interface ConfirmEvent extends MouseEvent {
 }
 
 /** Add AntD's info fields to the original event so native methods stay alive (RR-02). */
-function withConfirmInfo(event: ReactMouseEvent<HTMLButtonElement>): ConfirmEvent {
-  const result = event.nativeEvent as ConfirmEvent;
+function withConfirmInfo(event?: ReactMouseEvent<HTMLButtonElement>): ConfirmEvent {
+  const result = (event?.nativeEvent ?? new MouseEvent('click')) as ConfirmEvent;
   if (!Object.prototype.hasOwnProperty.call(result, 'key')) {
     Object.defineProperty(result, 'key', { value: undefined, configurable: true, enumerable: true });
   }
@@ -137,7 +137,7 @@ export function Popconfirm({
           footer={actions}
           onClose={(reason) => {
             if (reason === 'escape' || reason === 'outside' || reason === 'close') {
-              onCancel?.(undefined as never);
+              onCancel?.(withConfirmInfo() as never);
               close(reason);
             }
           }}

@@ -70,9 +70,7 @@ export function TreeSelect({ width = 'full', style, ...rest }: TreeSelectWrapper
   visit(data);
 
   const strategy = rest.showCheckedStrategy as Strategy | undefined;
-  const reportKeys = useMemo(() => {
-    if (strategy !== TreeSelectSHOW_CHILD) return keys;
-    // Keep only child keys when the caller asks for SHOW_CHILD.
+  const childKeys = useMemo(() => {
     const parents = new Set<string>();
     const walk = (nodes: typeof data) => nodes.forEach((node) => {
       if (Array.isArray(node.children) && node.children.length > 0) {
@@ -81,8 +79,11 @@ export function TreeSelect({ width = 'full', style, ...rest }: TreeSelectWrapper
       }
     });
     walk(data);
-    return keys.filter((key) => !parents.has(key));
-  }, [keys, strategy, data]);
+    return parents;
+  }, [data]);
+  const applyStrategy = (source: string[]) => strategy === TreeSelectSHOW_CHILD
+    ? source.filter((key) => !childKeys.has(key))
+    : source;
 
   const disabled = rest.disabled === true;
   const selectedTitle = keys.length === 0
@@ -100,7 +101,7 @@ export function TreeSelect({ width = 'full', style, ...rest }: TreeSelectWrapper
 
   function commit(nextKeys: string[]) {
     if (!controlled) setInnerKeys(nextKeys);
-    const value = (rest.treeCheckable === true ? reportKeys : nextKeys[0] ?? undefined) as never;
+    const value = (rest.treeCheckable === true ? applyStrategy(nextKeys) : nextKeys[0] ?? undefined) as never;
     const labels = nextKeys.map((key) => titleByKey.get(key) ?? key) as never;
     (rest.onChange as ((value: never, labels: never, extra: unknown) => void) | undefined)?.(
       value,

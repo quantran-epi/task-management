@@ -50,12 +50,13 @@ export function AutoComplete<ValueType = any>({ styles, ...rest }: AutoCompleteP
   const [query, setQuery] = useState(rest.value === undefined ? '' : String(rest.value ?? ''));
   const [open, setOpen] = useState(false);
   const [lead, setLead] = useState(0);
-  const controlled = rest.value !== undefined;
-  const current = controlled ? String(rest.value ?? '') : query;
+  // Keep a local draft even when controlled: callers need to type custom values
+  // (e.g. model names) while `value` tracks only committed selection.
+  const current = query;
 
   useEffect(() => {
-    if (controlled) setQuery(String(rest.value ?? ''));
-  }, [controlled, rest.value]);
+    setQuery(rest.value === undefined ? '' : String(rest.value ?? ''));
+  }, [rest.value]);
 
   const declared = Array.isArray(rest.options) ? rest.options as OptionShape[] : undefined;
   const fromChildren: OptionShape[] = [];
@@ -79,7 +80,7 @@ export function AutoComplete<ValueType = any>({ styles, ...rest }: AutoCompleteP
 
   function commit(option: OptionShape) {
     const value = (option.value ?? option.label ?? '') as ValueType;
-    if (!controlled) setQuery(String(value ?? ''));
+    setQuery(String(value ?? ''));
     (rest.onChange as ((value: ValueType, option: OptionShape) => void) | undefined)?.(value, option);
     (rest.onSelect as ((value: ValueType, option: OptionShape) => void) | undefined)?.(value, option);
     setOpen(false);
@@ -113,7 +114,7 @@ export function AutoComplete<ValueType = any>({ styles, ...rest }: AutoCompleteP
         value={current}
         onChange={(event) => {
           const value = event.target.value;
-          if (!controlled) setQuery(value);
+          setQuery(value);
           setLead(0);
           setOpen(true);
           (rest.onChange as ((value: ValueType, option: OptionShape) => void) | undefined)?.(value as ValueType, { value });

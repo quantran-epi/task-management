@@ -3,6 +3,7 @@ import type { RangePickerProps } from 'antd/es/date-picker';
 import dayjs, { type Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import {
+  useEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -111,6 +112,11 @@ export function DatePicker({ width = 'full', style, onChange, value, ...rest }: 
   const [month, setMonth] = useState(current ?? dayjs());
   const [lead, setLead] = useState(0);
 
+  useEffect(() => {
+    setText(formatValue(current, format));
+    if (current) setMonth(current);
+  }, [current, format]);
+
   function commit(next: DateValue) {
     if (next !== null && isDisabled(next, rest.disabledDate)) return;
     setText(formatValue(next, format));
@@ -185,6 +191,10 @@ export function DateRangePicker({
   const [month, setMonth] = useState(pair[0] ?? pair[1] ?? dayjs());
   const [lead, setLead] = useState(0);
   const anchorRef = active === 0 ? startRef : endRef;
+
+  useEffect(() => {
+    setTexts([formatValue(pair[0], format), formatValue(pair[1], format)]);
+  }, [pair[0], pair[1], format]);
 
   function commit(next: Dayjs) {
     const updated: [DateValue, DateValue] = active === 0 ? [next, pair[1]] : [pair[0], next];
