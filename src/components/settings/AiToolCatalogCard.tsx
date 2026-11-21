@@ -1,29 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  Input,
-  List,
-  Modal,
-  Space,
-  Spin,
-  Tag,
-  Typography,
-  message,
-  theme,
-} from 'antd';
-import {
-  ApiOutlined,
-  CodeOutlined,
-  CopyOutlined,
-  DatabaseOutlined,
-  ReloadOutlined,
-  SearchOutlined,
-  TeamOutlined,
-  ToolOutlined,
-} from '@ant-design/icons';
+import { Alert, Button, Card, Empty, Input, List, Modal, Space, Spin, Tag, Typography, useAntdToken, useMessage, ListItem, Paragraph } from '../ui';
+import { ApiOutlined, CodeOutlined, CopyOutlined, DatabaseOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, ToolOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getAllAvailableToolDefinitions,
@@ -46,7 +23,8 @@ export interface AiToolCatalogCardProps {
 
 /** Read-only inventory of every AI tool, including where each one is dispatched. */
 export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defaultDb }) => {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const [entries, setEntries] = useState<ToolCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -132,9 +110,9 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
         </Button>
       }
     >
-      <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+      <Paragraph type="secondary" style={{ marginBottom: 12 }}>
         Tất cả công cụ AI có sẵn: cơ sở dữ liệu, nhóm, MCP, Graphiti — kèm nơi sử dụng.
-      </Typography.Paragraph>
+      </Paragraph>
 
       {error && (
         <Alert
@@ -168,14 +146,14 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
           renderItem={(entry) => {
             const meta = SOURCE_META[entry.source];
             return (
-              <List.Item
+              <ListItem
                 actions={[
                   <Button key="detail" type="link" size="small" onClick={() => { setSelected(entry); setCopied(false); }}>
                     Chi tiết
                   </Button>,
                 ]}
               >
-                <List.Item.Meta
+                <ListItem.Meta
                   title={
                     <Space wrap size={[4, 6]}>
                       <Text code>{entry.tool.function.name}</Text>
@@ -202,7 +180,7 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
                     </Space>
                   }
                 />
-              </List.Item>
+              </ListItem>
             );
           }}
         />
@@ -224,9 +202,9 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <div>
               <Text strong>Mô tả</Text>
-              <Typography.Paragraph style={{ marginBottom: 0 }}>
+              <Paragraph style={{ marginBottom: 0 }}>
                 {selected.tool.function.description}
-              </Typography.Paragraph>
+              </Paragraph>
             </div>
             <div>
               <Text strong>Nơi sử dụng</Text>

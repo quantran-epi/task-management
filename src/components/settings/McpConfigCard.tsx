@@ -1,30 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Card,
-  List,
-  Switch,
-  Tag,
-  Typography,
-  Space,
-  Button,
-  Form,
-  Input,
-  Popconfirm,
-  message,
-  theme,
-  Alert,
-  Modal,
-} from 'antd';
-import {
-  ApiOutlined,
-  DatabaseOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { Card, List, Switch, Tag, Typography, Space, Button, Form, Input, Popconfirm, Alert, Modal, useAntdToken, useMessage, FormItem, useForm, ListItem, TextArea } from '../ui';
+import { ApiOutlined, DatabaseOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getMcpServers,
@@ -37,7 +13,6 @@ import {
 import { isTauriApp } from '../../utils/timerPopout';
 
 const { Text, Paragraph } = Typography;
-const { TextArea } = Input;
 
 export interface McpConfigCardProps {
   db?: TaskPlannerDatabase;
@@ -48,7 +23,8 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
   db = defaultDb,
   onConfigChange,
 }) => {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const [servers, setServers] = useState<McpServerConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -59,7 +35,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
   // Add / Edit form modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServerConfig | null>(null);
-  const [form] = Form.useForm();
+  const [form] = useForm();
 
   const isTauri = isTauriApp();
 
@@ -207,7 +183,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
               const isTesting = testingId === server.id;
 
               return (
-                <List.Item
+                <ListItem
                   key={server.id}
                   style={{
                     padding: '14px 16px',
@@ -304,7 +280,7 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
                       />
                     </div>
                   )}
-                </List.Item>
+                </ListItem>
               );
             }}
           />
@@ -323,15 +299,15 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
         width={560}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên máy chủ"
             rules={[{ required: true, message: 'Vui lòng nhập tên máy chủ' }]}
           >
             <Input placeholder="Ví dụ: Graphiti Banking MCP, Docs Server..." />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="url"
             label="Địa chỉ Endpoint (HTTP/HTTPS)"
             rules={[
@@ -343,9 +319,9 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
             ]}
           >
             <Input placeholder="http://10.4.97.70:30456/mcp" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="instruction"
             label="Chỉ dẫn chuyên ngành (Domain Prompt / Rules)"
             extra="Chỉ dẫn này sẽ được tự động tiêm vào system prompt của AI khi máy chủ được bật."
@@ -354,15 +330,15 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
               rows={4}
               placeholder="Quy tắc nghiệp vụ, danh mục bảng/cột cần tìm kiếm, cú pháp truy vấn..."
             />
-          </Form.Item>
+          </FormItem>
 
           <Space size="large">
-            <Form.Item name="enabled" label="Kích hoạt sẵn" valuePropName="checked">
+            <FormItem name="enabled" label="Kích hoạt sẵn" valuePropName="checked">
               <Switch />
-            </Form.Item>
-            <Form.Item name="desktopOnly" label="Chỉ chạy trên Desktop (Tauri)" valuePropName="checked">
+            </FormItem>
+            <FormItem name="desktopOnly" label="Chỉ chạy trên Desktop (Tauri)" valuePropName="checked">
               <Switch />
-            </Form.Item>
+            </FormItem>
           </Space>
         </Form>
       </Modal>

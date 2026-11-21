@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Space, Typography, InputNumber, Button, Row, Col } from 'antd';
+import { Card, Space, Typography, InputNumber, Button, Row, Col } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { updateCapacityRule } from '../../db/repositories/capacityRepo';

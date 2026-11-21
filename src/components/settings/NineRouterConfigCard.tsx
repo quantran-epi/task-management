@@ -1,30 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  AutoComplete,
-  Button,
-  Space,
-  Alert,
-  Typography,
-  notification,
-  Tag,
-  Modal,
-  Popconfirm,
-} from 'antd';
-import {
-  ApiOutlined,
-  SaveOutlined,
-  CheckCircleOutlined,
-  SafetyCertificateOutlined,
-  LockOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  PictureOutlined,
-} from '@ant-design/icons';
+import { Card, Form, Input, InputNumber, Select, AutoComplete, Button, Space, Alert, Typography, Tag, Modal, Popconfirm, useNotification, FormItem, InputPassword, CheckableTag } from '../ui';
+const { Paragraph, Text } = Typography;
+import { ApiOutlined, SaveOutlined, CheckCircleOutlined, SafetyCertificateOutlined, LockOutlined, EditOutlined, DeleteOutlined, PictureOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getNineRouterApiKey,
@@ -51,7 +28,6 @@ import { testImageGenerationConnection } from '../../services/ai/imageGeneration
 import { isTauriApp } from '../../utils/timerPopout';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Paragraph, Text } = Typography;
 
 export interface NineRouterConfigCardProps {
   db?: TaskPlannerDatabase;
@@ -65,6 +41,7 @@ export interface ConnectionState {
 }
 
 export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db = defaultDb }) => {
+  const notification = useNotification();
   const [endpoint, setEndpoint] = useState(DEFAULT_NINEROUTER_ENDPOINT);
   const [defaultModel, setDefaultModel] = useState(DEFAULT_NINEROUTER_MODEL);
   const [charLimit, setCharLimit] = useState<number>(DEFAULT_NINEROUTER_CHAR_LIMIT);
@@ -354,7 +331,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
       </Paragraph>
 
       <Form layout="vertical">
-        <Form.Item
+        <FormItem
           label="API Endpoint"
           extra="Mặc định: http://localhost:20128 (chạy daemon qua lệnh `npx 9router`, hoặc đường dẫn tương thích OpenAI /v1)"
         >
@@ -363,9 +340,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             onChange={(e) => setEndpoint(e.target.value)}
             placeholder="http://localhost:20128"
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="API Key"
           extra={
             isTauriApp()
@@ -404,16 +381,16 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               </Space>
             </Space>
           ) : (
-            <Input.Password
+            <InputPassword
               value={newKeyValue}
               onChange={(e) => setNewKeyValue(e.target.value)}
               placeholder="Nhập 9router API Key (sk-...)"
               prefix={<LockOutlined />}
             />
           )}
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item label="Mô hình AI mặc định (Default Model)">
+        <FormItem label="Mô hình AI mặc định (Default Model)">
           <Select
             value={defaultModel}
             onChange={(val) => setDefaultModel(val)}
@@ -429,9 +406,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                   : []
             }
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="Giới hạn ký tự ngữ cảnh (Safe Character Budget)"
           extra={
             <div style={{ marginTop: 6, fontSize: 12 }}>
@@ -444,36 +421,36 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
                 <span style={{ color: '#8c8c8c' }}>Gợi ý nhanh:</span>
-                <Tag.CheckableTag
+                <CheckableTag
                   checked={charLimit === 12000}
                   onChange={() => setCharLimit(12000)}
                 >
                   12k (~3k tok) • Mặc định
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={charLimit === 32000}
                   onChange={() => setCharLimit(32000)}
                 >
                   32k (~8k tok) • Local vừa
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={charLimit === 128000}
                   onChange={() => setCharLimit(128000)}
                 >
                   128k (~32k tok) • Cân bằng
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={charLimit === 500000}
                   onChange={() => setCharLimit(500000)}
                 >
                   500k (~125k tok) • GPT-4o / Claude
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={charLimit === 1000000}
                   onChange={() => setCharLimit(1000000)}
                 >
                   1M (~250k tok) • Siêu lớn
-                </Tag.CheckableTag>
+                </CheckableTag>
               </div>
               <div style={{ color: '#8c8c8c', lineHeight: 1.4 }}>
                 Tự do tùy chỉnh theo mô hình: mô hình nhỏ cục bộ (Ollama 8k–32k context) nên dùng 8k–32k ký tự để tránh lỗi vượt ngữ cảnh; mô hình hiện đại (Claude 3.5, GPT-4o, Gemini) có thể đặt 100k–1M+ ký tự để nạp file và tài liệu đầy đủ.
@@ -495,9 +472,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             style={{ width: 240 }}
             addonAfter="ký tự"
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="Context window của mô hình (tokens)"
           extra={
             <div style={{ marginTop: 6, fontSize: 12, color: '#8c8c8c', lineHeight: 1.5 }}>
@@ -506,30 +483,30 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               công cụ gần nhất. Chế độ tra cứu nén ở 75%, chế độ phân tích ở 90%.
               <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                 <span>Gợi ý:</span>
-                <Tag.CheckableTag
+                <CheckableTag
                   checked={contextWindowTokens === 32000}
                   onChange={() => setContextWindowTokens(32000)}
                 >
                   32k • Local nhỏ
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={contextWindowTokens === 128000}
                   onChange={() => setContextWindowTokens(128000)}
                 >
                   128k • GPT-4o
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={contextWindowTokens === 200000}
                   onChange={() => setContextWindowTokens(200000)}
                 >
                   200k • Claude / Mặc định
-                </Tag.CheckableTag>
-                <Tag.CheckableTag
+                </CheckableTag>
+                <CheckableTag
                   checked={contextWindowTokens === 1000000}
                   onChange={() => setContextWindowTokens(1000000)}
                 >
                   1M • Gemini
-                </Tag.CheckableTag>
+                </CheckableTag>
               </div>
             </div>
           }
@@ -548,7 +525,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             style={{ width: 240 }}
             addonAfter="tokens"
           />
-        </Form.Item>
+        </FormItem>
 
         {connectionResult && (
           <div style={{ marginBottom: 16 }}>
@@ -588,7 +565,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             Tùy chọn tạo ảnh minh họa trực tiếp thông qua công cụ `generate_image`. Sử dụng endpoint OpenAI `/v1/images/generations` hoặc qua 9router daemon.
           </Paragraph>
 
-          <Form.Item
+          <FormItem
             label="Image Endpoint"
             extra="Đường dẫn API tạo ảnh tương thích OpenAI (mặc định trỏ theo 9router hoặc OpenAI)"
           >
@@ -597,9 +574,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
               onChange={(e) => setImageEndpoint(e.target.value)}
               placeholder="http://localhost:20128"
             />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             label="Mô hình tạo ảnh (Image Model)"
             extra={
               <div style={{ marginTop: 4, fontSize: 12, color: '#8c8c8c' }}>
@@ -620,9 +597,9 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 ((option?.value as string) ?? '').toLowerCase().includes(inputValue.toLowerCase())
               }
             />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             label="API Key riêng cho tạo ảnh (Tùy chọn)"
             extra="Nếu để trống, hệ thống sẽ tự động dùng chung API Key của 9router ở trên."
           >
@@ -657,14 +634,14 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 </Space>
               </Space>
             ) : (
-              <Input.Password
+              <InputPassword
                 value={newImageKeyValue}
                 onChange={(e) => setNewImageKeyValue(e.target.value)}
                 placeholder="Nhập API Key riêng cho tạo ảnh (nếu khác 9router)"
                 prefix={<LockOutlined />}
               />
             )}
-          </Form.Item>
+          </FormItem>
 
           {imageConnectionResult && (
             <div style={{ marginBottom: 16 }}>
@@ -738,7 +715,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         okButtonProps={{ disabled: !newKeyValue.trim() }}
       >
         <Paragraph>Nhập API Key mới để thay thế khóa hiện tại:</Paragraph>
-        <Input.Password
+        <InputPassword
           value={newKeyValue}
           onChange={(e) => setNewKeyValue(e.target.value)}
           placeholder="sk-..."
@@ -767,7 +744,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
         okButtonProps={{ disabled: !newImageKeyValue.trim() }}
       >
         <Paragraph>Nhập API Key mới cho dịch vụ tạo ảnh:</Paragraph>
-        <Input.Password
+        <InputPassword
           value={newImageKeyValue}
           onChange={(e) => setNewImageKeyValue(e.target.value)}
           placeholder="sk-..."

@@ -1,19 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Divider,
-  Empty,
-  Form,
-  Input,
-  Popconfirm,
-  Space,
-  Switch,
-  Table,
-  Typography,
-} from 'antd';
+import { ApiOutlined, DeleteOutlined, ReloadOutlined, SaveOutlined } from '../ui/icon';
+import { Alert, Button, Card, Divider, Empty, Form, Input, Popconfirm, Space, Switch, Table, Typography, FormItem, InputPassword } from '../ui';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 import {
   useKnowledgeConfig,
@@ -199,7 +186,7 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
       </Paragraph>
 
       <Form layout="vertical">
-        <Form.Item label="Bật Knowledge Server">
+        <FormItem label="Bật Knowledge Server">
           <Switch
             checked={enabled}
             onChange={(checked) => {
@@ -208,9 +195,9 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
             }}
             aria-label="Bật Knowledge Server"
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="URL Knowledge Server"
           {...(validationMessage
             ? { validateStatus: 'error' as const, help: validationMessage }
@@ -226,16 +213,16 @@ export const KnowledgeServerConfigCard: React.FC<KnowledgeServerConfigCardProps>
             aria-label="URL Knowledge Server"
             autoComplete="url"
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item label="Token phiên">
-          <Input.Password
+        <FormItem label="Token phiên">
+          <InputPassword
             value={config.token}
             onChange={(event) => config.setToken(event.target.value)}
             aria-label="Token phiên"
             autoComplete="new-password"
           />
-        </Form.Item>
+        </FormItem>
 
         {diagnostic && (
           <Alert

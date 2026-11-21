@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { Alert, Typography } from 'antd';
-import { WarningOutlined } from '@ant-design/icons';
+import { Alert, Typography } from '../ui';
+const { Paragraph, Text } = Typography;
+import { WarningOutlined } from '../ui/icon';
 import type { z } from 'zod';
 import type { ConfigProfileEnvelopeSchema } from '../../validation/configProfileSchemas';
 import {
@@ -9,7 +10,6 @@ import {
 } from '../../services/configProfiles/catalog';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Paragraph, Text } = Typography;
 
 export interface PostProfileImportChecklistProps {
   envelope: z.infer<typeof ConfigProfileEnvelopeSchema>;

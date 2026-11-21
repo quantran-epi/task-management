@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
-import { Button, Card, Input, Popconfirm, Space, Table, Tag, Tooltip, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, TagsOutlined } from '@ant-design/icons';
+import { Button, Card, Input, Popconfirm, Space, Table, Tag, Tooltip, Typography, useMessage } from '../ui';
+const { Paragraph, Text } = Typography;
+import { DeleteOutlined, EditOutlined, PlusOutlined, TagsOutlined } from '../ui/icon';
 import type { ColumnsType } from 'antd/es/table';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -15,7 +16,6 @@ import {
   type SystemTypeOption,
 } from '../../services/system/systemTypeSettings';
 
-const { Paragraph, Text } = Typography;
 
 export interface SystemTypeOptionsCardProps {
   db?: TaskPlannerDatabase;
@@ -34,6 +34,7 @@ const EMPTY_DRAFT: Draft = { value: '', label: '', color: SYSTEM_TYPE_FALLBACK_C
  * `system_type_options` settings row so all surfaces refresh through their live query.
  */
 export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db = defaultDb }) => {
+  const message = useMessage();
   const options = useSystemTypeOptions(db);
   const usageCounts = useLiveQuery(async () => {
     const counts = new Map<string, number>();

@@ -1,11 +1,12 @@
 import React from 'react';
-import { Card, Space, Tag, Button, Typography, Progress, Alert, Empty, message } from 'antd';
-import { HddOutlined, DatabaseOutlined } from '@ant-design/icons';
+import { Card, Space, Tag, Button, Typography, Progress, Alert, Empty, useMessage, EmptyImageSimple } from '../ui';
+const { Paragraph, Text } = Typography;
+import { HddOutlined, DatabaseOutlined } from '../ui/icon';
 import { useStoragePersistence } from '../../hooks/useStoragePersistence';
 
-const { Paragraph, Text } = Typography;
 
 export const StoragePersistenceCard: React.FC = () => {
+  const message = useMessage();
   const {
     isPersisted,
     isSupported,
@@ -46,7 +47,7 @@ export const StoragePersistenceCard: React.FC = () => {
 
       {!isSupported ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description={
             <div>
               <Text strong>Không có thông tin hạn mức</Text>

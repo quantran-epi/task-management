@@ -1,40 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  Form,
-  Input,
-  Button,
-  Space,
-  Alert,
-  Typography,
-  notification,
-  Row,
-  Col,
-  Tag,
-  Modal,
-  Popconfirm,
-} from 'antd';
-import {
-  GithubOutlined,
-  SaveOutlined,
-  LockOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SafetyCertificateOutlined,
-} from '@ant-design/icons';
+import { Card, Form, Input, Button, Space, Alert, Typography, Row, Col, Tag, Modal, Popconfirm, useNotification, FormItem, InputPassword } from '../ui';
+const { Paragraph, Text } = Typography;
+import { GithubOutlined, SaveOutlined, LockOutlined, EditOutlined, DeleteOutlined, SafetyCertificateOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useGitHubAuth } from '../../context/GitHubAuthContext';
 import { isTauriApp } from '../../utils/timerPopout';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Paragraph, Text } = Typography;
 
 export interface GitHubConfigCardProps {
   db?: TaskPlannerDatabase;
 }
 
 export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = defaultDb }) => {
+  const notification = useNotification();
   const [owner, setOwner] = useState('');
   const [repo, setRepo] = useState('');
   const [branch, setBranch] = useState('main');
@@ -168,37 +148,37 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
       <Form layout="vertical">
         <Row gutter={16}>
           <Col xs={24} sm={12}>
-            <Form.Item label="Chủ sở hữu / Tổ chức (Owner)" required>
+            <FormItem label="Chủ sở hữu / Tổ chức (Owner)" required>
               <Input
                 value={owner}
                 onChange={(e) => setOwner(e.target.value)}
                 placeholder="ví dụ: octocat"
                 aria-label="Chủ sở hữu hoặc tổ chức GitHub"
               />
-            </Form.Item>
+            </FormItem>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Tên kho lưu trữ (Repository)" required>
+            <FormItem label="Tên kho lưu trữ (Repository)" required>
               <Input
                 value={repo}
                 onChange={(e) => setRepo(e.target.value)}
                 placeholder="ví dụ: my-tasks"
                 aria-label="Tên kho lưu trữ GitHub"
               />
-            </Form.Item>
+            </FormItem>
           </Col>
         </Row>
 
-        <Form.Item label="Nhánh (Branch)">
+        <FormItem label="Nhánh (Branch)">
           <Input
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
             placeholder="main"
             aria-label="Nhánh kho lưu trữ GitHub"
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="Personal Access Token (PAT)"
           extra="Fine-grained token cần quyền contents:read và contents:write trên kho lưu trữ. Secret không bao giờ hiển thị văn bản thuần."
         >
@@ -234,9 +214,9 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
               {hasToken ? 'Thay đổi PAT' : 'Nhập PAT'}
             </Button>
           </div>
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="Mật khẩu mã hóa / giải mã (Passphrase)"
           extra="Mật khẩu dùng để dẫn xuất khóa AES-GCM-256 (PBKDF2 600,000 vòng lặp)."
         >
@@ -272,9 +252,9 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
               {hasPassphrase ? 'Thay đổi Mật khẩu' : 'Nhập Mật khẩu'}
             </Button>
           </div>
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item style={{ marginBottom: 0 }}>
+        <FormItem style={{ marginBottom: 0 }}>
           <Space wrap>
             <Button
               type="primary"
@@ -300,7 +280,7 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
               </Popconfirm>
             )}
           </Space>
-        </Form.Item>
+        </FormItem>
       </Form>
 
       {/* Modal for replacing PAT */}
@@ -319,7 +299,7 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
         <Paragraph type="secondary">
           Token sẽ được lưu trữ an toàn trong OS Keychain (trên Desktop) hoặc bộ nhớ phiên (trên Web).
         </Paragraph>
-        <Input.Password
+        <InputPassword
           autoFocus
           placeholder="ghp_... hoặc github_pat_..."
           value={newPatValue}
@@ -344,7 +324,7 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
         <Paragraph type="secondary">
           Mật khẩu dùng để mã hóa và giải mã dữ liệu sao lưu trước khi đồng bộ lên GitHub.
         </Paragraph>
-        <Input.Password
+        <InputPassword
           autoFocus
           placeholder="Nhập mật khẩu sao lưu..."
           value={newPassphraseValue}

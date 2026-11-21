@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Button, notification } from 'antd';
-import { ExportOutlined } from '@ant-design/icons';
+import { Button , useNotification} from '../ui';
+import { ExportOutlined } from '../ui/icon';
 import type { ConfigurationProfile } from '../../services/configProfiles/types';
 import { exportProfileToFile } from '../../services/configProfiles/exportProfile';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
@@ -15,6 +15,7 @@ export interface ConfigProfileExportButtonProps {
  * localStorage or the keyring itself; exportProfileToFile blanks declared secrets.
  */
 export const ConfigProfileExportButton: React.FC<ConfigProfileExportButtonProps> = ({ profile }) => {
+  const notification = useNotification();
   const [loading, setLoading] = useState(false);
 
   const handleExport = async () => {

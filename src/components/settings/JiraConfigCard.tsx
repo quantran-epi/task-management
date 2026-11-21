@@ -1,29 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  Form,
-  Input,
-  Select,
-  Button,
-  Space,
-  Alert,
-  Typography,
-  notification,
-  Row,
-  Col,
-  Tag,
-  Modal,
-  Popconfirm,
-} from 'antd';
-import {
-  CloudSyncOutlined,
-  SaveOutlined,
-  CheckCircleOutlined,
-  SafetyCertificateOutlined,
-  LockOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { Card, Form, Input, Select, Button, Space, Alert, Typography, Row, Col, Tag, Modal, Popconfirm, useNotification, FormItem, InputPassword } from '../ui';
+const { Paragraph, Text, Title } = Typography;
+import { CloudSyncOutlined, SaveOutlined, CheckCircleOutlined, SafetyCertificateOutlined, LockOutlined, EditOutlined, DeleteOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getJiraStatuses, testJiraConnection } from '../../services/jira/jiraApi';
@@ -44,7 +22,6 @@ import {
 import { isTauriApp } from '../../utils/timerPopout';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
-const { Paragraph, Text } = Typography;
 
 export interface JiraConfigCardProps {
   db?: TaskPlannerDatabase;
@@ -58,6 +35,7 @@ export type DiagnosticState =
   | null;
 
 export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }) => {
+  const notification = useNotification();
   const [domain, setDomain] = useState('');
   const [email, setEmail] = useState('');
   const [corsProxy, setCorsProxy] = useState('');
@@ -357,7 +335,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
       <Form layout="vertical">
         <Row gutter={16}>
           <Col xs={24} sm={12}>
-            <Form.Item
+            <FormItem
               label="Tên miền Jira (Domain)"
               required
               extra="Ví dụ: my-org.atlassian.net (không cần nhập https://)"
@@ -368,21 +346,21 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
                 placeholder="my-org.atlassian.net"
                 aria-label="Tên miền Jira"
               />
-            </Form.Item>
+            </FormItem>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Email tài khoản Jira" required extra="Email dùng đăng nhập Atlassian">
+            <FormItem label="Email tài khoản Jira" required extra="Email dùng đăng nhập Atlassian">
               <Input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="user@example.com"
                 aria-label="Email Jira"
               />
-            </Form.Item>
+            </FormItem>
           </Col>
         </Row>
 
-        <Form.Item
+        <FormItem
           label="Jira API Token"
           required
           extra="Tạo API token tại: id.atlassian.com/manage-profile/security/api-tokens"
@@ -435,9 +413,9 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
               )}
             </Space>
           </div>
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           label="CORS Proxy URL (Tùy chọn)"
           extra="Do trình duyệt chặn gọi API trực tiếp tới Atlassian (CORS), cấu hình Proxy URL (như Cloudflare Worker) để chuyển tiếp request. Ví dụ: https://my-proxy.workers.dev/?url="
         >
@@ -447,11 +425,11 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
             placeholder="https://my-proxy.workers.dev/?url="
             aria-label="CORS Proxy URL"
           />
-        </Form.Item>
+        </FormItem>
 
         <Row gutter={16}>
           <Col xs={24} sm={12}>
-            <Form.Item
+            <FormItem
               label="Mã dự án Jira mặc định (Default Jira Key)"
               extra="Điền sẵn khi tạo Issue mới từ task (ví dụ: SHB)"
             >
@@ -461,10 +439,10 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
                 placeholder="SHB"
                 aria-label="Mã dự án mặc định"
               />
-            </Form.Item>
+            </FormItem>
           </Col>
           <Col xs={24} sm={12}>
-            <Form.Item label="Loại Issue mặc định (Default Issue Type)">
+            <FormItem label="Loại Issue mặc định (Default Issue Type)">
               <Select
                 value={defaultIssueType}
                 onChange={(val) => setDefaultIssueType(val)}
@@ -476,11 +454,11 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
                   { value: 'Sub-task', label: 'Sub-task' },
                 ]}
               />
-            </Form.Item>
+            </FormItem>
           </Col>
         </Row>
 
-        <Typography.Title level={5}>Ánh xạ trạng thái cục bộ sang Jira</Typography.Title>
+        <Title level={5}>Ánh xạ trạng thái cục bộ sang Jira</Title>
         <Paragraph type="secondary">
           Nhập Jira status ID từ cấu hình workflow/status. Tên hoặc token Jira hiện có cũng được
           hỗ trợ.
@@ -488,7 +466,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
         <Row gutter={16}>
           {LOCAL_TASK_STATUSES.map((status) => (
             <Col xs={24} sm={12} key={status}>
-              <Form.Item label={status}>
+              <FormItem label={status}>
                 <Select
                   mode="tags"
                   value={statusMappings[status]}
@@ -509,12 +487,12 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
                   ]}
                   aria-label={`Jira statuses cho ${status}`}
                 />
-              </Form.Item>
+              </FormItem>
             </Col>
           ))}
         </Row>
 
-        <Form.Item style={{ marginBottom: 0 }}>
+        <FormItem style={{ marginBottom: 0 }}>
           <Space wrap>
             <Button
               type="primary"
@@ -534,7 +512,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
               Kiểm tra kết nối
             </Button>
           </Space>
-        </Form.Item>
+        </FormItem>
       </Form>
 
       {/* Modal for replacing Jira API token without revealing secret */}
@@ -554,7 +532,7 @@ export const JiraConfigCard: React.FC<JiraConfigCardProps> = ({ db = defaultDb }
           Mã token sẽ được bảo vệ bởi OS Keychain (trên Desktop) hoặc phiên bảo mật và không bao giờ
           hiển thị lại dưới dạng văn bản thuần.
         </Paragraph>
-        <Input.Password
+        <InputPassword
           autoFocus
           placeholder="Nhập mã Jira API token mới"
           value={newTokenValue}

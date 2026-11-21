@@ -1,6 +1,6 @@
 import React from 'react';
-import { Card, Space, Typography, theme } from 'antd';
-import { DatabaseOutlined } from '@ant-design/icons';
+import { Card, Space, Typography, useAntdToken } from '../ui';
+import { DatabaseOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { OracleProfileManager } from '../ai/OracleSqlclSettingsModal';
 
@@ -15,7 +15,7 @@ export const OracleAiToolConfigCard: React.FC<OracleAiToolConfigCardProps> = ({
   db = defaultDb,
   onConfigChange,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <Card

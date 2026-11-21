@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, InputNumber, Button, Space, Typography, message } from 'antd';
-import { WarningOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, InputNumber, Button, Space, Typography, useMessage } from '../ui';
+const { Paragraph, Text } = Typography;
+import { WarningOutlined, SaveOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getGlobalBudgetWarnThresholdPct,
@@ -12,7 +13,6 @@ import {
   MIN_BUDGET_WARN_THRESHOLD_PCT,
 } from '../../types/aiOffice';
 
-const { Paragraph, Text } = Typography;
 
 export interface BudgetWarnThresholdCardProps {
   db?: TaskPlannerDatabase;
@@ -27,6 +27,7 @@ export interface BudgetWarnThresholdCardProps {
 export const BudgetWarnThresholdCard: React.FC<BudgetWarnThresholdCardProps> = ({
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [value, setValue] = useState<number>(DEFAULT_BUDGET_WARN_THRESHOLD_PCT);
   const [saving, setSaving] = useState(false);
 

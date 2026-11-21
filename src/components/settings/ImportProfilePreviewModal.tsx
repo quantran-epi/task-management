@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Input, Typography, Alert, Table, Tag, Descriptions, Space, notification } from 'antd';
+import { Modal, Input, Typography, Alert, Table, Tag, Descriptions, Space, useNotification, DescriptionsItem } from '../ui';
 import type { TaskPlannerDatabase } from '../../db';
 import {
   validateConfigProfilePayload,
@@ -74,6 +74,7 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
   onClose,
   onApplySuccess,
 }) => {
+  const notification = useNotification();
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const [appliedEnvelope, setAppliedEnvelope] = useState<ValidProfileEnvelope | undefined>(
@@ -182,24 +183,24 @@ export const ImportProfilePreviewModal: React.FC<ImportProfilePreviewModalProps>
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Descriptions size="small" bordered column={2}>
-            <Descriptions.Item label="Tên tệp">{rawFileName}</Descriptions.Item>
-            <Descriptions.Item label="Tên profile">
+            <DescriptionsItem label="Tên tệp">{rawFileName}</DescriptionsItem>
+            <DescriptionsItem label="Tên profile">
               {validationResult.valid ? validationResult.envelope.profile.name : 'N/A'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Phiên bản profile">
+            </DescriptionsItem>
+            <DescriptionsItem label="Phiên bản profile">
               {validationResult.valid
                 ? validationResult.envelope.profileSchemaVersion
                 : 'N/A'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Số field cài đặt">
+            </DescriptionsItem>
+            <DescriptionsItem label="Số field cài đặt">
               {validationResult.valid ? fieldCount : 'N/A'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Quy tắc công suất">
+            </DescriptionsItem>
+            <DescriptionsItem label="Quy tắc công suất">
               {validationResult.valid ? capacityRuleCount : 'N/A'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Ngoại lệ công suất">
+            </DescriptionsItem>
+            <DescriptionsItem label="Ngoại lệ công suất">
               {validationResult.valid ? capacityOverrideCount : 'N/A'}
-            </Descriptions.Item>
+            </DescriptionsItem>
           </Descriptions>
 
           {!validationResult.valid ? (

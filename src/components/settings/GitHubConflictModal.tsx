@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Input, Typography, Alert, Space, Button } from 'antd';
-import { WarningOutlined } from '@ant-design/icons';
+import { Modal, Input, Typography, Alert, Space, Button } from '../ui';
+import { WarningOutlined } from '../ui/icon';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
 const { Text, Paragraph } = Typography;

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Button, Space } from 'antd';
-import { UndoOutlined, DownloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Alert, Button, Space } from '../ui';
+import { UndoOutlined, DownloadOutlined, CheckCircleOutlined } from '../ui/icon';
 
 export interface PostRestoreBannerProps {
   onRollback: () => void;

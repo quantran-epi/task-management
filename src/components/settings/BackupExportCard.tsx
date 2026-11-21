@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Button, Typography, Space, notification } from 'antd';
-import { CloudDownloadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Button, Typography, Space , useNotification} from '../ui';
+import { CloudDownloadOutlined, DownloadOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -18,6 +18,7 @@ export interface BackupExportCardProps {
 }
 
 export const BackupExportCard: React.FC<BackupExportCardProps> = ({ db = defaultDb }) => {
+  const notification = useNotification();
   const [loading, setLoading] = useState(false);
 
   const lastBackup = useLiveQuery(async () => {

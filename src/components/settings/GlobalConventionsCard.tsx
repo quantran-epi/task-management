@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Input, Button, Space, Typography, Tag, Modal, Popconfirm, message } from 'antd';
-import { BookOutlined, SaveOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, Button, Space, Typography, Tag, Modal, Popconfirm, useMessage, TextArea } from '../ui';
+const { Paragraph, Text } = Typography;
+import { BookOutlined, SaveOutlined, EyeOutlined, DeleteOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getGlobalConventions,
@@ -9,8 +10,6 @@ import {
 } from '../../services/conventionService';
 import { renderSafeMarkdown } from '../../utils/markdown';
 
-const { Paragraph, Text } = Typography;
-const { TextArea } = Input;
 
 export interface GlobalConventionsCardProps {
   db?: TaskPlannerDatabase;
@@ -31,6 +30,7 @@ const PLACEHOLDER_GUIDE = `# Tiêu chuẩn Kỹ thuật Tổ chức
 - Không bỏ qua kiểm thử biên (edge cases).`;
 
 export const GlobalConventionsCard: React.FC<GlobalConventionsCardProps> = ({ db = defaultDb }) => {
+  const message = useMessage();
   const [content, setContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);

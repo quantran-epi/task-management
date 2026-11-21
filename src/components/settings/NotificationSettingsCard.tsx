@@ -1,23 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  Switch,
-  Typography,
-  Space,
-  Alert,
-  Divider,
-  Select,
-  Checkbox,
-  Row,
-  Col,
-  Button,
-  message,
-} from 'antd';
-import {
-  NotificationOutlined,
-  ControlOutlined,
-  AppstoreOutlined,
-} from '@ant-design/icons';
+import { Card, Switch, Typography, Space, Alert, Divider, Select, Checkbox, Row, Col, Button , useMessage} from '../ui';
+import { NotificationOutlined, ControlOutlined, AppstoreOutlined } from '../ui/icon';
 import { APP_NAME } from '../../constants/app';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -43,6 +26,7 @@ export interface NotificationSettingsCardProps {
 export const NotificationSettingsCard: React.FC<NotificationSettingsCardProps> = ({
   db = defaultDb,
 }) => {
+  const message = useMessage();
   const [permissionBlocked, setPermissionBlocked] = useState(false);
 
   const rawSettings = useLiveQuery(

@@ -1,30 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  Button,
-  Space,
-  Tag,
-  Typography,
-  notification,
-  Descriptions,
-  Divider,
-  Form,
-  Switch,
-  Radio,
-  InputNumber,
-  TimePicker,
-  Alert,
-} from 'antd';
-import {
-  CloudUploadOutlined,
-  CloudDownloadOutlined,
-  CloudSyncOutlined,
-  ApiOutlined,
-  SyncOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
+import { Card, Button, Space, Tag, Typography, Descriptions, Divider, Form, Switch, InputNumber, TimePicker, Alert, useNotification, FormItem, DescriptionsItem, RadioGroup, RadioButton } from '../ui';
+const { Paragraph, Text } = Typography;
+import { CloudUploadOutlined, CloudDownloadOutlined, CloudSyncOutlined, ApiOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, WarningOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -43,7 +20,6 @@ import { GitHubPassphraseModal } from './GitHubPassphraseModal';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 import type { GitHubConfig, PullBackupResult } from '../../services/github/types';
 
-const { Paragraph, Text } = Typography;
 
 export interface GitHubSyncCardProps {
   db?: TaskPlannerDatabase;
@@ -54,6 +30,7 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
   db = defaultDb,
   onPullSuccess,
 }) => {
+  const notification = useNotification();
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -469,8 +446,8 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
         )}
 
         <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="Trạng thái xác thực">{renderCredentialsTag()}</Descriptions.Item>
-          <Descriptions.Item label="Bản sao lưu gần nhất">
+          <DescriptionsItem label="Trạng thái xác thực">{renderCredentialsTag()}</DescriptionsItem>
+          <DescriptionsItem label="Bản sao lưu gần nhất">
             {lastSyncedSha ? (
               <Text code strong>
                 {lastSyncedSha.slice(0, 7)}
@@ -478,14 +455,14 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
             ) : (
               <Text type="secondary">Chưa đồng bộ</Text>
             )}
-          </Descriptions.Item>
-          <Descriptions.Item label="Lần đồng bộ thành công gần nhất" span={2}>
+          </DescriptionsItem>
+          <DescriptionsItem label="Lần đồng bộ thành công gần nhất" span={2}>
             {lastSyncedAt ? (
               dayjs(lastSyncedAt).format('DD/MM/YYYY HH:mm:ss')
             ) : (
               <Text type="secondary">Chưa đồng bộ</Text>
             )}
-          </Descriptions.Item>
+          </DescriptionsItem>
         </Descriptions>
 
         <Space wrap>
@@ -538,18 +515,18 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
         {syncData?.autoEnabled && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Form layout="inline">
-              <Form.Item label="Chế độ">
-                <Radio.Group
+              <FormItem label="Chế độ">
+                <RadioGroup
                   value={syncData?.autoMode ?? 'interval'}
                   onChange={(e) => updateAutoSyncSetting('github_auto_sync_mode', e.target.value)}
                 >
-                  <Radio.Button value="interval">Khoảng thời gian</Radio.Button>
-                  <Radio.Button value="daily">Hàng ngày (cố định)</Radio.Button>
-                </Radio.Group>
-              </Form.Item>
+                  <RadioButton value="interval">Khoảng thời gian</RadioButton>
+                  <RadioButton value="daily">Hàng ngày (cố định)</RadioButton>
+                </RadioGroup>
+              </FormItem>
 
               {syncData?.autoMode === 'daily' ? (
-                <Form.Item label="Giờ chạy">
+                <FormItem label="Giờ chạy">
                   <TimePicker
                     format="HH:mm"
                     value={dayjs(syncData?.autoDailyTime ?? '18:00', 'HH:mm')}
@@ -557,9 +534,9 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
                       if (val) updateAutoSyncSetting('github_auto_sync_daily_time', val.format('HH:mm'));
                     }}
                   />
-                </Form.Item>
+                </FormItem>
               ) : (
-                <Form.Item label="Mỗi (phút)">
+                <FormItem label="Mỗi (phút)">
                   <InputNumber
                     min={1}
                     max={1440}
@@ -568,36 +545,36 @@ export const GitHubSyncCard: React.FC<GitHubSyncCardProps> = ({
                       if (typeof val === 'number') updateAutoSyncSetting('github_auto_sync_interval_minutes', val);
                     }}
                   />
-                </Form.Item>
+                </FormItem>
               )}
             </Form>
 
             <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="Trạng thái đồng bộ">
+              <DescriptionsItem label="Trạng thái đồng bộ">
                 {renderAutoSyncStatus()}
-              </Descriptions.Item>
-              <Descriptions.Item label="Lần chạy tiếp theo">
+              </DescriptionsItem>
+              <DescriptionsItem label="Lần chạy tiếp theo">
                 <Text strong>{calculateNextRun()}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Dữ liệu chưa đồng bộ từ">
+              </DescriptionsItem>
+              <DescriptionsItem label="Dữ liệu chưa đồng bộ từ">
                 {syncData?.autoDirtySince ? (
                   <Tag color="warning">Thay đổi lúc {dayjs(syncData.autoDirtySince).format('DD/MM HH:mm:ss')}</Tag>
                 ) : (
                   <Text type="secondary">Không có (Đã khớp)</Text>
                 )}
-              </Descriptions.Item>
-              <Descriptions.Item label="Tự động chạy gần nhất">
+              </DescriptionsItem>
+              <DescriptionsItem label="Tự động chạy gần nhất">
                 {syncData?.autoLastRunAt ? dayjs(syncData.autoLastRunAt).format('DD/MM/YYYY HH:mm:ss') : 'Chưa chạy'}
-              </Descriptions.Item>
+              </DescriptionsItem>
               {syncData?.autoMissedDueAt && (
-                <Descriptions.Item label="Lần lỡ hẹn gần nhất">
+                <DescriptionsItem label="Lần lỡ hẹn gần nhất">
                   <Text type="warning">{dayjs(syncData.autoMissedDueAt).format('DD/MM/YYYY HH:mm:ss')}</Text>
-                </Descriptions.Item>
+                </DescriptionsItem>
               )}
               {syncData?.autoLastError && (
-                <Descriptions.Item label="Lỗi gần nhất">
+                <DescriptionsItem label="Lỗi gần nhất">
                   <Text type="danger">{syncData.autoLastError}</Text>
-                </Descriptions.Item>
+                </DescriptionsItem>
               )}
             </Descriptions>
           </Space>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Empty, Typography, Button, Space, Modal, Tag, notification } from 'antd';
-import { HistoryOutlined, UndoOutlined, DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Card, Empty, Typography, Button, Space, Tag, useNotification, useTaskMateModal, EmptyImageSimple } from '../ui';
+import { HistoryOutlined, UndoOutlined, DownloadOutlined, ExclamationCircleOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { SnapshotData } from '../../types/backup';
@@ -16,6 +16,8 @@ export interface SnapshotRollbackCardProps {
 export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
   db = defaultDb,
 }) => {
+  const notification = useNotification();
+  const { modal, contextHolder } = useTaskMateModal();
   const [loading, setLoading] = useState(false);
 
   const snapshotRecord = useLiveQuery(
@@ -29,7 +31,7 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
   const handleRollback = () => {
     if (!snapshotRecord) return;
 
-    Modal.confirm({
+    modal.confirm({
       title: 'Xác nhận hoàn tác dữ liệu về bản Snapshot?',
       icon: <ExclamationCircleOutlined />,
       content: (
@@ -86,6 +88,8 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
   };
 
   return (
+    <>
+    {contextHolder}
     <Card
       title={
         <span>
@@ -101,7 +105,7 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
 
       {!snapshotRecord ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description="Chưa có bản snapshot an toàn nào được lưu."
         />
       ) : (
@@ -143,5 +147,6 @@ export const SnapshotRollbackCard: React.FC<SnapshotRollbackCardProps> = ({
         </Space>
       )}
     </Card>
+    </>
   );
 };

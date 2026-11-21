@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Input, Typography, Alert, Button, Space } from 'antd';
-import { LockOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Modal, Typography, Alert, Button, Space, InputPassword } from '../ui';
+import { LockOutlined, DownloadOutlined } from '../ui/icon';
 import { downloadRawEncryptedBackup } from '../../services/github/githubSyncService';
 
 const { Paragraph } = Typography;
@@ -118,7 +118,7 @@ export const GitHubPassphraseModal: React.FC<GitHubPassphraseModalProps> = ({
           <Paragraph strong style={{ marginBottom: 8 }}>
             Mật khẩu giải mã:
           </Paragraph>
-          <Input.Password
+          <InputPassword
             value={passphrase}
             onChange={(e) => setPassphrase(e.target.value)}
             onPressEnter={handleSubmit}

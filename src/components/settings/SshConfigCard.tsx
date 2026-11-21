@@ -1,33 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Card,
-  Table,
-  Button,
-  Space,
-  Tag,
-  Modal,
-  Form,
-  Input,
-  InputNumber,
-  Radio,
-  Popconfirm,
-  Typography,
-  Alert,
-  notification,
-  Tooltip,
-} from 'antd';
-import {
-  CloudServerOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CheckCircleOutlined,
-  FolderOpenOutlined,
-  KeyOutlined,
-  LockOutlined,
-  ApiOutlined,
-  SyncOutlined,
-} from '@ant-design/icons';
+import { Card, Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Radio, Popconfirm, Typography, Alert, Tooltip, useNotification, FormItem, useForm, useWatch, InputPassword, SpaceCompact, RadioGroup } from '../ui';
+import { CloudServerOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined, FolderOpenOutlined, KeyOutlined, LockOutlined, ApiOutlined, SyncOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getSshConfigs,
@@ -66,6 +39,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
 }
 
 export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) => {
+  const notification = useNotification();
   const [configs, setConfigs] = useState<SshConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,8 +47,8 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
   const [testingId, setTestingId] = useState<string | null>(null);
   const [modalTesting, setModalTesting] = useState(false);
 
-  const [form] = Form.useForm<SshFormValues>();
-  const authTypeVal = Form.useWatch('authType', form);
+  const [form] = useForm<SshFormValues>();
+  const authTypeVal = useWatch('authType', form);
 
   const loadConfigs = async () => {
     setLoading(true);
@@ -374,90 +348,90 @@ export const SshConfigCard: React.FC<SshConfigCardProps> = ({ db = defaultDb }) 
         destroyOnClose
       >
         <Form form={form} layout="vertical" initialValues={{ port: 22, authType: 'password' }}>
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên gợi nhớ"
             rules={[{ required: true, message: 'Vui lòng nhập tên gợi nhớ' }]}
           >
             <Input placeholder="VD: WSL Ubuntu 24.04, Dev Staging Server" />
-          </Form.Item>
+          </FormItem>
 
           <Space orientation="horizontal" style={{ width: '100%' }} size="middle">
-            <Form.Item
+            <FormItem
               name="host"
               label="Host / IP"
               rules={[{ required: true, message: 'Vui lòng nhập Host hoặc IP' }]}
               style={{ flex: 1, minWidth: 260 }}
             >
               <Input placeholder="VD: 127.0.0.1 hoặc server.dev.internal" />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item
+            <FormItem
               name="port"
               label="Cổng (Port)"
               rules={[{ required: true, message: 'Vui lòng nhập cổng' }]}
               style={{ width: 110 }}
             >
               <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-            </Form.Item>
+            </FormItem>
           </Space>
 
-          <Form.Item
+          <FormItem
             name="username"
             label="Tên đăng nhập (Username)"
             rules={[{ required: true, message: 'Vui lòng nhập tên người dùng' }]}
           >
             <Input placeholder="VD: ubuntu, root, dev" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item name="authType" label="Phương thức xác thực">
-            <Radio.Group>
+          <FormItem name="authType" label="Phương thức xác thực">
+            <RadioGroup>
               <Radio value="password">Mật khẩu</Radio>
               <Radio value="key_file">Khóa riêng tư (Private Key)</Radio>
               <Radio value="agent">SSH Agent</Radio>
-            </Radio.Group>
-          </Form.Item>
+            </RadioGroup>
+          </FormItem>
 
           {authTypeVal === 'key_file' && (
             <>
-              <Form.Item
+              <FormItem
                 name="keyPath"
                 label="Đường dẫn khóa riêng tư (Private Key Path)"
                 rules={[{ required: true, message: 'Vui lòng cung cấp đường dẫn tệp khóa' }]}
               >
-                <Space.Compact style={{ width: '100%' }}>
+                <SpaceCompact style={{ width: '100%' }}>
                   <Input placeholder="VD: /home/user/.ssh/id_rsa hoặc C:\Users\user\.ssh\id_ed25519" />
                   <Button icon={<FolderOpenOutlined />} onClick={handlePickKeyFile}>
                     Chọn tệp
                   </Button>
-                </Space.Compact>
-              </Form.Item>
+                </SpaceCompact>
+              </FormItem>
 
-              <Form.Item
+              <FormItem
                 name="secret"
                 label="Mật mã khóa (Passphrase, nếu có)"
               >
-                <Input.Password placeholder="Nhập passphrase nếu khóa được mã hóa" />
-              </Form.Item>
+                <InputPassword placeholder="Nhập passphrase nếu khóa được mã hóa" />
+              </FormItem>
             </>
           )}
 
           {authTypeVal === 'password' && (
-            <Form.Item
+            <FormItem
               name="secret"
               label="Mật khẩu SSH"
               rules={[{ required: true, message: 'Vui lòng nhập mật khẩu SSH' }]}
             >
-              <Input.Password placeholder="Mật khẩu đăng nhập SSH" />
-            </Form.Item>
+              <InputPassword placeholder="Mật khẩu đăng nhập SSH" />
+            </FormItem>
           )}
 
-          <Form.Item
+          <FormItem
             name="defaultRemotePath"
             label="Thư mục làm việc từ xa mặc định (Default Remote Path)"
           >
             <Input placeholder="VD: /home/ubuntu/workspace hoặc /var/www" />
-          </Form.Item>
+          </FormItem>
         </Form>
       </Modal>
     </Card>

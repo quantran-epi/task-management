@@ -1,22 +1,6 @@
 import React, { useState, useRef } from 'react';
-import {
-  Card,
-  Table,
-  Button,
-  Modal,
-  Form,
-  DatePicker,
-  InputNumber,
-  Input,
-  Space,
-  Tag,
-  Typography,
-  Popconfirm,
-  Empty,
-  Segmented,
-  message,
-} from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Modal, Form, DatePicker, InputNumber, Input, Space, Tag, Typography, Popconfirm, Empty, Segmented, useMessage, FormItem, useForm, EmptyImageSimple, DateRangePicker } from '../ui';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -35,11 +19,12 @@ export interface OverridesTableProps {
 }
 
 export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }) => {
+  const message = useMessage();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingOverride, setEditingOverride] = useState<CapacityOverride | null>(null);
   const [rangeMode, setRangeMode] = useState<'single' | 'range'>('single');
   const [submitting, setSubmitting] = useState(false);
-  const [form] = Form.useForm();
+  const [form] = useForm();
   const restorerRef = useRef<(() => void) | null>(null);
 
   const overrides = useLiveQuery(
@@ -235,7 +220,7 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
         locale={{
           emptyText: (
             <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              image={EmptyImageSimple}
               description={
                 <div>
                   <Text strong>Chưa có ngày ngoại lệ nào</Text>
@@ -262,7 +247,7 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
       >
         <Form form={form} layout="vertical" preserve={false}>
           {!editingOverride && (
-            <Form.Item label="Phương thức chọn ngày">
+            <FormItem label="Phương thức chọn ngày">
               <Segmented<'single' | 'range'>
                 value={rangeMode}
                 onChange={(val) => setRangeMode(val)}
@@ -271,11 +256,11 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
                   { label: 'Khoảng ngày', value: 'range' },
                 ]}
               />
-            </Form.Item>
+            </FormItem>
           )}
 
           {editingOverride || rangeMode === 'single' ? (
-            <Form.Item
+            <FormItem
               name="date"
               label="Ngày"
               rules={[{ required: true, message: 'Vui lòng chọn ngày' }]}
@@ -285,42 +270,42 @@ export const OverridesTable: React.FC<OverridesTableProps> = ({ db = defaultDb }
                 format="YYYY-MM-DD"
                 disabled={Boolean(editingOverride)}
               />
-            </Form.Item>
+            </FormItem>
           ) : (
-            <Form.Item
+            <FormItem
               name="dateRange"
               label="Khoảng ngày"
               rules={[{ required: true, message: 'Vui lòng chọn khoảng ngày' }]}
             >
-              <DatePicker.RangePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-            </Form.Item>
+              <DateRangePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+            </FormItem>
           )}
 
           <Space align="start" size="middle">
-            <Form.Item
+            <FormItem
               name="hours"
               label="Số giờ làm việc"
               rules={[{ required: true, message: 'Vui lòng nhập số giờ' }]}
             >
               <InputNumber min={0} max={24} suffix="h" style={{ width: 120 }} />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item
+            <FormItem
               name="minutes"
               label="Số phút làm việc"
               rules={[{ required: true, message: 'Vui lòng nhập số phút' }]}
             >
               <InputNumber min={0} max={59} step={15} suffix="m" style={{ width: 120 }} />
-            </Form.Item>
+            </FormItem>
           </Space>
 
-          <Form.Item
+          <FormItem
             name="note"
             label="Ghi chú / Lý do"
             rules={[{ max: 200, message: 'Ghi chú tối đa 200 ký tự' }]}
           >
             <Input placeholder="vd: Nghỉ lễ Quốc khánh, Nghỉ phép, Tăng ca chạy dự án" maxLength={200} />
-          </Form.Item>
+          </FormItem>
         </Form>
       </Modal>
     </Card>

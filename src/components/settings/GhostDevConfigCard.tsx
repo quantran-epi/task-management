@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Input, InputNumber, Button, Space, Typography, message, Alert } from 'antd';
-import { RobotOutlined, SaveOutlined, ReloadOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { Card, Form, Input, InputNumber, Button, Space, Typography, Alert, useMessage, FormItem, useForm, SpaceCompact } from '../ui';
+import { RobotOutlined, SaveOutlined, ReloadOutlined, FolderOpenOutlined } from '../ui/icon';
 import {
   getGhostDevConfig,
   setGhostDevConfig,
@@ -14,7 +14,8 @@ import { browseLocalFile } from '../../utils/documentLinks';
 const { Paragraph } = Typography;
 
 export const GhostDevConfigCard: React.FC = () => {
-  const [form] = Form.useForm<GhostDevConfig>();
+  const message = useMessage();
+  const [form] = useForm<GhostDevConfig>();
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export const GhostDevConfigCard: React.FC = () => {
 
       <Form form={form} layout="vertical">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <Form.Item
+          <FormItem
             name="masterModel"
             label="Default Master Model (Lead Agent)"
             tooltip="Mô hình Claude chịu trách nhiệm lập kế hoạch, phân rã công việc và điều phối"
@@ -101,9 +102,9 @@ export const GhostDevConfigCard: React.FC = () => {
             ]}
           >
             <Input placeholder="claude-3-5-sonnet-20241022" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="workerModel"
             label="Default Worker Model (Subtask Agent)"
             tooltip="Mô hình Claude thực thi các nhiệm vụ cụ thể được Master phân rã"
@@ -116,26 +117,26 @@ export const GhostDevConfigCard: React.FC = () => {
             ]}
           >
             <Input placeholder="claude-3-5-haiku-20241022" />
-          </Form.Item>
+          </FormItem>
         </div>
 
-        <Form.Item
+        <FormItem
           label="Claude Code Executable / CLI Path"
           tooltip="Đường dẫn file thực thi hoặc tên lệnh Claude Code (để trống sẽ dùng 'claude' từ PATH hoặc biến môi trường CLAUDE_PATH)"
         >
-          <Space.Compact style={{ width: '100%' }}>
-            <Form.Item name="claudePath" noStyle>
+          <SpaceCompact style={{ width: '100%' }}>
+            <FormItem name="claudePath" noStyle>
               <Input placeholder="Mặc định: claude (ví dụ: claude, C:\...\claude.cmd, /usr/local/bin/claude)" />
-            </Form.Item>
+            </FormItem>
             {isTauriApp() && (
               <Button icon={<FolderOpenOutlined />} onClick={handleBrowseExecutable}>
                 Duyệt tập tin...
               </Button>
             )}
-          </Space.Compact>
-        </Form.Item>
+          </SpaceCompact>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="concurrencyCap"
           label="Giới hạn tiến trình đồng thời (Concurrency Cap)"
           tooltip="Số lượng tiến trình Claude Code (Master + Workers) tối đa được phép chạy cùng lúc"
@@ -145,7 +146,7 @@ export const GhostDevConfigCard: React.FC = () => {
           ]}
         >
           <InputNumber min={1} max={12} style={{ width: 200 }} />
-        </Form.Item>
+        </FormItem>
       </Form>
     </Card>
   );

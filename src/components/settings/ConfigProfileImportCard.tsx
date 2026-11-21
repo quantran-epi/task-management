@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Upload, Typography, notification } from 'antd';
-import { ImportOutlined, InboxOutlined } from '@ant-design/icons';
+import { Card, Typography, useNotification, UPLOAD_LIST_IGNORE, UploadDragger } from '../ui';
+import { ImportOutlined, InboxOutlined } from '../ui/icon';
 import type { UploadProps } from 'antd';
 import type { TaskPlannerDatabase } from '../../db';
 import type { ApplyProfileResult } from '../../services/configProfiles/importProfile';
@@ -8,7 +8,6 @@ import type { ValidProfileEnvelope } from './ImportProfilePreviewModal';
 import { ImportProfilePreviewModal } from './ImportProfilePreviewModal';
 
 const { Paragraph } = Typography;
-const { Dragger } = Upload;
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -29,6 +28,7 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
   db,
   onApplySuccess,
 }) => {
+  const notification = useNotification();
   const [modalOpen, setModalOpen] = useState(false);
 
   const [parsedPayload, setParsedPayload] = useState<unknown | null>(null);
@@ -47,7 +47,7 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
           message: 'Tệp quá lớn',
           description: 'Dung lượng tệp cấu hình vượt quá giới hạn 50MB cho phép.',
         });
-        return Upload.LIST_IGNORE;
+        return UPLOAD_LIST_IGNORE;
       }
 
       const reader = new FileReader();
@@ -93,13 +93,13 @@ export const ConfigProfileImportCard: React.FC<ConfigProfileImportCardProps> = (
           theo máy sẽ được đánh dấu để bạn rà soát trước khi áp dụng bằng cách trộn từng khóa.
         </Paragraph>
 
-        <Dragger {...uploadProps} style={{ padding: '16px 0' }}>
+        <UploadDragger {...uploadProps} style={{ padding: '16px 0' }}>
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ fontSize: 36, color: '#1677ff' }} />
           </p>
           <p className="ant-upload-text">Nhấp hoặc kéo thả tệp JSON profile vào khu vực này</p>
           <p className="ant-upload-hint">Hỗ trợ .json tối đa 50MB. Không ghi đè toàn bộ cài đặt.</p>
-        </Dragger>
+        </UploadDragger>
       </Card>
 
       {modalOpen && (

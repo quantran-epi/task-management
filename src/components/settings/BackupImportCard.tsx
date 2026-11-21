@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Card, Upload, Typography, notification } from 'antd';
-import { CloudUploadOutlined, InboxOutlined } from '@ant-design/icons';
+import { Card, Typography, useNotification, UPLOAD_LIST_IGNORE, UploadDragger } from '../ui';
+import { CloudUploadOutlined, InboxOutlined } from '../ui/icon';
 import type { UploadProps } from 'antd';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { ImportPreviewModal } from './ImportPreviewModal';
 
 const { Paragraph } = Typography;
-const { Dragger } = Upload;
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -19,6 +18,7 @@ export const BackupImportCard: React.FC<BackupImportCardProps> = ({
   db = defaultDb,
   onRestoreSuccess,
 }) => {
+  const notification = useNotification();
   const [modalOpen, setModalOpen] = useState(false);
   const [parsedPayload, setParsedPayload] = useState<unknown | null>(null);
   const [fileName, setFileName] = useState('');
@@ -34,7 +34,7 @@ export const BackupImportCard: React.FC<BackupImportCardProps> = ({
           message: 'Tệp quá lớn',
           description: 'Dung lượng tệp sao lưu vượt quá giới hạn 50MB cho phép.',
         });
-        return Upload.LIST_IGNORE;
+        return UPLOAD_LIST_IGNORE;
       }
 
       const reader = new FileReader();
@@ -72,7 +72,7 @@ export const BackupImportCard: React.FC<BackupImportCardProps> = ({
           Hệ thống sẽ kiểm tra tính toàn vẹn và cho phép bạn xem trước trước khi thực hiện.
         </Paragraph>
 
-        <Dragger {...uploadProps} style={{ padding: '16px 0' }}>
+        <UploadDragger {...uploadProps} style={{ padding: '16px 0' }}>
           <p className="ant-upload-drag-icon">
             <InboxOutlined style={{ fontSize: 36, color: '#1677ff' }} />
           </p>
@@ -80,7 +80,7 @@ export const BackupImportCard: React.FC<BackupImportCardProps> = ({
           <p className="ant-upload-hint">
             Hỗ trợ tệp định dạng .json với dung lượng tối đa 50MB.
           </p>
-        </Dragger>
+        </UploadDragger>
       </Card>
 
       {modalOpen && (

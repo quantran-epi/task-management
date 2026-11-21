@@ -1,15 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Modal,
-  Input,
-  Typography,
-  Alert,
-  Table,
-  Tag,
-  Descriptions,
-  Space,
-  notification,
-} from 'antd';
+import { Modal, Input, Typography, Alert, Table, Tag, Descriptions, Space, useNotification, DescriptionsItem, TableSummary } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { validateBackupPayload } from '../../services/backup/validateBackup';
@@ -55,6 +45,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
   onClose,
   onRestoreSuccess,
 }) => {
+  const notification = useNotification();
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -245,18 +236,18 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Descriptions size="small" bordered column={2}>
-          <Descriptions.Item label="Tên tệp">{rawFileName}</Descriptions.Item>
-          <Descriptions.Item label="Phiên bản sơ đồ">
+          <DescriptionsItem label="Tên tệp">{rawFileName}</DescriptionsItem>
+          <DescriptionsItem label="Phiên bản sơ đồ">
             {validationResult.envelope?.schemaVersion ?? 'N/A'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Thời gian xuất">
+          </DescriptionsItem>
+          <DescriptionsItem label="Thời gian xuất">
             {validationResult.envelope?.exportedAt
               ? new Date(validationResult.envelope.exportedAt).toLocaleString('vi-VN')
               : 'N/A'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Ứng dụng">
+          </DescriptionsItem>
+          <DescriptionsItem label="Ứng dụng">
             {validationResult.envelope?.app ?? 'N/A'}
-          </Descriptions.Item>
+          </DescriptionsItem>
         </Descriptions>
 
         {!validationResult.valid ? (
@@ -300,15 +291,15 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
                 const totalDelta = totalInc - totalCur;
 
                 return (
-                  <Table.Summary.Row style={{ fontWeight: 'bold' }}>
-                    <Table.Summary.Cell index={0}>Tổng cộng</Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} align="right">
+                  <TableSummary.Row style={{ fontWeight: 'bold' }}>
+                    <TableSummary.Cell index={0}>Tổng cộng</TableSummary.Cell>
+                    <TableSummary.Cell index={1} align="right">
                       {totalCur}
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={2} align="right">
+                    </TableSummary.Cell>
+                    <TableSummary.Cell index={2} align="right">
                       {totalInc}
-                    </Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="right">
+                    </TableSummary.Cell>
+                    <TableSummary.Cell index={3} align="right">
                       {totalDelta > 0 ? (
                         <Tag color="success">+{totalDelta}</Tag>
                       ) : totalDelta < 0 ? (
@@ -316,8 +307,8 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
                       ) : (
                         <Tag color="default">0</Tag>
                       )}
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
+                    </TableSummary.Cell>
+                  </TableSummary.Row>
                 );
               }}
             />

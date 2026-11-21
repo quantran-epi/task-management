@@ -40,3 +40,6 @@ export const Input = forwardRef<import('antd').InputRef, InputProps>(function In
 
 /** AntD Input.Search mirrored as a named export (compound slot policy, D-03). */
 export const InputSearch = AntInput.Search;
+
+/** AntD Input.Password mirrored as a named export (compound slot policy, D-03). */
+export const InputPassword = AntInput.Password;

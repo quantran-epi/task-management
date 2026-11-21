@@ -1,24 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Select,
-  Button,
-  Space,
-  Typography,
-  Alert,
-  theme,
-  message,
-} from 'antd';
-import {
-  FolderOpenOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-  SaveOutlined,
-} from '@ant-design/icons';
+import { Card, Form, Input, InputNumber, Select, Button, Space, Typography, Alert, useAntdToken, useMessage, FormItem, useForm } from '../ui';
+import { FolderOpenOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, SaveOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getSshConfigs } from '../../services/sshService';
 import type { SshConfig } from '../../types/ssh';
@@ -48,8 +30,9 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
   db = defaultDb,
   onConfigChange,
 }) => {
-  const { token } = theme.useToken();
-  const [form] = Form.useForm<SshFsToolConfig>();
+  const message = useMessage();
+  const { token } = useAntdToken();
+  const [form] = useForm<SshFsToolConfig>();
   const [sshConfigs, setSshConfigs] = useState<SshConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -150,7 +133,7 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>
-        <Form.Item
+        <FormItem
           name="sshConfigId"
           label="Máy chủ SSH Remote (Cố định cho AI Tool)"
           rules={[{ required: true, message: 'Vui lòng chọn 1 máy chủ SSH để AI thao tác file' }]}
@@ -166,43 +149,43 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
             }))}
             notFoundContent="Chưa có cấu hình SSH nào. Thêm trong tab SSH."
           />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item
+        <FormItem
           name="defaultBasePath"
           label="Thư mục gốc mặc định (Base Path)"
           tooltip="Thư mục bắt đầu hoặc tiền tố đường dẫn tương đối khi AI gọi tool (vd: /var/log hoặc /home/app hoặc /)"
         >
           <Input placeholder="/var/log" />
-        </Form.Item>
+        </FormItem>
 
         <Space orientation="horizontal" size="middle" style={{ display: 'flex', width: '100%' }}>
-          <Form.Item
+          <FormItem
             name="maxLinesPerRead"
             label="Số dòng tối đa / lần đọc"
             style={{ flex: 1 }}
             tooltip="Giới hạn số dòng tối đa khi AI đọc file để tránh làm tràn Context Window (10 - 500 dòng)."
           >
             <InputNumber min={10} max={500} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="maxListEntries"
             label="Số mục tối đa / lần liệt kê"
             style={{ flex: 1 }}
             tooltip="Giới hạn số file/thư mục tối đa trả về khi list_dir (10 - 200 entries)."
           >
             <InputNumber min={10} max={200} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="maxGrepMatches"
             label="Số kết quả tối đa / lần grep"
             style={{ flex: 1 }}
             tooltip="Giới hạn số dòng khớp tối đa trả về khi tìm kiếm grep (5 - 100 kết quả)."
           >
             <InputNumber min={5} max={100} style={{ width: '100%' }} />
-          </Form.Item>
+          </FormItem>
         </Space>
 
         {testResult && (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Button, Card, Descriptions, Modal, Space, Tag, Typography, notification } from 'antd';
-import { DatabaseOutlined, SaveOutlined, FolderOpenOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Descriptions, Space, Tag, Typography, useNotification, useTaskMateModal, DescriptionsItem } from '../ui';
+const { Paragraph, Text } = Typography;
+import { DatabaseOutlined, SaveOutlined, FolderOpenOutlined, DownloadOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -11,7 +12,6 @@ import {
   SQLITE_SETTING_KEYS,
 } from '../../services/localSqlitePersistence';
 
-const { Paragraph, Text } = Typography;
 
 export interface LocalSqlitePersistenceCardProps {
   db?: TaskPlannerDatabase;
@@ -20,6 +20,8 @@ export interface LocalSqlitePersistenceCardProps {
 export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProps> = ({
   db = defaultDb,
 }) => {
+  const notification = useNotification();
+  const { modal, contextHolder } = useTaskMateModal();
   const [busy, setBusy] = useState(false);
 
   const state = useLiveQuery(async () => {
@@ -91,7 +93,7 @@ export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProp
     };
 
     if (count > 0) {
-      Modal.confirm({
+      modal.confirm({
         title: 'Khôi phục từ SQLite?',
         content: 'Dữ liệu SQLite sẽ ghi đè các dòng trùng khóa trong IndexedDB hiện tại.',
         okText: 'Khôi phục',
@@ -104,6 +106,8 @@ export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProp
   };
 
   return (
+    <>
+    {contextHolder}
     <Card
       title={
         <Space>
@@ -128,13 +132,13 @@ export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProp
       )}
 
       <Descriptions column={1} size="small" bordered style={{ marginBottom: 16 }}>
-        <Descriptions.Item label="Đường dẫn">
+        <DescriptionsItem label="Đường dẫn">
           {state?.path ? <Text code>{state.path}</Text> : <Text type="secondary">Chưa chọn</Text>}
-        </Descriptions.Item>
-        <Descriptions.Item label="Hàng đợi ghi">{state?.queued ?? 0}</Descriptions.Item>
-        <Descriptions.Item label="Lần ghi gần nhất">
+        </DescriptionsItem>
+        <DescriptionsItem label="Hàng đợi ghi">{state?.queued ?? 0}</DescriptionsItem>
+        <DescriptionsItem label="Lần ghi gần nhất">
           {state?.lastFlushAt ? dayjs(state.lastFlushAt).format('DD/MM/YYYY HH:mm:ss') : 'Chưa có'}
-        </Descriptions.Item>
+        </DescriptionsItem>
       </Descriptions>
 
       <Space wrap>
@@ -149,5 +153,6 @@ export const LocalSqlitePersistenceCard: React.FC<LocalSqlitePersistenceCardProp
         </Button>
       </Space>
     </Card>
+    </>
   );
 };

@@ -123,6 +123,7 @@ export {
 } from './image';
 export {
   Input,
+  InputPassword,
   InputSearch,
   controlStyle,
   controlWidthStyle,
