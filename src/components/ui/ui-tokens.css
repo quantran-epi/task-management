@@ -10,6 +10,15 @@
   scroll-margin-block: var(--ui-control-height, 0px);
   column-gap: var(--ui-control-padding-inline, 0px);
   text-decoration-color: var(--ui-status-color, currentColor);
+  scroll-margin-inline: var(--ui-popup-offset, 0px);
+  scroll-padding-block: var(--ui-list-row-height, 0px);
+  outline-color: var(--ui-focus-ring, currentColor);
+}
+
+/* OpenIDEA CSS modules read --danger for invalid controls; keep D-12 status
+   colors intact for Tag/Badge by scoping the control-level override. */
+.taskmate-workbench-theme [data-oi-control] {
+  --danger: var(--danger-control);
 }
 
 /* Each rule reads one family of wrapper-injected values; :where() keeps the
