@@ -1,6 +1,7 @@
 import type { SkeletonProps as AntSkeletonProps } from 'antd';
 import type { CSSProperties, ReactNode } from 'react';
 import { classNames } from './native/classNames';
+import feedbackStyles from './openidea/Feedback.module.css';
 import { getSharedControlTokens } from './tokens.contract';
 
 export type SkeletonProps = AntSkeletonProps;
@@ -27,7 +28,7 @@ function Shape({ kind, style, className }: StaticShapeProps & { kind: 'button' |
       data-oi-control="skeleton"
       data-state={kind}
       aria-busy="true"
-      className={classNames(className)}
+      className={classNames(feedbackStyles.skeleton, className)}
       style={{ display: 'block', background: 'var(--bg-hover, rgba(127,127,127,0.18))', ...dimensions, ...style }}
     />
   );
