@@ -163,7 +163,7 @@
 | 51. Control Inventory & Surface Audit | 3/3 | Complete    | 2026-11-21 |
 | 52. OpenIDEA Mapping & Design Contract | 2/2 | Complete    | 2026-11-21 |
 | 53. Native Core & Form Controls | 5/5 | Complete    | 2026-11-21 |
-| 54. Native Overlay & Complex Controls | 0/TBD | Not started | — |
+| 54. Native Overlay & Complex Controls | 1/7 | In Progress|  |
 | 55. Full Surface Adoption & Theme/Offline Parity | 0/TBD | Not started | — |
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
 | 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
@@ -233,7 +233,7 @@
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 5/5 plans complete
+**Plans:** 1/7 plans executed
 
 Plans:
 **Wave 1**

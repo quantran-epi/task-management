@@ -20,7 +20,7 @@
 ### Native Implementation (NAT)
 
 - [x] **NAT-01**: Mọi wrapper trong `src/components/ui/` được thay bằng control tự build bằng React/CSS variables/CSS module/Web API; không import `antd` hay `@ant-design/icons`, không thêm thư viện UI runtime khác.
-- [ ] **NAT-02**: Mọi trạng thái control được giữ behavior: default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty; popup flip/shift, ngoài-click đóng, Escape đóng, focus trap cho dialog.
+- [x] **NAT-02**: Mọi trạng thái control được giữ behavior: default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty; popup flip/shift, ngoài-click đóng, Escape đóng, focus trap cho dialog.
 - [ ] **NAT-03**: Toàn bộ UI surface dùng wrapper TaskMate; caller không phải sửa từng màn hình để thích nghi; không còn import AntD trực tiếp trong `src` và không còn code control chết.
 - [ ] **NAT-04**: Token light/dark vẫn tập trung tại `src/styles/tokens.ts` và CSS variables; đổi theme cập nhật ngay mọi control; app vẫn chạy local/offline trên Tauri, không thêm runtime server.
 
@@ -68,7 +68,7 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 | MAP-02 | 52 | Complete |
 | MAP-03 | 52 | Complete |
 | NAT-01 | 53 | Complete |
-| NAT-02 | 54 | Pending |
+| NAT-02 | 54 | Complete |
 | NAT-03 | 55 | Pending |
 | NAT-04 | 55 | Pending |
 | CLEAN-01 | 56 | Pending |
