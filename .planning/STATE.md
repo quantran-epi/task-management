@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-11-09)
 Phase: 48 (agent-developer-workbench-ssh-worktree-coding-zone-popout-hu) — COMPLETE
 Plan: 4 of 4
 Status: Phase complete — review clean (0 Critical/Warning/Info), focused Vitest + tsc + cargo + Chrome UAT green; merged to feature/intellij-workbench
-Last activity: 2026-11-21 -- Agent Developer worktree coding zone, hunk review and popout sync delivered
+Last activity: 2026-11-21 - Completed quick task 261121-eck: Markdown Viewer trong Tool Explorer + fix search overflow + icon polish
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -113,6 +113,7 @@ Progress: [█████████░] 91%
 | 261120-gdq | Fix all 8 code-review findings from quick 261120-f8v: cross-branch reveal no-op, folder search result reveal hidden by results panel, Tauri draft handoff uses global emit instead of emitTo ai-popout, duplicate remote tree fetches during reveal, result cap consumed by ancestor folders, over-permissive looksLikeCodeLine causing prose misrender, browser popout handle recovery, global search full tree fetch every keystroke. | 2026-11-20 | 09277995 | [261120-gdq-fix-all-8-code-review-findings-from-quic](./quick/261120-gdq-fix-all-8-code-review-findings-from-quic/) |
 | 261120-ha7 | Tăng timeout mặc định settlePollDeadlineMs trong teamRunCoordinator.ts từ 120s lên 30 phút để explore_repo 20-40 turn không bị ép dừng nhầm; giữ cơ chế chống kẹt | 2026-11-20 | 2082d27c | [261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems](./quick/261120-ha7-t-ng-timeout-m-c-nh-settlepolldeadlinems/) |
 | 261121-0ix | Tạo bản draft HTML tương tác cho Agent Developer workbench: tree SSH worktree, multi-tab file viewer, diff approve/reject, popout sync team chat | 2026-11-21 | 2b7b4319 | [261121-0ix-t-o-b-n-draft-html-t-ng-t-c-cho-agent-de](./quick/261121-0ix-t-o-b-n-draft-html-t-ng-t-c-cho-agent-de/) |
+| 261121-eck | Markdown Viewer trong Tool Explorer + fix search overflow + icon polish | 2026-11-21 | 635cba8e | [261121-eck-trong-tool-explorer-th-m-markdown-viewer](./quick/261121-eck-trong-tool-explorer-th-m-markdown-viewer/) |
 
 ## Accumulated Context
 
