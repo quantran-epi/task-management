@@ -23,7 +23,7 @@
 
 ## Phases
 
-- [ ] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all AntD wrappers, ESLint + local checks guard, focused token+wrapper tests.
+- [x] **Phase 49: Design System Foundation** — IntelliJ-only shell, one light/dark token source, all AntD wrappers, ESLint + local checks guard, focused token+wrapper tests. (completed 2026-11-21)
 - [ ] **Phase 50: Full App Adoption** — migrate every surface to wrappers, strip token-valued inline styles, Chrome UAT in light and dark, all verification gates green.
 
 ## Phase Details
@@ -45,36 +45,36 @@
 Plans:
 **Wave 1**
 
-- [ ] 49-01-PLAN.md — Xóa shell AntD/flag/PWA; hard-boot IntelliJ, giữ lại side effect + coding-zone popout (SHELL-01..03)
+- [x] 49-01-PLAN.md — Xóa shell AntD/flag/PWA; hard-boot IntelliJ, giữ lại side effect + coding-zone popout (SHELL-01..03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 49-02-PLAN.md — Một nguồn `tokens.ts` cho ConfigProvider + CSS vars; toggle light/dark, localStorage override, broadcast popout + subscriber re-render (TOKEN-01..04)
+- [x] 49-02-PLAN.md — Một nguồn `tokens.ts` cho ConfigProvider + CSS vars; toggle light/dark, localStorage override, broadcast popout + subscriber re-render (TOKEN-01..04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 49-03-PLAN.md — Khung wrapper: `tokens.contract.ts`, Button/IconButton (aria-label), 144 icon, scanner tồn kho AntD (CTRL-01/02/06)
+- [x] 49-03-PLAN.md — Khung wrapper: `tokens.contract.ts`, Button/IconButton (aria-label), 144 icon, scanner tồn kho AntD (CTRL-01/02/06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 49-04-PLAN.md — Wrapper nhóm input và overlay; holder giữ theme cho message/notification/modal (CTRL-03/04)
+- [x] 49-04-PLAN.md — Wrapper nhóm input và overlay; holder giữ theme cho message/notification/modal (CTRL-03/04)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 49-05-PLAN.md — Wrapper status + control phức tạp chính (Table/Form/DatePicker/Menu/Tooltip/Popover/Tree/...) (CTRL-01/05/06)
-- [ ] 49-06-PLAN.md — Wrapper control còn lại: Card/Descriptions/Grid/Typography/Space + utility lõi (CTRL-01/06) [wave 5, song song 05]
+- [x] 49-05-PLAN.md — Wrapper status + control phức tạp chính (Table/Form/DatePicker/Menu/Tooltip/Popover/Tree/...) (CTRL-01/05/06)
+- [x] 49-06-PLAN.md — Wrapper control còn lại: Card/Descriptions/Grid/Typography/Space + utility lõi (CTRL-01/06) [wave 5, song song 05]
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 49-07-PLAN.md — Wrapper utility/layout cuối, chốt barrel + test parity D-12 + scanner coverage (CTRL-01/05/06)
+- [x] 49-07-PLAN.md — Wrapper utility/layout cuối, chốt barrel + test parity D-12 + scanner coverage (CTRL-01/05/06)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 49-08-PLAN.md — ESLint Babel-parser guard + npm script local, install package bản pin + verify repo tự động, test coverage D-04 (GUARD-01..03)
+- [x] 49-08-PLAN.md — ESLint Babel-parser guard + npm script local, install package bản pin + verify repo tự động, test coverage D-04 (GUARD-01..03)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 
-- [ ] 49-09-PLAN.md — Cổng tổng hợp lint+build+focused test, ký Nyquist và UI-SPEC + advisory SUS (toàn bộ 16 requirement, 25 task)
+- [x] 49-09-PLAN.md — Cổng tổng hợp lint+build+focused test, ký Nyquist và UI-SPEC + advisory SUS (toàn bộ 16 requirement, 25 task)
 
 **Cross-cutting constraints:**
 
@@ -102,7 +102,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 49. Design System Foundation | 0/9 | Ready to execute | - |
+| 49. Design System Foundation | 9/9 | Complete   | 2026-11-21 |
 | 50. Full App Adoption | 0/TBD | Not started | - |
 
 ## Previous Milestone: v1.3
@@ -152,7 +152,7 @@ Plans:
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 12/12 plans complete in 7 waves (plus two corrective fixes)
+**Plans:** 9/9 plans complete
 
 Plans:
 **Wave 1**
