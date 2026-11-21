@@ -101,6 +101,14 @@ export {
   type FormProps,
 } from './form';
 export {
+  ThemeConfigProvider,
+  type ConfigProviderProps,
+} from './config-provider';
+export {
+  useAntdToken,
+  darkAlgorithm,
+} from './antdTheme';
+export {
   Col,
   Grid,
   Row,

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './utils/date';
 import { initializeDatabaseDefaults } from './db/seeds';
 import { checkAndRequestStoragePersistence } from './services/storage/storagePersistence';
+import { ThemeAppHolder } from './components/ui';
 import { AntdThemeAdapter } from './workbench/AntdThemeAdapter';
 import { WorkbenchLayout } from './workbench/WorkbenchLayout';
 import { TimerProvider } from './context/TimerContext';
@@ -85,9 +86,11 @@ export const AppIntelliJ: React.FC = () => {
   if (route === 'timer-popout') {
     return (
       <AntdThemeAdapter>
-        <TimerProvider>
-          <TimerPopoutView />
-        </TimerProvider>
+        <ThemeAppHolder>
+          <TimerProvider>
+            <TimerPopoutView />
+          </TimerProvider>
+        </ThemeAppHolder>
       </AntdThemeAdapter>
     );
   }
@@ -95,7 +98,9 @@ export const AppIntelliJ: React.FC = () => {
   if (route === 'notes-popout') {
     return (
       <AntdThemeAdapter>
-        <NotesPopoutView />
+        <ThemeAppHolder>
+          <NotesPopoutView />
+        </ThemeAppHolder>
       </AntdThemeAdapter>
     );
   }
@@ -103,9 +108,11 @@ export const AppIntelliJ: React.FC = () => {
   if (route === 'ai-popout') {
     return (
       <AntdThemeAdapter>
-        <AIChatProvider>
-          <AIPopoutView />
-        </AIChatProvider>
+        <ThemeAppHolder>
+          <AIChatProvider>
+            <AIPopoutView />
+          </AIChatProvider>
+        </ThemeAppHolder>
       </AntdThemeAdapter>
     );
   }
@@ -113,25 +120,29 @@ export const AppIntelliJ: React.FC = () => {
   if (route === 'coding-zone-popout') {
     return (
       <AntdThemeAdapter>
-        <CodingZonePopoutView />
+        <ThemeAppHolder>
+          <CodingZonePopoutView />
+        </ThemeAppHolder>
       </AntdThemeAdapter>
     );
   }
 
   return (
     <AntdThemeAdapter>
-      {showSplash && <AppSplashScreen onReady={() => setShowSplash(false)} minDuration={1900} />}
-      <KnowledgeConfigProvider>
-        <FormGuardProvider>
-          <GitHubAuthProvider>
-            <TimerProvider>
-              <AIChatProvider>
-                <WorkbenchLayout />
-              </AIChatProvider>
-            </TimerProvider>
-          </GitHubAuthProvider>
-        </FormGuardProvider>
-      </KnowledgeConfigProvider>
+      <ThemeAppHolder>
+        {showSplash && <AppSplashScreen onReady={() => setShowSplash(false)} minDuration={1900} />}
+        <KnowledgeConfigProvider>
+          <FormGuardProvider>
+            <GitHubAuthProvider>
+              <TimerProvider>
+                <AIChatProvider>
+                  <WorkbenchLayout />
+                </AIChatProvider>
+              </TimerProvider>
+            </GitHubAuthProvider>
+          </FormGuardProvider>
+        </KnowledgeConfigProvider>
+      </ThemeAppHolder>
     </AntdThemeAdapter>
   );
 };

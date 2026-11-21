@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { ConfigProvider } from 'antd';
+import { ThemeConfigProvider } from '../components/ui';
 import { useThemeMode } from '../hooks/useThemeMode';
 import { applyCssVariables, getAntdTheme } from '../styles/tokens';
 
@@ -16,7 +16,7 @@ export function AntdThemeAdapter({ children }: AntdThemeAdapterProps) {
   }, [mode]);
 
   return (
-    <ConfigProvider theme={getAntdTheme(mode)}>
+    <ThemeConfigProvider theme={getAntdTheme(mode)}>
       <div
         ref={wrapperRef}
         className="taskmate-workbench-theme"
@@ -32,6 +32,6 @@ export function AntdThemeAdapter({ children }: AntdThemeAdapterProps) {
       >
         {children}
       </div>
-    </ConfigProvider>
+    </ThemeConfigProvider>
   );
 }
