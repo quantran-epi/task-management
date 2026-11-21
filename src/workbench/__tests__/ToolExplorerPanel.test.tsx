@@ -28,4 +28,16 @@ describe('ToolExplorerPanel', () => {
       container.remove();
     }
   });
+
+  it('shows curly-bracket icon for JSON Formatter and no file-text icon', () => {
+    render(<ToolExplorerPanel />);
+    const jsonButton = screen.getByRole('button', { name: 'Open JSON Formatter' });
+
+    const bracket = Array.from(jsonButton.querySelectorAll('span')).find(
+      (span) => span.textContent === '{}'
+    );
+    expect(bracket).toBeDefined();
+    expect(bracket?.style.color).toContain('var(--accent');
+    expect(jsonButton.querySelector('.anticon-file-text')).toBeNull();
+  });
 });

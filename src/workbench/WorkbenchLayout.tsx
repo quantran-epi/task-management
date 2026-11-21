@@ -34,7 +34,7 @@ import {
   JetBrainsOfficeIcon,
   JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
-import { ToolOutlined } from '@ant-design/icons';
+import { AppstoreOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
   export interface WorkbenchLayoutProps {
@@ -105,7 +105,7 @@ export function WorkbenchLayout({
 
   const rightItems = useMemo<ToolWindowItem[]>(() => {
     return [
-      { id: 'tool_explorer', name: 'Tool Explorer', icon: <ToolOutlined style={{ fontSize: 16 }} />, shortcut: 'Alt+9' },
+      { id: 'tool_explorer', name: 'Tool Explorer', icon: <AppstoreOutlined style={{ fontSize: 16, color: 'var(--accent, #3871e1)' }} />, shortcut: 'Alt+9' },
       { id: 'ai_chat', name: 'AI Assistant', icon: <JetBrainsAIIcon size={16} />, shortcut: 'Alt+3' },
       {
         id: 'notifications',

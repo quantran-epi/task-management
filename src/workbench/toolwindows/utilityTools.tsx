@@ -17,7 +17,7 @@ export const UTILITY_TOOLS: UtilityTool[] = [
     title: 'JSON Formatter',
     description: 'Format, minify và kiểm tra JSON',
     viewType: 'json_formatter',
-    icon: (size = 16) => <FileTextOutlined style={{ fontSize: size }} />,
+    icon: (size = 16) => <span style={{ fontSize: size, color: 'var(--accent, #3871e1)' }}>{'{}'}</span>,
   },
   {
     id: 'xml_formatter',
