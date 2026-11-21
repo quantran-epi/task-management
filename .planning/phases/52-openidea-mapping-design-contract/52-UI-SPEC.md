@@ -126,7 +126,7 @@ Quy ước group lấy nguyên từ `51-CONTROL-INVENTORY.md` §4 (`core/form` 2
 | 55 | `typography.tsx` | core/form | 02 | N-33 typography roles | `src/styles/tokens.css:293-295` 11/12/13 (+16 legacy Display) | `src/styles/tokens.css` |
 | 56 | `upload.tsx` | overlay/complex | 02 | N-34 upload | S-BTN + `List.module.css` `.row` file rows + N-20 progress | PROOF §Controls |
 
-Đối chiếu: 22 dòng MAP-01 (`button, badge, tag, checkbox, input, input-number, mentions, textarea, radio, select, auto-complete, tree-select, segmented, tabs, switch, drawer, modal, popconfirm, form, list, dropdown`) + 34 dòng MAP-02 = 56. Dòng `icon` gộp 141 export; 8 deep-import tại `RemoteGitExplorer.tsx` nằm trong dòng này, không đếm riêng.
+Đối chiếu: 22 dòng MAP-01 (`button, badge, tag, checkbox, input, input-number, mentions, textarea, radio, select, auto-complete, tree-select, segmented, tabs, switch, drawer, modal, popconfirm, form, list, dropdown, menu`) + 34 dòng MAP-02 = 56. Dòng `icon` gộp 141 export; 8 deep-import tại `RemoteGitExplorer.tsx` nằm trong dòng này, không đếm riêng.
 
 ### 1.1 Anatomy đã có bằng chứng PROOF (MAP-01)
 
