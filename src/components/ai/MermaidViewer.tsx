@@ -251,12 +251,12 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
 
   const handleDownloadSvg = () => {
     const svgEl = containerRef.current?.querySelector('svg');
-    downloadMermaidSvg(svgEl, { isDark: palette === 'dark', filename: 'diagram' });
+    downloadMermaidSvg(svgEl, (kind, text, extra) => appMessage[kind]({ content: text, ...(extra ?? {}) }), { isDark: palette === 'dark', filename: 'diagram' });
   };
 
   const handleDownloadPng = () => {
     const svgEl = containerRef.current?.querySelector('svg');
-    downloadMermaidPng(svgEl, { isDark: palette === 'dark', filename: 'diagram' });
+    downloadMermaidPng(svgEl, (kind, text, extra) => appMessage[kind]({ content: text, ...(extra ?? {}) }), { isDark: palette === 'dark', filename: 'diagram' });
   };
 
   const handleFixWithAi = async () => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, AutoComplete, Button, Space, message } from 'antd';
-import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { Modal, Form, Input, Select, AutoComplete, Button, useMessage, FormItem, SpaceCompact, TextArea, useForm, useWatch } from '../ui';
+import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getParentSystems } from '../../db/repositories/systemRepo';
@@ -47,10 +47,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
   onSave,
   db = defaultDb,
 }) => {
-  const [form] = Form.useForm();
+  const message = useMessage();
+  const [form] = useForm();
   const [remoteBrowserOpen, setRemoteBrowserOpen] = useState(false);
-  const selectedType = Form.useWatch('type', form);
-  const selectedSshConfigId = Form.useWatch('sshConfigId', form);
+  const selectedType = useWatch('type', form);
+  const selectedSshConfigId = useWatch('sshConfigId', form);
 
   // Queries for parent systems & ssh configs
   const parentSystems = useLiveQuery(() => getParentSystems(db), [db]) ?? [];
@@ -141,7 +142,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" style={{ marginTop: 14 }}>
-        <Form.Item
+        <FormItem
           name="type"
           label="Loại hệ thống"
           getValueProps={(value) => ({
@@ -182,19 +183,19 @@ export const SystemModal: React.FC<SystemModalProps> = ({
               }
             }}
           />
-        </Form.Item>
+        </FormItem>
 
         <div style={{ display: 'flex', gap: 12 }}>
-          <Form.Item
+          <FormItem
             name="name"
             label="Tên hệ thống"
             rules={[{ required: true, message: 'Vui lòng nhập tên hệ thống' }]}
             style={{ flex: 2 }}
           >
             <Input placeholder="VD: SmartCard Core API" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="code"
             label="Mã hệ thống (Code)"
             normalize={(val) => (val ? String(val).toUpperCase() : val)}
@@ -208,11 +209,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
             style={{ flex: 1 }}
           >
             <Input placeholder="VD: SC-API" />
-          </Form.Item>
+          </FormItem>
         </div>
 
         {!isLogicalGroup && (
-          <Form.Item
+          <FormItem
             name="parentId"
             label="Hệ thống cha (Parent Logical Group)"
             rules={[{ required: false }]}
@@ -227,12 +228,12 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                   label: `${p.name} (${p.code})`,
                 }))}
             />
-          </Form.Item>
+          </FormItem>
         )}
 
-        <Form.Item name="description" label="Mô tả chức năng">
-          <Input.TextArea rows={2} placeholder="Mô tả chức năng chính của hệ thống hoặc dịch vụ..." />
-        </Form.Item>
+        <FormItem name="description" label="Mô tả chức năng">
+          <TextArea rows={2} placeholder="Mô tả chức năng chính của hệ thống hoặc dịch vụ..." />
+        </FormItem>
 
         {!isLogicalGroup && (
           <div
@@ -260,7 +261,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
               <span>Cấu hình SSH & Repository từ xa</span>
             </div>
 
-            <Form.Item
+            <FormItem
               name="sshConfigId"
               label="Kết nối SSH máy chủ"
               rules={[{ required: false }]}
@@ -274,11 +275,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                   label: `${cfg.name} (${cfg.username}@${cfg.host}:${cfg.port})`,
                 }))}
               />
-            </Form.Item>
+            </FormItem>
 
-            <Form.Item label="Đường dẫn Repository trên máy chủ (Absolute path)" htmlFor="remoteRepoPath" style={{ marginBottom: 10 }}>
-              <Space.Compact style={{ width: '100%' }}>
-                <Form.Item
+            <FormItem label="Đường dẫn Repository trên máy chủ (Absolute path)" htmlFor="remoteRepoPath" style={{ marginBottom: 10 }}>
+              <SpaceCompact style={{ width: '100%' }}>
+                <FormItem
                   name="remoteRepoPath"
                   noStyle
                   rules={[
@@ -293,7 +294,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                   ]}
                 >
                   <Input placeholder="VD: /data/services/smartcard-api" />
-                </Form.Item>
+                </FormItem>
                 <Button
                   icon={<FolderOpenOutlined />}
                   title="Duyệt thư mục trên máy chủ SSH"
@@ -307,17 +308,17 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                 >
                   Duyệt SSH...
                 </Button>
-              </Space.Compact>
-            </Form.Item>
+              </SpaceCompact>
+            </FormItem>
 
-            <Form.Item
+            <FormItem
               name="defaultBaseBranch"
               label="Nhánh base mặc định"
               rules={[{ required: false }]}
               style={{ marginBottom: 0 }}
             >
               <Input placeholder="VD: origin/main hoặc origin/master" />
-            </Form.Item>
+            </FormItem>
           </div>
         )}
       </Form>

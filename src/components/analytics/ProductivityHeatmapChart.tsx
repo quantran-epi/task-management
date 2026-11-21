@@ -1,6 +1,6 @@
 import React from 'react';
 import { Heatmap } from '@ant-design/plots';
-import { Empty } from 'antd';
+import { Empty } from '../ui';
 import type { ProductivityHeatmapItem } from '../../types/analytics';
 
 export interface ProductivityHeatmapChartProps {

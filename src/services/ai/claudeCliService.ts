@@ -1,4 +1,4 @@
-import { message } from 'antd';
+import type { Notify } from '../../utils/exportFolderZip';
 import type { Task } from '../../types/models';
 import { isLocalPath, normalizeLocalPath } from '../../utils/documentLinks';
 import { isTauriApp } from '../../utils/timerPopout';
@@ -51,6 +51,7 @@ export function generateClaudeCliCommand(task: Task): string {
 
 export interface LaunchClaudeTerminalOptions {
   task: Task;
+  notify: Notify;
   isTauri?: boolean;
   tauriInvoker?: (command: string, args?: Record<string, unknown>) => Promise<any>;
 }
@@ -67,7 +68,7 @@ export interface LaunchClaudeTerminalResult {
 export async function launchClaudeTerminal(
   options: LaunchClaudeTerminalOptions
 ): Promise<LaunchClaudeTerminalResult> {
-  const { task, isTauri = isTauriApp(), tauriInvoker } = options;
+  const { task, notify, isTauri = isTauriApp(), tauriInvoker } = options;
   const command = generateClaudeCliCommand(task);
 
   if (isTauri) {
@@ -88,7 +89,7 @@ export async function launchClaudeTerminal(
   try {
     if (navigator?.clipboard?.writeText) {
       await navigator.clipboard.writeText(command);
-      message.success('Đã sao chép lệnh Claude Code vào bộ nhớ tạm');
+      notify('success', 'Đã sao chép lệnh Claude Code vào bộ nhớ tạm');
       return { launched: false, copied: true, command };
     }
   } catch (err) {

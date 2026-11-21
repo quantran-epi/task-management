@@ -1,12 +1,7 @@
 import React from 'react';
-import { Space, Typography, Tooltip, Button, Dropdown, Badge, theme, type MenuProps } from 'antd';
-import {
-  PauseCircleOutlined,
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExportOutlined,
-} from '@ant-design/icons';
+import { Space, Tooltip, Button, Dropdown, Badge, useAntdToken, Text } from '../ui';
+import type { MenuProps } from 'antd';
+import { PauseCircleOutlined, PlayCircleOutlined, CheckCircleOutlined, ClockCircleOutlined, ExportOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../../db';
 import { useTimer } from '../../hooks/useTimer';
@@ -33,7 +28,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
   database = db,
   compact = false,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const {
     activeTimers,
     getElapsedSeconds,
@@ -135,7 +130,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
         />
         <div style={{ display: 'inline-flex', flexDirection: 'column', maxWidth: compact ? 130 : 120 }}>
           <Tooltip title={subtitle ? `${taskTitle} (${subtitle})` : taskTitle}>
-            <Typography.Text
+            <Text
               ellipsis
               style={{
                 fontSize: compact ? 11.5 : 13,
@@ -144,10 +139,10 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
               }}
             >
               {taskTitle}
-            </Typography.Text>
+            </Text>
           </Tooltip>
           {!compact && subtitle && (
-            <Typography.Text
+            <Text
               ellipsis
               type="secondary"
               data-testid="capsule-hierarchy-subtitle"
@@ -157,10 +152,10 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
               }}
             >
               {subtitle}
-            </Typography.Text>
+            </Text>
           )}
         </div>
-        <Typography.Text
+        <Text
           data-testid="elapsed-ticker"
           style={{
             fontVariantNumeric: 'tabular-nums',
@@ -171,7 +166,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
           }}
         >
           {formatElapsedTicker(elapsedSec)}
-        </Typography.Text>
+        </Text>
         <Space orientation="horizontal" size={compact ? 1 : 2}>
           {isRunning ? (
             <Button
@@ -250,23 +245,23 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             />
             <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, maxWidth: 130 }}>
               <Tooltip title={taskTitle}>
-                <Typography.Text ellipsis style={{ fontSize: 13, lineHeight: 1.2 }}>
+                <Text ellipsis style={{ fontSize: 13, lineHeight: 1.2 }}>
                   {taskTitle}
-                </Typography.Text>
+                </Text>
               </Tooltip>
               {subtitle && (
-                <Typography.Text
+                <Text
                   ellipsis
                   type="secondary"
                   data-testid={`dropdown-hierarchy-subtitle-${timer.taskId}`}
                   style={{ fontSize: 11, lineHeight: 1.1 }}
                 >
                   {subtitle}
-                </Typography.Text>
+                </Text>
               )}
             </div>
           </div>
-          <Typography.Text
+          <Text
             style={{
               fontVariantNumeric: 'tabular-nums',
               fontSize: 13,
@@ -275,7 +270,7 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             }}
           >
             {formatElapsedTicker(elapsedSec)}
-          </Typography.Text>
+          </Text>
           <Space orientation="horizontal" size={2}>
             {isRunning ? (
               <Button
@@ -338,9 +333,9 @@ export const ActiveTimerWidget: React.FC<ActiveTimerWidgetProps> = ({
             openTimerPopout();
           }}
         >
-          <Typography.Text strong style={{ fontSize: 12 }}>
+          <Text strong style={{ fontSize: 12 }}>
             {activeTimers.length} bộ đếm đang chạy
-          </Typography.Text>
+          </Text>
           <Button
             type="link"
             size="small"

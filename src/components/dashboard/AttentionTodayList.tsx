@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, Badge, Button, Empty, List, Checkbox, Tag, Typography, Space, message } from 'antd';
+import { Card, Badge, Button, Empty, List, Checkbox, Tag, Space, useMessage, EmptyImageSimple, ListItem, Text } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { AttentionTaskItem } from '../../types/dashboard';
 import type { Task, TaskPriority, TaskStatus } from '../../types/models';
@@ -37,6 +37,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
   db,
   crMap,
 }) => {
+  const message = useMessage();
   const changeRequests = useLiveQuery(
     async () => {
       if (!db) return [];
@@ -87,7 +88,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
       >
         {items.length === 0 ? (
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description="Tuyệt vời! Bạn không có tác vụ quá hạn, đến hạn hôm nay hay lịch phân bổ nào còn dở dang."
             style={{ padding: '32px 0' }}
           />
@@ -95,7 +96,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
           <List
             dataSource={items}
             renderItem={(item) => (
-              <List.Item
+              <ListItem
                 key={item.task.id}
                 style={{
                   display: 'flex',
@@ -112,7 +113,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                     aria-label={`Đánh dấu hoàn thành cho ${item.task.name}`}
                   />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-                    <Typography.Text
+                    <Text
                       ellipsis
                       delete={item.task.status === 'Done' || item.task.status === 'Cancelled'}
                       style={{
@@ -132,15 +133,15 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                       aria-label={`Mở chi tiết tác vụ ${item.task.name}`}
                     >
                       {item.task.name}
-                    </Typography.Text>
+                    </Text>
                     {item.task.crId && internalCrMap.get(item.task.crId) && (
-                      <Typography.Text
+                      <Text
                         type="secondary"
                         ellipsis={{ tooltip: internalCrMap.get(item.task.crId) }}
                         style={{ fontSize: 11, lineHeight: 1.2 }}
                       >
                         {internalCrMap.get(item.task.crId)}
-                      </Typography.Text>
+                      </Text>
                     )}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center', marginTop: 2 }}>
                       {item.category === 'overdue' && (
@@ -185,7 +186,7 @@ export const AttentionTodayList: React.FC<AttentionTodayListProps> = ({
                     db={db}
                   />
                 </div>
-              </List.Item>
+              </ListItem>
             )}
           />
         )}

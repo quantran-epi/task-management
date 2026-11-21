@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, List, Typography, Button, Spin, Breadcrumb, Empty, message } from 'antd';
-import { FolderOutlined, FolderOpenOutlined, ArrowUpOutlined, CheckOutlined } from '@ant-design/icons';
+import { Modal, List, Button, Spin, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem, Text } from '../ui';
+import { FolderOutlined, FolderOpenOutlined, ArrowUpOutlined, CheckOutlined } from '../ui/icon';
 import { listRemoteDir } from '../../services/sshService';
 import type { SshConfig, RemoteFileInfo } from '../../types/ssh';
 
@@ -19,6 +19,7 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
   onSelect,
   onCancel,
 }) => {
+  const message = useMessage();
   const [currentPath, setCurrentPath] = useState<string>(initialPath || '/');
   const [items, setItems] = useState<RemoteFileInfo[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -177,13 +178,13 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
             </div>
           ) : items.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center' }}>
-              <Empty description="Không có thư mục con nào" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="Không có thư mục con nào" image={EmptyImageSimple} />
             </div>
           ) : (
             <List
               dataSource={items}
               renderItem={(item) => (
-                <List.Item
+                <ListItem
                   key={item.name}
                   onClick={() => handleNavigateInto(item)}
                   style={{
@@ -197,11 +198,11 @@ export const RemoteDirectoryBrowserModal: React.FC<RemoteDirectoryBrowserModalPr
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <FolderOutlined style={{ color: '#faad14', fontSize: 16 }} />
-                    <Typography.Text style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 13 }}>
                       {item.name}
-                    </Typography.Text>
+                    </Text>
                   </div>
-                </List.Item>
+                </ListItem>
               )}
             />
           )}

@@ -1,6 +1,6 @@
 import React from 'react';
-import { Tag, Tooltip, Popover, theme, Typography } from 'antd';
-import { LinkOutlined } from '@ant-design/icons';
+import { Tag, Tooltip, Popover, useAntdToken, Text } from '../ui';
+import { LinkOutlined } from '../ui/icon';
 import type { TagSource } from '../../domain/inheritance';
 
 export interface TagListDisplayProps {
@@ -14,13 +14,13 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
   source = 'direct',
   originName,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   if (!tags || tags.length === 0) {
     return (
-      <Typography.Text style={{ color: token.colorTextTertiary }}>
+      <Text style={{ color: token.colorTextTertiary }}>
         —
-      </Typography.Text>
+      </Text>
     );
   }
 
@@ -72,9 +72,9 @@ export const TagListDisplay: React.FC<TagListDisplayProps> = ({
 
   const popoverContent = (
     <div style={{ maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <Typography.Text strong style={{ fontSize: 12 }}>
+      <Text strong style={{ fontSize: 12 }}>
         Tất cả:
-      </Typography.Text>
+      </Text>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
         {tags.map((tag, idx) => renderTag(tag, idx))}
       </div>

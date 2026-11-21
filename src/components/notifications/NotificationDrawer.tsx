@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Drawer, Tabs, List, Empty, Badge, Grid } from 'antd';
+import { Drawer, Tabs, List, Empty, Badge, Grid, EmptyImageSimple } from '../ui';
 import type { AlertNotificationItem, NotificationTabKey } from '../../types/notifications';
 import { NotificationItemRow } from './NotificationItemRow';
 import type { TaskPlannerDatabase } from '../../db';
@@ -120,7 +120,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {filteredItems.length === 0 ? (
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description="Không có cảnh báo nào"
             style={{ padding: '48px 0' }}
           />

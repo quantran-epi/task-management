@@ -42,7 +42,7 @@ export const GhostDevConfigCard: React.FC = () => {
   };
 
   const handleBrowseExecutable = async () => {
-    const filePath = await browseLocalFile();
+    const filePath = await browseLocalFile((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
     if (filePath) {
       form.setFieldValue('claudePath', filePath);
     }

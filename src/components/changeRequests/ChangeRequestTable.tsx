@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Table, Tag, Button, Space, Tooltip, Popover, Dropdown, Progress, useAntdToken, type StatusKind } from '../ui';
+import { Table, Tag, Button, Space, Tooltip, Popover, Dropdown, Progress, useAntdToken, useMessage, useTaskMateModal, type StatusKind } from '../ui';
 import type { TableColumnsType, MenuProps } from 'antd';
 import { EditOutlined, DeleteOutlined, BranchesOutlined, LinkOutlined, FolderOpenOutlined, RobotOutlined, MoreOutlined, BellOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import type { ChangeRequest, CrType, CrStatus, System, Task } from '../../types/models';
@@ -76,6 +76,8 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
   db = defaultDb,
 }) => {
   const { token } = useAntdToken();
+  const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const today = getTodayDateString();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
   const { openChat } = useAIChat();
@@ -146,6 +148,8 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       render: (name: string, record) => {
         const linkCount = record.documentLinks?.length ?? 0;
         return (
+          <>
+            {contextHolder}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span
@@ -214,7 +218,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              void openDocumentLink(link);
+                              void openDocumentLink(link, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                             }}
                             title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
                             style={{
@@ -265,7 +269,8 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
               </div>
             )}
           </div>
-        );
+        
+  </>);
       },
     },
     {

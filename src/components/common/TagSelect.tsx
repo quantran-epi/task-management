@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Select, message } from 'antd';
+import { Select, useMessage } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   getDistinctOpsOwners,
@@ -26,6 +26,7 @@ export const TagSelect: React.FC<TagSelectProps> = ({
   placeholder,
   disabled,
 }) => {
+  const message = useMessage();
   const suggestions = useLiveQuery(
     () =>
       field === 'opsOwners'

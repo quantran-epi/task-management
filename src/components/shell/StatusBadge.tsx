@@ -1,5 +1,5 @@
 import React from 'react';
-import { Badge, Tooltip } from 'antd';
+import { Badge, Tooltip } from '../ui';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 export const StatusBadge: React.FC = () => {

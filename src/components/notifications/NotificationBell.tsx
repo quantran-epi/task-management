@@ -1,6 +1,6 @@
 import React from 'react';
-import { Badge, Button, Tooltip } from 'antd';
-import { BellOutlined } from '@ant-design/icons';
+import { Badge, Button, Tooltip } from '../ui';
+import { BellOutlined } from '../ui/icon';
 
 export interface NotificationBellProps {
   count: number;

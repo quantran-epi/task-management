@@ -1,28 +1,5 @@
-import {
-  CheckCircleOutlined,
-  CopyOutlined,
-  ExclamationCircleOutlined,
-  FileTextOutlined,
-  InfoCircleOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Drawer,
-  Empty,
-  Skeleton,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-  Tooltip,
-  Typography,
-  message,
-  theme,
-} from 'antd';
+import { CheckCircleOutlined, CopyOutlined, ExclamationCircleOutlined, FileTextOutlined, InfoCircleOutlined, WarningOutlined } from '../ui/icon';
+import { Alert, Button, Card, Descriptions, Drawer, Empty, Skeleton, Space, Table, Tabs, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem } from '../ui';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useState } from 'react';
 import type {
@@ -89,7 +66,8 @@ export function extractionMethodLabel(method: string) {
 }
 
 export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const [activeTab, setActiveTab] = useState<'facts' | 'quarantine' | 'proposals'>('facts');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
@@ -346,23 +324,23 @@ export function GraphEvidenceDrawer(props: GraphEvidenceDrawerProps) {
                 </Space>
 
                 <Descriptions size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-                  <Descriptions.Item label="Vị trí">
+                  <DescriptionsItem label="Vị trí">
                     <Text code>
                       Dòng {occ.startLine}–{occ.endLine}
                     </Text>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Phương pháp">
+                  </DescriptionsItem>
+                  <DescriptionsItem label="Phương pháp">
                     <Text>{extractionMethodLabel(occ.method)}</Text>
-                  </Descriptions.Item>
+                  </DescriptionsItem>
                   {occ.environment && (
-                    <Descriptions.Item label="Môi trường">
+                    <DescriptionsItem label="Môi trường">
                       <Tag>{occ.environment}</Tag>
-                    </Descriptions.Item>
+                    </DescriptionsItem>
                   )}
                   {occ.classification === 'INFERRED' && (
-                    <Descriptions.Item label="Độ tin cậy">
+                    <DescriptionsItem label="Độ tin cậy">
                       <Text>{Math.round(occ.confidence * 100)}%</Text>
-                    </Descriptions.Item>
+                    </DescriptionsItem>
                   )}
                 </Descriptions>
 

@@ -1,15 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Tag, Typography, Space, Button, Popconfirm, theme, Empty, Segmented } from 'antd';
-import {
-  RobotOutlined,
-  StopOutlined,
-  BranchesOutlined,
-  ThunderboltOutlined,
-  HistoryOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  LoadingOutlined,
-} from '@ant-design/icons';
+import { Card, Tag, Typography, Space, Button, Popconfirm, Empty, Segmented, useAntdToken, EmptyImageSimple } from '../ui';
+import { RobotOutlined, StopOutlined, BranchesOutlined, ThunderboltOutlined, HistoryOutlined, DeleteOutlined, EyeOutlined, LoadingOutlined } from '../ui/icon';
 import type { AgentSession, AgentStatus, GhostDevSessionAuditRecord } from '../../types/agent';
 
 const { Text } = Typography;
@@ -56,7 +47,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
   onDeleteAuditSession,
   onClearAllAuditHistory,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [currentTab, setCurrentTab] = useState<'active' | 'history'>('active');
   const [popconfirmOpenTaskId, setPopconfirmOpenTaskId] = useState<string | null>(null);
   const runningSessions = sessions.filter((s) => s.status !== 'interrupted');
@@ -115,7 +106,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
           {runningSessions.length === 0 ? (
             <div style={{ padding: 16, textAlign: 'center' }}>
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description="Chưa có phiên Ghost Dev nào"
                 style={{ margin: '32px 0' }}
               />
@@ -333,7 +324,7 @@ export const AgentSessionList: React.FC<AgentSessionListProps> = ({
           {auditHistory.length === 0 ? (
             <div style={{ padding: 16, textAlign: 'center' }}>
               <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                image={EmptyImageSimple}
                 description="Chưa có lịch sử phiên nào"
                 style={{ margin: '32px 0' }}
               />

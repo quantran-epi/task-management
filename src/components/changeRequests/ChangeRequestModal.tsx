@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Form, Input, DatePicker, Select, Button, Space, Tag, FormItem, FormList, useForm, RadioGroup, RadioButton, TextArea, useMessage } from '../ui';
+import { Modal, Form, Input, DatePicker, Select, Button, Space, Tag, FormItem, FormList, useForm, RadioGroup, RadioButton, TextArea, useMessage, useTaskMateModal } from '../ui';
 import { DeleteOutlined, LinkOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ChangeRequest, CrTarget, CrType, CrStatus } from '../../types/models';
@@ -65,6 +65,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   systems,
 }) => {
   const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   useRegisterActiveForm('change-request-modal', open);
 
   const [form] = useForm<ChangeRequestFormValues>();
@@ -215,6 +216,8 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   };
 
   return (
+    <>
+      {contextHolder}
     <Modal
       title={changeRequest ? 'Sửa Change Request' : 'Change Request mới'}
       open={open}
@@ -372,7 +375,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                       title="Duyệt thư mục trên máy"
                       aria-label="Duyệt thư mục"
                       onClick={async () => {
-                        const picked = await browseLocalFolder();
+                        const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                         if (picked) {
                           form.setFieldValue(['documentLinks', field.name], picked);
                         }
@@ -386,7 +389,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                       onClick={() => {
                         const val = form.getFieldValue(['documentLinks', field.name]);
                         if (val) {
-                          void openDocumentLink(val);
+                          void openDocumentLink(val, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                         }
                       }}
                     />
@@ -412,7 +415,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                     type="default"
                     icon={<FolderOpenOutlined />}
                     onClick={async () => {
-                      const picked = await browseLocalFolder();
+                      const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                       if (picked) {
                         add(picked);
                       }
@@ -459,5 +462,6 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         </div>
       </Form>
     </Modal>
-  );
+  
+  </>);
 };

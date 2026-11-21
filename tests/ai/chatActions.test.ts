@@ -66,6 +66,7 @@ describe('claudeCliService', () => {
       const result = await launchClaudeTerminal({
         task: mockTask,
         isTauri: false,
+        notify: () => {},
       });
 
       expect(result.copied).toBe(true);
@@ -77,6 +78,7 @@ describe('claudeCliService', () => {
       const result = await launchClaudeTerminal({
         task: mockTask,
         isTauri: true,
+        notify: () => {},
         tauriInvoker: invokeMock,
       });
 

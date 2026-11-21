@@ -1,4 +1,4 @@
-import { Alert, Checkbox, Table, Typography } from 'antd';
+import { Alert, Checkbox, Table, Typography } from '../ui';
 import type { DlpFinding } from '../../types/dlp';
 import { DLP_RULESET_VERSION } from '../../types/dlp';
 

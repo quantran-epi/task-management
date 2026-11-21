@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { theme, Button, Space, Tooltip } from 'antd';
-import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Button, Space, Tooltip, useAntdToken } from '../ui';
+import { CheckOutlined, CloseOutlined } from '../ui/icon';
 import type { DiffHunk, DiffLine, DiffViewMode } from '../../types/agent';
 
 export interface DiffHunkViewProps {
@@ -22,7 +22,7 @@ export const DiffHunkView: React.FC<DiffHunkViewProps> = ({
   onRejectHunk,
   onAcceptLine,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
   const [acting, setActing] = useState(false);
 

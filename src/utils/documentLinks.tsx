@@ -1,6 +1,14 @@
-import { message, Modal, Button } from 'antd';
-import { FolderOutlined, FolderOpenOutlined, CodeOutlined } from '@ant-design/icons';
+import { Button } from '../components/ui';
+import type { ModalFuncProps } from 'antd';
+import type { Notify } from './exportFolderZip';
+import { FolderOutlined, FolderOpenOutlined, CodeOutlined } from '../components/ui/icon';
 import { isTauriApp } from './timerPopout';
+
+/** Confirmation function injected by the view (D-06): no global AntD singleton. */
+export type ConfirmDialog = (config: ModalFuncProps) => { destroy: () => void };
+const noopNotify: Notify = () => {};
+const noopConfirm: ConfirmDialog = () => ({ destroy: () => {} });
+
 
 async function tauriInvoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import('@tauri-apps/api/core');
@@ -46,13 +54,13 @@ export function normalizeLocalPath(urlOrPath: string): string {
 /**
  * Opens a local file or directory in Finder / File Explorer.
  */
-export async function openLocalPathInExplorer(cleanPath: string): Promise<void> {
+export async function openLocalPathInExplorer(cleanPath: string, notify: Notify = noopNotify): Promise<void> {
   if (isTauriApp()) {
     try {
       await tauriInvoke('open_local_path', { path: cleanPath });
       return;
     } catch (err: any) {
-      message.error(`Không thể mở thư mục/tập tin: ${err?.message || err}`);
+      notify('error', `Không thể mở thư mục/tập tin: ${err?.message || err}`);
       return;
     }
   }
@@ -61,24 +69,24 @@ export async function openLocalPathInExplorer(cleanPath: string): Promise<void> 
   try {
     if (navigator?.clipboard?.writeText) {
       await navigator.clipboard.writeText(cleanPath);
-      message.info(`Đã sao chép đường dẫn vào clipboard: ${cleanPath}`);
+      notify('info', `Đã sao chép đường dẫn vào clipboard: ${cleanPath}`);
     } else {
-      message.info(`Đường dẫn máy cục bộ: ${cleanPath}`);
+      notify('info', `Đường dẫn máy cục bộ: ${cleanPath}`);
     }
   } catch {
-    message.info(`Đường dẫn máy cục bộ: ${cleanPath}`);
+    notify('info', `Đường dẫn máy cục bộ: ${cleanPath}`);
   }
 }
 
 /**
  * Launches Command Prompt / Terminal with Claude Code at the given directory.
  */
-export async function launchClaudeAtLocalPath(cleanPath: string): Promise<void> {
+export async function launchClaudeAtLocalPath(cleanPath: string, notify: Notify = noopNotify): Promise<void> {
   const terminalCmd = `cd '${cleanPath.replace(/'/g, "'\\''")}' && claude`;
   if (isTauriApp()) {
     try {
       await tauriInvoke('launch_claude_at_local_path', { path: cleanPath });
-      message.success('Đang mở Command Prompt chạy Claude Code...');
+      notify('success', 'Đang mở Command Prompt chạy Claude Code...');
       return;
     } catch (err: any) {
       console.warn('Tauri launch_claude_at_local_path failed, copying command:', err);
@@ -89,19 +97,19 @@ export async function launchClaudeAtLocalPath(cleanPath: string): Promise<void> 
   try {
     if (navigator?.clipboard?.writeText) {
       await navigator.clipboard.writeText(terminalCmd);
-      message.success(`Đã sao chép lệnh chạy Claude Code vào clipboard: ${terminalCmd}`);
+      notify('success', `Đã sao chép lệnh chạy Claude Code vào clipboard: ${terminalCmd}`);
     } else {
-      message.info(`Lệnh Claude Code: ${terminalCmd}`);
+      notify('info', `Lệnh Claude Code: ${terminalCmd}`);
     }
   } catch {
-    message.info(`Lệnh Claude Code: ${terminalCmd}`);
+    notify('info', `Lệnh Claude Code: ${terminalCmd}`);
   }
 }
 
 /**
  * Prompts user to pick between opening in File Explorer or running Claude Code in terminal.
  */
-export function promptLocalPathAction(cleanPath: string): Promise<void> {
+export function promptLocalPathAction(cleanPath: string, confirm: ConfirmDialog = noopConfirm, notify: Notify = noopNotify): Promise<void> {
   return new Promise<void>((resolve) => {
     let resolved = false;
     const safeResolve = () => {
@@ -111,26 +119,26 @@ export function promptLocalPathAction(cleanPath: string): Promise<void> {
       }
     };
 
-    const modal = Modal.confirm({
+    const modal = confirm({
       title: 'Thao tác với đường dẫn cục bộ',
-      icon: <FolderOutlined style={{ color: '#1677ff' }} />,
+      icon: <FolderOutlined style={{ color: 'var(--accent)' }} />,
       width: 520,
       content: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
           <div
             style={{
               wordBreak: 'break-all',
-              backgroundColor: '#f5f5f5',
+              backgroundColor: 'var(--island-muted-bg)',
               padding: '8px 12px',
-              borderRadius: 6,
-              fontSize: 12,
+              borderRadius: 'var(--radius-control)',
+              fontSize: 'var(--font-size-ui)',
               fontFamily: 'monospace',
-              border: '1px solid #e8e8e8',
+              border: '1px solid var(--border-subtle)',
             }}
           >
             {cleanPath}
           </div>
-          <div style={{ fontSize: 13, color: '#595959' }}>
+          <div style={{ fontSize: 'var(--font-size-ui)', color: 'var(--fg-secondary)' }}>
             Chọn thao tác bạn muốn thực hiện với đường dẫn này:
           </div>
         </div>
@@ -149,7 +157,7 @@ export function promptLocalPathAction(cleanPath: string): Promise<void> {
             icon={<FolderOpenOutlined />}
             onClick={async () => {
               modal.destroy();
-              await openLocalPathInExplorer(cleanPath);
+              await openLocalPathInExplorer(cleanPath, notify);
               safeResolve();
             }}
           >
@@ -160,7 +168,7 @@ export function promptLocalPathAction(cleanPath: string): Promise<void> {
             icon={<CodeOutlined />}
             onClick={async () => {
               modal.destroy();
-              await launchClaudeAtLocalPath(cleanPath);
+              await launchClaudeAtLocalPath(cleanPath, notify);
               safeResolve();
             }}
           >
@@ -188,7 +196,7 @@ export interface OpenDocumentLinkOptions {
  */
 export async function openDocumentLink(
   urlOrPath: string,
-  options?: OpenDocumentLinkOptions
+  options?: OpenDocumentLinkOptions & { confirm?: ConfirmDialog; notify?: Notify }
 ): Promise<void> {
   const trimmed = urlOrPath.trim();
   if (!trimmed) return;
@@ -196,9 +204,9 @@ export async function openDocumentLink(
   if (isLocalPath(trimmed)) {
     const cleanPath = normalizeLocalPath(trimmed);
     if (options?.quickClaude) {
-      await launchClaudeAtLocalPath(cleanPath);
+      await launchClaudeAtLocalPath(cleanPath, options?.notify);
     } else {
-      await promptLocalPathAction(cleanPath);
+      await promptLocalPathAction(cleanPath, options?.confirm, options?.notify);
     }
     return;
   }
@@ -225,9 +233,9 @@ export async function openDocumentLink(
  * Invokes native directory picker dialog in Tauri desktop app.
  * Returns selected path or null if cancelled or not in Tauri.
  */
-export async function browseLocalFolder(): Promise<string | null> {
+export async function browseLocalFolder(notify: Notify = noopNotify): Promise<string | null> {
   if (!isTauriApp()) {
-    message.warning('Duyệt thư mục chỉ khả dụng trên ứng dụng Desktop.');
+    notify('warning', 'Duyệt thư mục chỉ khả dụng trên ứng dụng Desktop.');
     return null;
   }
 
@@ -235,7 +243,7 @@ export async function browseLocalFolder(): Promise<string | null> {
     const picked = await tauriInvoke<string | null>('select_local_folder');
     return picked ?? null;
   } catch (err: any) {
-    message.error(`Không thể duyệt thư mục: ${err?.message || err}`);
+    notify('error', `Không thể duyệt thư mục: ${err?.message || err}`);
     return null;
   }
 }
@@ -244,9 +252,9 @@ export async function browseLocalFolder(): Promise<string | null> {
  * Invokes native file picker dialog in Tauri desktop app.
  * Returns selected path or null if cancelled or not in Tauri.
  */
-export async function browseLocalFile(): Promise<string | null> {
+export async function browseLocalFile(notify: Notify = noopNotify): Promise<string | null> {
   if (!isTauriApp()) {
-    message.warning('Duyệt tập tin chỉ khả dụng trên ứng dụng Desktop.');
+    notify('warning', 'Duyệt tập tin chỉ khả dụng trên ứng dụng Desktop.');
     return null;
   }
 
@@ -254,7 +262,7 @@ export async function browseLocalFile(): Promise<string | null> {
     const picked = await tauriInvoke<string | null>('select_local_file');
     return picked ?? null;
   } catch (err: any) {
-    message.error(`Không thể duyệt tập tin: ${err?.message || err}`);
+    notify('error', `Không thể duyệt tập tin: ${err?.message || err}`);
     return null;
   }
 }

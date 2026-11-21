@@ -1,29 +1,6 @@
-import {
-  DeleteOutlined,
-  DownOutlined,
-  PlusOutlined,
-  UpOutlined,
-  FolderOutlined,
-  FileTextOutlined,
-} from '@ant-design/icons';
-import {
-  Button,
-  Checkbox,
-  Collapse,
-  Form,
-  Input,
-  List,
-  Modal,
-  Radio,
-  Select,
-  Space,
-  Tag,
-  Tooltip,
-  Tree,
-  Typography,
-  theme,
-  type TreeDataNode,
-} from 'antd';
+import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined, FolderOutlined, FileTextOutlined } from '../ui/icon';
+import { Button, Checkbox, Collapse, Form, Input, List, Modal, Radio, Select, Space, Tag, Tooltip, Tree, Typography, useAntdToken, FormItem, InputSearch, ListItem, RadioGroup } from '../ui';
+import type { TreeDataNode } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import type {
   DocumentSet,
@@ -95,7 +72,7 @@ export function DocumentSetForm({
   currentFolderId,
   onSave,
 }: DocumentSetFormProps) {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [name, setName] = useState(initialSet?.name ?? '');
   const [mode, setMode] = useState<'empty' | 'folder' | 'manual'>(initialSet ? 'manual' : 'empty');
   const [members, setMembers] = useState<string[]>(initialSet?.documentIds ?? []);
@@ -399,8 +376,8 @@ export function DocumentSetForm({
   return (
     <Form layout="vertical">
       {/* 1. Friendly Presets Radio (D-18) */}
-      <Form.Item label="Mẫu thiết lập phạm vi (Preset)">
-        <Radio.Group
+      <FormItem label="Mẫu thiết lập phạm vi (Preset)">
+        <RadioGroup
           aria-label="Scope preset"
           value={preset}
           onChange={(e) => handlePresetChange(e.target.value)}
@@ -412,12 +389,12 @@ export function DocumentSetForm({
               </Radio>
             ))}
           </Space>
-        </Radio.Group>
-      </Form.Item>
+        </RadioGroup>
+      </FormItem>
 
       {/* 2. Preset-specific fields */}
       {preset === 'TheoMoiTruong' && (
-        <Form.Item
+        <FormItem
           label="Môi trường (Environment)"
           required
           {...(submittedAttempt && !environment ? { validateStatus: 'error', help: 'Vui lòng chọn hoặc nhập môi trường' } : {})}
@@ -452,11 +429,11 @@ export function DocumentSetForm({
               onChange={(e) => setEnvironment(e.target.value)}
             />
           )}
-        </Form.Item>
+        </FormItem>
       )}
 
       {(preset === 'TheoModule' || preset === 'TuyChinh') && (
-        <Form.Item
+        <FormItem
           label="Miền / Phân hệ (Domain / Module)"
           required
           {...(submittedAttempt && !domain.trim() ? { validateStatus: 'error', help: 'Vui lòng nhập tên miền / module' } : {})}
@@ -467,27 +444,27 @@ export function DocumentSetForm({
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
           />
-        </Form.Item>
+        </FormItem>
       )}
 
       {preset === 'TheoPhienBan' && (
-        <Form.Item label="Phiên bản (Version)">
+        <FormItem label="Phiên bản (Version)">
           <Input
             aria-label="Phiên bản"
             placeholder="Ví dụ: v2026.10, 2.4.0..."
             value={version ?? ''}
             onChange={(e) => setVersion(e.target.value)}
           />
-        </Form.Item>
+        </FormItem>
       )}
 
       {preset === 'BoSung' && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-          <Form.Item
+          <FormItem
             label="Loại quan hệ bổ sung"
             required
           >
-            <Radio.Group
+            <RadioGroup
               aria-label="Relation kind"
               value={supplementRelationKind}
               onChange={(e) => setSupplementRelationKind(e.target.value)}
@@ -495,10 +472,10 @@ export function DocumentSetForm({
               <Radio value="EXTENDS">EXTENDS (Mở rộng)</Radio>
               <Radio value="SUPPLEMENTS">SUPPLEMENTS (Bổ trợ)</Radio>
               <Radio value="SUPERSEDES">SUPERSEDES (Thay thế)</Radio>
-            </Radio.Group>
-          </Form.Item>
+            </RadioGroup>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             label="Bộ tài liệu cha / liên quan"
             required
             {...(submittedAttempt && !supplementTargetSetId ? { validateStatus: 'error', help: 'Vui lòng chọn bộ tài liệu liên quan' } : {})}
@@ -510,7 +487,7 @@ export function DocumentSetForm({
               onChange={(val) => setSupplementTargetSetId(val ?? '')}
               options={availableSets.map((s) => ({ label: s.name, value: s.id }))}
             />
-          </Form.Item>
+          </FormItem>
         </Space>
       )}
 
@@ -573,30 +550,30 @@ export function DocumentSetForm({
       />
 
       {/* 4. Name */}
-      <Form.Item label="Tên bộ tài liệu" required>
+      <FormItem label="Tên bộ tài liệu" required>
         <Input
           aria-label="Tên bộ tài liệu"
           value={name}
           onChange={(event) => setName(event.target.value.slice(0, 122))}
         />
-      </Form.Item>
+      </FormItem>
 
       {/* 5. Initialize from (only for creation) */}
       {!initialSet && (
-        <Form.Item label="Khởi tạo từ">
-          <Radio.Group value={mode} onChange={(event) => chooseMode(event.target.value)}>
+        <FormItem label="Khởi tạo từ">
+          <RadioGroup value={mode} onChange={(event) => chooseMode(event.target.value)}>
             <Space direction="vertical">
               <Radio value="empty">Bộ trống</Radio>
               <Radio value="folder">Từ thư mục hiện tại</Radio>
               <Radio value="manual">Chọn tài liệu</Radio>
             </Space>
-          </Radio.Group>
+          </RadioGroup>
           {mode === 'folder' && (
             <Text type="secondary" style={{ display: 'block', marginTop: token.marginSM }}>
               Tài liệu thêm hoặc di chuyển sau này không tự thay đổi bộ này.
             </Text>
           )}
-        </Form.Item>
+        </FormItem>
       )}
 
       {/* 6. Document membership list */}
@@ -620,7 +597,7 @@ export function DocumentSetForm({
             renderItem={(documentId, index) => {
               const title = noteById.get(documentId)?.title || 'Tài liệu không tên';
               return (
-                <List.Item
+                <ListItem
                   data-testid={`member-${documentId}`}
                   actions={[
                     <Tooltip title="Đưa lên" key="up">
@@ -652,7 +629,7 @@ export function DocumentSetForm({
                   <Tooltip title={documentId}>
                     <Text ellipsis>{title}</Text>
                   </Tooltip>
-                </List.Item>
+                </ListItem>
               );
             }}
           />
@@ -678,7 +655,7 @@ export function DocumentSetForm({
           setPickerOpen(false);
         }}
       >
-        <Input.Search
+        <InputSearch
           aria-label="Tìm tài liệu"
           placeholder="Tìm theo tiêu đề, hashtag..."
           style={{ marginBottom: token.marginSM }}

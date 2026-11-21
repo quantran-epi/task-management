@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Typography, Space, Button, Alert } from 'antd';
+import { Modal, Typography, Space, Button, Alert } from '../ui';
 import type { ShellPermissionRequest } from '../../types/agent';
 import { isTauriApp } from '../../utils/timerPopout';
 

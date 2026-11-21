@@ -1,6 +1,6 @@
 import React from 'react';
-import { Form, DatePicker, TimePicker, Input, Button, Space, Typography } from 'antd';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { DatePicker, TimePicker, Input, Button, Space, Typography, FormItem, FormList } from '../ui';
+import { PlusOutlined, DeleteOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import type { ReminderItem } from '../../types/models';
 
@@ -46,7 +46,7 @@ export function formatRemindersForForm(entity?: {
 }
 
 /**
- * Convert Form.List values into clean ReminderItem[] for persistence
+ * Convert FormList values into clean ReminderItem[] for persistence
  */
 export function formatRemindersForSave(formReminders?: unknown[]): ReminderItem[] | undefined {
   if (!Array.isArray(formReminders) || formReminders.length === 0) {
@@ -93,8 +93,8 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
   label = 'Nhắc nhở (Tối đa 5)',
 }) => {
   return (
-    <Form.Item label={label} style={{ marginBottom: 16 }}>
-      <Form.List name="reminders">
+    <FormItem label={label} style={{ marginBottom: 16 }}>
+      <FormList name="reminders">
         {(fields, { add, remove }) => (
           <Space direction="vertical" style={{ width: '100%' }}>
             {fields.map((field) => (
@@ -107,11 +107,11 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                   width: '100%',
                 }}
               >
-                <Form.Item name={[field.name, 'id']} hidden>
+                <FormItem name={[field.name, 'id']} hidden>
                   <Input />
-                </Form.Item>
+                </FormItem>
 
-                <Form.Item
+                <FormItem
                   name={[field.name, 'date']}
                   rules={[{ required: true, message: 'Chọn ngày nhắc' }]}
                   style={{ width: 140, marginBottom: 8, flexShrink: 0 }}
@@ -121,9 +121,9 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                     placeholder="Ngày"
                     style={{ width: '100%' }}
                   />
-                </Form.Item>
+                </FormItem>
 
-                <Form.Item
+                <FormItem
                   name={[field.name, 'time']}
                   style={{ width: 100, marginBottom: 8, flexShrink: 0 }}
                 >
@@ -133,14 +133,14 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
                     allowClear
                     style={{ width: '100%' }}
                   />
-                </Form.Item>
+                </FormItem>
 
-                <Form.Item
+                <FormItem
                   name={[field.name, 'note']}
                   style={{ flex: 1, marginBottom: 8 }}
                 >
                   <Input placeholder="Ghi chú nhắc nhở..." maxLength={500} allowClear />
-                </Form.Item>
+                </FormItem>
 
                 <Button
                   danger
@@ -169,8 +169,8 @@ export const RemindersFormList: React.FC<RemindersFormListProps> = ({
             )}
           </Space>
         )}
-      </Form.List>
-    </Form.Item>
+      </FormList>
+    </FormItem>
   );
 };
 

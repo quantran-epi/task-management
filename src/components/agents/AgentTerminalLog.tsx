@@ -1,38 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import {
-  Typography,
-  Input,
-  Button,
-  Space,
-  Tag,
-  Segmented,
-  Card,
-  Collapse,
-  Tooltip,
-  message,
-  Spin,
-  ConfigProvider,
-  theme,
-} from 'antd';
-import {
-  SendOutlined,
-  DownCircleOutlined,
-  ClearOutlined,
-  RobotOutlined,
-  CopyOutlined,
-  CodeOutlined,
-  AppstoreOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  CloseOutlined,
-  LeftOutlined,
-  RightOutlined,
-  ToolOutlined,
-  SafetyCertificateOutlined,
-  CommentOutlined,
-  LoadingOutlined,
-  BulbOutlined,
-} from '@ant-design/icons';
+import { Typography, Input, Button, Space, Tag, Segmented, Card, Collapse, Tooltip, Spin, ThemeConfigProvider, darkAlgorithm, useMessage } from '../ui';
+import { SendOutlined, DownCircleOutlined, ClearOutlined, RobotOutlined, CopyOutlined, CodeOutlined, AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, LeftOutlined, RightOutlined, ToolOutlined, SafetyCertificateOutlined, CommentOutlined, LoadingOutlined, BulbOutlined } from '../ui/icon';
 import type { GhostDevStreamChunk, WorkerSession, AgentStatus } from '../../types/agent';
 import { loadAvailableSkills, type SkillItem } from '../../services/agents/agentSkillService';
 import {
@@ -441,6 +409,7 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   mentionedFilePath,
   onClearMentionedFile,
 }) => {
+  const message = useMessage();
   const [inputText, setInputText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [viewMode, setViewMode] = useState<'human' | 'raw'>('human');
@@ -1063,9 +1032,9 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   };
 
   return (
-    <ConfigProvider
+    <ThemeConfigProvider
       theme={{
-        algorithm: theme.darkAlgorithm,
+        algorithm: darkAlgorithm,
         components: {
           Segmented: {
             trackBg: '#09090b',
@@ -2203,6 +2172,6 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
           </Button>
         </div>
       </div>
-    </ConfigProvider>
+    </ThemeConfigProvider>
   );
 };

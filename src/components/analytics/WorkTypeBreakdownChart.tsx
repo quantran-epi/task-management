@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pie } from '@ant-design/plots';
-import { Empty } from 'antd';
+import { Empty } from '../ui';
 import type { WorkTypeBreakdownItem } from '../../types/analytics';
 
 export interface WorkTypeBreakdownChartProps {

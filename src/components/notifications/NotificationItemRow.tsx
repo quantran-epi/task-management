@@ -1,12 +1,6 @@
 import React from 'react';
-import { Checkbox, Tag, Typography, Button, Tooltip, message } from 'antd';
-import {
-  CalendarOutlined,
-  FolderOutlined,
-  FlagOutlined,
-  EyeInvisibleOutlined,
-  CheckOutlined,
-} from '@ant-design/icons';
+import { Checkbox, Tag, Button, Tooltip, useMessage, Text } from '../ui';
+import { CalendarOutlined, FolderOutlined, FlagOutlined, EyeInvisibleOutlined, CheckOutlined } from '../ui/icon';
 import type { AlertNotificationItem } from '../../types/notifications';
 import type { TaskPlannerDatabase } from '../../db';
 import type { TaskStatus } from '../../types/models';
@@ -26,6 +20,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
   onDismiss,
   db,
 }) => {
+  const message = useMessage();
   const handleToggleDone = async (e: any) => {
     e.stopPropagation();
     if (!item.task) return;
@@ -152,7 +147,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
         <div style={{ marginTop: 2, flexShrink: 0 }}>{renderLeading()}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Typography.Text
+            <Text
               strong
               ellipsis
               style={{
@@ -172,19 +167,19 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
               aria-label={`Chi tiết ${item.title}`}
             >
               {item.title}
-            </Typography.Text>
+            </Text>
             <Tag color={item.tagColor} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
               {item.tagLabel}
             </Tag>
           </div>
           {item.subtitle && (
-            <Typography.Text
+            <Text
               type="secondary"
               ellipsis
               style={{ fontSize: 12, lineHeight: 1.3 }}
             >
               {item.subtitle}
-            </Typography.Text>
+            </Text>
           )}
         </div>
       </div>

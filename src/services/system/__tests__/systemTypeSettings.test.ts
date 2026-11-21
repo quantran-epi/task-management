@@ -1,14 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
-import {
-  AppstoreOutlined,
-  CodeOutlined,
-  DatabaseOutlined,
-  DesktopOutlined,
-  FolderOpenOutlined,
-  FolderOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { AppstoreOutlined, CodeOutlined, DatabaseOutlined, DesktopOutlined, FolderOpenOutlined, FolderOutlined, ThunderboltOutlined } from '../../../components/ui/icon';
 import { TaskPlannerDatabase } from '../../../db';
 import {
   DEFAULT_SYSTEM_TYPE_OPTIONS,

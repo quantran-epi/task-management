@@ -478,9 +478,9 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                               e.preventDefault();
                               e.stopPropagation();
                               if (e.altKey) {
-                                void openDocumentLink(link, { quickClaude: true });
+                                void openDocumentLink(link, { quickClaude: true, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                               } else {
-                                void openDocumentLink(link);
+                                void openDocumentLink(link, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                               }
                             }}
                             title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}

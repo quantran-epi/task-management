@@ -1,13 +1,5 @@
 import { useCallback, type ComponentType } from 'react';
-import {
-  AppstoreOutlined,
-  CodeOutlined,
-  DatabaseOutlined,
-  DesktopOutlined,
-  FolderOpenOutlined,
-  FolderOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { AppstoreOutlined, CodeOutlined, DatabaseOutlined, DesktopOutlined, FolderOpenOutlined, FolderOutlined, ThunderboltOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Button, Input, Modal, Space, Typography, message } from 'antd';
+import { Alert, Button, Input, Modal, Space, Typography, useMessage } from '../ui';
 import type { TaskPlannerDatabase } from '../../db';
 import { deleteDocumentSet } from '../../db/repositories/documentSetRepo';
 import type { DocumentSet } from '../../types/models';
@@ -31,6 +31,7 @@ export const DocumentSetDeleteDialog: React.FC<DocumentSetDeleteDialogProps> = (
   onClose,
   onDeleted,
 }) => {
+  const message = useMessage();
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const localOnlyEnabled = confirmation === set.name;

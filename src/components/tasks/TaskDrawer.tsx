@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch } from '../ui';
+import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch, useTaskMateModal } from '../ui';
 import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -113,6 +113,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   db,
 }) => {
   const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   useRegisterActiveForm('task-drawer', open);
 
   const [form] = useForm<TaskDrawerFormValues>();
@@ -811,7 +812,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         title="Duyệt thư mục trên máy"
                         aria-label="Duyệt thư mục"
                         onClick={async () => {
-                          const picked = await browseLocalFolder();
+                          const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                           if (picked) {
                             form.setFieldValue(['documentLinks', field.name], picked);
                           }
@@ -825,7 +826,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         onClick={() => {
                           const val = form.getFieldValue(['documentLinks', field.name]);
                           if (val) {
-                            void openDocumentLink(val);
+                            void openDocumentLink(val, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                           }
                         }}
                       />
@@ -851,7 +852,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       type="default"
                       icon={<FolderOpenOutlined />}
                       onClick={async () => {
-                        const picked = await browseLocalFolder();
+                        const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                         if (picked) {
                           add(picked);
                         }
@@ -925,6 +926,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   ];
 
   return (
+    <>
+      {contextHolder}
     <Drawer
       zIndex={1050}
       title="Chỉnh sửa tác vụ"
@@ -983,5 +986,6 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         onCancel={() => setGhostDevModalOpen(false)}
       />
     </Drawer>
+    </>
   );
 };

@@ -1,33 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Modal,
-  Typography,
-  Progress,
-  Table,
-  Button,
-  Space,
-  Card,
-  Tag,
-  message,
-  Statistic,
-  Row,
-  Col,
-  Segmented,
-  Alert,
-  Spin,
-} from 'antd';
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ArrowRightOutlined,
-  CalendarOutlined,
-  FireOutlined,
-  RobotOutlined,
-  BulbOutlined,
-  SunOutlined,
-  MoonOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
+import { Modal, Typography, Progress, Table, Button, Space, Card, Tag, Statistic, Row, Col, Segmented, Alert, Spin, useMessage } from '../ui';
+import { CheckCircleOutlined, ClockCircleOutlined, ArrowRightOutlined, CalendarOutlined, FireOutlined, RobotOutlined, BulbOutlined, SunOutlined, MoonOutlined, ReloadOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getEffectiveCapacityForDate } from '../../db/repositories/capacityRepo';
@@ -75,6 +48,7 @@ export const DailyReviewModal: React.FC<DailyReviewModalProps> = ({
   db = defaultDb,
   initialTab = 'briefing',
 }) => {
+  const message = useMessage();
   const targetDate = date || getTodayDateString();
   const tomorrowDate = dayjs(targetDate, 'YYYY-MM-DD').add(1, 'day').format('YYYY-MM-DD');
 

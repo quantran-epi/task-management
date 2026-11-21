@@ -1,6 +1,8 @@
 import JSZip from 'jszip';
-import { message } from 'antd';
 import type { Note } from '../types/models';
+
+/** View-owned notification callback (D-06): no global AntD singleton. */
+export type Notify = (kind: 'success' | 'error' | 'loading' | 'warning' | 'info', text: string, extra?: object) => void;
 
 /**
  * Recursively collects all documents and subfolders under the specified folderId.
@@ -110,18 +112,16 @@ export async function exportFolderAsZip(
  */
 export async function downloadFolderAsZip(
   folder: Note,
-  allNotes: readonly Note[]
+  allNotes: readonly Note[],
+  notify: Notify
 ): Promise<void> {
   const label = folder.title || 'Thư mục';
   try {
-    message.loading({ content: `Đang nén thư mục "${label}"...`, key: 'download-folder' });
+    notify('loading', `Đang nén thư mục "${label}"...`, { key: 'download-folder', duration: 0 });
     await exportFolderAsZip(folder, allNotes);
-    message.success({ content: `Tải xuống thành công thư mục "${label}"`, key: 'download-folder' });
+    notify('success', `Tải xuống thành công thư mục "${label}"`, { key: 'download-folder' });
   } catch (err: any) {
     console.error('Download folder error:', err);
-    message.error({
-      content: `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`,
-      key: 'download-folder',
-    });
+    notify('error', `Không thể tải thư mục: ${err?.message || 'Lỗi không xác định'}`, { key: 'download-folder' });
   }
 }

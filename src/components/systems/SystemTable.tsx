@@ -1,14 +1,6 @@
 import React, { useMemo } from 'react';
-import { Table, Tag, Typography, Button, Space, Popconfirm, Tooltip, Empty, message } from 'antd';
-import {
-  FolderOutlined,
-  BranchesOutlined,
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CopyOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { Table, Tag, Typography, Button, Space, Popconfirm, Tooltip, Empty, useMessage, EmptyImageSimple } from '../ui';
+import { FolderOutlined, BranchesOutlined, PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined, CloudServerOutlined } from '../ui/icon';
 import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
@@ -46,6 +38,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
   onEditSystem,
   onDeleteSystem,
 }) => {
+  const message = useMessage();
   const sshConfigMap = useMemo(() => {
     const map = new Map<string, SshConfig>();
     for (const cfg of sshConfigs) {
@@ -308,7 +301,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
       locale={{
         emptyText: (
           <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            image={EmptyImageSimple}
             description="Chưa có hệ thống nào trong danh mục"
           />
         ),

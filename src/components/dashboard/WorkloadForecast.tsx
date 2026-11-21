@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Segmented, Alert, Tag, Typography, Space } from 'antd';
+import { Card, Segmented, Alert, Tag, Typography, Space } from '../ui';
 import type { ForecastHorizon, HorizonDayData } from '../../types/dashboard';
 import { MiniDayCard } from './MiniDayCard';
 import { formatMinutes } from '../../utils/time';

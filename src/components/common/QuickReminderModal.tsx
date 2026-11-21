@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, DatePicker, TimePicker, Input, message } from 'antd';
+import { Modal, Form, DatePicker, TimePicker, useMessage, FormItem, TextArea, useForm } from '../ui';
 import dayjs from 'dayjs';
 import type { Task, ChangeRequest, ReminderItem } from '../../types/models';
 import { updateTask } from '../../db/repositories/taskRepo';
@@ -30,7 +30,8 @@ export const QuickReminderModal: React.FC<QuickReminderModalProps> = ({
   target,
   db,
 }) => {
-  const [form] = Form.useForm<QuickReminderFormValues>();
+  const message = useMessage();
+  const [form] = useForm<QuickReminderFormValues>();
 
   useEffect(() => {
     if (open) {
@@ -97,26 +98,26 @@ export const QuickReminderModal: React.FC<QuickReminderModalProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-        <Form.Item
+        <FormItem
           name="date"
           label="Ngày nhắc nhở"
           rules={[{ required: true, message: 'Vui lòng chọn ngày nhắc nhở' }]}
         >
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="Chọn ngày" />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item name="time" label="Giờ nhắc nhở (tùy chọn)">
+        <FormItem name="time" label="Giờ nhắc nhở (tùy chọn)">
           <TimePicker style={{ width: '100%' }} format="HH:mm" placeholder="Chọn giờ (HH:mm)" />
-        </Form.Item>
+        </FormItem>
 
-        <Form.Item name="note" label="Ghi chú nhắc nhở (tùy chọn)">
-          <Input.TextArea
+        <FormItem name="note" label="Ghi chú nhắc nhở (tùy chọn)">
+          <TextArea
             rows={3}
             placeholder="Nội dung cần nhớ khi đến giờ..."
             maxLength={200}
             showCount
           />
-        </Form.Item>
+        </FormItem>
       </Form>
     </Modal>
   );

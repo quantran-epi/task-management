@@ -1,8 +1,8 @@
 import React from 'react';
-import { Card, Table, Tag, Progress, Alert, Empty, Row, Col, Typography, Space } from 'antd';
+import { Card, Table, Tag, Progress, Alert, Empty, Row, Col, Typography, Space } from '../ui';
 import type { ColumnsType } from 'antd/es/table';
 import { Column } from '@ant-design/plots';
-import { BulbOutlined } from '@ant-design/icons';
+import { BulbOutlined } from '../ui/icon';
 import type { WorkTypeAccuracyItem, WorkTypeAccuracySummary } from '../../types/analytics';
 
 const { Text } = Typography;

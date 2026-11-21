@@ -2410,7 +2410,7 @@ Rules:
     try {
       const task = await getTask(currentScope.id, db);
       if (!task) return;
-      await launchClaudeTerminal({ task });
+      await launchClaudeTerminal({ task, notify: (kind, text, extra) => appMessage[kind]({ content: text, ...(extra ?? {}) }) });
     } catch (err: any) {
       appMessage.error(`Lỗi khởi chạy Claude Code: ${err?.message || err}`);
     }

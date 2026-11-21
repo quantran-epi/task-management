@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Modal } from 'antd';
+import { useTaskMateModal } from '../ui';
 import type { DiffFile, DiffHunk, DiffLine } from '../../types/agent';
 import type { WorktreeDescriptor } from '../../types/codingZone';
 import { applyHunk, revertHunk } from '../../services/sshWorktreeService';
@@ -91,6 +91,7 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
   hunkStates,
   setHunkState,
 }) => {
+  const { modal, contextHolder } = useTaskMateModal();
   const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -151,7 +152,7 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
   };
 
   const bulkRevert = () => {
-    Modal.confirm({
+    modal.confirm({
       title: COPY.confirmTitle,
       content: COPY.confirmBody,
       okText: COPY.confirmOk,
@@ -178,6 +179,8 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
   };
 
   return (
+    <>
+      {contextHolder}
     <div className="cz-diff-panel" data-testid="cz-diff-panel">
       <div className="cz-diff-toolbar">
         <div className="cz-segmented" role="group" aria-label="Chế độ hiển thị diff">
@@ -223,6 +226,7 @@ export const CodingZoneDiffPanel: React.FC<CodingZoneDiffPanelProps> = ({
         })}
       </div>
     </div>
+  </>
   );
 };
 

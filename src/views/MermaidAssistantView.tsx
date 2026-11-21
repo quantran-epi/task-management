@@ -449,12 +449,12 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
 
   const handleDownloadSvg = () => {
     const svgEl = canvasRef.current?.querySelector('svg');
-    downloadMermaidSvg(svgEl, { isDark, filename: 'diagram' });
+    downloadMermaidSvg(svgEl, (kind, text, extra) => messageApi[kind]({ content: text, ...(extra ?? {}) }), { isDark, filename: 'diagram' });
   };
 
   const handleDownloadPng = () => {
     const svgEl = canvasRef.current?.querySelector('svg');
-    downloadMermaidPng(svgEl, { isDark, filename: 'diagram' });
+    downloadMermaidPng(svgEl, (kind, text, extra) => messageApi[kind]({ content: text, ...(extra ?? {}) }), { isDark, filename: 'diagram' });
   };
 
   const handleAiFix = async (overridePrompt?: string) => {

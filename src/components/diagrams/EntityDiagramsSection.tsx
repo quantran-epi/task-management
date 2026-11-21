@@ -1,23 +1,6 @@
 import React, { useState } from 'react';
-import {
-  List,
-  Button,
-  Tag,
-  Empty,
-  Tooltip,
-  Modal,
-  message,
-  Popconfirm,
-  Space,
-} from 'antd';
-import {
-  ApartmentOutlined,
-  PlusOutlined,
-  EyeOutlined,
-  EditOutlined,
-  DisconnectOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons';
+import { List, Button, Tag, Empty, Tooltip, Modal, Popconfirm, Space, useMessage, EmptyImageSimple, ListItem } from '../ui';
+import { ApartmentOutlined, PlusOutlined, EyeOutlined, EditOutlined, DisconnectOutlined, DeleteOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteEntityType } from '../../types/models';
@@ -46,6 +29,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
   db = defaultDb,
   embedded = false,
 }) => {
+  const message = useMessage();
   const openTab = useLayoutStore((s) => s.openTab);
 
   const [previewDiagram, setPreviewDiagram] = useState<Note | null>(null);
@@ -153,7 +137,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
 
       {diagrams.length === 0 ? (
         <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          image={EmptyImageSimple}
           description="Chưa có biểu đồ nào được gắn với đối tượng này"
           style={{ margin: '16px 0' }}
         >
@@ -166,7 +150,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
           size="small"
           dataSource={diagrams}
           renderItem={(diag) => (
-            <List.Item
+            <ListItem
               key={diag.id}
               actions={[
                 <Tooltip key="preview" title="Xem nhanh">
@@ -227,7 +211,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                 background: 'var(--bg-elev, #fafafa)',
               }}
             >
-              <List.Item.Meta
+              <ListItem.Meta
                 avatar={<ApartmentOutlined style={{ fontSize: 18, color: '#10b981', marginTop: 2 }} />}
                 title={
                   <a
@@ -246,7 +230,7 @@ export const EntityDiagramsSection: React.FC<EntityDiagramsSectionProps> = ({
                   </div>
                 }
               />
-            </List.Item>
+            </ListItem>
           )}
         />
       )}

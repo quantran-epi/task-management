@@ -1,5 +1,5 @@
 import { saveFileWithPicker } from './fileExport';
-import { message } from 'antd';
+import type { Notify } from './exportFolderZip';
 
 export interface ExportDiagramOptions {
   filename?: string;
@@ -50,10 +50,11 @@ export function prepareSvgForExport(svgEl: SVGSVGElement, isDark = false): {
  */
 export async function downloadMermaidSvg(
   svgEl: SVGSVGElement | null | undefined,
+  notify: Notify,
   options?: ExportDiagramOptions
 ): Promise<boolean> {
   if (!svgEl) {
-    message.warning('Không tìm thấy sơ đồ SVG để xuất');
+    notify('warning', 'Không tìm thấy sơ đồ SVG để xuất');
     return false;
   }
 
@@ -67,13 +68,13 @@ export async function downloadMermaidSvg(
       filters: [{ name: 'SVG Image', extensions: ['svg'] }],
     });
     if (res.saved) {
-      message.success('Đã xuất file SVG thành công');
+      notify('success', 'Đã xuất file SVG thành công');
       return true;
     }
     return false;
   } catch (err) {
     console.error('Lỗi xuất SVG:', err);
-    message.error('Không thể xuất file SVG');
+    notify('error', 'Không thể xuất file SVG');
     return false;
   }
 }
@@ -84,10 +85,11 @@ export async function downloadMermaidSvg(
  */
 export async function downloadMermaidPng(
   svgEl: SVGSVGElement | null | undefined,
+  notify: Notify,
   options?: ExportDiagramOptions
 ): Promise<boolean> {
   if (!svgEl) {
-    message.warning('Không tìm thấy sơ đồ để xuất PNG');
+    notify('warning', 'Không tìm thấy sơ đồ để xuất PNG');
     return false;
   }
 
@@ -103,7 +105,7 @@ export async function downloadMermaidPng(
 
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        message.error('Không khởi tạo được bộ vẽ Canvas');
+        notify('error', 'Không khởi tạo được bộ vẽ Canvas');
         resolve(false);
         return;
       }
@@ -122,7 +124,7 @@ export async function downloadMermaidPng(
           ctx.drawImage(img, 0, 0, width, height);
           canvas.toBlob(async (blob) => {
             if (!blob) {
-              message.error('Không thể trích xuất dữ liệu ảnh PNG');
+              notify('error', 'Không thể trích xuất dữ liệu ảnh PNG');
               resolve(false);
               return;
             }
@@ -134,7 +136,7 @@ export async function downloadMermaidPng(
             });
 
             if (res.saved) {
-              message.success('Đã xuất file PNG thành công');
+              notify('success', 'Đã xuất file PNG thành công');
               resolve(true);
             } else {
               resolve(false);
@@ -143,23 +145,23 @@ export async function downloadMermaidPng(
         } catch (canvasErr) {
           console.error('Canvas drawImage error:', canvasErr);
           // Fallback to SVG if canvas is blocked
-          message.warning('Trình duyệt chặn xuất PNG, tự động tải SVG dự phòng...');
-          const fallbackRes = await downloadMermaidSvg(svgEl, options);
+          notify('warning', 'Trình duyệt chặn xuất PNG, tự động tải SVG dự phòng...');
+          const fallbackRes = await downloadMermaidSvg(svgEl, notify, options);
           resolve(fallbackRes);
         }
       };
 
       img.onerror = async (err) => {
         console.error('SVG Image load error for PNG export:', err);
-        message.warning('Không thể chuyển đổi PNG trên môi trường hiện tại, đang xuất dạng SVG...');
-        const fallbackRes = await downloadMermaidSvg(svgEl, options);
+        notify('warning', 'Không thể chuyển đổi PNG trên môi trường hiện tại, đang xuất dạng SVG...');
+        const fallbackRes = await downloadMermaidSvg(svgEl, notify, options);
         resolve(fallbackRes);
       };
 
       img.src = dataUri;
     } catch (err) {
       console.error('Error exporting PNG:', err);
-      message.error('Không thể xuất ảnh PNG');
+      notify('error', 'Không thể xuất ảnh PNG');
       resolve(false);
     }
   });

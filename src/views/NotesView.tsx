@@ -609,7 +609,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
   };
 
   const handleDownloadFolder = async (folder: Note) => {
-    await downloadFolderAsZip(folder, allNotes || (await db.notes.toArray()));
+    await downloadFolderAsZip(folder, allNotes || (await db.notes.toArray()), (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
   };
 
   const handleOpenPopout = () => {

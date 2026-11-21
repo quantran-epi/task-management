@@ -1,28 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  Form,
-  Input,
-  Select,
-  Button,
-  Radio,
-  Space,
-  Typography,
-  message,
-  notification,
-  Segmented,
-} from 'antd';
-import {
-  RobotOutlined,
-  FolderOpenOutlined,
-  FolderOutlined,
-  RocketOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
-  ReloadOutlined,
-  FileTextOutlined,
-  CloudServerOutlined,
-} from '@ant-design/icons';
+import { Modal, Form, Input, Select, Button, Radio, Space, Typography, Segmented, useMessage, useNotification, FormItem, RadioGroup, SpaceCompact, TextArea, useForm, useWatch } from '../ui';
+import { RobotOutlined, FolderOpenOutlined, FolderOutlined, RocketOutlined, EyeOutlined, EyeInvisibleOutlined, ReloadOutlined, FileTextOutlined, CloudServerOutlined } from '../ui/icon';
 import type { Task } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
 import { isLocalPath, normalizeLocalPath, browseLocalFolder } from '../../utils/documentLinks';
@@ -57,7 +35,9 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   onCancel,
   onSuccess,
 }) => {
-  const [form] = Form.useForm();
+  const message = useMessage();
+  const notification = useNotification();
+  const [form] = useForm();
   const [submitting, setSubmitting] = useState(false);
   const [detectedPaths, setDetectedPaths] = useState<string[]>([]);
   const [selectedPathMode, setSelectedPathMode] = useState<'detected' | 'custom'>('detected');
@@ -70,7 +50,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   const [extraInstructionsText, setExtraInstructionsText] = useState<string>('');
   const [showPromptPreview, setShowPromptPreview] = useState<boolean>(false);
 
-  const watchedRepoPath = Form.useWatch('repoPath', form);
+  const watchedRepoPath = useWatch('repoPath', form);
   const currentRepo = normalizeLocalPath(watchedRepoPath || (detectedPaths[0] ?? '')) || '/workspace';
   const generatedDefaultPrompt = task
     ? generateGhostDevMasterPrompt(task, currentRepo)
@@ -137,7 +117,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   }, [visible, task, form]);
 
   const handleBrowse = async () => {
-    const picked = await browseLocalFolder();
+    const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
     if (picked) {
       form.setFieldValue('repoPath', picked);
       setSelectedPathMode('custom');
@@ -271,7 +251,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
 
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
         {sshConfigs.length > 0 && (
-          <Form.Item label="Môi trường thực thi (Execution Target)">
+          <FormItem label="Môi trường thực thi (Execution Target)">
             <Select
               value={execTarget}
               onChange={(val) => {
@@ -310,22 +290,22 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                 Claude Code sẽ chạy bên trong WSL/Server từ xa qua SSH — an toàn, không bị quét process bởi Trellix trên máy host.
               </Paragraph>
             )}
-          </Form.Item>
+          </FormItem>
         )}
 
         {detectedPaths.length > 0 ? (
-          <Form.Item label="Thư mục làm việc (Repository)" required>
-            <Radio.Group
+          <FormItem label="Thư mục làm việc (Repository)" required>
+            <RadioGroup
               value={selectedPathMode}
               onChange={(e) => setSelectedPathMode(e.target.value)}
               style={{ width: '100%', marginBottom: 8 }}
             >
               <Radio value="detected">Đường dẫn từ tài liệu tác vụ ({detectedPaths.length})</Radio>
               <Radio value="custom">Chọn thư mục khác</Radio>
-            </Radio.Group>
+            </RadioGroup>
 
             {selectedPathMode === 'detected' ? (
-              <Form.Item
+              <FormItem
                 name="repoPath"
                 noStyle
                 rules={[{ required: true, message: 'Vui lòng chọn thư mục' }]}
@@ -342,45 +322,45 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   }))}
                   style={{ width: '100%' }}
                 />
-              </Form.Item>
+              </FormItem>
             ) : (
-              <Space.Compact style={{ width: '100%' }}>
-                <Form.Item
+              <SpaceCompact style={{ width: '100%' }}>
+                <FormItem
                   name="repoPath"
                   noStyle
                   rules={[{ required: true, message: 'Vui lòng nhập hoặc duyệt thư mục' }]}
                 >
                   <Input placeholder="/path/to/git-repository" />
-                </Form.Item>
+                </FormItem>
                 <Button icon={<FolderOpenOutlined />} onClick={handleBrowse}>
                   Duyệt...
                 </Button>
-              </Space.Compact>
+              </SpaceCompact>
             )}
-          </Form.Item>
+          </FormItem>
         ) : (
-          <Form.Item
+          <FormItem
             label="Thư mục làm việc (Git Repository)"
             required
             tooltip="Đường dẫn thư mục chứa repository git cục bộ của tác vụ này"
           >
-            <Space.Compact style={{ width: '100%' }}>
-              <Form.Item
+            <SpaceCompact style={{ width: '100%' }}>
+              <FormItem
                 name="repoPath"
                 noStyle
                 rules={[{ required: true, message: 'Vui lòng nhập hoặc duyệt thư mục' }]}
               >
                 <Input placeholder="/Users/name/projects/my-app hoặc C:\repo" />
-              </Form.Item>
+              </FormItem>
               <Button icon={<FolderOpenOutlined />} onClick={handleBrowse}>
                 Duyệt...
               </Button>
-            </Space.Compact>
-          </Form.Item>
+            </SpaceCompact>
+          </FormItem>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Form.Item
+          <FormItem
             name="masterModel"
             label="Master Agent Model"
             rules={[
@@ -392,9 +372,9 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             ]}
           >
             <Input placeholder="sonnet" />
-          </Form.Item>
+          </FormItem>
 
-          <Form.Item
+          <FormItem
             name="workerModel"
             label="Worker Agent Model"
             rules={[
@@ -406,7 +386,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
             ]}
           >
             <Input placeholder="haiku" />
-          </Form.Item>
+          </FormItem>
         </div>
 
         <div style={{ marginTop: 16, borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
@@ -436,18 +416,18 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
 
           {promptMode === 'default' ? (
             <div>
-              <Form.Item
+              <FormItem
                 label="Chỉ dẫn bổ sung (tùy chọn)"
                 tooltip="Chỉ dẫn này sẽ được thêm vào cuối Master Prompt mặc định"
                 style={{ marginBottom: 8 }}
               >
-                <Input.TextArea
+                <TextArea
                   rows={3}
                   value={extraInstructionsText}
                   onChange={(e) => setExtraInstructionsText(e.target.value)}
                   placeholder="Nhập yêu cầu đặc biệt, lưu ý hoặc ràng buộc (ví dụ: Không sửa file XYZ, viết test bằng Vitest...)"
                 />
-              </Form.Item>
+              </FormItem>
             </div>
           ) : (
             <div>
@@ -477,7 +457,7 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
                   Khôi phục mặc định
                 </Button>
               </div>
-              <Input.TextArea
+              <TextArea
                 rows={8}
                 value={customPromptText}
                 onChange={(e) => {

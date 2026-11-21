@@ -21,7 +21,7 @@ describe('mermaidExport', () => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 200 100');
 
-    const res = await downloadMermaidSvg(svg, { filename: 'test-diagram' });
+    const res = await downloadMermaidSvg(svg, () => {}, { filename: 'test-diagram' });
     expect(res).toBe(true);
     expect(saveFileSpy).toHaveBeenCalled();
     const [calledFilename, calledBlob] = saveFileSpy.mock.calls[0]!;
@@ -33,7 +33,7 @@ describe('mermaidExport', () => {
   });
 
   it('downloadMermaidSvg returns false when svgEl is null', async () => {
-    const res = await downloadMermaidSvg(null);
+    const res = await downloadMermaidSvg(null, () => {});
     expect(res).toBe(false);
   });
 });

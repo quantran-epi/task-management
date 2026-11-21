@@ -1,4 +1,4 @@
-import { Alert, Button, Result, Space, Spin, Typography } from 'antd';
+import { Alert, Button, Result, Space, Spin, Typography } from '../ui';
 import type { PublishPrimaryState } from '../../types/models';
 
 const { Text } = Typography;

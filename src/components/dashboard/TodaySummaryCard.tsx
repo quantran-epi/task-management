@@ -1,12 +1,6 @@
 import React from 'react';
-import { Card, Statistic, Progress, Tag, Button, Space, Typography, Alert } from 'antd';
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  MinusCircleOutlined,
-  CalendarOutlined,
-} from '@ant-design/icons';
+import { Card, Statistic, Progress, Tag, Button, Space, Typography, Alert } from '../ui';
+import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, MinusCircleOutlined, CalendarOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import type { DayCapacityMetrics, DailyLoadState } from '../../utils/capacity';
 import { formatMinutes } from '../../utils/time';

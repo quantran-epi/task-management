@@ -1,41 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import {
-  Typography,
-  Button,
-  Segmented,
-  Tag,
-  Space,
-  Empty,
-  Popconfirm,
-  theme,
-  Tooltip,
-  Dropdown,
-  Tree,
-  Input,
-  message,
-  ConfigProvider,
-  Popover,
-  Select,
-} from 'antd';
+import { Typography, Button, Segmented, Tag, Space, Empty, Popconfirm, Tooltip, Dropdown, Tree, Input, ThemeConfigProvider, Popover, Select, useAntdToken, useMessage } from '../ui';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import {
-  CheckOutlined,
-  UndoOutlined,
-  FileTextOutlined,
-  FolderOutlined,
-  ReloadOutlined,
-  FullscreenOutlined,
-  FullscreenExitOutlined,
-  CopyOutlined,
-  SearchOutlined,
-  EyeOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  CommentOutlined,
-  FolderOpenOutlined,
-  SettingOutlined,
-} from '@ant-design/icons';
+import { CheckOutlined, UndoOutlined, FileTextOutlined, FolderOutlined, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, CopyOutlined, SearchOutlined, EyeOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CommentOutlined, FolderOpenOutlined, SettingOutlined } from '../ui/icon';
 import type { DiffFile, DiffHunk, DiffViewMode } from '../../types/agent';
 import { DiffHunkView } from './DiffHunkView';
 import { DiffInlineCommentModal } from './DiffInlineCommentModal';
@@ -140,7 +107,8 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   onMentionFile,
   worktreePath,
 }) => {
-  const { token } = theme.useToken();
+  const message = useMessage();
+  const { token } = useAntdToken();
   const [acting, setActing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -433,7 +401,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
   const isSelectedFileChanged = Boolean(selectedFile);
 
   return (
-    <ConfigProvider
+    <ThemeConfigProvider
       theme={{
         token: {
           zIndexPopupBase: 2000,
@@ -1044,6 +1012,6 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         />
       )}
     </div>
-  </ConfigProvider>
+  </ThemeConfigProvider>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Empty } from 'antd';
+import { Empty } from '../ui';
 
 export interface EmptyStateProps {
   heading?: string;

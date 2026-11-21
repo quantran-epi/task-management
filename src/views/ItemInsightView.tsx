@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem } from '../components/ui';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem, useTaskMateModal } from '../components/ui';
 import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -73,6 +73,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
 
   const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
   const message = useMessage();
+  const { modal, contextHolder } = useTaskMateModal();
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
 
@@ -288,6 +289,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
 
   if (!hasItem) {
     return (
+      <>
+        {contextHolder}
       <Card style={{ margin: 16 }}>
         <Empty
           description={`Không tìm thấy mục ${itemType} với ID: ${itemId}`}
@@ -298,7 +301,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           </Button>
         </Empty>
       </Card>
-    );
+    
+  </>);
   }
 
   const renderRecommendationAlert = (rec: InsightRecommendation) => {
@@ -609,7 +613,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                     overflow: 'hidden',
                   }}
                   icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                  onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey })}
+                  onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
                   title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
                 >
                   <span

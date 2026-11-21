@@ -1,12 +1,5 @@
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  CloudOutlined,
-  EditOutlined,
-  LoadingOutlined,
-  WarningOutlined,
-} from '@ant-design/icons';
-import { Space, Tag, Tooltip, Typography } from 'antd';
+import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, EditOutlined, LoadingOutlined, WarningOutlined } from '../ui/icon';
+import { Space, Tag, Tooltip, Typography } from '../ui';
 import { useEffect, useState } from 'react';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import type { PublishPrimaryState } from '../../types/models';

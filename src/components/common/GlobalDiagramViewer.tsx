@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Button, theme, Space } from 'antd';
-import { ApartmentOutlined, ExportOutlined, CloseOutlined } from '@ant-design/icons';
+import { Modal, Button, Space, useAntdToken } from '../ui';
+import { ApartmentOutlined, ExportOutlined, CloseOutlined } from '../ui/icon';
 import { MermaidViewer } from '../ai/MermaidViewer';
 import { extractMermaidCode } from '../../services/ai/mermaidFixerService';
 
@@ -17,7 +17,7 @@ export function isLikelyMermaidCode(text: string): boolean {
 }
 
 export const GlobalDiagramViewer: React.FC = () => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [modalOpen, setModalOpen] = useState(false);
   const [diagramCode, setDiagramCode] = useState('');
   const [floatingPos, setFloatingPos] = useState<{ x: number; y: number } | null>(null);

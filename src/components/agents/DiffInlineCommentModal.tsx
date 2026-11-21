@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Input, Typography, Space, Button } from 'antd';
+import { Modal, Typography, Space, Button, TextArea } from '../ui';
 import { formatInlineFeedbackPrompt } from '../../utils/ghostDevPrompt';
 
 const { Text, Paragraph } = Typography;
@@ -100,7 +100,7 @@ export const DiffInlineCommentModal: React.FC<DiffInlineCommentModalProps> = ({
           <Paragraph style={{ marginBottom: 4 }}>
             <Text strong>Nội dung chỉ đạo chỉnh sửa:</Text>
           </Paragraph>
-          <Input.TextArea
+          <TextArea
             rows={4}
             value={comment}
             onChange={(e) => setComment(e.target.value)}

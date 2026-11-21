@@ -1,19 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip } from 'antd';
-import {
-  SearchOutlined,
-  CheckSquareOutlined,
-  ProjectOutlined,
-  ApartmentOutlined,
-  FileTextOutlined,
-  PlusOutlined,
-  CalendarOutlined,
-  BarChartOutlined,
-  SettingOutlined,
-  DashboardOutlined,
-  QuestionCircleOutlined,
-  RobotOutlined,
-} from '@ant-design/icons';
+import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip, ListItem } from '../ui';
+import { SearchOutlined, CheckSquareOutlined, ProjectOutlined, ApartmentOutlined, FileTextOutlined, PlusOutlined, CalendarOutlined, BarChartOutlined, SettingOutlined, DashboardOutlined, QuestionCircleOutlined, RobotOutlined } from '../ui/icon';
 import { useAIChat } from '../../context/AIChatContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -538,7 +525,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               size="small"
               dataSource={CHEATSHEET_ENTRIES}
               renderItem={(item) => (
-                <List.Item
+                <ListItem
                   style={{
                     cursor: 'pointer',
                     padding: '8px 12px',
@@ -578,7 +565,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                   <Text code style={{ fontSize: 12 }}>
                     {item.example}
                   </Text>
-                </List.Item>
+                </ListItem>
               )}
             />
           </div>
@@ -593,7 +580,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                 renderItem={(item, idx) => {
                   const isSelected = idx === selectedIndex;
                   return (
-                    <List.Item
+                    <ListItem
                       key={item.id}
                       onClick={() => item.action()}
                       onMouseEnter={() => setSelectedIndex(idx)}
@@ -625,7 +612,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                         </div>
                       </Space>
                       <div>{getCategoryTag(item.category)}</div>
-                    </List.Item>
+                    </ListItem>
                   );
                 }}
               />

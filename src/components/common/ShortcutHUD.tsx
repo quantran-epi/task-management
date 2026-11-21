@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, Typography, Tag, Space, theme } from 'antd';
-import { SearchOutlined, CompassOutlined, AppstoreOutlined, CheckSquareOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Modal, Input, Typography, Tag, Space, useAntdToken } from '../ui';
+import { SearchOutlined, CompassOutlined, AppstoreOutlined, CheckSquareOutlined, FileTextOutlined } from '../ui/icon';
 import type { ShortcutItem, ShortcutCategory } from '../../types/shortcuts';
 import { formatShortcutKeys } from '../../utils/keyboard';
 
@@ -26,7 +26,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
   shortcuts,
   currentRoute,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<any>(null);

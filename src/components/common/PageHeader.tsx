@@ -1,5 +1,5 @@
 import React from 'react';
-import { Typography, theme } from 'antd';
+import { Typography, useAntdToken } from '../ui';
 
 const { Title, Text } = Typography;
 
@@ -20,7 +20,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   style,
   className,
 }) => {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
 
   return (
     <div

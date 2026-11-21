@@ -1,11 +1,6 @@
 import React from 'react';
-import { Tag, Progress, Space, Typography } from 'antd';
-import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  ExclamationCircleOutlined,
-  MinusCircleOutlined,
-} from '@ant-design/icons';
+import { Tag, Progress, Space, Typography } from '../ui';
+import { CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined, MinusCircleOutlined } from '../ui/icon';
 import dayjs from 'dayjs';
 import type { HorizonDayData } from '../../types/dashboard';
 import type { DailyLoadState } from '../../utils/capacity';

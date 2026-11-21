@@ -401,8 +401,8 @@ export function DocsExplorer({ db = defaultDb }: DocsExplorerProps) {
   );
 
   const handleDownloadFolder = useCallback(
-    (folder: Note) => downloadFolderAsZip(folder, allNotes ?? []),
-    [allNotes]
+    (folder: Note) => downloadFolderAsZip(folder, allNotes ?? [], (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) })),
+    [allNotes, message]
   );
 
   return (

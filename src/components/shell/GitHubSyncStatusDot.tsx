@@ -1,5 +1,5 @@
 import React from 'react';
-import { Badge, Tooltip, Typography } from 'antd';
+import { Badge, Tooltip, Typography } from '../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useGitHubAuth } from '../../context/GitHubAuthContext';
@@ -64,7 +64,7 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
           ? 'Lỗi xác thực GitHub PAT (401/403)'
           : 'Tự động đồng bộ bị tạm dừng';
     return renderIndicator(
-      <Badge status="error" />,
+      <Badge status="danger" />,
       `Đồng bộ GitHub: ${reasonText}`
     );
   }
@@ -72,7 +72,7 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
   // 2. Retry with consecutive errors -> Red / Warning dot
   if (retryState?.nextRetryAt && retryState.consecutiveFailures > 0) {
     return renderIndicator(
-      <Badge status="error" />,
+      <Badge status="danger" />,
       `Đồng bộ GitHub: Lỗi kết nối (thử lại sau). ${lastError || ''}`
     );
   }

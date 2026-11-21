@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Input, Typography, Alert } from 'antd';
+import { Modal, Input, Typography, Alert } from '../ui';
 import { resetDatabaseToDefaults } from '../../db/seeds';
 
 const { Text } = Typography;

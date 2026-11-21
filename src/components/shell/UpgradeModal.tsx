@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Alert, Button } from 'antd';
+import { Modal, Alert, Button } from '../ui';
 
 export const UpgradeModal: React.FC = () => {
   const [blocked, setBlocked] = useState(false);

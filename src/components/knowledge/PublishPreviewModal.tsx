@@ -1,4 +1,4 @@
-import { Alert, Button, List, Modal, Space, Statistic, Tabs, Typography, theme } from 'antd';
+import { Alert, Button, List, Modal, Space, Statistic, Tabs, Typography, useAntdToken, ListItem } from '../ui';
 import { useEffect, useState } from 'react';
 import type { ChangePreview, DeltaClassification } from '../../services/knowledge/changePreview';
 import type { PublishSession } from '../../services/knowledge/publishOrchestrator';
@@ -26,7 +26,7 @@ export interface PublishPreviewModalProps {
 }
 
 export function PublishPreviewModal({ open, preview, session, onClose, onOpenStatus, onAnnounce }: PublishPreviewModalProps) {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   const [step, setStep] = useState<Step>('preview');
   const [conflict, setConflict] = useState(false);
   const [publishBusy, setPublishBusy] = useState(false);
@@ -154,13 +154,13 @@ export function PublishPreviewModal({ open, preview, session, onClose, onOpenSta
                   renderItem={(document) => {
                     const chunks = preview.chunks.filter((chunk) => chunk.documentId === document.documentId);
                     return (
-                      <List.Item>
+                      <ListItem>
                         <Space direction="vertical">
                           <Text strong>{document.title}</Text>
                           {classification === 'removed' && <Text type="warning">Tài liệu cục bộ vẫn được giữ nguyên.</Text>}
                           {chunks.map((chunk, index) => <Text key={`${chunk.classification}-${index}`} type="secondary">Chunk: {LABELS[chunk.classification]}</Text>)}
                         </Space>
-                      </List.Item>
+                      </ListItem>
                     );
                   }}
                 />

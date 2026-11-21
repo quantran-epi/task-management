@@ -1,6 +1,6 @@
 import React from 'react';
 import { Column } from '@ant-design/plots';
-import { Empty } from 'antd';
+import { Empty } from '../ui';
 import type { EstimateVsActualItem } from '../../types/analytics';
 
 export interface EstimateVsActualChartProps {
