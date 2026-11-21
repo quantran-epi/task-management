@@ -275,7 +275,6 @@ describe('SettingsView Integration & Offline Independence (SYNC-07, SYNC-05)', (
       'Cấu hình kho lưu trữ GitHub',
       'Đồng bộ sao lưu GitHub',
       'Lưu cục bộ SQLite cho desktop',
-      'Trạng thái PWA & Ngoại tuyến',
       'Dung lượng lưu trữ & Tính bền vững',
       'Khu vực nguy hiểm (Danger Zone)',
       'Sao lưu & khôi phục',

@@ -30,7 +30,6 @@ import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
 import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
 import { McpConfigCard } from '../components/settings/McpConfigCard';
 import { AiToolCatalogCard } from '../components/settings/AiToolCatalogCard';
-import { PwaStatusCard } from '../components/settings/PwaStatusCard';
 import { StoragePersistenceCard } from '../components/settings/StoragePersistenceCard';
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
@@ -212,7 +211,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <GitHubSyncCard db={db} onPullSuccess={handleRemotePullSuccess} />
           <Typography.Text strong>Lưu trữ & môi trường</Typography.Text>
           <LocalSqlitePersistenceCard db={db} />
-          <PwaStatusCard />
           <StoragePersistenceCard />
 
           <Card

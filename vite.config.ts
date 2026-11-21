@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
 
 const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM || process.env.TAURI_PLATFORM);
 
@@ -14,61 +13,11 @@ export default defineConfig({
     strictPort: true,
     host: process.env.TAURI_DEV_HOST || false,
   },
-  plugins: [
-    react(),
-    VitePWA({
-      disable: isTauri,
-      registerType: 'prompt',
-      includeAssets: [
-        'favicon.svg',
-        'pwa-192x192.png',
-        'pwa-512x512.png',
-        'pwa-512x512-maskable.png',
-      ],
-      manifest: {
-        name: 'TaskMate',
-        short_name: 'TaskMate',
-        description: 'TaskMate - Private offline-first personal task and workload planner',
-        theme_color: '#1677ff',
-        background_color: '#ffffff',
-        display: 'standalone',
-        start_url: '/task-management/',
-        scope: '/task-management/',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: 'pwa-512x512-maskable.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
-        navigateFallback: '/task-management/index.html',
-        navigateFallbackAllowlist: [/^\/task-management\//],
-        cleanupOutdatedCaches: true,
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-      },
-    }),
-  ],
+  plugins: [react()],
   test: {
     alias: {
       'aria-query': fileURLToPath(
         new URL('./node_modules/aria-query', import.meta.url)
-      ),
-      'virtual:pwa-register/react': fileURLToPath(
-        new URL('./tests/mocks/pwaRegister.ts', import.meta.url)
       ),
     },
     environment: 'jsdom',
