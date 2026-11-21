@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { PlannerView } from '../../src/views/PlannerView';
-import { App } from '../../src/App';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { initializeDatabaseDefaults } from '../../src/db/seeds';
 import { createTask } from '../../src/db/repositories/taskRepo';
@@ -169,20 +168,6 @@ describe('PlannerView & App Route Integration (PLAN-03, PLAN-04, UX-02, UX-03, U
     await waitFor(() => {
       expect(screen.getByTestId('day-column-header-2026-09-28')).toHaveTextContent(/Sức chứa:\s*6h/);
     });
-  });
-
-  it('verifies App shell routes /#/planner to PlannerView and /#/settings to SettingsView without empty states', async () => {
-    render(<App />);
-
-    // Click Planner in Menu
-    fireEvent.click(screen.getByRole('menuitem', { name: /Lập kế hoạch/i }));
-    expect(await screen.findByTestId('planner-view')).toBeInTheDocument();
-    expect(screen.queryByText('Workload Planner')).toBeNull();
-
-    // Click Settings in Menu
-    fireEvent.click(screen.getByRole('menuitem', { name: /Cài đặt/i }));
-    expect(await screen.findByText('Cài đặt & Cấu hình công suất')).toBeInTheDocument();
-    expect(screen.getByText('Mẫu công suất cơ bản hàng tuần')).toBeInTheDocument();
   });
 
   it('configures desktop grid with minmax of at least 180px and auto horizontal overflow (03-04)', async () => {

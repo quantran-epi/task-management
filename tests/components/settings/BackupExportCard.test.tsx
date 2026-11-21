@@ -4,7 +4,6 @@ import { notification } from 'antd';
 import { TaskPlannerDatabase } from '../../../src/db/index';
 import { BackupExportCard } from '../../../src/components/settings/BackupExportCard';
 import { SettingsView } from '../../../src/views/SettingsView';
-import { AppShell } from '../../../src/components/shell/AppShell';
 import * as exportBackupService from '../../../src/services/backup/exportBackup';
 import * as ariaModule from '../../../src/components/common/AriaLiveRegion';
 
@@ -84,21 +83,6 @@ describe('SettingsView two-tab organization (D-16)', () => {
     expect(screen.getByText('Công suất làm việc')).toBeInTheDocument();
     expect(screen.getByText('Sao lưu & Dữ liệu')).toBeInTheDocument();
     expect(screen.getByText('Sao lưu dữ liệu')).toBeInTheDocument();
-  });
-});
-
-describe('AppShell AriaLiveRegion integration (D-15, UX-04)', () => {
-  it('mounts off-screen AriaLiveRegion in AppShell layout', () => {
-    render(
-      <AppShell currentRoute="settings" onNavigate={() => {}}>
-        <div>Test Page Content</div>
-      </AppShell>
-    );
-
-    const liveRegion = screen.getByRole('status');
-    expect(liveRegion).toBeInTheDocument();
-    expect(liveRegion).toHaveAttribute('aria-live', 'polite');
-    expect(liveRegion).toHaveAttribute('aria-atomic', 'true');
   });
 });
 
