@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { Button, theme } from 'antd';
+import { Button, ThemeAppHolder, useAntdToken } from '../../components/ui';
 import { AntdThemeAdapter } from '../AntdThemeAdapter';
 import { getAntdTheme, lightTokens } from '../../styles/tokens';
 import { THEME_MODE_EVENT } from '../themeBroadcast';
@@ -19,7 +21,7 @@ const tauri = vi.hoisted(() => {
 vi.mock('@tauri-apps/api/event', () => ({ emitTo: tauri.emitTo, listen: tauri.listen }));
 
 function TokenConsumer() {
-  const { token } = theme.useToken();
+  const { token } = useAntdToken();
   return (
     <div data-testid="token-consumer">
       <span data-testid="color-primary">{token.colorPrimary}</span>
@@ -32,6 +34,27 @@ function TokenConsumer() {
 }
 
 describe('AntdThemeAdapter', () => {
+  it('mounts the holder context and exposes themed AntD tokens', () => {
+    const { container } = render(
+      <AntdThemeAdapter>
+        <ThemeAppHolder>
+          <TokenConsumer />
+        </ThemeAppHolder>
+      </AntdThemeAdapter>,
+    );
+    expect(container.querySelector('.ant-app')).not.toBeNull();
+    expect(screen.getByTestId('token-consumer')).not.toBeNull();
+    expect(screen.getByTestId('color-primary').textContent).toBe('#2f62d8');
+  });
+
+  it('keeps the shell adapter free of runtime antd imports', () => {
+    const source = readFileSync(
+      resolve(__dirname, '../AntdThemeAdapter.tsx'),
+      'utf8',
+    );
+    expect(source).not.toMatch(/from ['"]antd['"]/);
+  });
+
   it('renders children with compact light tokens', () => {
     render(
       <AntdThemeAdapter>
