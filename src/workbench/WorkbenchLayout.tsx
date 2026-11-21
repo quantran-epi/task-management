@@ -35,6 +35,9 @@ import {
   JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
 import { AppstoreOutlined } from '../components/ui/icon';
+// CR-01: vendored OpenIDEA token sheet must load before the workbench palette
+// so control CSS modules resolve --bg-button-primary, --border-button, --space-*, etc.
+import '../components/ui/openidea/tokens.css';
 import '../styles/workbench-tokens.css';
 import '../components/ui/ui-tokens.css';
 

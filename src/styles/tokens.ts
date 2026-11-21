@@ -368,6 +368,10 @@ export function applyCssVariables(mode: ThemeMode, target: HTMLElement): void {
     for (const root of roots) root.style.setProperty(name, value);
   }
   for (const root of roots) root.style.colorScheme = mode;
+  // Vendored OpenIDEA sheets scope both palettes to :root[data-theme="..."].
+  // The shell wrapper keeps its data-theme for local selectors; the document
+  // root is the one that makes those selectors match (CR-01).
+  document.documentElement.setAttribute('data-theme', mode);
 }
 
 // CSS-only aliases kept in workbench-tokens.css because they are structural var() references,

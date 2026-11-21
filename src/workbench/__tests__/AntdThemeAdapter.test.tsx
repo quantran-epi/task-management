@@ -44,7 +44,7 @@ describe('AntdThemeAdapter', () => {
     );
     expect(container.querySelector('.ant-app')).not.toBeNull();
     expect(screen.getByTestId('token-consumer')).not.toBeNull();
-    expect(screen.getByTestId('color-primary').textContent).toBe('#2f62d8');
+    expect(screen.getByTestId('color-primary').textContent).toBe('#3871e1');
   });
 
   it('keeps the shell adapter free of runtime antd imports', () => {
@@ -63,12 +63,12 @@ describe('AntdThemeAdapter', () => {
       </AntdThemeAdapter>
     );
 
-    expect(screen.getByTestId('color-primary').textContent).toBe('#2f62d8');
+    expect(screen.getByTestId('color-primary').textContent).toBe('#3871e1');
     expect(screen.getByTestId('border-radius').textContent).toBe('4');
-    // compactAlgorithm resolves the 13px/30px seeds down to 10px/26px (measured
+    // compactAlgorithm resolves the 13px/28px seeds down to 10px/24px (measured
     // from getDesignToken with defaultAlgorithm + compactAlgorithm).
     expect(screen.getByTestId('font-size').textContent).toBe('10');
-    expect(screen.getByTestId('control-height').textContent).toBe('26');
+    expect(screen.getByTestId('control-height').textContent).toBe('24');
     expect(screen.getByText('Test Button')).toBeInTheDocument();
   });
 
@@ -140,13 +140,13 @@ describe('AntdThemeAdapter', () => {
       );
       const wrapper = container.querySelector('.taskmate-workbench-theme') as HTMLElement;
       expect(wrapper.getAttribute('data-theme')).toBe('light');
-      expect(wrapper.style.getPropertyValue('--accent')).toBe('#2f62d8');
+      expect(wrapper.style.getPropertyValue('--accent')).toBe('#3871e1');
 
       await waitFor(() => expect(tauri.listen).toHaveBeenCalledWith(THEME_MODE_EVENT, expect.any(Function)));
       act(() => { tauri.handler()!({ payload: { mode: 'dark' } }); });
 
       expect(wrapper.getAttribute('data-theme')).toBe('dark');
-      expect(wrapper.style.getPropertyValue('--accent')).toBe('#6a9bff');
+      expect(wrapper.style.getPropertyValue('--accent')).toBe('#3871e1');
       expect(tauri.emitTo).not.toHaveBeenCalled();
       expect(window.localStorage.getItem('taskmate_theme')).toBeNull();
       unmount();

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -120,5 +120,49 @@ describe('tokens — single source parity', () => {
       expect(element.style.getPropertyValue(name)).toBe(tokens.css[name as keyof typeof tokens.css]);
     }
     expect(element.style.getPropertyValue('--accent')).toBe('#3871e1');
+    expect(document.documentElement.getAttribute('data-theme')).toBe(mode);
+  });
+
+  it('CR-01: vendored token sheet is imported by the app and covers every non-fallback CSS module var', () => {
+    const main = read('src/main.tsx');
+    expect(main).toMatch(/import ['"]\.\/components\/ui\/openidea\/tokens\.css['"]/);
+    expect(main).toMatch(/import ['"]\.\/components\/ui\/openidea\/global\.css['"]/);
+
+    const cssDir = resolve(ROOT, 'src/components/ui/openidea');
+    const modules = readdirSync(cssDir)
+      .filter((file) => file.endsWith('.module.css'))
+      .map((file) => readFileSync(resolve(cssDir, file), 'utf8'))
+      .join('\n');
+    const tokenSheet = read('src/components/ui/openidea/tokens.css');
+    const injected = JSON.stringify([lightTokens.css, darkTokens.css]);
+    // Component-scoped vars ({--tab-tint}, {--tree-depth}, …) are set by the
+    // owning component/element; root-scoped vars must come from a token source.
+    const componentScoped = new Set([
+      '--tree-depth', '--tab-tint', '--row-tint',
+      '--oi-icon-filter', '--oi-icon-opacity', '--oi-tree-icon-size',
+      // Locally declared inside CSS module rules (`:local` declarations).
+      '--button-radius', '--icon-color', '--message-icon-color',
+      '--tab-selected-bg', '--tab-selected-border', '--tab-tint-mix',
+    ]);
+    const provided = new Set<string>([
+      ...[...tokenSheet.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((match) => match[1]!),
+      ...[...injected.matchAll(/--[a-z0-9-]+/g)].map((match) => match[0]),
+      ...componentScoped,
+    ]);
+    const referenced = new Set<string>();
+    for (const match of modules.matchAll(/var\(\s*(--[a-z0-9-]+)/g)) referenced.add(match[1]!);
+    const withFallback = new Set(
+      [...modules.matchAll(/var\(\s*(--[a-z0-9-]+)\s*,/g)].map((match) => match[1]!),
+    );
+    const missing = [...referenced].filter((name) => !provided.has(name) && !withFallback.has(name));
+    expect(missing).toEqual([]);
+    // Guard against silent deletion of the control-specific aliases the modules need.
+    for (const name of [
+      '--bg-button-primary', '--fg-button-primary', '--border-button',
+      '--border-checkbox', '--bg-tree-selected', '--z-popup',
+      '--space-1', '--space-1-5', '--space-2', '--bg-dialog',
+    ]) {
+      expect(provided.has(name)).toBe(true);
+    }
   });
 });

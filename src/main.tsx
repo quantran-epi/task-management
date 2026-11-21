@@ -1,6 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import AppIntelliJ from './AppIntelliJ';
+// CR-01: OpenIDEA token sheet + global reset must be the first styles in the
+// bundle; the vendored theme selectors key off :root[data-theme].
+import './components/ui/openidea/tokens.css';
+import './components/ui/openidea/global.css';
 import './styles/markdown.css';
 import './styles/team-chat.css';
 // Default per-weight CSS carries unicode-range for every subset (incl. Vietnamese U+1EA0-1EF9),
