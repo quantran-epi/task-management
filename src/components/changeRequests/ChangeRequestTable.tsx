@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Table, Tag, Button, Space, Tooltip, Popover, Dropdown, Progress, useAntdToken } from '../ui';
+import { Table, Tag, Button, Space, Tooltip, Popover, Dropdown, Progress, useAntdToken, type StatusKind } from '../ui';
 import type { TableColumnsType, MenuProps } from 'antd';
 import { EditOutlined, DeleteOutlined, BranchesOutlined, LinkOutlined, FolderOpenOutlined, RobotOutlined, MoreOutlined, BellOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import type { ChangeRequest, CrType, CrStatus, System, Task } from '../../types/models';
@@ -27,23 +27,23 @@ export interface ChangeRequestTableProps {
 
 export const CR_TYPE_CONFIG: Record<
   CrType,
-  { label: string; color: string; icon: React.ReactNode; text: string }
+  { label: string; status: StatusKind; icon: React.ReactNode; text: string }
 > = {
   NEW_FEATURE: {
     label: 'New Feature',
-    color: '#1677ff',
+    status: 'accent',
     icon: <ThunderboltOutlined />,
     text: 'Tạo mới tính năng',
   },
   ENHANCEMENT: {
     label: 'Enhancement',
-    color: '#52c41a',
+    status: 'success',
     icon: <ToolOutlined />,
     text: 'Nâng cấp / Cập nhật',
   },
   BUGFIX: {
     label: 'Bugfix',
-    color: '#faad14',
+    status: 'warning',
     icon: <BugOutlined />,
     text: 'Sửa lỗi',
   },
@@ -116,7 +116,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
     },
     {
       key: 'add-reminder',
-      icon: <BellOutlined style={{ color: '#faad14' }} />,
+      icon: <BellOutlined style={{ color: 'var(--warning)' }} />,
       label: 'Thêm nhắc nhở',
       onClick: () => setReminderTargetCR(record),
     },
@@ -167,7 +167,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                     fontFamily: 'monospace',
                     fontWeight: 600,
                     margin: 0,
-                    fontSize: 11.5,
+                    fontSize: 'var(--font-size-small)',
                   }}
                 >
                   {record.code}
@@ -178,7 +178,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                 <Tag
                   color="purple"
                   icon={<LinkOutlined />}
-                  style={{ cursor: 'pointer', margin: 0, fontSize: 11 }}
+                  style={{ cursor: 'pointer', margin: 0, fontSize: 'var(--font-size-xs)' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     void openJiraExternalUrl(getJiraBrowseUrl(record.jiraEpicKey!));
@@ -218,7 +218,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                             }}
                             title={local ? 'Mở trong File Explorer' : 'Mở liên kết web'}
                             style={{
-                              fontSize: 12,
+                              fontSize: 'var(--font-size-small)',
                               display: 'flex',
                               alignItems: 'flex-start',
                               gap: 6,
@@ -229,7 +229,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                             {local ? (
                               <FolderOpenOutlined style={{ color: '#fa8c16', flexShrink: 0, marginTop: 2 }} />
                             ) : (
-                              <LinkOutlined style={{ color: '#1677ff', flexShrink: 0, marginTop: 2 }} />
+                              <LinkOutlined style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
                             )}
                             <span
                               title={link}
@@ -251,7 +251,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                 >
                   <Tag
                     icon={<LinkOutlined />}
-                    style={{ cursor: 'pointer', margin: 0, fontSize: 11 }}
+                    style={{ cursor: 'pointer', margin: 0, fontSize: 'var(--font-size-xs)' }}
                     color="default"
                   >
                     {linkCount} link{linkCount > 1 ? 's' : ''}
@@ -260,7 +260,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
               )}
             </div>
             {record.description && (
-              <div style={{ fontSize: 12, color: token.colorTextTertiary, marginTop: 4 }}>
+              <div style={{ fontSize: 'var(--font-size-small)', color: token.colorTextTertiary, marginTop: 4 }}>
                 {record.description}
               </div>
             )}
@@ -276,7 +276,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       render: (type: CrType) => {
         const cfg = CR_TYPE_CONFIG[type] ?? CR_TYPE_CONFIG.ENHANCEMENT;
         return (
-          <Tag color={cfg.color} icon={cfg.icon} style={{ fontWeight: 600, fontSize: 11.5 }}>
+          <Tag status={cfg.status} icon={cfg.icon} style={{ fontWeight: 600, fontSize: 'var(--font-size-small)' }}>
             {cfg.label}
           </Tag>
         );
@@ -290,7 +290,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       render: (_: unknown, record) => {
         const targets = record.targets ?? [];
         if (targets.length === 0) {
-          return <span style={{ color: token.colorTextTertiary, fontSize: 12 }}>Chưa chọn</span>;
+          return <span style={{ color: token.colorTextTertiary, fontSize: 'var(--font-size-small)' }}>Chưa chọn</span>;
         }
 
         return (
@@ -304,7 +304,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                   <Tag
                     color="cyan"
                     icon={<BranchesOutlined />}
-                    style={{ margin: 0, fontSize: 11, fontFamily: 'monospace' }}
+                    style={{ margin: 0, fontSize: 'var(--font-size-xs)', fontFamily: 'monospace' }}
                   >
                     {label}
                   </Tag>
@@ -332,14 +332,14 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
         const crTasks = taskMap.get(record.id) || [];
         const total = crTasks.length;
         if (total === 0) {
-          return <span style={{ color: token.colorTextTertiary, fontSize: 12 }}>0 tác vụ</span>;
+          return <span style={{ color: token.colorTextTertiary, fontSize: 'var(--font-size-small)' }}>0 tác vụ</span>;
         }
         const done = crTasks.filter((t) => t.status === 'Done').length;
         const percent = Math.round((done / total) * 100);
 
         return (
           <div style={{ width: 140 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-xs)', marginBottom: 2 }}>
               <span>{done}/{total} Done</span>
               <span style={{ fontWeight: 600 }}>{percent}%</span>
             </div>

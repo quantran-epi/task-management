@@ -165,7 +165,7 @@ ${originalContent}
             {isStreaming && (
               <Space>
                 <Spin size="small" />
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                   AI đang chuẩn hóa cấu trúc...
                 </Text>
               </Space>
@@ -207,7 +207,7 @@ ${originalContent}
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
             Chuyển đổi tài liệu hiện tại theo cấu trúc BM25 và Knowledge Graph chuẩn.
           </Text>
           <Segmented
@@ -238,7 +238,7 @@ ${originalContent}
                 display: 'flex',
                 flexDirection: 'column',
                 border: '1px solid #e5e7eb',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 overflow: 'hidden',
               }}
             >
@@ -248,7 +248,7 @@ ${originalContent}
                   backgroundColor: '#f3f4f6',
                   borderBottom: '1px solid #e5e7eb',
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   color: '#4b5563',
                 }}
               >
@@ -276,7 +276,7 @@ ${originalContent}
                 display: 'flex',
                 flexDirection: 'column',
                 border: '1px solid #bae6fd',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 overflow: 'hidden',
               }}
             >
@@ -286,7 +286,7 @@ ${originalContent}
                   backgroundColor: '#f0f9ff',
                   borderBottom: '1px solid #bae6fd',
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   color: '#0369a1',
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -303,7 +303,7 @@ ${originalContent}
                   overflowY: 'auto',
                   fontSize: 13,
                   lineHeight: 1.6,
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'var(--bg-island)',
                   whiteSpace: 'pre-wrap',
                   fontFamily: 'monospace',
                 }}
@@ -324,9 +324,9 @@ ${originalContent}
               height: 480,
               overflowY: 'auto',
               border: '1px solid #e5e7eb',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               padding: 16,
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--bg-island)',
             }}
           >
             {proposedContent ? (

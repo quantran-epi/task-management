@@ -240,7 +240,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography.Text
                         ellipsis
-                        style={{ fontSize: 11, color: att.caption ? 'inherit' : '#8c8c8c', maxWidth: 80 }}
+                        style={{ fontSize: 'var(--font-size-xs)', color: att.caption ? 'inherit' : 'var(--fg-secondary)', maxWidth: 80 }}
                         title={att.caption || att.fileName}
                       >
                         {att.caption || att.fileName}
@@ -251,7 +251,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                             <Button
                               type="text"
                               size="small"
-                              icon={<EditOutlined style={{ fontSize: 12 }} />}
+                              icon={<EditOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                               onClick={() => {
                                 setEditingCaptionId(att.id);
                                 setCaptionInput(att.caption || '');
@@ -268,7 +268,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                               type="text"
                               danger
                               size="small"
-                              icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                              icon={<DeleteOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                             />
                           </Popconfirm>
                         </Space>
@@ -324,7 +324,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Typography.Text
                         ellipsis
-                        style={{ fontSize: 11, color: staged.caption ? 'inherit' : '#8c8c8c', maxWidth: 80 }}
+                        style={{ fontSize: 'var(--font-size-xs)', color: staged.caption ? 'inherit' : 'var(--fg-secondary)', maxWidth: 80 }}
                         title={staged.caption || staged.file.name}
                       >
                         {staged.caption || staged.file.name}
@@ -335,7 +335,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                             <Button
                               type="text"
                               size="small"
-                              icon={<EditOutlined style={{ fontSize: 12 }} />}
+                              icon={<EditOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                               onClick={() => {
                                 setEditingCaptionId(key);
                                 setCaptionInput(staged.caption || '');
@@ -346,7 +346,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                             type="text"
                             danger
                             size="small"
-                            icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                            icon={<DeleteOutlined style={{ fontSize: 'var(--font-size-small)' }} />}
                             onClick={() => handleDeleteStaged(idx)}
                           />
                         </Space>

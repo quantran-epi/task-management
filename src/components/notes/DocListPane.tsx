@@ -202,7 +202,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               justifyContent: 'space-between',
               padding: '6px 10px',
               backgroundColor: '#fef3c7',
-              borderRadius: 6,
+              borderRadius: 'var(--radius-control)',
               border: '1px solid #fde68a',
             }}
           >
@@ -211,7 +211,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               <div
                 style={{
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   color: '#92400e',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -260,7 +260,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 icon={<PlusOutlined />}
                 onClick={onCreateDoc}
                 style={{
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-xs)',
                   height: 24,
                   padding: '0 8px',
                   backgroundColor: '#d97706',
@@ -277,7 +277,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 
         <Input
           placeholder="Tìm trong danh sách..."
-          prefix={<SearchOutlined style={{ color: '#8c8c8c' }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--fg-secondary)' }} />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           allowClear
@@ -299,7 +299,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
           />
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text type="secondary" style={{ fontSize: 11 }}>
+          <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
             {filteredAndSortedDocs.length} tài liệu
           </Text>
           <Select
@@ -344,7 +344,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={onCreateDoc}
-                style={{ marginTop: 12, backgroundColor: '#4f46e5' }}
+                style={{ marginTop: 12, backgroundColor: 'var(--accent)' }}
               >
                 {currentFolder
                   ? `Tạo tài liệu trong "${currentFolder.title}"`
@@ -374,11 +374,11 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 }}
                 style={{
                   padding: '10px 12px',
-                  borderRadius: 6,
+                  borderRadius: 'var(--radius-control)',
                   cursor: 'pointer',
-                  backgroundColor: isSelected ? '#f0f2ff' : '#ffffff',
+                  backgroundColor: isSelected ? '#f0f2ff' : 'var(--bg-island)',
                   border: isSelected ? '1px solid #c7d2fe' : '1px solid #f0f0f0',
-                  borderLeft: isSelected ? '3px solid #4f46e5' : '3px solid transparent',
+                  borderLeft: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
                   boxShadow: isSelected ? '0 1px 3px rgba(79, 70, 229, 0.1)' : 'none',
                   transition: 'all 0.15s ease',
                   position: 'relative',
@@ -390,13 +390,13 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     {isQuickNote ? (
                       <FormOutlined style={{ fontSize: 13, color: '#faad14' }} />
                     ) : (
-                      <FileTextOutlined style={{ fontSize: 13, color: '#4f46e5' }} />
+                      <FileTextOutlined style={{ fontSize: 13, color: 'var(--accent)' }} />
                     )}
                     <span
                       style={{
                         fontWeight: 600,
                         fontSize: 13,
-                        color: isSelected ? '#4f46e5' : '#262626',
+                        color: isSelected ? 'var(--accent)' : '#262626',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -407,13 +407,13 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {doc.isPinned && <PushpinFilled style={{ color: '#4f46e5', fontSize: 11 }} />}
+                    {doc.isPinned && <PushpinFilled style={{ color: 'var(--accent)', fontSize: 'var(--font-size-xs)' }} />}
                     {doc.deletedAt && onRestoreDoc && (
                       <Tooltip title="Khôi phục tài liệu">
                         <Button
                           type="text"
                           size="small"
-                          icon={<UndoOutlined style={{ color: '#16a34a', fontSize: 12 }} />}
+                          icon={<UndoOutlined style={{ color: '#16a34a', fontSize: 'var(--font-size-small)' }} />}
                           onClick={(e) => {
                             e.stopPropagation();
                             onRestoreDoc(doc);
@@ -431,8 +431,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                         style={{
                           cursor: 'pointer',
                           padding: '0 4px',
-                          color: '#8c8c8c',
-                          fontSize: 12,
+                          color: 'var(--fg-secondary)',
+                          fontSize: 'var(--font-size-small)',
                         }}
                       >
                         <MoreOutlined />
@@ -452,8 +452,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                 {/* Snippet (2 lines max) */}
                 <div
                   style={{
-                    fontSize: 12,
-                    color: '#8c8c8c',
+                    fontSize: 'var(--font-size-small)',
+                    color: 'var(--fg-secondary)',
                     marginTop: 4,
                     lineHeight: '1.4',
                     display: '-webkit-box',
@@ -472,7 +472,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     marginTop: 8,
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     color: '#bfbfbf',
                   }}
                 >

@@ -237,7 +237,7 @@ export function DocsLibraryActions({
             rows={18}
             style={{
               fontFamily: 'monospace',
-              fontSize: 12,
+              fontSize: 'var(--font-size-small)',
               backgroundColor: '#fafafa',
             }}
           />

@@ -572,8 +572,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#ffffff',
-          color: '#8c8c8c',
+          backgroundColor: 'var(--bg-island)',
+          color: 'var(--fg-secondary)',
           padding: 32,
         }}
       >
@@ -605,7 +605,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--bg-island)',
         position: isFullscreen ? 'fixed' : 'relative',
         top: isFullscreen ? 0 : 'auto',
         left: isFullscreen ? 0 : 'auto',
@@ -676,7 +676,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           <Tooltip title="Hỏi AI về tài liệu này (Cmd+J)">
             <Button
               size="small"
-              icon={<RobotOutlined style={{ color: '#4f46e5' }} />}
+              icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
               onClick={handleAskAI}
             >
               Hỏi AI
@@ -858,7 +858,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             <Tag
               color="blue"
               icon={<CheckSquareOutlined />}
-              style={{ cursor: 'pointer', padding: '2px 8px', fontSize: 12 }}
+              style={{ cursor: 'pointer', padding: '2px 8px', fontSize: 'var(--font-size-small)' }}
               onClick={() => {
                 if (onOpenTask) {
                   onOpenTask(parentTask.id);
@@ -875,14 +875,14 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             <Tag
               color="purple"
               icon={<FolderOutlined />}
-              style={{ cursor: onOpenCr ? 'pointer' : 'default', padding: '2px 8px', fontSize: 12 }}
+              style={{ cursor: onOpenCr ? 'pointer' : 'default', padding: '2px 8px', fontSize: 'var(--font-size-small)' }}
               onClick={() => onOpenCr?.(parentCr.id)}
             >
               Thuộc CR: <strong>{parentCr.code || parentCr.name}</strong>
             </Tag>
           )}
           {tags.map((t) => (
-            <Tag key={t} color="purple" style={{ fontSize: 11 }}>
+            <Tag key={t} color="purple" style={{ fontSize: 'var(--font-size-xs)' }}>
               #{t}
             </Tag>
           ))}
@@ -967,9 +967,9 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   left: 16,
                   width: 320,
                   maxHeight: 280,
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'var(--bg-island)',
                   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius-control)',
                   border: '1px solid #e5e7eb',
                   zIndex: 1050,
                   overflowY: 'auto',
@@ -981,7 +981,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                 <div
                   style={{
                     padding: '6px 12px',
-                    fontSize: 11,
+                    fontSize: 'var(--font-size-xs)',
                     fontWeight: 600,
                     color: '#6b7280',
                     borderBottom: '1px solid #f3f4f6',
@@ -1181,8 +1181,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           padding: '4px 16px',
           borderTop: '1px solid #f0f0f0',
           backgroundColor: '#fafafa',
-          fontSize: 11,
-          color: '#8c8c8c',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--fg-secondary)',
           flexShrink: 0,
           minWidth: 0,
         }}

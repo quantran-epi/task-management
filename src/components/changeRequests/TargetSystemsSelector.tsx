@@ -61,7 +61,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
         <span>
           <BranchesOutlined style={{ marginRight: 6, color: iconColor }} />
           <span>{child.name}</span>
-          <span style={{ fontFamily: 'monospace', color: '#595959', marginLeft: 6, fontSize: 11 }}>
+          <span style={{ fontFamily: 'monospace', color: '#595959', marginLeft: 6, fontSize: 'var(--font-size-xs)' }}>
             ({child.code})
           </span>
           <Tag
@@ -90,7 +90,7 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
           <span>
             <FolderOutlined style={{ marginRight: 6, color: '#722ed1' }} />
             <span style={{ fontWeight: 600 }}>{parent.name}</span>
-            <span style={{ color: '#8c8c8c', marginLeft: 6, fontSize: 11 }}>[{parent.code}]</span>
+            <span style={{ color: 'var(--fg-secondary)', marginLeft: 6, fontSize: 'var(--font-size-xs)' }}>[{parent.code}]</span>
           </span>
         ),
         children: children.map((child) => renderSubsystem(child, '#13c2c2')),
@@ -106,8 +106,8 @@ export const TargetSystemsSelector: React.FC<TargetSystemsSelectorProps> = ({
         key: '__orphaned__',
         value: '__orphaned__',
         selectable: false,
-        title: <span style={{ color: '#faad14' }}>Chưa phân nhóm hệ thống</span>,
-        children: orphaned.map((child) => renderSubsystem(child, '#faad14')),
+        title: <span style={{ color: 'var(--warning)' }}>Chưa phân nhóm hệ thống</span>,
+        children: orphaned.map((child) => renderSubsystem(child, 'var(--warning)')),
       });
     }
 

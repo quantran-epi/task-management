@@ -265,30 +265,30 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           <RadioGroup style={{ width: '100%', display: 'flex', gap: 12 }}>
             <RadioButton value="NEW_FEATURE" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
-                <ThunderboltOutlined style={{ color: '#1677ff', marginRight: 6 }} />
+                <ThunderboltOutlined style={{ color: 'var(--accent)', marginRight: 6 }} />
                 Tạo mới tính năng
               </div>
-              <Tag color="#1677ff" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
+              <Tag status="accent" style={{ marginTop: 4, marginRight: 0, fontSize: 'var(--font-size-xs)' }}>
                 New Feature
               </Tag>
             </RadioButton>
 
             <RadioButton value="ENHANCEMENT" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
-                <ToolOutlined style={{ color: '#52c41a', marginRight: 6 }} />
+                <ToolOutlined style={{ color: 'var(--success)', marginRight: 6 }} />
                 Nâng cấp / Cập nhật
               </div>
-              <Tag color="#52c41a" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
+              <Tag status="success" style={{ marginTop: 4, marginRight: 0, fontSize: 'var(--font-size-xs)' }}>
                 Enhancement
               </Tag>
             </RadioButton>
 
             <RadioButton value="BUGFIX" style={{ flex: 1, textAlign: 'center', height: 'auto', padding: '6px 8px' }}>
               <div style={{ fontWeight: 600 }}>
-                <BugOutlined style={{ color: '#faad14', marginRight: 6 }} />
+                <BugOutlined style={{ color: 'var(--warning)', marginRight: 6 }} />
                 Sửa lỗi
               </div>
-              <Tag color="#faad14" style={{ marginTop: 4, marginRight: 0, fontSize: 11 }}>
+              <Tag status="warning" style={{ marginTop: 4, marginRight: 0, fontSize: 'var(--font-size-xs)' }}>
                 Bugfix
               </Tag>
             </RadioButton>
@@ -362,7 +362,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                     >
                       <Input
                         placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
-                        prefix={<LinkOutlined style={{ color: '#8c8c8c' }} />}
+                        prefix={<LinkOutlined style={{ color: 'var(--fg-secondary)' }} />}
                         style={{ flex: 1, minWidth: 0 }}
                       />
                     </FormItem>

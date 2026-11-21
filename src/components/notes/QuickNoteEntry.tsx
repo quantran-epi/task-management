@@ -132,7 +132,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
         flexDirection: 'column',
         gap: 6,
         padding: '10px 12px',
-        borderRadius: 8,
+        borderRadius: 'var(--radius-control)',
         border: '1px solid #d9d9d9',
         backgroundColor: '#fafafa',
       }}
@@ -168,7 +168,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
           paddingTop: 6,
         }}
       >
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+        <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
           Markdown • Enter để lưu • Shift+Enter xuống dòng • Dán ảnh (Ctrl+V)
         </Typography.Text>
         <Space size={6}>

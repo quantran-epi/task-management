@@ -37,7 +37,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <LinkOutlined style={{ color: '#4f46e5' }} />
+        <LinkOutlined style={{ color: 'var(--accent)' }} />
         <Text strong style={{ fontSize: 13 }}>
           Được liên kết từ ({totalCount})
         </Text>
@@ -46,7 +46,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {tasks.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Tác vụ:
             </Text>
             {tasks.map((task) => (
@@ -65,7 +65,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
 
         {changeRequests.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Change Request:
             </Text>
             {changeRequests.map((cr) => (
@@ -84,7 +84,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
 
         {referencingNotes.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-            <Text type="secondary" style={{ fontSize: 12, marginRight: 4 }}>
+            <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginRight: 4 }}>
               Tài liệu khác:
             </Text>
             {referencingNotes.map((note) => (

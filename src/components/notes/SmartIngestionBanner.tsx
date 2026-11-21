@@ -47,11 +47,11 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
       className="smart-ingestion-banner"
       type="info"
       showIcon
-      icon={<BulbOutlined style={{ color: '#4f46e5' }} />}
+      icon={<BulbOutlined style={{ color: 'var(--accent)' }} />}
       message={<Text strong>💡 Gợi ý liên kết liên quan</Text>}
       description={
         <div style={{ marginTop: 8 }}>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 'var(--font-size-small)' }}>
             Phát hiện các tác vụ, CR và hệ thống liên quan từ nội dung văn bản. Chọn mục cần liên kết hai chiều:
           </Text>
           <Space orientation="vertical" size={6} style={{ width: '100%', marginBottom: 12 }}>
@@ -65,7 +65,7 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
                   >
                     <span style={{ marginRight: 4 }}>{renderIcon(entity.type)}</span>
                     <Text strong={isChecked}>{entity.title}</Text>
-                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', marginLeft: 8 }}>
                       ({entity.matchReason})
                     </Text>
                   </Checkbox>
@@ -81,7 +81,7 @@ export const SmartIngestionBanner: React.FC<SmartIngestionBannerProps> = ({
               onClick={handleApply}
               loading={loading}
               disabled={selectedIds.length === 0}
-              style={{ backgroundColor: '#4f46e5' }}
+              style={{ backgroundColor: 'var(--accent)' }}
             >
               Áp dụng tất cả
             </Button>

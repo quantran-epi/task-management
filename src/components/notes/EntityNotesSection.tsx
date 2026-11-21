@@ -142,7 +142,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                 data-ai-context-type="note"
                 data-ai-context-id={note.id}
                 style={{
-                  borderLeft: note.isPinned ? '3px solid #1677ff' : undefined,
+                  borderLeft: note.isPinned ? '3px solid var(--accent)' : undefined,
                   background: note.isPinned ? '#f0f7ff' : '#fff',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
@@ -182,7 +182,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                       <Button
                         type="text"
                         size="small"
-                        icon={note.isPinned ? <PushpinFilled style={{ color: '#1677ff' }} /> : <PushpinOutlined />}
+                        icon={note.isPinned ? <PushpinFilled style={{ color: 'var(--accent)' }} /> : <PushpinOutlined />}
                         onClick={(event) => {
                           event.stopPropagation();
                           void handleTogglePin(note);
@@ -237,7 +237,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                 />
 
                 <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                     Cập nhật: {new Date(note.updatedAt).toLocaleString('vi-VN')}
                   </Typography.Text>
                 </div>

@@ -354,10 +354,10 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         data-testid="local-document-absent-notice"
         style={{
           padding: '8px 12px',
-          borderRadius: 6,
+          borderRadius: 'var(--radius-control)',
           background: '#fafafa',
           color: '#595959',
-          fontSize: 12,
+          fontSize: 'var(--font-size-small)',
           fontWeight: 600,
         }}
       >
@@ -365,12 +365,12 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
       </div>
       <div
         data-testid="cited-excerpt-panel"
-        style={{ borderRadius: 8, border: '1px solid #d9d9d9', backgroundColor: '#fafafa', overflow: 'hidden' }}
+        style={{ borderRadius: 'var(--radius-control)', border: '1px solid #d9d9d9', backgroundColor: '#fafafa', overflow: 'hidden' }}
       >
-        <div style={{ padding: '6px 12px', background: '#f0f0f0', borderBottom: '1px solid #d9d9d9', fontSize: 12, fontWeight: 600 }}>
+        <div style={{ padding: '6px 12px', background: '#f0f0f0', borderBottom: '1px solid #d9d9d9', fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
           Trích dẫn từ bản chụp
           {citedSnapshotId && (
-            <Text type="secondary" style={{ marginLeft: 8, fontSize: 11, fontFamily: 'monospace' }}>
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: 'var(--font-size-xs)', fontFamily: 'monospace' }}>
               {citedSnapshotId.slice(0, 7)}…
             </Text>
           )}
@@ -393,7 +393,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
       title={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 24, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <FileTextOutlined style={{ color: '#1677ff', flexShrink: 0 }} />
+            <FileTextOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
             <span
               style={{
                 overflow: 'hidden',
@@ -459,7 +459,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
             <div
               data-testid="cited-excerpt-panel"
               style={{
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: '1px solid #d9d9d9',
                 backgroundColor: '#fafafa',
                 overflow: 'hidden',
@@ -473,7 +473,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   padding: '6px 12px',
                   backgroundColor: '#f0f0f0',
                   borderBottom: '1px solid #d9d9d9',
-                  fontSize: 12,
+                  fontSize: 'var(--font-size-small)',
                   fontWeight: 600,
                 }}
               >
@@ -482,7 +482,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 </span>
                 {effectiveAuthority === 'server' && citedSnapshotId && (
                   <Tooltip title={citedSnapshotId}>
-                    <Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'monospace' }}>
                       {citedSnapshotId.slice(0, 7)}…
                     </Text>
                   </Tooltip>
@@ -514,7 +514,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   <GroundedBanner variant="snapshot-mismatch" />
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       color: '#cf1322',
                       fontWeight: 600,
                       marginTop: 4,
@@ -556,7 +556,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 </Tag>
               ))}
               {doc.updatedAt && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
+                <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                   Cập nhật: {new Date(doc.updatedAt).toLocaleDateString()}
                 </Text>
               )}
@@ -582,7 +582,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
               style={{
                 outline: 'none',
                 padding: '6px 12px',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 backgroundColor: isHighlighted ? 'rgba(250, 173, 20, 0.15)' : 'rgba(0, 0, 0, 0.02)',
                 borderLeft: '4px solid #faad14',
                 transition: isReducedMotion ? 'none' : 'background-color 0.4s ease',
@@ -591,7 +591,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 justifyContent: 'space-between',
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: 600, color: '#d48806' }}>
+              <Text style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: '#d48806' }}>
                 📍 Vị trí trích dẫn: Dòng {targetRange.start}–{targetRange.end}
               </Text>
             </div>
@@ -619,9 +619,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
               data-testid="quick-preview-lines-container"
               className="quick-preview-lines-container"
               style={{
-                borderRadius: 6,
+                borderRadius: 'var(--radius-control)',
                 border: '1px solid #d9d9d9',
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--bg-island)',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                 fontSize: 13,
                 lineHeight: '22px',
@@ -663,7 +663,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       className="gsd-line-number"
                       style={{
                         width: 44,
-                        color: isLineHighlighted ? '#d48806' : '#8c8c8c',
+                        color: isLineHighlighted ? '#d48806' : 'var(--fg-secondary)',
                         fontWeight: isLineHighlighted ? 700 : 400,
                         textAlign: 'right',
                         paddingRight: 10,
@@ -765,15 +765,15 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
                       borderRadius: 4,
                       cursor: 'pointer',
                     }}
                   >
-                    <CheckSquareOutlined style={{ color: '#1677ff' }} />
-                    <span style={{ fontWeight: 500, color: '#1677ff' }}>{task.name}</span>
+                    <CheckSquareOutlined style={{ color: 'var(--accent)' }} />
+                    <span style={{ fontWeight: 500, color: 'var(--accent)' }}>{task.name}</span>
                     {task.jiraKey && (
                       <Tag color="blue" style={{ fontSize: 10, margin: 0, padding: '0 4px' }}>
                         {task.jiraKey}
@@ -789,7 +789,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
                       borderRadius: 4,
@@ -807,7 +807,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: 6,
-                      fontSize: 12,
+                      fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
                       backgroundColor: '#f5f5f5',
                       borderRadius: 4,

@@ -42,7 +42,7 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
 
   if (headings.length === 0) {
     return (
-      <div style={{ padding: 12, color: '#8c8c8c', fontSize: 12, textAlign: 'center' }}>
+      <div style={{ padding: 12, color: 'var(--fg-secondary)', fontSize: 'var(--font-size-small)', textAlign: 'center' }}>
         Chưa có mục lục (thêm các thẻ #, ##, ###)
       </div>
     );
@@ -67,8 +67,8 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
   return (
     <div className="doc-outline-toc" style={{ padding: '8px 4px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, paddingLeft: 4 }}>
-        <OrderedListOutlined style={{ fontSize: 12, color: '#8c8c8c' }} />
-        <Text strong style={{ fontSize: 12, color: '#595959' }}>
+        <OrderedListOutlined style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }} />
+        <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#595959' }}>
           Mục lục
         </Text>
       </div>
@@ -104,7 +104,7 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.backgroundColor = '#f5f5f5';
-                e.currentTarget.style.color = '#4f46e5';
+                e.currentTarget.style.color = 'var(--accent)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';

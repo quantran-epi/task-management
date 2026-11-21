@@ -80,7 +80,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
         minWidth: 0,
         height: '100%',
         overflowY: 'auto',
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--bg-island)',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -95,7 +95,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
       >
         {/* Breadcrumbs */}
         <Breadcrumb
-          style={{ marginBottom: 8, fontSize: 12 }}
+          style={{ marginBottom: 8, fontSize: 'var(--font-size-small)' }}
           items={[
             {
               title: (
@@ -134,13 +134,13 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
             {currentFolder ? (
               <FolderOpenFilled style={{ fontSize: 28, color: '#d97706' }} />
             ) : (
-              <FolderFilled style={{ fontSize: 28, color: '#4f46e5' }} />
+              <FolderFilled style={{ fontSize: 28, color: 'var(--accent)' }} />
             )}
             <div>
               <Title level={4} style={{ margin: 0, color: '#1f2937' }}>
                 {getFilterTitle()}
               </Title>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 {subfolders.length} thư mục con · {documents.length} tài liệu
               </Text>
             </div>
@@ -162,7 +162,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
               size="middle"
               icon={<PlusOutlined />}
               onClick={onCreateDoc}
-              style={{ backgroundColor: '#4f46e5' }}
+              style={{ backgroundColor: 'var(--accent)' }}
             >
               Tạo tài liệu mới
             </Button>
@@ -188,7 +188,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                     size="small"
                     onClick={() => onNavigateFolder(folder.id)}
                     style={{
-                      borderRadius: 8,
+                      borderRadius: 'var(--radius-control)',
                       border: '1px solid #e5e7eb',
                       backgroundColor: '#fefce8',
                     }}
@@ -200,7 +200,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         <Text strong style={{ fontSize: 13, color: '#1f2937', display: 'block' }} ellipsis={{ tooltip: folder.title }}>
                           {folder.title || 'Thư mục không tên'}
                         </Text>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
+                        <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                           {docCount} tài liệu
                         </Text>
                       </div>
@@ -230,7 +230,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                     : 'Thư mục này đang trống'
                 }
               >
-                <Button type="primary" icon={<PlusOutlined />} onClick={onCreateDoc} style={{ backgroundColor: '#4f46e5' }}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={onCreateDoc} style={{ backgroundColor: 'var(--accent)' }}>
                   Tạo tài liệu đầu tiên
                 </Button>
               </Empty>
@@ -258,7 +258,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         size="small"
                         onClick={() => onSelectDoc(doc)}
                         style={{
-                          borderRadius: 8,
+                          borderRadius: 'var(--radius-control)',
                           border: '1px solid #e5e7eb',
                           height: '100%',
                           display: 'flex',
@@ -275,7 +275,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                           {isQuick ? (
                             <FormOutlined style={{ color: '#faad14', fontSize: 15 }} />
                           ) : (
-                            <FileTextOutlined style={{ color: '#4f46e5', fontSize: 15 }} />
+                            <FileTextOutlined style={{ color: 'var(--accent)', fontSize: 15 }} />
                           )}
                           <Text strong style={{ fontSize: 14, color: '#111827', flex: 1 }} ellipsis={{ tooltip: doc.title }}>
                             {doc.title || 'Không có tiêu đề'}
@@ -285,8 +285,8 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
 
                         {isQuick && doc.entityType && (
                           <div style={{ marginBottom: 6 }}>
-                            <Tag color="purple" style={{ margin: 0, fontSize: 11, maxWidth: '100%' }}>
-                              <Text ellipsis={{ tooltip: `${doc.entityType}: ${entityLabel}` }} style={{ color: 'inherit', fontSize: 11 }}>
+                            <Tag color="purple" style={{ margin: 0, fontSize: 'var(--font-size-xs)', maxWidth: '100%' }}>
+                              <Text ellipsis={{ tooltip: `${doc.entityType}: ${entityLabel}` }} style={{ color: 'inherit', fontSize: 'var(--font-size-xs)' }}>
                                 {doc.entityType}: {entityLabel}
                               </Text>
                             </Tag>
@@ -296,7 +296,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         <Paragraph
                           type="secondary"
                           ellipsis={{ rows: 2 }}
-                          style={{ fontSize: 12, marginBottom: 8, flex: 1, color: '#6b7280' }}
+                          style={{ fontSize: 'var(--font-size-small)', marginBottom: 8, flex: 1, color: '#6b7280' }}
                         >
                           {snippet}
                         </Paragraph>
@@ -309,7 +309,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                               </Tag>
                             ))}
                           </div>
-                          <Text type="secondary" style={{ fontSize: 11 }}>
+                          <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
                             <CalendarOutlined style={{ marginRight: 4 }} />
                             {updatedTime}
                           </Text>

@@ -352,7 +352,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FileTextOutlined style={{ color: '#4f46e5' }} />
+            <FileTextOutlined style={{ color: 'var(--accent)' }} />
             <span>Xem trước & Nhập tài liệu từ Zip</span>
             {zipFile && (
               <Tag color="blue" style={{ marginLeft: 6 }}>
@@ -372,7 +372,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
           <Button
             key="submit"
             type="primary"
-            style={{ backgroundColor: '#4f46e5' }}
+            style={{ backgroundColor: 'var(--accent)' }}
             loading={importing}
             disabled={selectedCount === 0 || loading}
             icon={<CheckCircleOutlined />}
@@ -405,7 +405,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
               style={{
                 padding: '12px 14px',
                 backgroundColor: '#f8fafc',
-                borderRadius: 8,
+                borderRadius: 'var(--radius-control)',
                 border: '1px solid #e2e8f0',
               }}
             >
@@ -424,7 +424,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
               {targetMode === 'new' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 420 }}>
                   <Input
-                    prefix={<FolderAddOutlined style={{ color: '#4f46e5' }} />}
+                    prefix={<FolderAddOutlined style={{ color: 'var(--accent)' }} />}
                     placeholder="Tên thư mục mới..."
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
@@ -509,7 +509,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
                   key: 'relativePath',
                   width: 240,
                   render: (path: string) => (
-                    <Text type="secondary" style={{ fontSize: 12 }} ellipsis={{ tooltip: path }}>
+                    <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }} ellipsis={{ tooltip: path }}>
                       {path}
                     </Text>
                   ),
@@ -519,7 +519,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
                   key: 'size',
                   width: 110,
                   render: (_: unknown, record: ExtractedZipDoc) => (
-                    <span style={{ fontSize: 12, color: '#64748b' }}>
+                    <span style={{ fontSize: 'var(--font-size-small)', color: '#64748b' }}>
                       {record.wordCount} từ ({Math.round(record.sizeBytes / 1024 * 10) / 10} KB)
                     </span>
                   ),
@@ -549,7 +549,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
       <Drawer
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FileTextOutlined style={{ color: '#4f46e5' }} />
+            <FileTextOutlined style={{ color: 'var(--accent)' }} />
             <span>{previewDoc?.detectedTitle || previewDoc?.fileName}</span>
           </div>
         }
@@ -560,7 +560,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
         {previewDoc && (
           <div>
             <div style={{ marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Đường dẫn: {previewDoc.relativePath} • {previewDoc.wordCount} từ
               </Text>
             </div>
