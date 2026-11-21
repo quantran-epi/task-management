@@ -1298,4 +1298,97 @@ Mỗi dòng dưới tương ứng một nhóm `<!-- SURFACE: ... -->` trong §3.
 
 ## 5. Đối chiếu cuối và bàn giao Phase 52
 
-*(Do 51-03 viết tiếp.)*
+### 5.1 Tiêu chí thành công ↔ vị trí trong artifact
+
+Năm tiêu chí của `.planning/ROADMAP.md:45-49` (Phase 51) đối chiếu trực tiếp với marker trong artifact này. Mọi lệnh chạy từ repo root `/Users/tranducquan/Working/Personal/task-management`.
+
+| Tiêu chí ROADMAP | Vị trí trong artifact / marker | Lệnh kiểm tra |
+|---|---|---|
+| #1 — danh mục mọi wrapper và grep import khớp, không import ngoài tồn kho | §2 `<!-- WRAPPER-ROW -->` (56 dòng), §2.1 `<!-- EXPORT:` (257 tên), §3.1 `SURFACE-DETAIL` 139 `path:line` + fixture 365 entry | `grep -c '^<!-- WRAPPER-ROW -->' .planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md` (=56); `find src/components/ui -maxdepth 1 -name '*.tsx' \| wc -l` (=56); `grep -Fq "<path:line>" tests/fixtures/ant-design-surface-inventory.txt` cho từng entry |
+| #2 — mỗi control có file, props, state, event, keyboard/focus, validation, accessible name | §2 mỗi dòng `WRAPPER-ROW` có đủ 7 cột sau marker | `grep -c '^<!-- WRAPPER-ROW -->' ...` (=56); đọc 56 dòng §2 — cột `props/extends`, `state`, `event`, `keyboard/focus`, `validation`, `accessible name`, `behavior phải giữ` |
+| #3 — mọi UI surface 12 nhóm được quét | §3.2 `<!-- SURFACE: <group> -->` (441 dòng), đủ 12 nhóm INV-02 | `grep -c '^<!-- SURFACE:' ...` (=441); `grep -o '^<!-- SURFACE: [a-z]*' ... \| sort -u \| wc -l` (=12) |
+| #4 — nhóm implementation, complexity, wrapper cần thay, analog hoặc "cần thiết kế mới", behavior phải giữ | §4 bảng 56 dòng `<!-- CLASSIFY:` (mỗi dòng 7 cột), §4.1 12 dòng SURFACE adoption, §4.2 3 nhóm ↔ phase | `grep -c '^<!-- CLASSIFY:' ...` (=56); lệnh `npx tsx` đối chiếu CLASSIFY ↔ WRAPPER-ROW ở cuối §5.2 |
+| #5 — số wrapper artifact khớp số wrapper thực tế, không sót/không trùng | §1 bảng đối chiếu: **257 tên export làm con số guard** (được `scanWrappers()` trả về) và **56 file** làm cột "wrapper cần thay" — trùng bảng đối chiếu §1 và 56 dòng §2 | `npx tsx -e "import{scanWrappers}from './tests/helpers/antdInventory';console.log(scanWrappers('src/components/ui').size)"` (=257); `find src/components/ui -maxdepth 1 -name '*.tsx' \| wc -l` (=56); `npx tsx .../findMissingWrappers` → `[]` |
+
+> #5 là hai phép đếm khác nhau, không được gộp: 257 tên export (icon, static subcomponent, hook, helper) là guard; 56 file `.tsx` là cột wrapper cần thay. Cả hai cùng khớp §1. `51-PATTERNS.md` từng gộp hai số này — đã bị §1 bác bỏ bằng lệnh live.
+
+### 5.2 Lệnh tái tạo tổng hợp
+
+Gộp lệnh ở `51-PATTERNS.md` §5 với lệnh grep marker. Copy/paste nguyên khối từ repo root (không chạy full Vitest):
+
+```bash
+cd /Users/tranducquan/Working/Personal/task-management
+
+# 56 file wrapper + 4 hạ tầng + 10 test
+find src/components/ui -maxdepth 1 -name '*.tsx' | wc -l
+find src/components/ui -maxdepth 1 -type f ! -name '*.tsx' | sort
+find src/components/ui/__tests__ -type f | sort
+
+# 257 tên export guard, consumed antd và missing wrapper
+npx tsx -e "import{scanWrappers,scanConsumedAntd,findMissingWrappers}from './tests/helpers/antdInventory';const w=scanWrappers('src/components/ui');const c=scanConsumedAntd('src');console.log('wrappers',w.size);console.log(JSON.stringify(c));console.log('missing',findMissingWrappers(c,w));"
+
+# import antd / @ant-design/icons (runtime, type-only, re-export, deep)
+grep -rnE "from ['\"](antd|@ant-design/icons)" src --include='*.ts' --include='*.tsx' | sort
+grep -rnE "^import (type )?\{" src --include='*.ts' --include='*.tsx' \
+  | grep -E "(antd|@ant-design/icons)" | grep -vE "^[^:]+:[0-9]+:import type \{" | sort
+grep -rn "import type .* from 'antd'" src --include='*.ts' --include='*.tsx'
+grep -rnE "export type .* from ['\"]antd" --include='*.ts' --include='*.tsx' src
+grep -rnE "(import|export) type .* from ['\"]antd/es/" --include='*.ts' --include='*.tsx' src
+grep -rn "@ant-design/icons/" src --include='*.tsx'
+grep -rln "@ant-design/plots" src --include='*.tsx' | sort
+grep -rnE "(Modal\.(confirm|info|success|warning|error)|message\.(success|error|warning|warn|info|loading|open|destroy)\(|notification\.(success|error|warning|warn|info|loading|open|destroy)\()" src --include='*.ts' --include='*.tsx' | grep -v '/ui/'
+
+# surface: route, view, workbench, settings
+cat src/hooks/useHashRoute.ts
+grep -nE "case '" src/workbench/EditorArea.tsx
+find src/views -maxdepth 1 -name '*.tsx' | sort
+find src/workbench -maxdepth 2 -name '*.tsx' | sort
+find src/components/settings -maxdepth 1 -name '*.tsx' | sort
+
+# surface: overlay / menu / state
+grep -rlnE '<(Modal|Drawer|Popover)' src --include='*.tsx' | grep -v __tests__ | sort
+grep -rln '<Popconfirm' src --include='*.tsx' | grep -v __tests__ | sort
+grep -rln '<Tooltip' src --include='*.tsx' | grep -v __tests__ | sort
+grep -rln 'onContextMenu' src --include='*.tsx' | grep -v __tests__ | sort
+find src -type f \( -iname '*empty*' -o -iname '*loading*' -o -iname '*error*' -o -iname '*skeleton*' -o -iname '*banner*' \) | sort
+
+# marker artifact + fixture sort
+grep -c '^<!-- WRAPPER-ROW -->' .planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md   # 56
+grep -c '^<!-- SURFACE:' .planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md         # 441
+grep -c '^<!-- EXPORT:' .planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md          # 257
+grep -c '^<!-- CLASSIFY:' .planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md        # 56
+awk 'NF' tests/fixtures/ant-design-surface-inventory.txt | LC_ALL=C sort -c
+
+# CLASSIFY ↔ WRAPPER-ROW phải khớp từng tên file
+npx tsx -e "import{readFileSync}from 'node:fs';const d=readFileSync('.planning/phases/51-control-inventory-surface-audit/51-CONTROL-INVENTORY.md','utf8');const rows=[...d.matchAll(/^<!-- WRAPPER-ROW -->[^\\n]*src\\/components\\/ui\\/([a-z0-9-]+)\\.tsx/gm)].map(m=>m[1]);const cls=[...d.matchAll(/^<!-- CLASSIFY: ([a-z0-9-]+) -->/gm)].map(m=>m[1]).sort();const want=[...new Set(rows)].sort();if(cls.length!==56||JSON.stringify(cls)!==JSON.stringify(want))throw Error('classify drift');console.log('classify matches',cls.length)"
+
+# gate scoped — KHÔNG chạy full Vitest
+npx vitest run src/components/ui/__tests__/antdInventory.test.ts src/components/ui/__tests__/coverage.test.ts src/components/ui/__tests__/staticApiGuard.test.ts --bail=1
+npx tsc --noEmit
+git status --short src
+```
+
+Kết quả chạy lúc đóng plan 2026-11-22 (repo root, Node v24.16.0):
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `npx vitest run ... --bail=1` (3 file) | **3 file / 12 test passed**, exit 0 |
+| `npx tsc --noEmit` | exit 0, không lỗi |
+| `git status --short src` | trống — Phase 51 không đổi source |
+| `awk 'NF' fixture \| LC_ALL=C sort -c` | exit 0 |
+| Marker artifact | `WRAPPER-ROW` 56, `EXPORT` 257, `SURFACE` 441, `CLASSIFY` 56; `classify matches 56` |
+| `scanWrappers` / `findMissingWrappers` | `wrappers 257` / `missing []` |
+
+### 5.3 Bàn giao Phase 52
+
+- **Research**: bị bỏ theo quyết định milestone (ROADMAP ghi `Research flag: skipped`). Không chạy research phase; artifact này là input.
+- **Baseline đã duyệt**: `/private/tmp/claude-503/-Users-tranducquan-Working-Personal-task-management/32c7be2b-546e-433a-aa53-76345c15954c/scratchpad/oi-prototype/PROOF.md` — **đường dẫn tuyệt đối, nằm ngoài repo**. `.planning/ROADMAP.md:52` ghi tắt `scratchpad/oi-prototype/PROOF.md`; phải dùng đường dẫn tuyệt đối ở trên. PATTERNS §6 ghi "không tìm thấy file" là kết quả quét bên trong repo; file tồn tại ở scratchpad và là proof đã được sếp duyệt. PROOF chỉ chứng minh prototype ngoài repo (Button/Input/Checkbox/Radio/Toggle/Select+Listbox/Tabs/Chip/Dialog, light+dark, focus ring, portal 4px, row 24px, dialog radius 10px); Phase 51 **không** copy thiết kế từ PROOF.
+- **Phase 52 sản xuất** `52-UI-SPEC.md` và khóa API/metric cho MAP-01 (có analog) lẫn MAP-02 (thiết kế mới). MAP-03 khẳng định props/API/event/controlled-uncontrolled/validation/keyboard-focus/a11y giữ nguyên theo §2.
+- **Phase 51 không đổi** props, API, event, keyboard, focus, accessible name của bất kỳ control nào — mọi cột `behavior phải giữ nguyên` ở §4/§4.1 là tiêu chí chặn cho Phase 53/54/55, không phải đề xuất thay đổi.
+- **Đầu vào MAP-02** — danh sách 34 nhãn `cần thiết kế mới` đã gán ở §4 (mỗi dòng là một wrapper cần thiết kế control mới; Phase 52 quyết shape cụ thể):
+
+  `alert`, `app`, `avatar`, `breadcrumb`, `card`, `collapse`, `config-provider`, `date-picker`, `descriptions`, `divider`, `empty`, `grid`, `icon`, `image`, `layout`, `message`, `notification`, `pagination`, `popover`, `progress`, `result`, `skeleton`, `slider`, `space`, `spin`, `splitter`, `statistic`, `status-dot`, `table`, `time-picker`, `tooltip`, `tree`, `typography`, `upload` — cộng 4 deep-import icon trong `RemoteGitExplorer.tsx` (`FolderOutlined`, `FolderOpenOutlined`, `FileTextOutlined`, `ReloadOutlined`, `SearchOutlined`, `BranchesOutlined`, `CloudServerOutlined`, `FolderViewOutlined`) đã nằm trong dòng `icon`, không đếm riêng.
+
+  22 wrapper còn lại có analog từ PROOF: `button` (Button), `badge`/`tag` (Chip), `checkbox` (Checkbox), `input`/`input-number`/`mentions`/`textarea` (Input), `radio` (Radio), `select`/`auto-complete`/`tree-select` (Select + Listbox), `segmented`/`tabs` (Tabs), `switch` (Toggle), `drawer`/`modal`/`popconfirm` (Dialog), `form`/`list` (Input/Checkbox/Listbox). Phase 52 rà soát lại ánh xạ này trước khi khóa MAP-01. 34 + 22 = 56.
+
+- **Liên kết Phase 56** (CLEAN-01..03): 31 dòng import type, 13 dòng export type + 22 dòng deep type, 8 icon deep-import và 4 file `@ant-design/plots` chỉ được gỡ khi xóa dependency; không thuộc runtime Phase 53/54 (xem §3.1 và §4.2).
