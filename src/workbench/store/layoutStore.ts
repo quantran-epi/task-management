@@ -24,7 +24,11 @@ export type EditorViewType =
   // survive merge/partialize without a LAYOUT_STORAGE_KEY bump.
   | 'doc_set'
   // Dedicated Docs library tab: left set list + right detail, one tab for all sets.
-  | 'doc_set_library';
+  | 'doc_set_library'
+  // Utility tools opened from the Tool Explorer right stripe.
+  | 'json_formatter'
+  | 'xml_formatter'
+  | 'text_compare';
 
 export interface EditorTab {
   id: string;

@@ -3,12 +3,14 @@ import { Tooltip } from 'antd';
 import {
   MinusOutlined,
   BellOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
 import { useAIChat } from '../../context/AIChatContext';
 import { AIChatDrawer } from '../../components/ai/AIChatDrawer';
 import { NotificationPanel } from './NotificationPanel';
+import { ToolExplorerPanel } from './ToolExplorerPanel';
 import type { TaskPlannerDatabase } from '../../db';
 
 export interface RightToolWindowProps {
@@ -35,6 +37,11 @@ export function RightToolWindow({
 
   const getHeaderMeta = () => {
     switch (rightActiveId) {
+      case 'tool_explorer':
+        return {
+          title: 'Tool Explorer',
+          icon: <ToolOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />,
+        };
       case 'notifications':
         return {
           title: 'Notifications & Alerts',
@@ -135,6 +142,8 @@ export function RightToolWindow({
           </div>
         ) : rightActiveId === 'notifications' ? (
           <NotificationPanel db={db} />
+        ) : rightActiveId === 'tool_explorer' ? (
+          <ToolExplorerPanel />
         ) : (
           children || null
         )}

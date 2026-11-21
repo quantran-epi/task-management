@@ -34,6 +34,7 @@ import {
   JetBrainsOfficeIcon,
   JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
+import { ToolOutlined } from '@ant-design/icons';
 import '../styles/workbench-tokens.css';
 
   export interface WorkbenchLayoutProps {
@@ -104,6 +105,7 @@ export function WorkbenchLayout({
 
   const rightItems = useMemo<ToolWindowItem[]>(() => {
     return [
+      { id: 'tool_explorer', name: 'Tool Explorer', icon: <ToolOutlined style={{ fontSize: 16 }} />, shortcut: 'Alt+9' },
       { id: 'ai_chat', name: 'AI Assistant', icon: <JetBrainsAIIcon size={16} />, shortcut: 'Alt+3' },
       {
         id: 'notifications',
@@ -166,7 +168,7 @@ export function WorkbenchLayout({
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
 
-  const { isOpen: isAIChatOpen } = useAIChat();
+  const { isOpen: isAIChatOpen, closeChat } = useAIChat();
 
   // OS notification click (deeplink): open the matching editor tab in the workbench.
   useEffect(() => {
@@ -252,12 +254,18 @@ export function WorkbenchLayout({
     };
   }, [openTab]);
 
-  // Sync AIChatContext.isOpen with layoutStore rightActiveId
+  // Sync AIChatContext.isOpen with layoutStore rightActiveId. Only claim the panel
+  // when nothing else is docked there; otherwise Tool Explorer/Notifications cannot
+  // stay open while the chat context is marked open.
   useEffect(() => {
-    if (isAIChatOpen && rightActiveId !== 'ai_chat') {
+    if (isAIChatOpen && rightActiveId === null) {
       setToolWindowActive('right', 'ai_chat');
+      return;
     }
-  }, [isAIChatOpen, rightActiveId, setToolWindowActive]);
+    if (isAIChatOpen && rightActiveId && rightActiveId !== 'ai_chat') {
+      closeChat();
+    }
+  }, [isAIChatOpen, rightActiveId, closeChat, setToolWindowActive]);
 
   const activeTab = openTabs.find((t) => t.id === activeTabId);
 

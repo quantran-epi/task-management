@@ -60,6 +60,7 @@ import { TeamWorkspaceView } from '../views/TeamWorkspaceView';
 import { RemoteFileViewer } from './editor/RemoteFileViewer';
 import { DocumentSetDetail } from './DocumentSetDetail';
 import { DocSetLibrary } from './DocSetLibrary';
+import { UtilityToolPanel, utilityToolIcon } from './toolwindows/UtilityToolPanel';
 import type { TaskPlannerDatabase } from '../db';
 
 export interface EditorAreaProps {
@@ -101,6 +102,10 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <TeamOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
     case 'settings':
       return <SettingOutlined style={{ fontSize: size - 1, color: 'var(--fg-muted, #6c707e)' }} />;
+    case 'json_formatter':
+    case 'xml_formatter':
+    case 'text_compare':
+      return utilityToolIcon(viewType, size);
     default:
       return <FileTextOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
   }
@@ -195,22 +200,17 @@ function SortableEditorTabItem({
     maxWidth: isPinned ? 240 : 200,
     background: isActive
       ? 'var(--bg-island, #ffffff)'
-      : isPinned
-      ? 'var(--bg-elev, #f7f8fa)'
-      : 'transparent',
-    borderRadius: '6px 6px 0 0',
-    borderTop: isActive
-      ? '2px solid var(--accent, #3871e1)'
-      : isPinned
-      ? '1px solid var(--border-strong, #d1d3d9)'
-      : '1px solid transparent',
-    borderLeft: isActive || isPinned ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
-    borderRight: isActive || isPinned ? '1px solid var(--border-strong, #d1d3d9)' : '1px solid transparent',
-    borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid transparent',
+      : 'var(--bg-elev, #f7f8fa)',
+    borderRadius: 'var(--radius-tab, 6px) var(--radius-tab, 6px) 0 0',
+    borderTop: isActive ? '2px solid var(--accent, #3871e1)' : '1px solid var(--border-strong, #d1d3d9)',
+    borderLeft: '1px solid var(--border-strong, #d1d3d9)',
+    borderRight: '1px solid var(--border-strong, #d1d3d9)',
+    borderBottom: isActive ? '1px solid var(--bg-island, #ffffff)' : '1px solid var(--border-strong, #d1d3d9)',
     marginBottom: isActive ? -1 : 0,
+    boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
     color: isActive ? 'var(--fg-strong, #000000)' : 'var(--fg-secondary, #5f6269)',
     fontWeight: isActive ? 600 : isPinned ? 500 : 400,
-    fontSize: 'var(--font-size-ui, 13.5px)',
+    fontSize: 'var(--font-size-ui, 13px)',
     cursor: 'pointer',
     userSelect: 'none',
     position: 'relative',
@@ -670,6 +670,10 @@ export function EditorArea({ db }: EditorAreaProps) {
             {...dbProp}
           />
         );
+      case 'json_formatter':
+      case 'xml_formatter':
+      case 'text_compare':
+        return <UtilityToolPanel viewType={tab.viewType} />;
       default:
         return <TasksView {...dbProp} />;
     }
@@ -715,11 +719,11 @@ export function EditorArea({ db }: EditorAreaProps) {
               height: '100%',
               flex: 1,
               minWidth: 0,
-              padding: '0 4px 0 8px',
+              padding: '0 8px',
               overflowX: 'auto',
               overflowY: 'hidden',
               scrollbarWidth: 'none',
-              gap: 3,
+              gap: 2,
             }}
           >
             <SortableContext

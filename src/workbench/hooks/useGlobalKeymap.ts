@@ -68,6 +68,11 @@ export function useGlobalKeymap(): void {
           executeAction('view.toggle-ai-staff');
           return;
         }
+        if (e.key === '9') {
+          e.preventDefault();
+          executeAction('view.toggle-tool-explorer');
+          return;
+        }
         if (e.key === 'm' || e.key === 'M') {
           e.preventDefault();
           executeAction('view.open-mermaid-studio');

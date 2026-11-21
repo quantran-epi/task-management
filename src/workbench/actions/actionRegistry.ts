@@ -116,6 +116,15 @@ export function initStandardActions(): void {
       },
     },
     {
+      id: 'view.toggle-tool-explorer',
+      title: 'Tool Windows: Toggle Tool Explorer',
+      category: 'View',
+      shortcut: 'Alt+9',
+      perform: () => {
+        useLayoutStore.getState().toggleToolWindow('right', 'tool_explorer');
+      },
+    },
+    {
       id: 'view.toggle-notifications',
       title: 'Tool Windows: Toggle Notifications',
       category: 'View',

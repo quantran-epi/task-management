@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tool Explorer — Draft</title>
+<style>
+  :root{
+    --bg-frame:#e9eaee;--bg-island:#fff;--bg-elev:#f7f8fa;--bg-hover:#ededed;--bg-input:#fff;
+    --border:#e9eaee;--border-strong:#d1d3d9;--fg-strong:#000;--fg:#1f2937;--fg-secondary:#5f6269;--fg-muted:#6c707e;
+    --accent:#2f62d8;--accent-soft:#e4ecff;--danger:#d1484f;--success:#338555;--warning:#a56906;
+    --island-gap:6px;--radius:8px;--stripe:36px;--mono:"SFMono-Regular",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg-frame);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--fg)}
+  button{font:inherit}
+  .shell{height:100vh;display:flex;flex-direction:column;padding:6px;gap:6px;min-height:640px}
+  .titlebar{height:34px;display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--bg-island);border-radius:var(--radius);box-shadow:0 1px 2px #0000000d}
+  .brand{font-weight:700;letter-spacing:.02em}.brand span{color:var(--accent)}
+  .menu{display:flex;gap:12px;color:var(--fg-secondary);font-size:12px}
+  .titlebar .spacer{flex:1}.avatar{width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:11px;font-weight:700}
+  .body{flex:1;min-height:0;display:flex;gap:6px}
+  .stripe{width:var(--stripe);flex:0 0 var(--stripe);background:var(--bg-island);border-radius:var(--radius);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:5px;box-shadow:0 1px 2px #0000000d}
+  .stripe.right{order:3}
+  .stripe .sep{width:20px;height:1px;background:var(--border-strong);margin:3px 0}
+  .stripe button{width:30px;height:30px;border:0;background:transparent;border-radius:5px;color:var(--fg-muted);cursor:pointer;display:grid;place-items:center;position:relative}
+  .stripe button:hover{background:var(--bg-hover);color:var(--fg-strong)}
+  .stripe button.active{background:var(--bg-island);color:var(--accent);box-shadow:0 0 0 1px var(--border) inset}
+  .stripe button.active::after{content:"";position:absolute;right:0;top:5px;bottom:5px;width:2.5px;background:var(--accent);border-radius:2px}
+  .stripe svg{width:17px;height:17px}
+  .center{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-island);border-radius:var(--radius);overflow:hidden;box-shadow:0 1px 2px #0000000d}
+  .tabbar{height:36px;display:flex;align-items:flex-end;gap:2px;padding:0 8px;background:var(--bg-elev);border-bottom:1px solid var(--border)}
+  .tab{height:31px;display:flex;align-items:center;gap:7px;padding:0 12px;color:var(--fg-secondary);border:1px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;font-size:12.5px;cursor:pointer;white-space:nowrap}
+  .tab:hover{color:var(--fg-strong)}
+  .tab.active{background:var(--bg-island);color:var(--fg-strong);font-weight:600;border-color:var(--border-strong);border-top:2px solid var(--accent);margin-bottom:-1px}
+  .tab .x{margin-left:4px;color:var(--fg-muted);font-size:14px;line-height:1}
+  .tab svg{width:14px;height:14px}
+  .tabbar .hint{margin-left:auto;color:var(--fg-muted);font-size:11px;padding-bottom:9px}
+  .stage{flex:1;min-height:0;overflow:auto;background:var(--bg-island)}
+  .pane{display:none;height:100%;flex-direction:column;min-height:0}
+  .pane.active{display:flex}
+  /* right panel */
+  .rightpanel{width:300px;flex:0 0 300px;background:var(--bg-island);border-radius:var(--radius);display:none;flex-direction:column;overflow:hidden;box-shadow:0 1px 2px #0000000d;order:2}
+  .rightpanel.open{display:flex}
+  .rp-head{height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--bg-elev);font-weight:600}
+  .rp-head .x{margin-left:auto;background:none;border:0;cursor:pointer;color:var(--fg-muted);font-size:16px}
+  .rp-search{margin:10px;height:30px;border:1px solid var(--border-strong);border-radius:6px;padding:0 9px;display:flex;align-items:center;gap:7px;color:var(--fg-muted)}
+  .rp-search input{border:0;outline:0;flex:1;font:inherit;background:transparent;color:var(--fg)}
+  .rp-label{padding:6px 12px;color:var(--fg-muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.09em}
+  .rp-list{padding:0 8px;overflow:auto}
+  .rp-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px;border:0;background:transparent;border-radius:6px;cursor:pointer;text-align:left;color:var(--fg)}
+  .rp-item:hover{background:var(--bg-hover)}
+  .rp-item .ic{width:30px;height:30px;border-radius:7px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:0 0 30px}
+  .rp-item .ic svg{width:16px;height:16px}
+  .rp-item .txt b{display:block;font-size:12.5px}.rp-item .txt small{display:block;color:var(--fg-muted);font-size:11px}
+  .rp-foot{margin-top:auto;border-top:1px solid var(--border);padding:9px 12px;color:var(--fg-muted);font-size:11px}
+  /* tool common */
+  .toolbar{display:flex;align-items:center;gap:8px;padding:9px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .btn{height:28px;padding:0 11px;border:1px solid var(--border-strong);background:var(--bg-island);border-radius:5px;cursor:pointer;color:var(--fg);display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{background:var(--bg-hover)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(.94)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .select{height:28px;border:1px solid var(--border-strong);border-radius:5px;background:var(--bg-input);color:var(--fg);padding:0 8px;font:inherit}
+  .seg{display:flex;border:1px solid var(--border-strong);border-radius:5px;overflow:hidden}
+  .seg button{border:0;background:transparent;padding:0 10px;height:26px;cursor:pointer;color:var(--fg-secondary);font-size:12px}
+  .seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .status{margin-left:auto;font-size:11.5px;color:var(--fg-muted);display:flex;align-items:center;gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+  .dot.err{background:var(--danger)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);flex:1;min-height:0}
+  .grid2 .col{display:flex;flex-direction:column;min-height:0;background:var(--bg-island)}
+  .colhead{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--bg-elev);border-bottom:1px solid var(--border);font-size:11.5px;font-weight:600;color:var(--fg-secondary)}
+  .colhead .badge{margin-left:auto;font-weight:400;color:var(--fg-muted)}
+  textarea,.out{flex:1;min-height:0;border:0;outline:0;resize:none;padding:12px 14px;font:12.5px/1.6 var(--mono);color:var(--fg);background:var(--bg-island);tab-size:2;white-space:pre-wrap;overflow:auto}
+  textarea::placeholder{color:var(--fg-muted);opacity:.7}
+  .out.ok{color:var(--fg)}.out.bad{color:var(--danger)}
+  .tool-foot{height:28px;border-top:1px solid var(--border);padding:0 14px;display:flex;align-items:center;gap:14px;color:var(--fg-muted);font-size:11px;background:var(--bg-elev)}
+  .empty{height:100%;display:grid;place-items:center;color:var(--fg-muted);gap:10px;text-align:center}
+  .empty .big{font-size:15px;color:var(--fg-secondary);font-weight:600}
+  .empty kbd{font:11px var(--mono);background:var(--bg-elev);border:1px solid var(--border-strong);border-radius:4px;padding:2px 5px}
+  /* compare */
+  .diffrow{display:grid;grid-template-columns:44px 1fr 1fr;font:12px/1.55 var(--mono)}
+  .diffrow>div{padding:1px 10px;white-space:pre-wrap;word-break:break-word}
+  .diffrow .ln{color:var(--fg-muted);text-align:right;background:var(--bg-elev);user-select:none;border-right:1px solid var(--border)}
+  .diffrow .ch{text-align:center;color:var(--fg-muted);border-right:1px solid var(--border)}
+  .diffrow.add .a{background:#e6f6ec}.diffrow.add .b{background:#e6f6ec;color:#146c37}
+  .diffrow.del .a{background:#fdeaea;color:#a12525}.diffrow.del .b{background:#fdeaea}
+  .diffrow.mod .a{background:#fff4e0}.diffrow.mod .b{background:#eaf1ff}
+  .legend{display:flex;gap:12px;font-size:11px;color:var(--fg-muted);align-items:center}
+  .swatch{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
+  @media(max-width:900px){.rightpanel{position:absolute;right:6px;top:46px;bottom:26px;z-index:20;width:min(300px,80vw)}.menu{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="titlebar">
+    <div class="brand">Task<span>Mate</span></div>
+    <div class="menu"><span>File</span><span>Edit</span><span>View</span><span>Tools</span></div>
+    <div class="spacer"></div>
+    <div class="avatar">Q</div>
+  </div>
+
+  <div class="body" style="position:relative">
+    <!-- LEFT STRIPE -->
+    <aside class="stripe" aria-label="left stripe">
+      <button title="CR Explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7h6l2 2h10v10H3z"/></svg></button>
+      <button title="Docs Explorer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5"/></svg></button>
+      <button title="Systems"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="4" width="7" height="7"/><rect x="4" y="13" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/></svg></button>
+    </aside>
+
+    <!-- CENTER -->
+    <main class="center">
+      <div class="tabbar" id="tabbar">
+        <div class="tab active" data-tool="home" onclick="openTool('home')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8v9H3z"/></svg>Dashboard <span class="x" onclick="event.stopPropagation();closeTab('home')">×</span>
+        </div>
+        <!-- tool tabs injected here -->
+        <div class="hint">Tool Explorer: click icon trên stripe phải</div>
+      </div>
+
+      <div class="stage" id="stage">
+        <!-- HOME -->
+        <section class="pane active" id="pane-home">
+          <div class="empty"><div class="big">Dashboard</div><div>Mở Tool Explorer ở stripe bên phải để chọn công cụ.</div></div>
+        </section>
+
+        <!-- JSON FORMATTER -->
+        <section class="pane" id="pane-json">
+          <div class="toolbar">
+            <button class="btn primary" onclick="formatJson()">Format</button>
+            <button class="btn" onclick="minifyJson()">Minify</button>
+            <button class="btn" onclick="copyText('json-in')">Copy input</button>
+            <button class="btn" onclick="copyText('json-out')">Copy output</button>
+            <button class="btn" onclick="clearPair('json-in','json-out','json-status')">Clear</button>
+            <select class="select" id="json-indent" onchange="formatJson()" aria-label="Indent">
+              <option value="2">2 spaces</option><option value="4">4 spaces</option><option value="tab">Tab</option>
+            </select>
+            <div class="status"><span class="dot" id="json-dot"></span><span id="json-status">Sẵn sàng</span></div>
+          </div>
+          <div class="grid2">
+            <div class="col"><div class="colhead">INPUT <span class="badge" id="json-count">0 ký tự</span></div><textarea id="json-in" spellcheck="false" placeholder='Dán JSON vào đây, ví dụ: {"name":"TaskMate","ok":true}' oninput="onJsonInput()"></textarea></div>
+            <div class="col"><div class="colhead">OUTPUT <span class="badge">đã format</span></div><pre class="out" id="json-out"></pre></div>
+          </div>
+          <div class="tool-foot"><span>JSON · UTF-8</span><span id="json-lines">0 dòng</span></div>
+        </section>
+
+        <!-- XML FORMATTER -->
+        <section class="pane" id="pane-xml">
+          <div class="toolbar">
+            <button class="btn primary" onclick="formatXml()">Format</button>
+            <button class="btn" onclick="minifyXml()">Minify</button>
+            <button class="btn" onclick="copyText('xml-in')">Copy input</button>
+            <button class="btn" onclick="copyText('xml-out')">Copy output</button>
+            <button class="btn" onclick="clearPair('xml-in','xml-out','xml-status')">Clear</button>
+            <select class="select" id="xml-indent" onchange="formatXml()" aria-label="Indent">
+              <option value="2">2 spaces</option><option value="4">4 spaces</option><option value="tab">Tab</option>
+            </select>
+            <div class="status"><span class="dot" id="xml-dot"></span><span id="xml-status">Sẵn sàng</span></div>
+          </div>
+          <div class="grid2">
+            <div class="col"><div class="colhead">INPUT <span class="badge" id="xml-count">0 ký tự</span></div><textarea id="xml-in" spellcheck="false" placeholder='Dán XML vào đây, ví dụ: <note><to>Quan</to></note>' oninput="onXmlInput()"></textarea></div>
+            <div class="col"><div class="colhead">OUTPUT <span class="badge">đã format</span></div><pre class="out" id="xml-out"></pre></div>
+          </div>
+          <div class="tool-foot"><span>XML · UTF-8</span><span id="xml-lines">0 dòng</span></div>
+        </section>
+
+        <!-- TEXT COMPARE -->
+        <section class="pane" id="pane-compare">
+          <div class="toolbar">
+            <button class="btn primary" onclick="runCompare()">So sánh</button>
+            <div class="seg"><button id="cmp-mode-lines" class="on" onclick="setCmpMode('lines')">Theo dòng</button><button id="cmp-mode-words" onclick="setCmpMode('words')">Theo từ</button></div>
+            <label style="display:flex;align-items:center;gap:5px;color:var(--fg-secondary);font-size:12px"><input type="checkbox" id="cmp-ignore-case" onchange="runCompare()"/> Bỏ qua hoa/thường</label>
+            <label style="display:flex;align-items:center;gap:5px;color:var(--fg-secondary);font-size:12px"><input type="checkbox" id="cmp-ignore-space" onchange="runCompare()"/> Bỏ qua khoảng trắng</label>
+            <button class="btn" onclick="swapCompare()">Đổi chiều</button>
+            <div class="status" id="cmp-status">Dán 2 đoạn text để so sánh</div>
+          </div>
+          <div class="grid2">
+            <div class="col"><div class="colhead">A — GỐC <span class="badge" id="cmp-count-a">0 dòng</span></div><textarea id="cmp-a" spellcheck="false" placeholder="Text gốc..." oninput="runCompare()"></textarea></div>
+            <div class="col"><div class="colhead">B — MỚI <span class="badge" id="cmp-count-b">0 dòng</span></div><textarea id="cmp-b" spellcheck="false" placeholder="Text cần so sánh..." oninput="runCompare()"></textarea></div>
+          </div>
+          <div id="cmp-result-wrap" style="height:38%;display:flex;flex-direction:column;border-top:1px solid var(--border)">
+            <div class="colhead">KẾT QUẢ KHÁC BIỆT <span class="badge legend" id="cmp-legend"></span></div>
+            <div id="cmp-result" style="flex:1;overflow:auto;font:12.5px/1.55 var(--mono)"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- RIGHT PANEL -->
+    <aside class="rightpanel" id="rightpanel" aria-label="Tool Explorer panel">
+      <div class="rp-head">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="18" cy="17" r="2"/></svg>
+        Tool Explorer
+        <button class="x" title="Đóng" onclick="toggleExplorer()">×</button>
+      </div>
+      <div class="rp-search">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M16 16l4 4"/></svg>
+        <input id="tool-search" placeholder="Tìm công cụ..." oninput="filterTools()" />
+      </div>
+      <div class="rp-label">Format &amp; Transform</div>
+      <div class="rp-list" id="tool-list">
+        <button class="rp-item" data-tool="json" onclick="openTool('json')"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 4H6a2 2 0 00-2 2v4l-2 2 2 2v4a2 2 0 002 2h2"/><path d="M16 4h2a2 2 0 012 2v4l2 2-2 2v4a2 2 0 01-2 2h-2"/></svg></span><span class="txt"><b>JSON Formatter</b><small>Format, minify, validate JSON</small></span></button>
+        <button class="rp-item" data-tool="xml" onclick="openTool('xml')"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 4L4 12l4 8M16 4l4 8-4 8M13 3l-2 18"/></svg></span><span class="txt"><b>XML Formatter</b><small>Format, minify, validate XML</small></span></button>
+        <button class="rp-item" data-tool="compare" onclick="openTool('compare')"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h7v14H4zM13 5h7v14h-7z"/><path d="M6 9h3M6 13h3M15 9h3M15 13h3"/></svg></span><span class="txt"><b>Text Compare</b><small>So sánh text theo dòng/từ</small></span></button>
+      </div>
+      <div class="rp-label">More tools soon</div>
+      <div class="rp-foot">Chọn tool để mở tab ở vùng làm việc.</div>
+    </aside>
+
+    <!-- RIGHT STRIPE -->
+    <aside class="stripe right" aria-label="right stripe">
+      <button id="explorer-btn" title="Tool Explorer" onclick="toggleExplorer()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg>
+      </button>
+      <div class="sep"></div>
+      <button title="AI Assistant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/></svg></button>
+      <button title="Notifications"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 9a6 6 0 0112 0c0 7 2 8 2 8H4s2-1 2-8z"/><path d="M10 20h4"/></svg></button>
+    </aside>
+  </div>
+  <div style="height:22px;background:var(--bg-island);border-radius:6px;display:flex;align-items:center;padding:0 12px;gap:16px;color:var(--fg-muted);font-size:11px"><span>main</span><span>✓ 0 problems</span><span style="margin-left:auto">UTF-8 · Spaces: 2</span></div>
+</div>
+
+<script>
+const TOOLS = {
+  home:{title:'Dashboard',icon:'home'},
+  json:{title:'JSON Formatter',icon:'json'},
+  xml:{title:'XML Formatter',icon:'xml'},
+  compare:{title:'Text Compare',icon:'compare'},
+};
+let openOrder = ['home'];
+let activeTool = 'home';
+let explorerOpen = false;
+let cmpMode = 'lines';
+let cmpRows = [];
+
+function svgFor(kind){
+  const common='width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"';
+  if(kind==='home') return `<svg ${common}><path d="M3 11l9-8 9 8v9H3z"/></svg>`;
+  if(kind==='json') return `<svg ${common}><path d="M8 4H6a2 2 0 00-2 2v4l-2 2 2 2v4a2 2 0 002 2h2"/><path d="M16 4h2a2 2 0 012 2v4l2 2-2 2v4a2 2 0 01-2 2h-2"/></svg>`;
+  if(kind==='xml') return `<svg ${common}><path d="M8 4L4 12l4 8M16 4l4 8-4 8"/></svg>`;
+  return `<svg ${common}><path d="M4 5h7v14H4zM13 5h7v14h-7z"/></svg>`;
+}
+function renderTabs(){
+  const bar=document.getElementById('tabbar');
+  bar.querySelectorAll('.tab').forEach(n=>n.remove());
+  for(const id of openOrder){
+    const t=TOOLS[id];
+    const el=document.createElement('div');
+    el.className='tab'+(id===activeTool?' active':'');
+    el.onclick=()=>activate(id);
+    el.innerHTML=svgFor(t.icon)+'<span>'+t.title+'</span>'+(id==='home'?'':'<span class="x" title="Đóng">×</span>');
+    const x=el.querySelector('.x');
+    if(x) x.onclick=(e)=>{e.stopPropagation();closeTab(id)};
+    bar.insertBefore(el,bar.querySelector('.hint'));
+  }
+}
+function openTool(id){
+  if(!openOrder.includes(id)) openOrder.push(id);
+  activeTool=id;renderTabs();
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id==='pane-'+id));
+  document.querySelectorAll('.rp-item').forEach(b=>b.classList.toggle('active',b.dataset.tool===id));
+  if(id==='compare') runCompare();
+  if(explorerOpen) toggleExplorer();
+}
+function activate(id){openTool(id)}
+function closeTab(id){
+  if(id==='home') return;
+  openOrder=openOrder.filter(x=>x!==id);
+  if(activeTool===id) activeTool=openOrder[openOrder.length-1]||'home';
+  openTool(activeTool);
+}
+function toggleExplorer(){
+  explorerOpen=!explorerOpen;
+  document.getElementById('rightpanel').classList.toggle('open',explorerOpen);
+  document.getElementById('explorer-btn').classList.toggle('active',explorerOpen);
+  if(explorerOpen) setTimeout(()=>document.getElementById('tool-search').focus(),0);
+}
+function filterTools(){
+  const q=document.getElementById('tool-search').value.trim().toLowerCase();
+  document.querySelectorAll('#tool-list .rp-item').forEach(b=>{
+    b.style.display=b.textContent.toLowerCase().includes(q)?'flex':'none';
+  });
+}
+function setStatus(prefix,msg,ok){
+  document.getElementById(prefix+'-status').textContent=msg;
+  document.getElementById(prefix+'-dot').classList.toggle('err',!ok);
+}
+function indentUnit(sel){const v=document.getElementById(sel).value;return v==='tab'?'\t':Number(v)}
+function onJsonInput(){
+  const v=document.getElementById('json-in').value;
+  document.getElementById('json-count').textContent=v.length+' ký tự';
+  if(!v.trim()){document.getElementById('json-out').textContent='';setStatus('json','Sẵn sàng',true);return}
+  formatJson();
+}
+function formatJson(){
+  const raw=document.getElementById('json-in').value;
+  const out=document.getElementById('json-out');
+  if(!raw.trim()){out.textContent='';setStatus('json','Sẵn sàng',true);return}
+  try{
+    const val=JSON.parse(raw);
+    out.textContent=JSON.stringify(val,null,indentUnit('json-indent'));
+    out.classList.remove('bad');out.classList.add('ok');
+    setStatus('json','Hợp lệ · đã format',true);
+  }catch(e){out.textContent='❌ '+e.message;out.classList.add('bad');setStatus('json','JSON không hợp lệ',false)}
+  updateLines('json');
+}
+function minifyJson(){
+  const raw=document.getElementById('json-in').value;
+  if(!raw.trim())return;
+  try{const s=JSON.stringify(JSON.parse(raw));document.getElementById('json-out').textContent=s;setStatus('json','Hợp lệ · minified',true);updateLines('json')}
+  catch(e){setStatus('json','JSON không hợp lệ',false)}
+}
+/* XML parse + pretty print using DOMParser (browser native) */
+function parseXml(text){
+  const doc=new DOMParser().parseFromString(text,'application/xml');
+  const err=doc.getElementsByTagName('parsererror')[0];
+  if(err) throw new Error((err.textContent||'XML parse error').split('\n')[0].trim());
+  return doc.documentElement;
+}
+function xmlEscape(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function serializeXml(node,unit,level=0){
+  const pad=unit.repeat(level);
+  if(node.nodeType===3) return node.nodeValue.trim()?pad+xmlEscape(node.nodeValue.trim())+'\n':'';
+  if(node.nodeType!==1) return '';
+  let s=pad+'<'+node.tagName;
+  for(const a of node.attributes) s+=' '+a.name+'="'+a.value.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'"';
+  const kids=[...node.childNodes].filter(n=>n.nodeType===1||(n.nodeType===3&&n.nodeValue.trim()));
+  if(!kids.length) return s+' />\n';
+  if(kids.every(n=>n.nodeType===3)) return s+'>'+escapeXmlText(kids.map(n=>n.nodeValue).join('').trim())+'</'+node.tagName+'>\n';
+  s+='>\n';
+  for(const k of kids) s+=serializeXml(k,unit,level+1);
+  return s+pad+'</'+node.tagName+'>\n';
+}
+function escapeXmlText(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function formatXml(){
+  const raw=document.getElementById('xml-in').value;
+  const out=document.getElementById('xml-out');
+  if(!raw.trim()){out.textContent='';setStatus('xml','Sẵn sàng',true);return}
+  try{out.textContent=serializeXml(parseXml(raw),indentUnit('xml-indent')).trimEnd();out.classList.remove('bad');setStatus('xml','Hợp lệ · đã format',true)}
+  catch(e){out.textContent='❌ '+e.message;out.classList.add('bad');setStatus('xml','XML không hợp lệ',false)}
+  updateLines('xml');
+}
+function minifyXml(){
+  const raw=document.getElementById('xml-in').value;
+  if(!raw.trim())return;
+  try{const root=parseXml(raw);document.getElementById('xml-out').textContent=serializeXml(root,'').trim();setStatus('xml','Hợp lệ · minified',true);updateLines('xml')}
+  catch(e){setStatus('xml','XML không hợp lệ',false)}
+}
+function onXmlInput(){
+  const v=document.getElementById('xml-in').value;
+  document.getElementById('xml-count').textContent=v.length+' ký tự';
+  if(!v.trim()){document.getElementById('xml-out').textContent='';setStatus('xml','Sẵn sàng',true);return}
+  formatXml();
+}
+function updateLines(prefix){document.getElementById(prefix+'-lines').textContent=(document.getElementById(prefix+'-out').textContent.split('\n').length)+' dòng'}
+function clearPair(inId,outId,statusId){
+  document.getElementById(inId).value='';document.getElementById(outId).textContent='';
+  document.getElementById(statusId).textContent='Sẵn sàng';
+  document.getElementById(inId).dispatchEvent(new Event('input'));
+}
+async function copyText(id){
+  const txt=document.getElementById(id).value||document.getElementById(id).textContent;
+  if(!txt)return;
+  try{await navigator.clipboard.writeText(txt);flash('Đã copy')}catch(e){flash('Không copy được')}
+}
+function flash(msg){const s=document.getElementById('cmp-status');const old=s.textContent;s.textContent=msg;setTimeout(()=>s.textContent=old,1400)}
+function normalize(s){
+  s=s.replace(/\r\n?/g,'\n');
+  if(document.getElementById('cmp-ignore-case').checked)s=s.toLowerCase();
+  if(document.getElementById('cmp-ignore-space').checked)s=s.replace(/[ \t]+/g,' ').trim();
+  return s;
+}
+function setCmpMode(m){
+  cmpMode=m;
+  document.getElementById('cmp-mode-lines').classList.toggle('on',m==='lines');
+  document.getElementById('cmp-mode-words').classList.toggle('on',m==='words');
+  runCompare();
+}
+function tokens(s){const n=normalize(s);return cmpMode==='lines'?n.split('\n'):n.split(/(\s+)/).filter(t=>t.trim())}
+/* LCS diff — O(n*m), adequate for draft tool sizes */
+function diffTokens(a,b){
+  const n=a.length,m=b.length;
+  const dp=Array.from({length:n+1},()=>new Uint32Array(m+1));
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=a[i]===b[j]?1+dp[i+1][j+1]:Math.max(dp[i+1][j],dp[i][j+1]);
+  const rows=[];let i=0,j=0,changes=0;
+  while(i<n&&j<m){
+    if(a[i]===b[j]){rows.push({type:'same',a:a[i],b:b[j],an:i+1,bn:j+1});i++;j++}
+    else if(dp[i+1][j]>=dp[i][j+1]){rows.push({type:'del',a:a[i],b:'',an:i+1,bn:''});i++;changes++}
+    else{rows.push({type:'add',a:'',b:b[j],an:'',bn:j+1});j++;changes++}
+  }
+  while(i<n){rows.push({type:'del',a:a[i],b:'',an:i+1,bn:''});i++;changes++}
+  while(j<m){rows.push({type:'add',a:'',b:b[j],an:'',bn:j+1});j++;changes++}
+  return {rows,changes};
+}
+function runCompare(){
+  const a=document.getElementById('cmp-a').value,b=document.getElementById('cmp-b').value;
+  document.getElementById('cmp-count-a').textContent=(cmpMode==='lines'?a.split('\n').length:a.split(/\s+/).filter(Boolean).length)+(cmpMode==='lines'?' dòng':' từ');
+  document.getElementById('cmp-count-b').textContent=(cmpMode==='lines'?b.split('\n').length:b.split(/\s+/).filter(Boolean).length)+(cmpMode==='lines'?' dòng':' từ');
+  const res=document.getElementById('cmp-result');
+  if(!a.trim()&&!b.trim()){res.innerHTML='<div style="padding:12px;color:var(--fg-muted)">Dán 2 đoạn text để so sánh.</div>';document.getElementById('cmp-status').textContent='Dán 2 đoạn text để so sánh';document.getElementById('cmp-legend').innerHTML='';return}
+  const {rows,changes}=diffTokens(tokens(a),tokens(b));
+  cmpRows=rows;
+  const same=rows.filter(r=>r.type==='same').length;
+  res.innerHTML=rows.map(r=>`<div class="diffrow ${r.type}"><div class="ln">${r.an||''}</div><div class="a">${escapeHtml(r.a)}</div><div class="ch">${r.type==='del'?'−':r.type==='add'?'+':''}</div><div class="b">${escapeHtml(r.b)}</div><div class="ln">${r.bn||''}</div></div>`).join('');
+  document.getElementById('cmp-status').textContent=changes?'⚠ '+changes+' thay đổi · '+same+' giống nhau':'✓ Hai đoạn giống hệt';
+  document.getElementById('cmp-legend').innerHTML='<span><i class="swatch" style="background:#e6f6ec"></i>thêm</span><span><i class="swatch" style="background:#fdeaea"></i>xóa</span>';
+}
+function escapeHtml(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+function swapCompare(){
+  const a=document.getElementById('cmp-a'),b=document.getElementById('cmp-b');
+  [a.value,b.value]=[b.value,a.value];runCompare();
+}
+renderTabs();
+</script>
+</body>
+</html>
