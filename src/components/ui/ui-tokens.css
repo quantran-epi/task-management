@@ -81,3 +81,5 @@
 
 .taskmate-workbench-theme :where([style*="--ui-progress-tone"]) { text-decoration-color: var(--ui-progress-tone, currentColor); }
 .taskmate-workbench-theme :where([style*="--ui-spin-accent"]) { text-decoration-color: var(--ui-spin-accent, currentColor); }
+.taskmate-workbench-theme :where([style*="--ui-progress-stroke"]) { border-block-color: var(--ui-progress-stroke, currentColor); }
+.taskmate-workbench-theme :where([style*="--ui-skeleton-shimmer-duration"]) { animation-duration: var(--ui-skeleton-shimmer-duration, 1.4s); }
