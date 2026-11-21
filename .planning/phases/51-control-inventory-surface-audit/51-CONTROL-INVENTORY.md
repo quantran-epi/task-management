@@ -1392,3 +1392,5 @@ Kết quả chạy lúc đóng plan 2026-11-22 (repo root, Node v24.16.0):
   22 wrapper còn lại có analog từ PROOF: `button` (Button), `badge`/`tag` (Chip), `checkbox` (Checkbox), `input`/`input-number`/`mentions`/`textarea` (Input), `radio` (Radio), `select`/`auto-complete`/`tree-select` (Select + Listbox), `segmented`/`tabs` (Tabs), `switch` (Toggle), `drawer`/`modal`/`popconfirm` (Dialog), `form`/`list` (Input/Checkbox/Listbox). Phase 52 rà soát lại ánh xạ này trước khi khóa MAP-01. 34 + 22 = 56.
 
 - **Liên kết Phase 56** (CLEAN-01..03): 31 dòng import type, 13 dòng export type + 22 dòng deep type, 8 icon deep-import và 4 file `@ant-design/plots` chỉ được gỡ khi xóa dependency; không thuộc runtime Phase 53/54 (xem §3.1 và §4.2).
+
+**Ghi chú đóng phase (51-03):** cả ba plan 51-01/02/03 đã có SUMMARY; INV-01..03 đều hoàn tất trong artifact này. Kiểm tra cuối cùng trước khi bàn giao: 3 file Vitest scoped xanh (12 test), `tsc --noEmit` exit 0, `git status --short src` trống, marker 56/257/441/56 khớp, fixture sort đúng. Phase 51 chuyển sang trạng thái `ready_for_verification`; chưa có thay đổi source nào để verify runtime.

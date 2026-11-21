@@ -9,7 +9,7 @@
 
 - [x] **INV-01**: Mọi control/UI surface TaskMate đang dùng được liệt kê từ `src/components/ui/` và mọi import `antd` / `@ant-design/icons` còn sót trong `src`, kèm file, props, state, event, keyboard/focus, validation và a11y.
 - [x] **INV-02**: Danh mục bao phủ toàn bộ UI surface: route/view, tool window, settings, CR, notes, AI Office, modal/drawer/popconfirm, form/table, menu/context menu, tooltip/popover, notification, và các trạng thái empty/error/loading.
-- [ ] **INV-03**: Mỗi control được phân loại theo nhóm implementation và độ phức tạp, xác định wrapper cần thay, control còn thiếu, và tiêu chí behavior phải giữ nguyên.
+- [x] **INV-03**: Mỗi control được phân loại theo nhóm implementation và độ phức tạp, xác định wrapper cần thay, control còn thiếu, và tiêu chí behavior phải giữ nguyên.
 
 ### OpenIDEA Mapping & Design (MAP)
 
@@ -63,7 +63,7 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 |-------------|-------|--------|
 | INV-01 | 51 | Complete |
 | INV-02 | 51 | Complete |
-| INV-03 | 51 | Pending |
+| INV-03 | 51 | Complete |
 | MAP-01 | 52 | Pending |
 | MAP-02 | 52 | Pending |
 | MAP-03 | 52 | Pending |

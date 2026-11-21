@@ -25,7 +25,7 @@
 
 ## Phases
 
-- [ ] **Phase 51: Control Inventory & Surface Audit** — liệt kê mọi control/import AntD, mọi UI surface, phân nhóm implementation (INV-01..03)
+- [x] **Phase 51: Control Inventory & Surface Audit** — liệt kê mọi control/import AntD, mọi UI surface, phân nhóm implementation (INV-01..03) (completed 2026-11-21)
 - [ ] **Phase 52: OpenIDEA Mapping & Design Contract** — map control có tương đương, thiết kế control mới, khóa API/metric baseline (MAP-01..03)
 - [ ] **Phase 53: Native Core & Form Controls** — thay wrapper core/form bằng control tự build, không import AntD (NAT-01)
 - [ ] **Phase 54: Native Overlay & Complex Controls** — Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form + mọi trạng thái/behavior (NAT-02)
@@ -160,7 +160,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 51. Control Inventory & Surface Audit | 2/3 | In Progress|  |
+| 51. Control Inventory & Surface Audit | 3/3 | Complete   | 2026-11-21 |
 | 52. OpenIDEA Mapping & Design Contract | 0/TBD | Not started | — |
 | 53. Native Core & Form Controls | 0/TBD | Not started | — |
 | 54. Native Overlay & Complex Controls | 0/TBD | Not started | — |
@@ -233,7 +233,7 @@
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 **Wave 1**
