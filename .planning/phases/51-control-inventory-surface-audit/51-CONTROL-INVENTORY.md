@@ -1147,7 +1147,154 @@ Mỗi dòng dưới đây bắt đầu bằng marker `<!-- SURFACE: <group> -->`
 
 ## 4. Phân loại implementation
 
-*(Do 51-03 viết tiếp.)*
+Mục này là INV-03. Mỗi dòng `<!-- CLASSIFY: <tên-file> -->` khớp đúng một `<!-- WRAPPER-ROW -->` ở §2 theo cùng tên file (56 dòng, không thiếu, không trùng). Nhóm được gán theo `51-PATTERNS.md` §4 với **quy tắc ưu tiên bắt buộc, mỗi file chỉ một nhóm**: (1) có behavior overlay/complex (range picker, popup, focus trap, portal, mask, contextHolder) → `overlay/complex`; (2) domain-specific phục vụ view cụ thể → `domain/adoption`; (3) còn lại → `core/form`. Áp dụng quy tắc: `date-picker.tsx` có range picker → `overlay/complex` (không ghi core/form); `status-dot.tsx` và `empty.tsx` phục vụ view cụ thể → `domain/adoption` (không ghi core/form); `auto-complete.tsx` có popup → `overlay/complex`. `icon.tsx` gộp 141 export `wrapIcon` vào một dòng, kèm ghi chú 8 deep-import ở `RemoteGitExplorer.tsx` (§3.1(e), vẫn tính chung nhóm core/form).
+
+Cột `OpenIDEA analog` là **nhãn dự kiến** lấy từ baseline đã duyệt (`PROOF.md`, §5): chỉ ghi tên control có bằng chứng trong PROOF (Button, Input, Checkbox, Radio, Toggle, Select/Listbox, Tabs, Chip, Dialog); mọi control khác ghi đúng chữ `cần thiết kế mới`. Phase 51 **không** đặt metric/CSS module/DOM/class — đó là MAP-01/MAP-02 của Phase 52. "Control còn thiếu" mô tả phần PROOF chưa port, không phải quyết định thiết kế.
+
+| dòng phân loại | nhóm | complexity | wrapper cần thay | OpenIDEA analog | control còn thiếu | behavior phải giữ nguyên |
+|---|---|---|---|---|---|---|
+<!-- CLASSIFY: alert -->
+| `src/components/ui/alert.tsx` | core/form | thấp | `src/components/ui/alert.tsx` | cần thiết kế mới | banner/alert variant light+dark | type mặc định info; status map D-12; caller style win |
+<!-- CLASSIFY: app -->
+| `src/components/ui/app.tsx` | overlay/complex | trung bình | `src/components/ui/app.tsx` | cần thiết kế mới | app root holder tương đương AntApp | token `--ui-app-font-size`; caller style win; `useApp()` tách khỏi `message.tsx`; context holder phải render |
+<!-- CLASSIFY: auto-complete -->
+| `src/components/ui/auto-complete.tsx` | overlay/complex | cao | `src/components/ui/auto-complete.tsx` | Select + Listbox | popup gợi ý auto-complete | metric qua `styles.root`; caller root style win; popup Arrow/Enter/Escape, portal cách anchor 4px (Phase 52 xác nhận) |
+<!-- CLASSIFY: avatar -->
+| `src/components/ui/avatar.tsx` | core/form | thấp | `src/components/ui/avatar.tsx` | cần thiết kế mới | avatar + group fallback | iconSize/fontSize token; caller style win; Group mirrored |
+<!-- CLASSIFY: badge -->
+| `src/components/ui/badge.tsx` | core/form | trung bình | `src/components/ui/badge.tsx` | Chip | badge count/status light+dark | status color từ map D-12; color explicit caller win; caller style win |
+<!-- CLASSIFY: breadcrumb -->
+| `src/components/ui/breadcrumb.tsx` | overlay/complex | thấp | `src/components/ui/breadcrumb.tsx` | cần thiết kế mới | breadcrumb separator/link | font/gap token; caller style win; statics mirrored (Item, Separator) |
+<!-- CLASSIFY: button -->
+| `src/components/ui/button.tsx` | core/form | thấp | `src/components/ui/button.tsx` | Button | none cho shape cơ bản (PROOF có primary/secondary/ghost/small/disabled) | variant map type/danger; `withoutUndefined` bỏ key undefined; native Enter/Space; caller props/style win; `IconButton` bắt `aria-label` |
+<!-- CLASSIFY: card -->
+| `src/components/ui/card.tsx` | overlay/complex | trung bình | `src/components/ui/card.tsx` | cần thiết kế mới | card grid/meta | statics mirrored thành named export; token style; caller style win |
+<!-- CLASSIFY: checkbox -->
+| `src/components/ui/checkbox.tsx` | core/form | thấp | `src/components/ui/checkbox.tsx` | Checkbox | none cho shape cơ bản (PROOF có SVG check 12px) | `withoutUndefined`; Space toggle native; controlSize token; caller style win; Group mirrored |
+<!-- CLASSIFY: collapse -->
+| `src/components/ui/collapse.tsx` | overlay/complex | trung bình | `src/components/ui/collapse.tsx` | cần thiết kế mới | accordion panel | header Enter/Space; font/height/padding token; caller style win; Panel mirrored |
+<!-- CLASSIFY: config-provider -->
+| `src/components/ui/config-provider.tsx` | overlay/complex | trung bình | `src/components/ui/config-provider.tsx` | cần thiết kế mới | theme provider holder | theme thuộc caller; `withoutUndefined(theme)`; `getSharedControlTokens` được gọi; kế thừa descendants |
+<!-- CLASSIFY: date-picker -->
+| `src/components/ui/date-picker.tsx` | overlay/complex | cao | `src/components/ui/date-picker.tsx` | cần thiết kế mới | calendar popup + range picker | **range picker (DateRangePicker) thuộc nhóm này**; width full mặc định; `withoutUndefined` value/onChange; picker keyboard; caller style win |
+<!-- CLASSIFY: descriptions -->
+| `src/components/ui/descriptions.tsx` | overlay/complex | trung bình | `src/components/ui/descriptions.tsx` | cần thiết kế mới | description list layout | font/height token; label/value pairs; caller style win; Item mirrored |
+<!-- CLASSIFY: divider -->
+| `src/components/ui/divider.tsx` | core/form | thấp | `src/components/ui/divider.tsx` | cần thiết kế mới | divider/separator | separator semantics; font/gap token; caller style win |
+<!-- CLASSIFY: drawer -->
+| `src/components/ui/drawer.tsx` | overlay/complex | cao | `src/components/ui/drawer.tsx` | Dialog (panel) | drawer placement + mask policy | Esc close khi closable; **focus trap**; `resolveMask` giữ boolean `false` không đổi thành object; `closePolicy: silent` tắt closable; caller width/title win |
+<!-- CLASSIFY: dropdown -->
+| `src/components/ui/dropdown.tsx` | overlay/complex | cao | `src/components/ui/dropdown.tsx` | Select + Listbox (trigger) | overlay menu placement | Arrow/Enter menu; `styles.root` token; caller styles win; portal placement; Button mirrored |
+<!-- CLASSIFY: empty -->
+| `src/components/ui/empty.tsx` | domain/adoption | thấp | `src/components/ui/empty.tsx` | cần thiết kế mới | domain-specific empty description | font token; description muted color; caller styles win; images mirrored; trạng thái empty/error/loading (§3.2 state) giữ nguyên |
+<!-- CLASSIFY: form -->
+| `src/components/ui/form.tsx` | overlay/complex | cao | `src/components/ui/form.tsx` | Input + Checkbox (form layout) | form layout + validation/error list | labelPolicy map layout; caller layout/requiredMark win; Enter submit + field focus; `FormItem`/`FormList`/`FormErrorList`/`useForm`/`useWatch` static phải mirrored như source (`form.tsx:35-39`) |
+<!-- CLASSIFY: grid -->
+| `src/components/ui/grid.tsx` | core/form | trung bình | `src/components/ui/grid.tsx` | cần thiết kế mới | grid gutter/breakpoint | gutter mặc định paddingInline; caller gutter/style win; `Grid.useBreakpoint` mirrored |
+<!-- CLASSIFY: icon -->
+| `src/components/ui/icon.tsx` | core/form | cao | `src/components/ui/icon.tsx` | cần thiết kế mới | bộ icon SVG thay 141 export `@ant-design/icons` | **141 export qua một factory `wrapIcon`**; token fontSize/iconSize; tone map D-12; caller style win; tên export giữ nguyên. §3.1(e): 8 deep-import tại `RemoteGitExplorer.tsx` (`FolderOutlined`, `FolderOpenOutlined`, `FileTextOutlined`, `ReloadOutlined`, `SearchOutlined`, `BranchesOutlined`, `CloudServerOutlined`, `FolderViewOutlined`) thuộc **cùng nhóm core/form** |
+<!-- CLASSIFY: image -->
+| `src/components/ui/image.tsx` | overlay/complex | trung bình | `src/components/ui/image.tsx` | cần thiết kế mới | image preview portal | preview controls keyboard; `styles.root` token; caller root style win; PreviewGroup mirrored |
+<!-- CLASSIFY: input-number -->
+| `src/components/ui/input-number.tsx` | core/form | trung bình | `src/components/ui/input-number.tsx` | Input | number stepper | min/max/precision truyền nguyên; `withoutUndefined`; ArrowUp/ArrowDown native; status từ aria-invalid; caller style win |
+<!-- CLASSIFY: input -->
+| `src/components/ui/input.tsx` | core/form | thấp | `src/components/ui/input.tsx` | Input | none cho shape cơ bản | full width mặc định; forwardRef; native focus; status từ aria-invalid; `withoutUndefined`; caller style win; Search/Password mirrored |
+<!-- CLASSIFY: layout -->
+| `src/components/ui/layout.tsx` | overlay/complex | trung bình | `src/components/ui/layout.tsx` | cần thiết kế mới | shell landmark + sider | token height/gutter; sider controls; landmark semantics; caller style win; statics mirrored |
+<!-- CLASSIFY: list -->
+| `src/components/ui/list.tsx` | overlay/complex | trung bình | `src/components/ui/list.tsx` | Listbox | list pagination + meta | generic preserved; row height/font token; item focus; caller style win |
+<!-- CLASSIFY: mentions -->
+| `src/components/ui/mentions.tsx` | core/form | trung bình | `src/components/ui/mentions.tsx` | Input | @-mention popup | full width mặc định; forwardRef; @ trigger + Arrow/Enter; iconSize token; caller style win; Option mirrored |
+<!-- CLASSIFY: menu -->
+| `src/components/ui/menu.tsx` | overlay/complex | cao | `src/components/ui/menu.tsx` | Listbox | menu popup placement | Arrow/Enter/Escape; row height từ controlHeight; caller style win; Item/SubMenu/ItemGroup mirrored; context menu duy nhất `TaskTable.tsx:1014` (§3.2) |
+<!-- CLASSIFY: message -->
+| `src/components/ui/message.tsx` | overlay/complex | cao | `src/components/ui/message.tsx` | cần thiết kế mới | message holder + instance API | holder đơn nhất; không static `message.*`; `contextHolder` phải render; kế thừa ConfigProvider theme; realtime không reload |
+<!-- CLASSIFY: modal -->
+| `src/components/ui/modal.tsx` | overlay/complex | cao | `src/components/ui/modal.tsx` | Dialog + window titlebar | imperative modal + footer/mask policy | Esc close khi closable; **focus trap**; boolean `mask: false` giữ nguyên (không đổi thành object); `contextHolder` từ `useTaskMateModal()` phải render; `footerPolicy: none` → null; `withoutUndefined`; caller win |
+<!-- CLASSIFY: notification -->
+| `src/components/ui/notification.tsx` | overlay/complex | trung bình | `src/components/ui/notification.tsx` | cần thiết kế mới | notification instance + realtime sink | duration 4.5; placement topRight; pauseOnHover true; iconSize token; không static API; realtime không reload (memory rule) |
+<!-- CLASSIFY: pagination -->
+| `src/components/ui/pagination.tsx` | overlay/complex | trung bình | `src/components/ui/pagination.tsx` | cần thiết kế mới | pagination controls | `styles.root` token; page buttons keyboard; caller root style win |
+<!-- CLASSIFY: popconfirm -->
+| `src/components/ui/popconfirm.tsx` | overlay/complex | trung bình | `src/components/ui/popconfirm.tsx` | Dialog (confirm) | confirm popover + tone | okText "Xác nhận", cancelText "Hủy"; okType primary; `tone: danger` → okButtonProps.danger; trigger focus + Escape dismiss; caller okType/okButtonProps win; khác static `Modal.confirm` |
+<!-- CLASSIFY: popover -->
+| `src/components/ui/popover.tsx` | overlay/complex | trung bình | `src/components/ui/popover.tsx` | cần thiết kế mới | portal placement | trigger hover/click/focus; maxWidth từ controlHeight scale; caller overlayStyle win |
+<!-- CLASSIFY: progress -->
+| `src/components/ui/progress.tsx` | core/form | thấp | `src/components/ui/progress.tsx` | cần thiết kế mới | progress bar | status map D-12; progressbar semantics; caller strokeColor/style win |
+<!-- CLASSIFY: radio -->
+| `src/components/ui/radio.tsx` | core/form | thấp | `src/components/ui/radio.tsx` | Radio | none cho shape cơ bản | Arrow selection native; Group/Button mirrored cùng token style; caller size/style win |
+<!-- CLASSIFY: result -->
+| `src/components/ui/result.tsx` | core/form | thấp | `src/components/ui/result.tsx` | cần thiết kế mới | result illustration | font/icon token; caller style win; title/status text |
+<!-- CLASSIFY: segmented -->
+| `src/components/ui/segmented.tsx` | core/form | trung bình | `src/components/ui/segmented.tsx` | Tabs | segmented control shape | generic preserved; Arrow selection; token height/font/radius; caller style win |
+<!-- CLASSIFY: select -->
+| `src/components/ui/select.tsx` | core/form | trung bình | `src/components/ui/select.tsx` | Select + Listbox | none cho shape cơ bản (PROOF có listbox 24px row) | allowClear mặc định true; `withoutUndefined`; full width; combobox Arrow/Enter; status từ aria-invalid; caller status/style win |
+<!-- CLASSIFY: skeleton -->
+| `src/components/ui/skeleton.tsx` | core/form | thấp | `src/components/ui/skeleton.tsx` | cần thiết kế mới | skeleton shapes | statics mirrored; row/avatar token; loading semantics; caller style win |
+<!-- CLASSIFY: slider -->
+| `src/components/ui/slider.tsx` | core/form | trung bình | `src/components/ui/slider.tsx` | cần thiết kế mới | slider handle/rail | Arrow keys trên handle; handle/rail token; caller style win; aria-label từ caller |
+<!-- CLASSIFY: space -->
+| `src/components/ui/space.tsx` | core/form | thấp | `src/components/ui/space.tsx` | cần thiết kế mới | spacing primitive | gap mặc định paddingInline; caller size/style win; Compact mirrored |
+<!-- CLASSIFY: spin -->
+| `src/components/ui/spin.tsx` | core/form | thấp | `src/components/ui/spin.tsx` | cần thiết kế mới | spinner | accent từ map D-12; status semantics; caller style win; static mirrored |
+<!-- CLASSIFY: splitter -->
+| `src/components/ui/splitter.tsx` | overlay/complex | cao | `src/components/ui/splitter.tsx` | cần thiết kế mới | resize handle + drag policy | resize handle keys; handle size token; caller style win; Panel mirrored |
+<!-- CLASSIFY: statistic -->
+| `src/components/ui/statistic.tsx` | core/form | thấp | `src/components/ui/statistic.tsx` | cần thiết kế mới | statistic/countdown display | font token; statics mirrored; Countdown onFinish; caller style win |
+<!-- CLASSIFY: status-dot -->
+| `src/components/ui/status-dot.tsx` | domain/adoption | thấp | `src/components/ui/status-dot.tsx` | cần thiết kế mới | domain status dot (view-specific) | map D-12 chung; decorative aria-hidden mặc định; role img khi có label; caller style win |
+<!-- CLASSIFY: switch -->
+| `src/components/ui/switch.tsx` | core/form | thấp | `src/components/ui/switch.tsx` | Toggle | none cho shape cơ bản | Space toggle; `role=switch`; height/radius token; caller style win |
+<!-- CLASSIFY: table -->
+| `src/components/ui/table.tsx` | overlay/complex | cao | `src/components/ui/table.tsx` | cần thiết kế mới | data grid (header/sort/pagination/selection) | generic preserved; density → size chỉ khi set; padding/font token; row selection controls; caller style win; `TableSummary` mirrored |
+<!-- CLASSIFY: tabs -->
+| `src/components/ui/tabs.tsx` | overlay/complex | trung bình | `src/components/ui/tabs.tsx` | Tabs | none cho shape cơ bản | Arrow trong tablist; `styles.root` token; caller styles win; TabPane mirrored |
+<!-- CLASSIFY: tag -->
+| `src/components/ui/tag.tsx` | core/form | trung bình | `src/components/ui/tag.tsx` | Chip | status tag variants | status map D-12 light/dark; checkable tag focus; caller style win; CheckableTag mirrored |
+<!-- CLASSIFY: textarea -->
+| `src/components/ui/textarea.tsx` | core/form | thấp | `src/components/ui/textarea.tsx` | Input | multiline + auto-size | minRows 2; maxRows từ controlHeight/fontSize; full width; forwardRef; native focus; `withoutUndefined`; alias `TextArea` |
+<!-- CLASSIFY: time-picker -->
+| `src/components/ui/time-picker.tsx` | core/form | trung bình | `src/components/ui/time-picker.tsx` | cần thiết kế mới | time popup + range | pickerStyle full width mặc định; picker Arrow/Enter; caller style win; TimeRangePicker mirrored |
+<!-- CLASSIFY: tooltip -->
+| `src/components/ui/tooltip.tsx` | overlay/complex | trung bình | `src/components/ui/tooltip.tsx` | cần thiết kế mới | portal tooltip placement | hover/focus trigger; mouseEnterDelay 0.15 mặc định; maxWidth token scale; caller overlayStyle win |
+<!-- CLASSIFY: tree-select -->
+| `src/components/ui/tree-select.tsx` | overlay/complex | cao | `src/components/ui/tree-select.tsx` | Select + Listbox | tree popup + checkable nodes | full width mặc định; combobox/tree navigation; `SHOW_ALL`/`SHOW_CHILD`/`SHOW_PARENT` mirrored; caller style win |
+<!-- CLASSIFY: tree -->
+| `src/components/ui/tree.tsx` | overlay/complex | cao | `src/components/ui/tree.tsx` | cần thiết kế mới | virtualized tree + drag/drop | Arrow/Enter navigation; row height từ controlHeight; caller style win; TreeNode/DirectoryTree mirrored |
+<!-- CLASSIFY: typography -->
+| `src/components/ui/typography.tsx` | core/form | trung bình | `src/components/ui/typography.tsx` | cần thiết kế mới | font roles + Link | fontRole 11/12/13/16px qua CSS token; Link focus kế thừa; caller style win; namespace gồm Link |
+<!-- CLASSIFY: upload -->
+| `src/components/ui/upload.tsx` | overlay/complex | cao | `src/components/ui/upload.tsx` | cần thiết kế mới | file picker + drop zone + progress | full width mặc định; token metrics; trigger/filename buttons; `beforeUpload`/`onChange` giữ nguyên; Dragger + `UPLOAD_LIST_IGNORE` mirrored; caller style win |
+
+Tổng theo nhóm: `core/form` 26 wrapper, `overlay/complex` 28 wrapper, `domain/adoption` 2 wrapper (`status-dot`, `empty`) — cộng 56, **không đếm trùng** một file nào. 257 tên export guard đứng riêng ở §2.1; 141 export icon nằm trong đúng một dòng `icon`.
+
+### 4.1 Adoption surface → wrapper
+
+Mỗi dòng dưới tương ứng một nhóm `<!-- SURFACE: ... -->` trong §3.2 (12 nhóm INV-02, 441 dòng). Độ phức tạp adoption tính theo **số file call site**: thấp ≤5, trung bình 6-20, cao >20. `domain/adoption` ở bảng §4 là wrapper domain-specific; bảng này là phần còn lại của nhóm — mọi surface consumer phải đổi import sang wrapper đã thay ở Phase 53/54.
+
+| SURFACE nhóm | complexity adoption | wrapper tiêu thụ chính | path files dẫn chứng (§3.2) | behavior phải giữ |
+|---|---|---|---|---|
+| route | cao | ThemeConfigProvider, App, message/notification holder | `src/hooks/useHashRoute.ts`, `src/AppIntelliJ.tsx`, `src/views/TimerPopoutView.tsx`, `src/views/NotesPopoutView.tsx`, `src/views/AIPopoutView.tsx`, `src/views/CodingZonePopoutView.tsx`, `src/workbench/EditorArea.tsx` | 15 route + 22 `viewType`; mỗi popout tự bọc `AntdThemeAdapter` + `ThemeAppHolder`, không singleton holder |
+| toolwindow | cao | Button, IconButton, Tooltip, Dropdown, Menu, Spin | `src/workbench/toolwindows/*.tsx` (18), `src/workbench/WorkbenchLayout.tsx`, `src/workbench/TitleBar.tsx`, `src/workbench/StatusBar.tsx`, `src/workbench/EditorArea.tsx`, `src/workbench/search/SearchEverywhereModal.tsx` | shell/provider/command registry; theme + context message giữ nguyên |
+| settings | cao | Input, Select, Switch, Form, Table, Modal, Popconfirm, notification | `src/components/settings/*.tsx` (30), `src/views/SettingsView.tsx`, `src/views/ConfigProfilesView.tsx` | form validation, import preview/DLP confirmation, realtime notification không reload |
+| cr | thấp | Modal, Table, Form, Select | `src/components/changeRequests/ChangeRequestModal.tsx`, `ChangeRequestTable.tsx`, `TargetSystemsSelector.tsx`, `src/views/ChangeRequestsView.tsx`, `src/views/ChangeRequestDetailView.tsx` | modal/table/form behavior, caller props win |
+| notes | trung bình | Tree, Modal, Drawer, Input, Popconfirm, Tooltip | `src/components/notes/*.tsx` (16), `src/views/NotesView.tsx`, `src/views/NotesPopoutView.tsx` | tree editor/modal/banner; popout tự bọc holder |
+| ai | cao | Button, Input, Tooltip, Modal, Drawer, Table, message/notification | `src/components/ai/**`, `src/components/agents/*.tsx` (11), `src/views/AiOfficeView.tsx`, `src/views/TeamWorkspaceView.tsx`, `src/workbench/toolwindows/AiOfficeExplorer.tsx` | chat/citation/modal/diff + realtime agent activity; context-bound notification |
+| modal | cao | Modal, Drawer, Popover, Popconfirm | 85 file `<Modal>`/`<Drawer>`/`<Popover>` + 33 file `<Popconfirm>` (danh sách §3.2) | focus trap, Escape, portal, mask `false`, `contextHolder`; `<Popconfirm>` khác static `Modal.confirm` |
+| form | cao | Form + static subcomponent, Input, Select, Table | 38 file (danh sách §3.2), `src/components/ui/form.tsx:35-39` | `FormItem`/`FormList`/`FormErrorList`/`useForm`/`useWatch` mirror; validation + labelPolicy |
+| menu | thấp | Menu, Dropdown | `src/components/ui/menu.tsx`, `src/components/ui/dropdown.tsx`, `src/workbench/actions/actionRegistry.ts`, `src/components/tasks/TaskTable.tsx:1014` | `onContextMenu` duy nhất tại `TaskTable.tsx:1014` — grep `<Menu` sẽ sót |
+| tooltip | cao | Tooltip, Popover | 76 file (danh sách §3.2), gồm `src/components/ui/tooltip.tsx`, `src/components/ui/popover.tsx` | mouseEnterDelay 0.15; portal placement; caller overlayStyle win |
+| notification | trung bình | notification hook, ThemeAppHolder | `src/components/notifications/*.tsx`, `src/components/ui/notification.tsx`, `src/workbench/toolwindows/NotificationPanel.tsx`, `src/hooks/useNotifications.ts`, `useDesktopNotification.ts`, `useTimerAlertMonitor.ts` | **realtime, không reload**; context-bound, không static API |
+| state | trung bình | Empty, Skeleton, Result, Alert, Spin | `src/components/common/EmptyState.tsx`, `src/components/ui/{empty,skeleton,result,alert,spin}.tsx`, `src/components/ai/InlineApiErrorCard.tsx`, `InterruptedBanner.tsx`, `widget/StagedLoadingIndicator.tsx`, `grounded/GroundedBanner.tsx`, `notes/SmartIngestionBanner.tsx`, `settings/PostRestoreBanner.tsx` | empty/error/loading semantics + status map D-12 |
+
+### 4.2 Ba nhóm ↔ phase tiêu thụ
+
+| Nhóm INV-03 | Số wrapper | Tiêu thụ bởi | Requirement/plan | Đầu ra bị cấm ở Phase 51 |
+|---|---:|---|---|---|
+| core/form | 26 | Phase 53 | NAT-01 | không đổi props/keyboard/focus/a11y của control hiện hữu |
+| overlay/complex | 28 | Phase 54 | NAT-02 | không thiết kế focus trap/portal/mask mới — chỉ ghi tiêu chí phải giữ |
+| domain/adoption | 2 wrapper + 12 SURFACE nhóm ở §4.1 | Phase 55 | NAT-03 / NAT-04 | không sửa call site, không đổi route/popout provider |
+| (liên kết) import type/static/plots | 31 import type + 13 export type + 22 deep type + 8 icon deep-import + 4 plots | Phase 56 | CLEAN-01 / CLEAN-02 / CLEAN-03 | chỉ gỡ import khi dependency AntD bị xóa; ghi rõ ở §3.1, không đụng runtime Phase 53/54 |
 
 ## 5. Đối chiếu cuối và bàn giao Phase 52
 
