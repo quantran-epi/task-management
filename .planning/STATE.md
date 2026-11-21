@@ -3,8 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: planning
-last_updated: "2026-11-21T18:00:00.000Z"
-last_activity: 2026-11-21
+stopped_at: Phase 50 UI-SPEC approved
+last_updated: "2026-11-21T17:16:09.032Z"
+last_activity: 2026-11-21 — v1.6 roadmap created (Phases 51–58, 18 requirements mapped)
 progress:
   total_phases: 8
   completed_phases: 0
