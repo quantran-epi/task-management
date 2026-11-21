@@ -20,14 +20,14 @@ export type RadioGroupProps = AntRadioGroupProps & AriaProps;
 export type RadioButtonProps = AntRadioButtonProps & AriaProps;
 
 type GroupValue = string | number | boolean;
-type RadioEvent = { target: { value: GroupValue; checked: boolean; name?: string } };
 
 interface RadioGroupContextValue {
   name: string;
   value: unknown;
   checkedValue: unknown;
   disabled: boolean;
-  onSelect: (value: GroupValue) => void;
+  // Mirror the native change event so group onChange keeps AntD's event shape.
+  onSelect: (event: ChangeEvent<HTMLInputElement>) => void;
 }
 
 const RadioGroupContext = createContext<RadioGroupContextValue | null>(null);
@@ -59,7 +59,7 @@ export function Radio({ style, className, children, checked, defaultChecked, dis
     // Radio's change event target already exposes the DOM value, so forward the
     // native event unchanged and let the group mirror it with the same payload.
     onChange?.(event as never);
-    if (group !== null && value !== undefined) group.onSelect(value as GroupValue);
+    if (group !== null && value !== undefined) group.onSelect(event);
   }
 
   const input = (
@@ -101,9 +101,15 @@ export function RadioGroup({ controlSize = 'middle', style, className, children,
   void value; // controlled value is forwarded through context; selection follows caller state
   const checkedValue = value !== undefined ? value : innerValue;
 
-  function handleSelect(selected: GroupValue) {
+  function handleSelect(event: ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.value as GroupValue;
     if (value === undefined) setInnerValue(selected);
-    const event: RadioEvent = { target: { value: selected, checked: true, name: name ?? generatedName } };
+    // Keep the native event instance (methods + nativeEvent) and normalize only
+    // the target to AntD's RadioChangeEventTarget: checked/name/value.
+    Object.defineProperty(event, 'target', {
+      configurable: true,
+      value: { value: selected, checked: true, name: name ?? generatedName },
+    });
     onChange?.(event as never);
   }
 
@@ -172,7 +178,7 @@ export function RadioButton({ style, className, children, value, disabled, check
           aria-label={rest['aria-label']}
           onChange={(event) => {
             onChange?.(event as never);
-            if (group !== null && value !== undefined) group.onSelect(value as GroupValue);
+            if (group !== null && value !== undefined) group.onSelect(event);
           }}
         />
       </span>

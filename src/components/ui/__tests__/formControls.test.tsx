@@ -23,6 +23,27 @@ describe('RadioGroup event parity (CR-02 / WR-01)', () => {
     expect(onChange.mock.calls[0]![0].target.checked).toBe(true);
   });
 
+  it('passes a native-looking change event with stopPropagation from RadioGroup (RR-02)', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <RadioGroup value="a" onChange={onChange}>
+        <Radio value="a">A</Radio>
+        <Radio value="b">B</Radio>
+      </RadioGroup>,
+    );
+    const radios = container.querySelectorAll('input[type="radio"]');
+    fireEvent.click(radios[1]!);
+    const event = onChange.mock.calls[0]![0];
+    expect(event.target.value).toBe('b');
+    expect(typeof event.stopPropagation).toBe('function');
+    expect(typeof event.preventDefault).toBe('function');
+    expect(event.nativeEvent).toBeDefined();
+    expect(() => {
+      event.stopPropagation();
+      event.preventDefault();
+    }).not.toThrow();
+  });
+
   it('tracks defaultValue without caller rerender and keeps groups isolated', () => {
     const { container } = render(
       <>
