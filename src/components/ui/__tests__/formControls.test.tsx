@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Form, FormItem } from '../form';
+import { Checkbox, CheckboxGroup } from '../checkbox';
 import { Radio, RadioButton, RadioGroup } from '../radio';
 import { Switch } from '../switch';
 
@@ -83,5 +84,31 @@ describe('Switch content and uncontrolled state (WR-02)', () => {
     fireEvent.click(control);
     expect(onChange.mock.calls[0]![0]).toBe(false);
     expect(control).toHaveAttribute('aria-checked', 'false');
+  });
+});
+
+describe('Checkbox event parity (WR-03)', () => {
+  it('emits an array from CheckboxGroup', () => {
+    const onChange = vi.fn();
+    render(<CheckboxGroup options={['a', 'b', 'c']} defaultValue={['a']} onChange={onChange} />);
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[1]!);
+    expect(onChange.mock.calls[0]![0]).toEqual(['a', 'b']);
+  });
+
+  it('keeps native event methods and submits the indeterminate value', () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <form>
+        <Checkbox value="mixed" name="mixed" indeterminate onChange={onChange}>Mixed</Checkbox>
+      </form>,
+    );
+    const box = screen.getByRole('checkbox') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(box).toHaveAttribute('aria-checked', 'mixed');
+    expect(new FormData(container.querySelector('form')!).get('mixed')).not.toBeNull();
+    fireEvent.click(box);
+    expect(typeof onChange.mock.calls[0]![0].stopPropagation).toBe('function');
+    expect(typeof onChange.mock.calls[0]![0].preventDefault).toBe('function');
   });
 });

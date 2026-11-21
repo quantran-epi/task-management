@@ -1,6 +1,6 @@
 import type { CheckboxProps as AntCheckboxProps } from 'antd';
 import type { CheckboxGroupProps as AntCheckboxGroupProps } from 'antd/es/checkbox/Group';
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { classNames } from './native/classNames';
 import checkStyles from './openidea/Checkbox.module.css';
 import { getSharedControlTokens, withoutUndefined, type ControlSize } from './tokens.contract';
@@ -31,7 +31,19 @@ function CheckIcon({ indeterminate = false }: { indeterminate?: boolean }) {
 
 /** Consumed AntD Checkbox statics mirrored as named exports. */
 export function CheckboxGroup({ options, value, defaultValue, onChange, style, className, children, ...rest }: CheckboxGroupProps) {
-  const selected = new Set<unknown>(value ?? defaultValue ?? []);
+  const [innerValues, setInnerValues] = useState<unknown[]>(defaultValue ?? []);
+  const selectedValues = value ?? innerValues;
+  const selected = new Set<unknown>(Array.isArray(selectedValues) ? selectedValues : []);
+
+  function toggle(optionValue: unknown, checked: boolean) {
+    const next = Array.isArray(selectedValues) ? (selectedValues as unknown[]).slice() : [];
+    const index = next.findIndex((item) => item === optionValue);
+    if (checked && index < 0) next.push(optionValue);
+    if (!checked && index >= 0) next.splice(index, 1);
+    if (value === undefined) setInnerValues(next);
+    (onChange as ((values: unknown[]) => void) | undefined)?.(next);
+  }
+
   return (
     <div
       role="group"
@@ -43,21 +55,14 @@ export function CheckboxGroup({ options, value, defaultValue, onChange, style, c
       {options
         ? options.map((opt) => {
           const option = typeof opt === 'string' || typeof opt === 'number' ? { value: opt, label: String(opt) } : opt;
-          const next = [...selected];
-          const checked = selected.has(option.value);
-          if (checked) {
-            next.splice(next.indexOf(option.value), 1);
-          } else {
-            next.push(option.value);
-          }
           return (
             <Checkbox
               key={String(option.value)}
               value={option.value}
               label={option.label}
-              checked={checked}
+              checked={selected.has(option.value)}
               {...('disabled' in option && option.disabled !== undefined ? { disabled: option.disabled } : {})}
-              onChange={(event) => onChange?.({ ...event, target: { value: option.value, checked: event.target.checked } } as never)}
+              onChange={(event) => toggle(option.value, event.target.checked)}
             />
           );
         })
@@ -109,22 +114,17 @@ export function Checkbox({
           id={id}
           type="checkbox"
           className={checkStyles.native}
-          checked={isChecked}
+          checked={isChecked || mixed}
           disabled={disabled === true || readOnly === true}
           readOnly={readOnly === true}
-          name={name}
+          name={mixed && name === undefined ? '_indeterminate' : name}
           value={typeof value === 'string' || typeof value === 'number' ? value : undefined}
           aria-label={ariaLabel}
           aria-checked={mixed ? 'mixed' : undefined}
           onChange={(event) => {
-            onChange?.({
-              ...event,
-              target: {
-                checked: event.target.checked,
-                value: event.target.value,
-                name: event.target.name,
-              },
-            } as never);
+            // Forward the native event so stopPropagation/preventDefault survive;
+            // its target already exposes checked/value/name in AntD's shape.
+            onChange?.(event as never);
           }}
         />
         <span className={classNames(checkStyles.box, isChecked && checkStyles.on)} aria-hidden="true">
