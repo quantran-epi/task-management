@@ -8,7 +8,7 @@ import { dirname, relative, resolve, sep } from 'node:path';
 
 // Static imperative APIs stay on their original import and print a warning;
 // the executor must convert them to hooks by hand before gating the file.
-const STATIC_APIS = new Set(['message', 'notification']);
+const STATIC_APIS = new Set(['message', 'notification', 'Modal']);
 
 const HELP = `Usage: node scripts/adoption-codemod.mjs [options] <file...>
 
