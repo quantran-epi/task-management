@@ -27,7 +27,7 @@
 
 - [x] **Phase 51: Control Inventory & Surface Audit** — liệt kê mọi control/import AntD, mọi UI surface, phân nhóm implementation (INV-01..03) (completed 2026-11-21)
 - [x] **Phase 52: OpenIDEA Mapping & Design Contract** — map control có tương đương, thiết kế control mới, khóa API/metric baseline (MAP-01..03) (completed 2026-11-21)
-- [ ] **Phase 53: Native Core & Form Controls** — thay wrapper core/form bằng control tự build, không import AntD (NAT-01)
+- [x] **Phase 53: Native Core & Form Controls** — thay wrapper core/form bằng control tự build, không import AntD (NAT-01) (completed 2026-11-21)
 - [ ] **Phase 54: Native Overlay & Complex Controls** — Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form + mọi trạng thái/behavior (NAT-02)
 - [ ] **Phase 55: Full Surface Adoption & Theme/Offline Parity** — mọi màn hình dùng wrapper, token light/dark, Tauri offline (NAT-03, NAT-04)
 - [ ] **Phase 56: AntD Removal, Guardrails & Focused Verification** — gỡ dependency, ESLint guard, focused test, cổng tổng hợp (CLEAN-01..03)
@@ -162,7 +162,7 @@
 |-------|----------------|--------|-----------|
 | 51. Control Inventory & Surface Audit | 3/3 | Complete    | 2026-11-21 |
 | 52. OpenIDEA Mapping & Design Contract | 2/2 | Complete    | 2026-11-21 |
-| 53. Native Core & Form Controls | 4/5 | In Progress|  |
+| 53. Native Core & Form Controls | 5/5 | Complete   | 2026-11-21 |
 | 54. Native Overlay & Complex Controls | 0/TBD | Not started | — |
 | 55. Full Surface Adoption & Theme/Offline Parity | 0/TBD | Not started | — |
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |

@@ -179,3 +179,32 @@ Plus `npx tsc --noEmit` (exit 0) and `npm run lint` (exit 0) above.
 Core defect count: **0** (26 native wrappers, 257 exports, 141 icons, caller API unchanged). Scoped gates green. NAT-01 is eligible to close here.
 
 `gsd-tools requirements mark-complete NAT-01` returned `already_complete: ["NAT-01"]` — the status was set prematurely in 53-01; this gate is the first evidence-backed close. No status was reverted or re-written manually.
+
+### Task 2 metadata sign-off
+
+```text
+$ gsd-tools requirements mark-complete NAT-01
+{"updated":false,"marked_complete":[],"already_complete":["NAT-01"],"not_found":[],"total":1}
+
+$ gsd-tools roadmap update-plan-progress 53
+{"updated":true,"phase":"53","plan_count":5,"summary_count":5,"status":"Complete","complete":true}
+
+$ gsd-tools state complete-phase --phase 53
+{"updated":["Status","Last Activity","Current Position"],"phase":"53"}
+
+$ gsd-tools state record-session --stopped-at 'Completed 53-05-PLAN.md' --resume-file None
+{"recorded":true,"updated":["Last session","Stopped At","Resume File"]}
+
+$ gsd-tools state advance-plan
+{"advanced":false,"reason":"last_plan","current_plan":5,"total_plans":5,"status":"ready_for_verification"}
+
+$ gsd-tools state update-progress
+{"updated":true,"percent":100,"completed":10,"total":10,"bar":"[██████████] 100%"}
+
+$ gsd-tools state record-metric --phase 53 --plan 05 --duration '~6m' --tasks 2 --files 5
+{"recorded":true,"phase":"53","plan":"05","duration":"~6m"}
+```
+
+Post-update acceptance: `| NAT-01 | 53 | Complete |` present; ROADMAP row `| 53. Native Core & Form Controls | 5/5 | Complete | 2026-11-21 |`; `STATE` stopped_at `Completed 53-05-PLAN.md`; `phase-plan-index 53` has `has_checkpoints: false`; `npx tsc --noEmit` and `npm run lint` exit 0; no full Vitest run.
+
+Known tool side effect repaired: `roadmap update-plan-progress` rewrote Phase 35's `**Plans:** 4/5 plans executed` to `5/5 plans complete`; restored the original line via Edit as instructed by the plan.
