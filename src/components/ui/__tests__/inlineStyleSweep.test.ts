@@ -11,16 +11,15 @@ const TOKEN_LITERALS = [
   /\bgap:\s*[diagram]\b/i,
 ];
 
-function migratedPaths(): string[] {
-  const paths = new Set<string>();
-  for (const name of readdirSync(MANIFEST_DIR)) {
-    if (!/^wave-.*\.txt$/.test(name)) continue;
-    for (const line of readFileSync(join(MANIFEST_DIR, name), 'utf8').split('\n')) {
-      const path = line.trim();
-      if (path && !path.startsWith('#')) paths.add(path);
-    }
-  }
-  return [...paths].sort();
+function manifestNames(): string[] {
+  return readdirSync(MANIFEST_DIR).filter((name) => /^wave-.*\.txt$/.test(name)).sort();
+}
+
+function pathsIn(name: string): string[] {
+  return readFileSync(join(MANIFEST_DIR, name), 'utf8')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
 }
 
 function violations(path: string): string[] {
@@ -35,12 +34,14 @@ function violations(path: string): string[] {
   return found;
 }
 
-describe('D-10 inline token literal sweep over migrated waves', () => {
-  it('has a non-empty migration manifest', () => {
-    expect(migratedPaths().length).toBeGreaterThan(0);
+describe('D-10 inline token literal sweep over all wave manifests', () => {
+  it('has a non-empty set of wave manifests', () => {
+    expect(manifestNames().length).toBeGreaterThan(0);
   });
 
-  it('finds no token-valued inline style literal in migrated files', () => {
-    expect(migratedPaths().flatMap(violations)).toEqual([]);
+  it('finds no token-valued inline style literal in any migrated wave', () => {
+    for (const name of manifestNames()) {
+      expect(pathsIn(name).flatMap(violations), `manifest ${name}`).toEqual([]);
+    }
   });
 });

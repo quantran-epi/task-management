@@ -1,22 +1,27 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MANIFEST_DIR = join('tests', 'fixtures', 'adoption');
+const SRC_DIR = 'src';
+const UI_DIR = join('src', 'components', 'ui');
 const STATIC_IMPORT = /\bimport\s*\{[^}]*\b(message|notification|Modal)\b[^}]*\}\s*from\s*['"]antd['"]/;
+// D-05/D-07: block every static receiver including loading/open/destroy/warn.
 const STATIC_CALL =
   /\b(Modal)\.confirm\(|\b(message|notification)\.(success|error|warning|warn|info|loading|open|destroy)\(/g;
 
-function migratedPaths(): string[] {
-  const paths = new Set<string>();
-  for (const name of readdirSync(MANIFEST_DIR)) {
-    if (!/^wave-.*\.txt$/.test(name)) continue;
-    for (const line of readFileSync(join(MANIFEST_DIR, name), 'utf8').split('\n')) {
-      const path = line.trim();
-      if (path && !path.startsWith('#')) paths.add(path);
-    }
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) out.push(...sourceFiles(path));
+    else if (/\.tsx?$/.test(entry)) out.push(path);
   }
-  return [...paths].sort();
+  return out;
+}
+
+/** D-05: no zone exception — every src file outside ui/ is scanned. */
+function guardedPaths(): string[] {
+  return sourceFiles(SRC_DIR).filter((path) => !path.startsWith(`${UI_DIR}/`)).sort();
 }
 
 function executableLines(source: string): string[] {
@@ -54,12 +59,13 @@ function violations(path: string): string[] {
   return found;
 }
 
-describe('D-07 static AntD API guard over migrated waves', () => {
-  it('has a non-empty migration manifest', () => {
-    expect(migratedPaths().length).toBeGreaterThan(0);
+describe('D-07 static AntD API guard over whole src', () => {
+  it('scans every src source file outside ui/', () => {
+    expect(guardedPaths().length).toBeGreaterThan(0);
+    expect(guardedPaths().some((path) => path.startsWith('src/components/ui/'))).toBe(false);
   });
 
-  it('finds no unbound message/notification/Modal.confirm call in migrated files', () => {
-    expect(migratedPaths().flatMap(violations)).toEqual([]);
+  it('finds no unbound message/notification/Modal.confirm call outside ui/', () => {
+    expect(guardedPaths().flatMap(violations)).toEqual([]);
   });
 });

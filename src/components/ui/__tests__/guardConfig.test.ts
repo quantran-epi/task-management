@@ -9,8 +9,8 @@ const eslintConfig = readFileSync('eslint.config.mjs', 'utf8');
 
 describe('GUARD-01/02 local-only guard configuration', () => {
   it('defines the three local npm scripts and keeps build unchanged', () => {
-    expect(packageJson.scripts.lint).toBeDefined();
-    expect(packageJson.scripts['lint:adoption']).toBeDefined();
+    expect(packageJson.scripts.lint).toBe('eslint src');
+    expect(packageJson.scripts['lint:adoption']).toBeUndefined();
     expect(packageJson.scripts['test:foundation']).toBeDefined();
     expect(packageJson.scripts.build).toBe('tsc && vite build');
   });

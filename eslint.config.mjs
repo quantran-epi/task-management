@@ -4,14 +4,11 @@
 // runtime AntD imports live in src/components/ui/** (D-01/D-03/D-18), disabled
 // by the later override object.
 //
-// Lint scope is a phase boundary, not a bypass:
-//   - `npm run lint`        -> scoped to ui/ + the foundation files Phase 49
-//                             created; green today.
-//   - `npm run lint:adoption` -> `eslint src`; EXPECTED RED until Phase 50
-//                             migrates the ~248 app files still importing
-//                             AntD directly. Phase 50 promotes it to `lint`.
-// IN-01: do not read a green `npm run lint` as app-wide guard coverage. Before
-// the Phase 50 release, replace `lint` with `eslint src` and require it green.
+// IN-01 (RESOLVED in Phase 50): `npm run lint` is now `eslint src` — app-wide
+// guard coverage, not a scoped subset. Phase 50 migrated every view onto the
+// ui/ barrel so runtime AntD imports outside ui/ are gone. `lint:adoption`
+// was removed; this rule plus the static-API source guards are the single
+// local-only gate. No GitHub Actions.
 import babelParser from '@babel/eslint-parser';
 import reactHooks from 'eslint-plugin-react-hooks';
 
