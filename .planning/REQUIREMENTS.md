@@ -7,31 +7,31 @@
 
 ### Single Runtime Shell (SHELL)
 
-- [ ] **SHELL-01**: Ứng dụng chỉ khởi động một shell IntelliJ/workbench; không còn lựa chọn shell AntD hay flag chuyển đổi.
-- [ ] **SHELL-02**: Toàn bộ code của shell AntD cũ, cờ chuyển đổi trong `main.tsx`, và PWA install prompts bị xóa khỏi repo; không còn đường dẫn code chết.
-- [ ] **SHELL-03**: Không có migration cho cấu hình shell cũ; dữ liệu test được bỏ theo nguyên tắc C-16.
+- [x] **SHELL-01**: Ứng dụng chỉ khởi động một shell IntelliJ/workbench; không còn lựa chọn shell AntD hay flag chuyển đổi.
+- [x] **SHELL-02**: Toàn bộ code của shell AntD cũ, cờ chuyển đổi trong `main.tsx`, và PWA install prompts bị xóa khỏi repo; không còn đường dẫn code chết.
+- [x] **SHELL-03**: Không có migration cho cấu hình shell cũ; dữ liệu test được bỏ theo nguyên tắc C-16.
 
 ### Design Tokens & Themes (TOKEN)
 
-- [ ] **TOKEN-01**: Một nguồn định nghĩa token duy nhất (màu, radius, chiều cao control, font, spacing) được dùng bởi cả AntD `ConfigProvider` và CSS/workbench.
-- [ ] **TOKEN-02**: Cả light mode và dark mode có bộ token hoàn chỉnh, đổi theme lập tức cập nhật mọi control mà không reload.
-- [ ] **TOKEN-03**: Lựa chọn theme hiện tại của user được giữ làm mặc định; không ép đổi sang light hay dark.
-- [ ] **TOKEN-04**: Không còn giá trị màu/font/size hardcoded trong components ứng dụng cho những giá trị đã có token; test phát hiện drift giữa ConfigProvider và CSS token.
+- [x] **TOKEN-01**: Một nguồn định nghĩa token duy nhất (màu, radius, chiều cao control, font, spacing) được dùng bởi cả AntD `ConfigProvider` và CSS/workbench.
+- [x] **TOKEN-02**: Cả light mode và dark mode có bộ token hoàn chỉnh, đổi theme lập tức cập nhật mọi control mà không reload.
+- [x] **TOKEN-03**: Lựa chọn theme hiện tại của user được giữ làm mặc định; không ép đổi sang light hay dark.
+- [x] **TOKEN-04**: Không còn giá trị màu/font/size hardcoded trong components ứng dụng cho những giá trị đã có token; test phát hiện drift giữa ConfigProvider và CSS token.
 
 ### Control Wrappers (CTRL)
 
-- [ ] **CTRL-01**: Mọi control AntD không có ngoại lệ (Button, Input, Select, Table, Form, DatePicker, Drawer, Modal, Card, Menu, Tooltip, Popover, Tag, Badge, v.v.) đều có wrapper TaskMate tại `src/components/ui/`; mọi dùng trong app đều đi qua wrapper đó.
-- [ ] **CTRL-02**: Wrapper Button/IconButton áp thống nhất size, font, màu, trạng thái loading/disabled/danger, và yêu cầu accessible name cho icon button.
-- [ ] **CTRL-03**: Wrapper Input/Select/Textarea/InputNumber áp thống nhất chiều cao, font, placeholder, trạng thái error/disabled và độ rộng mặc định theo ngữ cảnh.
-- [ ] **CTRL-04**: Wrapper Modal/Drawer/Popconfirm áp thống nhất width scale, footer, close/mask policy, và tiêu đề.
-- [ ] **CTRL-05**: Wrapper Tag/StatusTag/Badge áp thống nhất bảng màu trạng thái, font, padding; không còn map màu rời rạc trong các view.
-- [ ] **CTRL-06**: Mọi wrapper, kể cả control phức tạp (Table/Form/DatePicker...), đều là điểm cấu hình duy nhất: nhận default từ token dùng chung và cho phép đổi/thay thế implementation chỉ tại một chỗ. Không có re-export rỗng hay import AntD trực tiếp outside `src/components/ui/`.
+- [x] **CTRL-01**: Mọi control AntD không có ngoại lệ (Button, Input, Select, Table, Form, DatePicker, Drawer, Modal, Card, Menu, Tooltip, Popover, Tag, Badge, v.v.) đều có wrapper TaskMate tại `src/components/ui/`; mọi dùng trong app đều đi qua wrapper đó.
+- [x] **CTRL-02**: Wrapper Button/IconButton áp thống nhất size, font, màu, trạng thái loading/disabled/danger, và yêu cầu accessible name cho icon button.
+- [x] **CTRL-03**: Wrapper Input/Select/Textarea/InputNumber áp thống nhất chiều cao, font, placeholder, trạng thái error/disabled và độ rộng mặc định theo ngữ cảnh.
+- [x] **CTRL-04**: Wrapper Modal/Drawer/Popconfirm áp thống nhất width scale, footer, close/mask policy, và tiêu đề.
+- [x] **CTRL-05**: Wrapper Tag/StatusTag/Badge áp thống nhất bảng màu trạng thái, font, padding; không còn map màu rời rạc trong các view.
+- [x] **CTRL-06**: Mọi wrapper, kể cả control phức tạp (Table/Form/DatePicker...), đều là điểm cấu hình duy nhất: nhận default từ token dùng chung và cho phép đổi/thay thế implementation chỉ tại một chỗ. Không có re-export rỗng hay import AntD trực tiếp outside `src/components/ui/`.
 
 ### Guardrails (GUARD)
 
-- [ ] **GUARD-01**: ESLint rule chặn import trực tiếp `antd`/`@ant-design/icons` trong toàn bộ `src` ngoài `src/components/ui/`; không có ngoại lệ, wrapper là nơi duy nhất được phép.
-- [ ] **GUARD-02**: Quy trình local bắt buộc: `npm run lint` + `npm run build` + focused test sau mỗi lần sửa code; vi phạm import trực tiếp làm lint fail. Không dùng GitHub Actions CI.
-- [ ] **GUARD-03**: Test tập trung kiểm tra wrapper render đúng token ở cả light và dark, accessible name, và policy (footer/modal, status colors).
+- [x] **GUARD-01**: ESLint rule chặn import trực tiếp `antd`/`@ant-design/icons` trong toàn bộ `src` ngoài `src/components/ui/`; không có ngoại lệ, wrapper là nơi duy nhất được phép.
+- [x] **GUARD-02**: Quy trình local bắt buộc: `npm run lint` + `npm run build` + focused test sau mỗi lần sửa code; vi phạm import trực tiếp làm lint fail. Không dùng GitHub Actions CI.
+- [x] **GUARD-03**: Test tập trung kiểm tra wrapper render đúng token ở cả light và dark, accessible name, và policy (footer/modal, status colors).
 
 ### Adoption & Verification (ADOPT)
 
@@ -60,28 +60,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SHELL-01 | Phase 49 | Pending |
-| SHELL-02 | Phase 49 | Pending |
-| SHELL-03 | Phase 49 | Pending |
-| TOKEN-01 | Phase 49 | Pending |
-| TOKEN-02 | Phase 49 | Pending |
-| TOKEN-03 | Phase 49 | Pending |
-| TOKEN-04 | Phase 49 | Pending |
-| CTRL-01 | Phase 49 | Pending |
-| CTRL-02 | Phase 49 | Pending |
-| CTRL-03 | Phase 49 | Pending |
-| CTRL-04 | Phase 49 | Pending |
-| CTRL-05 | Phase 49 | Pending |
-| CTRL-06 | Phase 49 | Pending |
-| GUARD-01 | Phase 49 | Pending |
-| GUARD-02 | Phase 49 | Pending |
-| GUARD-03 | Phase 49 | Pending |
+| SHELL-01 | Phase 49 | Complete |
+| SHELL-02 | Phase 49 | Complete |
+| SHELL-03 | Phase 49 | Complete |
+| TOKEN-01 | Phase 49 | Complete |
+| TOKEN-02 | Phase 49 | Complete |
+| TOKEN-03 | Phase 49 | Complete |
+| TOKEN-04 | Phase 49 | Complete |
+| CTRL-01 | Phase 49 | Complete |
+| CTRL-02 | Phase 49 | Complete |
+| CTRL-03 | Phase 49 | Complete |
+| CTRL-04 | Phase 49 | Complete |
+| CTRL-05 | Phase 49 | Complete |
+| CTRL-06 | Phase 49 | Complete |
+| GUARD-01 | Phase 49 | Complete |
+| GUARD-02 | Phase 49 | Complete |
+| GUARD-03 | Phase 49 | Complete |
 | ADOPT-01 | Phase 50 | Pending |
 | ADOPT-02 | Phase 50 | Pending |
 | ADOPT-03 | Phase 50 | Pending |
 | ADOPT-04 | Phase 50 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 20 total
 - Mapped to phases: 20
 - Unmapped: 0
