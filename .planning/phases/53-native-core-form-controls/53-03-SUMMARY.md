@@ -77,7 +77,7 @@ Each task was committed atomically:
 4. **Task 4: Mentions + TimePicker native popup (S-FLD + S-SEL/N-30)** - `d65fdcd2` (feat)
 5. **Post-task TimeRangePicker popup lifecycle fix** - `0df05b76` (fix)
 
-**Plan metadata:** pending metadata commit.
+**Plan metadata:** see `docs(53-03): complete native form controls plan` commit.
 
 ## Files Created/Modified
 

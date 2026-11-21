@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: executing
-stopped_at: Completed 53-02-PLAN.md
-last_updated: "2026-11-21T19:30:27.293Z"
+stopped_at: Completed 53-03-PLAN.md
+last_updated: "2026-11-21T19:57:28.643Z"
 last_activity: 2026-11-21 -- Phase 53 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 10
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 ## Current Position
 
 Phase: 53 (native-core-form-controls) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-11-21 -- Phase 53 execution started
 
@@ -55,8 +55,8 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T19:30:20.541Z
-Stopped at: Completed 53-02-PLAN.md
+Last session: 2026-11-21T19:57:22.215Z
+Stopped at: Completed 53-03-PLAN.md
 Resume file: None
 
 Progress: [█████░░░░░] 50%
@@ -305,6 +305,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 52]: 52-01 khóa 52-UI-SPEC.md làm design contract duy nhất; 56 mapping = 56 API = 56 wrapper, 22 MAP-01/34 MAP-02, 25 baseline rows, 56/56 API identical, focused test 3 file/12 test xanh. — Phase 53/54/55 implement từ contract đã duyệt, không hỏi lại metric/API; mọi drift ở Phase 57 sửa về PROOF/token nguồn.
 - [Phase 53-native-core-form-controls]: D-53-01: control-level invalid color is scoped via [data-oi-control] to --danger-control, preserving D-12 status map globally — Input.module.css .invalid must measure #c54e58/#f57e84 without changing Tag/Badge status colors
 - [Phase 53]: Native control wrappers keep AntD prop aliases as type-only imports while rendering vendored CSS module DOM; callers stay unchanged until Phase 56. — Preserves caller type surface and avoids touching 157+ call sites before the dependency-removal phase.
+- [Phase 53]: Native form fields keep AntD prop aliases as type-only imports while rendering native S-FLD/portal DOM; callers stay unchanged until Phase 56.
+- [Phase 53]: InputRef/TextAreaRef/MentionsRef expose focus/blur/select, resizableTextArea.textArea and textarea members consumed by DocEditorPane/ChatInputBar/TasksView.
+- [Phase 53]: Select/mentions/time-picker reuse the 53-01 Popup helper; its control prop supplies per-wrapper measurement hooks.
 
 ## Performance Metrics
 
@@ -363,6 +366,7 @@ Progress: [█████░░░░░] 50%
 | Phase 52 P01 | ~2 min | 3 tasks | 4 files |
 | Phase 53-native-core-form-controls P01 | ~7 min | 3 tasks | 38 files |
 | Phase 53 P02 | ~14 min | 4 tasks | 13 files |
+| Phase 53-native-core-form-controls P03 | ~19 min | 4 tasks | 9 files |
 
 ### Blockers
 
