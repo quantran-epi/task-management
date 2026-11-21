@@ -57,14 +57,15 @@ describe('input-family policy', () => {
     const input = screen.getByLabelText('Code');
     expect(input).toBeDisabled();
     expect(input).toHaveValue('ABC');
-    expect(input.closest('.ant-input-affix-wrapper, .ant-input')).toHaveClass('ant-input-status-error');
+    expect(input).toHaveAttribute('data-oi-control', 'input');
+    expect(input).toHaveAttribute('data-state', 'invalid');
   });
 
   it('applies Textarea policy with a token-derived default minRows', () => {
     render(<Textarea placeholder="Ghi chú" />);
     const textarea = screen.getByPlaceholderText('Ghi chú');
     expect(DEFAULT_TEXTAREA_MIN_ROWS).toBeGreaterThanOrEqual(2);
-    expect(textarea.closest('.ant-input')).not.toBeNull();
+    expect(textarea).toHaveAttribute('data-oi-control', 'input');
   });
 
   it('keeps Select allowClear default and InputNumber min/max passthrough', () => {
