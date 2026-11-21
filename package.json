@@ -19,7 +19,10 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "lint": "eslint src/components/ui src/main.tsx src/AppIntelliJ.tsx src/styles src/hooks/useThemeMode.ts src/workbench/themeBroadcast.ts tests/fixtures/guard/good-import.tsx",
+    "lint:adoption": "eslint src",
+    "test:foundation": "vitest run src/components/ui/__tests__ src/workbench/__tests__/shellRemoval.test.ts src/workbench/__tests__/mainBoot.test.ts src/workbench/__tests__/AntdThemeAdapter.test.tsx src/hooks/__tests__/themeBroadcast.test.ts --bail=1"
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",

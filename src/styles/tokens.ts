@@ -1,4 +1,4 @@
-import { theme, type ThemeConfig } from 'antd';
+import { theme, type ThemeConfig } from '../components/ui/antdTheme';
 
 /**
  * Single source of truth for the workbench palette and metrics (TOKEN-01..04, D-08/D-12).
