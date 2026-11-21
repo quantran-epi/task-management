@@ -164,7 +164,7 @@ Script (50 D-11): nâng `lint` thành `eslint src`; xóa `lint:adoption`; giữ 
 | Gate | Lệnh | Kết quả kỳ vọng |
 |------|------|-----------------|
 | Import wrapper | `npm run lint` (no-restricted-imports) | 0 error runtime import `antd`/`@ant-design/icons` ngoài `src/components/ui/` (toàn app xanh sau sóng 5) |
-| Static API | `grep -r nE 'Modal\.confirm\(|message\.(success|error|warning|info)\(|notification\.(success|error|warning|info)\(' src --include='*.ts' --include='*.tsx' \| grep -v 'src/components/ui/' \| grep -vc '^#'` | `0` |
+| Static API | `grep -rnE 'Modal\.confirm\(|message\.(success|error|warning|warn|info|loading|open|destroy)\(|notification\.(success|error|warning|warn|info|loading|open|destroy)\(' src --include='*.ts' --include='*.tsx' \| grep -v 'src/components/ui/' \| grep -vc '^#'` | `0` |
 | Token inline | sweep test token-valued inline style trên view đã migrate (§Inline Style) | 0 hardcode trùng token (ngoại lệ có comment + review list) |
 | Types | `npx tsc --noEmit` | clean |
 | Focused test | `npm run test:foundation` | 11 file/73 test xanh + test ADOPT-01/02 mở rộng |

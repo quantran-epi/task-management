@@ -95,7 +95,35 @@ Plans:
   4. Light/dark parity trên các luồng đại diện: cùng một control ở hai theme chỉ khác giá trị token, không có control nào lệch màu/font/size.
   5. `tsc --noEmit`, lint, focused Vitest và build đều xanh.
 
-**Plans**: TBD
+**Plans**: 9 plans in 6 waves (5 bề mặt + nền + cổng tổng hợp; sóng 5 xử lý notify callback dùng chung)
+Plans:
+**Wave 1**
+
+- [ ] 50-01-PLAN.md — Nền adoption: mount ThemeAppHolder mỗi branch, wrapper ConfigProvider + theme bridge, codemod, guard static API + inline sweep, e2e skeleton (ADOPT-01..04)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 50-02-PLAN.md — Sóng 1 tasks/planner: import barrel + static API → hook + dọn inline token (ADOPT-01/02, U1)
+- [ ] 50-06-PLAN.md — Sóng 5 tool windows: IconButton aria-label, actionRegistry nhận notify callback, dọn inline token (ADOPT-01/02/03, U5)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 50-03-PLAN.md — Sóng 2 settings: import barrel + static API → hook, giữ copy validation byte-for-byte (ADOPT-01/02, U2)
+- [ ] 50-04-PLAN.md — Sóng 3 CR/notes: FormItem mirror, Modal contextHolder, StatusTag token map (ADOPT-01/02, U3/U4)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 50-05-PLAN.md — Sóng 4 AI/chat: import barrel + static API → hook, sửa 3 lỗi hooks ChatMessageBubble (ADOPT-01/02/04, U6)
+- [ ] 50-07-PLAN.md — Views: 22 màn hình cấp cao import barrel + hook (ADOPT-01/02)
+
+**Wave 5** *(blocked on Waves 4)*
+
+- [ ] 50-08-PLAN.md — Đuôi 52 file components/utils/services + notify callback cho 3 file .ts phi-React (ADOPT-01/02)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 50-09-PLAN.md — Cổng tổng hợp: lint = eslint src, xóa lint:adoption, e2e 6 luồng light/dark, 50-UAT.md + VALIDATION sign-off (ADOPT-03/04)
+
 **UI hint**: yes
 
 ## Progress
@@ -103,7 +131,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 49. Design System Foundation | 9/9 | Complete    | 2026-11-21 |
-| 50. Full App Adoption | 0/TBD | Not started | - |
+| 50. Full App Adoption | 0/9 | Not started | - |
 
 ## Previous Milestone: v1.3
 

@@ -32,7 +32,7 @@ created: 2026-11-21
 
 - **After every task commit:** `npx tsc --noEmit && npm run lint && npm run test:foundation`
 - **After every plan wave:** `eslint <các file đã migrate>` + Vitest liên quan + `npm run build`
-- **Before `/gsd-verify-work`:** `eslint src` + `test:foundation` + `build` + `npm run test:e2e` xanh
+- **Before `/gsd-verify-work`:** `eslint src` + `test:foundation` + `build` + `npm run test:e2e` xanh + `grep -rnE 'Modal\.confirm\(|message\.(success|error|warning|warn|info|loading|open|destroy)\(|notification\.(success|error|warning|warn|info|loading|open|destroy)\(' src ...` = 0 (bắt buộc chặn 4 call `message.loading(` đã migrate ở wave 05/06/07/08)
 - **Max feedback latency:** ~60s (không tính E2E)
 
 ---
@@ -58,7 +58,7 @@ created: 2026-11-21
 
 ## Wave 0 Requirements
 
-- [ ] `src/components/ui/__tests__/staticApiGuard.test.ts` — chặn `message.*`/`notification.*`/`Modal.confirm` tĩnh ngoài `ui/` (D-07)
+- [ ] `src/components/ui/__tests__/staticApiGuard.test.ts` — chặn `message.*`/`notification.*`/`Modal.confirm` tĩnh ngoài `ui/` (D-07); regex phải gồm `loading`/`open`/`destroy`/`warn`, verify `grep -rnE 'message\.loading\('` ngoài `ui/` = 0
 - [ ] `src/components/ui/__tests__/inlineStyleSweep.test.ts` — chặn token-valued inline style trên view đã migrate (D-10)
 - [ ] `e2e/adoption.spec.ts` — smoke 6 luồng × light/dark (U1..U6), focus/keyboard/aria
 - [ ] `src/components/ui/__tests__/guardConfig.test.ts` — sửa assert `lint:adoption` → `lint === 'eslint src'` (D-11)
@@ -86,5 +86,6 @@ created: 2026-11-21
 - [ ] No watch-mode flags
 - [ ] Feedback latency < 60s
 - [ ] `nyquist_compliant: true` set in frontmatter
+- [ ] Static API grep toàn src = 0 với regex gồm `loading`/`open`/`destroy`/`warn` (D-05/D-07); 4 call `message.loading(` cũ đã chuyển sang `useMessage().loading(..., duration: 0)` hoặc notify callback
 
 **Approval:** pending 2026-11-21

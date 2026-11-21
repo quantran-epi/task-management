@@ -364,27 +364,27 @@ await expect(font).toBe('13px');
 | A2 | `ThemeAppHolder` có thể bọc toàn bộ `AppIntelliJ` return (kể cả 4 popout branch) mà không tạo holder trùng | Pattern 1, Open Questions | Nếu mỗi popout là window riêng, cần mount riêng theo branch — planner phải quyết. |
 | A3 | `test:foundation` là 11 file/73 test (CONTEXT) nhưng `49-VALIDATION.md` ghi 10 file/61 test | Validation Architecture | Baseline test count lệch; chỉ cần xanh, không cần khớp số chính xác. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Lệch số call site API tĩnh (615 đo được vs 633 CONTEXT)**
    - What we know: grep `Modal.confirm|message.(success|error|warning|info)|notification.(...)` ngoài ui/ cho 615 trong 101 file; CONTEXT ghi 633 trong 104 file.
    - What's unclear: nguồn lệch 18 (có thể `message.open`/`loading` hoặc đếm ở thời điểm trước).
-   - Recommendation: dùng grep guard làm nguồn truth; plan migrate theo bề mặt, không dựa trên số cố định.
+   - RESOLVED: dùng grep guard làm nguồn truth; regex guard phải gồm `message.open`/`loading` (cả `destroy`/`warn`) — 4 call `message.loading(` là nguồn lệch; migrate theo bề mặt (manifest whitelist), không dựa trên số cố định.
 
 2. **Mount `ThemeAppHolder` cho popout**
    - What we know: `AppIntelliJ` trả 5 branch (4 popout + main), mỗi branch bọc `AntdThemeAdapter` riêng; `ThemeAppHolder` chưa mount.
    - What's unclear: popout chạy trong Tauri window riêng hay cùng React tree? (route-based render trong cùng component gợi ý cùng tree, nhưng cần xác nhận runtime).
-   - Recommendation: mount holder ngay dưới `AntdThemeAdapter` trong mỗi branch (hoặc bọc ngoài cùng quanh toàn bộ return) — đúng một lần cho mỗi rendered tree; planner chọn và ghi rõ.
+   - RESOLVED: mount `ThemeAppHolder` đúng một lần ngay dưới `AntdThemeAdapter` trong **mỗi** branch return (4 popout + main); test `.ant-app` chứng minh context tồn tại. Không dùng global singleton.
 
 3. **Phạm vi "view đã migrate" cho inline-style sweep test**
    - What we know: D-10 yêu cầu test chặn token-valued inline style trên view đã migrate; không có rule ESLint tự động.
    - What's unclear: test sweep chạy toàn `src` hay theo danh sách file sóng?
-   - Recommendation: test quét toàn `src` ngoài `ui/` nhưng chỉ fail trên whitelist bề mặt đã migrate (hoặc chạy ở sóng cuối khi toàn app đã migrate) — planner quyết cơ chế.
+   - RESOLVED: guard đọc danh sách manifest `wave-*.txt` làm whitelist cho từng sóng; ở wave cuối mở rộng quét toàn manifest + staticApiGuard quét toàn src. Near-token đổi value phải có comment; marker `ponytail:` được bỏ qua.
 
 4. **Cách toggle theme trong UAT Playwright**
    - What we know: toggle nằm ở `src/workbench/TitleBar.tsx:42` (`useThemeMode().toggle`); `useThemeMode` lưu localStorage + broadcast.
    - What's unclear: selector ổn định cho nút toggle (cần đọc TitleBar ripple) và có sẵn data-testid không.
-   - Recommendation: thêm `data-testid` cho toggle trong plan UAT hoặc dùng accessible name; ghi vào spec.
+   - RESOLVED: dùng accessible-name selector `getByRole('button', { name: 'Chuyển đổi giao diện sáng/tối' })` trong `e2e/adoption.spec.ts`; không thêm `data-testid` mới, giữ aria-label hiện có byte-for-byte.
 
 ## Environment Availability
 
