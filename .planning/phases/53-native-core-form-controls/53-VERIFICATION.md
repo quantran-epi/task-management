@@ -1,20 +1,23 @@
 # Phase 53 Verification — NAT-01 Consolidation Gate
 
-**Date:** 2026-11-21
+**Date:** 2026-11-22 (refreshed after deep code review; original gate 2026-11-21)
 **Plan:** 53-05 (final consolidation gate)
-**Scope:** 26 core/form wrappers, 257-export guard, 141 icons, caller API stability, scoped gates.
+**Scope:** 26 core/form wrappers, 257-export guard, 141 icons, caller API stability, scoped gates, 13/13 review findings.
 **Rule honored:** no `npm test`, no full Vitest suite. Every command below ran on the real tree; stdout captured verbatim.
+**Status: PASSED** — all five ROADMAP success criteria verified; all 13 review findings resolved; focused gates green.
 
 ## Gate Result Summary
 
 | Gate | Command | Result |
 |---|---|---|
-| Typecheck | `npx tsc --noEmit` | PASS (exit 0, 0 bytes stdout/stderr) |
+| Typecheck | `npx tsc --noEmit` | PASS (exit 0) |
 | Lint | `npm run lint` | PASS (exit 0, `eslint src`) |
-| Scoped Vitest (10 files, `--bail=1`) | command below | PASS (10 files / 62 tests) |
+| Build | `npm run build` | PASS (`✓ built in 1.52s`; only pre-existing chunk-size / INEFFECTIVE_DYNAMIC_IMPORT warnings) |
+| Scoped Vitest (11 files, `--bail=1`) | command below | PASS (11 files / 77 tests — original 62 + 15 from `formControls.test.tsx` added after review) |
 | 26-wrapper runtime-import gate | Node script, 7 selftests | PASS (0 offenders, 7/7 selftests correct) |
 | Export guard | `scanWrappers()`/`findMissingWrappers()` | PASS (257 / `[]`) |
 | Icon count | `grep -c '^export const .* = wrapIcon('` | PASS (141) |
+| Review findings | `53-REVIEW.md` + `53-REVIEW-FIX.md` | PASS (13/13 resolved; `status: clean`, 0 critical/0 warning, 1 non-blocking info since fixed) |
 | Plan index | `gsd-tools phase-plan-index 53` | PASS (5 plans, waves 1-5, no warning) |
 
 ## 5 Success Criteria — ROADMAP Phase 53 §75-81
@@ -33,7 +36,14 @@ RUNTIME_IMPORT_OFFENDERS=0
 SELFTESTS={"runtime":1,"typeOnly":0,"inlineTypeOnly":0,"exportTypeOnly":0,"iconRuntime":1,"deepRuntime":1,"multilineMixed":1}
 ```
 
-**Status:** PASS. 26/26 native, 0 runtime AntD/icon imports.
+**Refreshed 2026-11-22 stdout (statement-aware scan over the 26 files listed in §1):**
+
+```text
+CORE_WRAPPERS=26
+RUNTIME_IMPORT_OFFENDERS=0
+```
+
+**Status:** PASS. 26/26 native, 0 runtime AntD/icon imports. All 26 wrappers import `tokens.contract` helpers (`getSharedControlTokens` in 26/26; `getStatusTokens` in status-bearing wrappers; `withoutUndefined` in 6).
 
 **Known debt (not Phase 53):** 19 non-core overlay wrappers still import AntD at runtime — Phase 54/56. 8 deep-import icon lines in `src/workbench/toolwindows/RemoteGitExplorer.tsx` — Phase 55/56.
 
@@ -76,7 +86,7 @@ CONSUMED_COMPONENTS=29
 CONSUMED_ICONS=1
 ```
 
-**Status:** PASS. Typecheck across all callers clean; wrapper guard unchanged; no caller file was edited by Phase 53.
+**Status:** PASS. Typecheck across all callers clean; wrapper guard unchanged; no caller file was edited by Phase 53. Post-review fixes touched only 3 source files (`select.tsx`, `radio.tsx` + `formControls.test.tsx`, plus the stale-directive cleanup in `select.tsx`) and no caller.
 
 ### Criterion 4 — shared token contract, no pass-through
 
@@ -117,29 +127,54 @@ npx vitest run \
   src/components/ui/__tests__/guardConfig.test.ts \
   src/components/ui/__tests__/staticApiGuard.test.ts \
   src/components/ui/__tests__/inlineStyleSweep.test.ts \
+  src/components/ui/__tests__/formControls.test.tsx \
   --bail=1
 ```
 
-**Actual stdout (final rerun):**
+`formControls.test.tsx` was added after the deep review to lock the 3 residual fixes (RR-01 Select lead, RR-02 Radio event payload, RR-03 RadioButton `defaultChecked`) plus the core form-control behavior suite.
+
+**Actual stdout (refreshed rerun 2026-11-22):**
 
 ```text
  RUN  v5.0.2 /Users/tranducquan/Working/Personal/task-management
 
 Not implemented: Window's getComputedStyle() method: with pseudo-elements
   ... (7 duplicate lines)
- Test Files  10 passed (10)
-      Tests  62 passed (62)
-   Start at  03:23:09
-   Duration  7.56s (environment 41%, import 26%, tests 20%, setup 8%, transform 5%)
+ Test Files  11 passed (11)
+      Tests  77 passed (77)
+   Start at  04:34:15
+   Duration  9.62s (environment 38%, import 28%, tests 21%, setup 8%, transform 4%)
 
-Environment  jsdom was created 10 times · 3.01s total, 41% of tracked time
+Environment  jsdom was created 11 times · 3.40s total, 38% of tracked time
              create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
              learn more: https://vitest.dev/guide/improving-performance#test-environments
 ```
 
-Plus `npx tsc --noEmit` (exit 0) and `npm run lint` (exit 0) above.
+Plus `npx tsc --noEmit` (exit 0), `npm run lint` (exit 0) and `npm run build` (exit 0) above.
 
 **Status:** PASS. No overlay/Form `.ant-*` assertion was lowered; the overlay assertions are still present and green because Phase 54 has not removed AntD overlay implementations yet.
+
+## Review Findings — 13/13 Resolved (deep review 2026-11-21)
+
+Cross-reference: `53-REVIEW.md` (`status: clean`, 10 vòng đầu + 3 re-review iteration 1) và `53-REVIEW-FIX.md` (`status: complete`, 3/3 fixed).
+
+| Finding | Severity | Fix owner | Evidence hiện tại |
+|---|---|---|---|
+| CR-01 | critical | token CSS wiring | `src/main.tsx:6-7` import `openidea/tokens.css` + `global.css` trước mọi style khác; `applyCssVariables()` đặt `data-theme` lên `document.documentElement` (`src/styles/tokens.ts:374`); `tokens.test.ts:135` guard import + `var(--x)`; Chrome computed style đúng 2 theme |
+| CR-02 | critical | Radio event payload | `RadioGroupContext.onSelect` nhận `ChangeEvent<HTMLInputElement>` (`radio.tsx:30`); `Radio.handleChange`/`RadioButton` forward cùng native event instance; `handleSelect` giữ `stopPropagation`/`preventDefault`/`nativeEvent`, normalize `target` (`:104-114`); test `formControls.test.tsx:26-45` assert `target.value === 'b'` + method callable |
+| WR-01 | warning | RadioGroup state | uncontrolled `setInnerValue`, `useId()` name riêng, xử lý `options`; test group isolation pass (`formControls.test.tsx:54`) |
+| WR-02 | warning | Switch content/uncontrolled | `checkedChildren`/`unCheckedChildren` render knob label; không leak DOM attr; `defaultChecked` toggle đúng |
+| WR-03 | warning | Checkbox payload | forward native change event (methods nguyên); Group onChange nhận mảng value; indeterminate `checked=true` + `aria-checked="mixed"` + submit value có trong FormData (`formControls.test.tsx:225-249`) |
+| WR-04 | warning | Select option payload | option có `value`/`label`; `onSelect` normalize; `tagRender.onClose` remove đúng tag; `valueKey` xử lý option object (`formControls.test.tsx:160-223`) |
+| WR-05 | warning | Popup focus | `onCloseRef` effect ổn định; search focus giữ qua rerender/clear; Escape scope popup trên cùng; focus anchor trên Escape/outside-click; cleanup không focus anchor (`formControls.test.tsx:120-158`) |
+| INFO-01 | info | import graph | graph sạch, guard counts đúng, `npm run lint` exit 0 (app-wide `eslint src`) |
+| INFO-02 | info | token palette | 5 palette value theo §5; scope `--danger: var(--danger-control)` chỉ control thật; token test khóa giá trị; Chrome xác nhận primary `rgb(56,113,225)`, border light `rgb(209,211,217)` / dark `rgb(64,67,74)`, dark input `rgb(25,26,28)` |
+| INFO-03 | info | Badge dot | `controls.test.tsx` assert `badgeDot` không null; test dùng `<Badge dot />` |
+| RR-01 | warning | Select lead reset | `selectedValueKey` primitive + `useMemo` (`select.tsx:90-97`); effect reset lead không chạy lại khi `setLead` rerender; test `formControls.test.tsx:183-206` ArrowDown × 2 → `data-lead = Alpha two`, Enter → `onChange('a2')` |
+| RR-02 | warning | Radio method payload | giữ event instance, `Object.defineProperty(event,'target',…)` normalize AntD shape; test assert methods callable + `nativeEvent` tồn tại |
+| RR-03 | warning | Standalone RadioButton `defaultChecked` | ternary như `Radio` (`radio.tsx:159-161`), thay `?? ownChecked` không bao giờ chạy; test `formControls.test.tsx:47-52` assert `input.checked === true` + `data-state="checked"` |
+
+**Verification 2026-11-22:** 13/13 findings có fix commit trong git history (`082cd006`, `e4809d2a`, `f972380d`, `26a05858`, `458e1f71`, `a7aaaeef`, `d9bbef38`, `72794011`, `03c8fe04`, `64089491`, `a08ca6e6`); source hiện tại giữ nguyên mọi fix; scoped 11-file / 77-test chạy xanh, `tsc`/`lint`/`build` exit 0. INFO-04 (unused `eslint-disable` directive trong `select.tsx`) đã được dọn bởi `a08ca6e6`; `npm run lint` exit 0 không còn warning.
 
 ## Plan Index
 
@@ -176,7 +211,7 @@ Plus `npx tsc --noEmit` (exit 0) and `npm run lint` (exit 0) above.
 
 ## Sign-off
 
-Core defect count: **0** (26 native wrappers, 257 exports, 141 icons, caller API unchanged). Scoped gates green. NAT-01 is eligible to close here.
+Core defect count: **0** (26 native wrappers, 257 exports, 141 icons, caller API unchanged, 13/13 review findings resolved). Scoped gates green. NAT-01 is closed and verified.
 
 `gsd-tools requirements mark-complete NAT-01` returned `already_complete: ["NAT-01"]` — the status was set prematurely in 53-01; this gate is the first evidence-backed close. No status was reverted or re-written manually.
 
