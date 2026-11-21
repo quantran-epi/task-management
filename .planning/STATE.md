@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
 status: executing
-stopped_at: Phase 52 UI-SPEC approved
-last_updated: "2026-11-21T18:17:25.661Z"
-last_activity: 2026-11-21 -- Phase 52 planning complete
+stopped_at: Completed 52-01-PLAN.md
+last_updated: "2026-11-21T18:21:14.974Z"
+last_activity: 2026-11-21 -- Phase 52 execution started
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 13
 ---
 
@@ -19,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Thay toàn bộ AntD bằng bộ control tự build theo OpenIDEA (PyCharm Islands), light+dark, API/behavior/a11y giữ nguyên; gỡ hoàn toàn `antd` + `@ant-design/icons`.
-**Current focus:** Phase 51 — control-inventory-surface-audit
+**Current focus:** Phase 52 — openidea-mapping-design-contract
 
 ## Current Position
 
-Phase: 52
-Plan: Not started
+Phase: 52 (openidea-mapping-design-contract) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-11-21 -- Phase 52 planning complete
+Last activity: 2026-11-21 -- Phase 52 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -55,9 +55,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T18:04:48.228Z
-Stopped at: Phase 52 UI-SPEC approved
-Resume file: .planning/phases/52-openidea-mapping-design-contract/52-UI-SPEC.md
+Last session: 2026-11-21T18:20:52.657Z
+Stopped at: Completed 52-01-PLAN.md
+Resume file: .planning/phases/52-openidea-mapping-design-contract/52-02-PLAN.md
 
 Progress: [█████████░] 91%
 
@@ -302,6 +302,7 @@ Progress: [█████████░] 91%
 - [Phase 51]: Tồn kho Phase 51 định nghĩa bốn số riêng biệt: 56 file wrapper, 257 tên export guard, 52/141/3 named import live và 10 file test bằng chứng. Mọi lệch với PATTERNS được ghi kèm lệnh tái tạo; static call site được đếm bằng cú pháp và bind context, không phải import AntD tĩnh. — ROADMAP tiêu chí #5 cần một định nghĩa "wrapper" duy nhất; 56 file và 257 export là hai phép đếm khác nhau. PATTERNS đã lỗi thời so với source nên lệnh scan live là truth, tránh Phase 52 lập kế hoạch trên số sai.
 - [Phase 51]: Tồn kho §3 tách riêng năm dạng import: 139 dòng/97 file tổng hợp, 76 dòng runtime, 31 dòng import type, 13 dòng export type + 22 dòng deep type, 8 icon deep-import; static call xếp theo receiver binding (0 unbound, 86 file context-bound) chứ không theo import. — scanConsumedAntd() bỏ import type và không thấy static API; gộp nhóm sẽ làm Phase 56 gỡ dependency sót type/deep import và nhầm 86 notification context-bound thành AntD static.
 - [Phase 51]: Mỗi file wrapper có đúng một nhóm implementation theo quy tắc ưu tiên overlay > domain > core; 26/28/2 không trùng, date-picker thuộc overlay, status-dot/empty thuộc adoption. — Tránh gán nhóm chéo giữa PATTERNS cũ và INV-03; phase 53/54/55 cần một nhóm duy nhất để khóa API.
+- [Phase 52]: 52-01 khóa 52-UI-SPEC.md làm design contract duy nhất; 56 mapping = 56 API = 56 wrapper, 22 MAP-01/34 MAP-02, 25 baseline rows, 56/56 API identical, focused test 3 file/12 test xanh. — Phase 53/54/55 implement từ contract đã duyệt, không hỏi lại metric/API; mọi drift ở Phase 57 sửa về PROOF/token nguồn.
 
 ## Performance Metrics
 
@@ -357,3 +358,8 @@ Progress: [█████████░] 91%
 | Phase 51 P01 | 3 min | 2 tasks | 1 files |
 | Phase 51 P02 | 5 min | 2 tasks | 3 files |
 | Phase 51 P03 | 3 min | 2 tasks | 2 files |
+| Phase 52 P01 | ~2 min | 3 tasks | 4 files |
+
+### Blockers
+
+None

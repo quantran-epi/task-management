@@ -13,9 +13,9 @@
 
 ### OpenIDEA Mapping & Design (MAP)
 
-- [ ] **MAP-01**: Với mỗi control có tương đương trong OpenIDEA, bản thiết kế map rõ token, metric, DOM/class, CSS module gốc, trạng thái và behavior; nguồn tham chiếu được ghi lại.
-- [ ] **MAP-02**: Với mỗi control không có tương đương trong OpenIDEA, thiết kế control mới theo ngôn ngữ OpenIDEA: font 13px, control height 28px, radius 4px, focus ring, popup portal cách anchor 4px, list row 24px, dialog radius 10px — áp cho cả light và dark.
-- [ ] **MAP-03**: Bản thiết kế ghi rõ props/API wrapper hiện tại được giữ nguyên; event, controlled/uncontrolled behavior, validation, keyboard/focus và accessible name không đổi.
+- [x] **MAP-01**: Với mỗi control có tương đương trong OpenIDEA, bản thiết kế map rõ token, metric, DOM/class, CSS module gốc, trạng thái và behavior; nguồn tham chiếu được ghi lại.
+- [x] **MAP-02**: Với mỗi control không có tương đương trong OpenIDEA, thiết kế control mới theo ngôn ngữ OpenIDEA: font 13px, control height 28px, radius 4px, focus ring, popup portal cách anchor 4px, list row 24px, dialog radius 10px — áp cho cả light và dark.
+- [x] **MAP-03**: Bản thiết kế ghi rõ props/API wrapper hiện tại được giữ nguyên; event, controlled/uncontrolled behavior, validation, keyboard/focus và accessible name không đổi.
 
 ### Native Implementation (NAT)
 
@@ -64,9 +64,9 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 | INV-01 | 51 | Complete |
 | INV-02 | 51 | Complete |
 | INV-03 | 51 | Complete |
-| MAP-01 | 52 | Pending |
-| MAP-02 | 52 | Pending |
-| MAP-03 | 52 | Pending |
+| MAP-01 | 52 | Complete |
+| MAP-02 | 52 | Complete |
+| MAP-03 | 52 | Complete |
 | NAT-01 | 53 | Pending |
 | NAT-02 | 54 | Pending |
 | NAT-03 | 55 | Pending |
