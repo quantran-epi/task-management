@@ -1,6 +1,6 @@
 import { Drawer as AntDrawer, type DrawerProps as AntDrawerProps } from 'antd';
-import { getSharedControlTokens } from './tokens.contract';
-import { getOverlayWidth, type OverlayWidth } from './modal';
+import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
+import { getOverlayWidth, resolveMask, type OverlayWidth } from './modal';
 
 export interface DrawerProps extends AntDrawerProps {
   widthScale?: OverlayWidth;
@@ -15,18 +15,23 @@ export function Drawer({
   placement = 'right',
   closable,
   mask,
+  maskClosable,
   title,
   ...rest
 }: DrawerProps) {
   void getSharedControlTokens();
+  const closableByDefault = closePolicy === 'closable';
   return (
     <AntDrawer
       {...rest}
       size={width ?? getOverlayWidth(widthScale)}
       placement={placement}
       title={title}
-      closable={closePolicy === 'closable' ? (closable ?? true) : false}
-      mask={{ closable: closePolicy === 'closable', ...(typeof mask === 'object' ? mask : {}) }}
+      closable={closableByDefault ? (closable ?? true) : false}
+      {...withoutUndefined({
+        maskClosable,
+        mask: resolveMask(mask, closableByDefault, maskClosable),
+      })}
     />
   );
 }

@@ -18,6 +18,20 @@ export interface ModalProps extends AntModalProps {
 }
 
 /**
+ * Preserve an explicit boolean `mask` (especially `false`) instead of replacing
+ * it with a config object, which AntD reads as "mask on" (WR-04). Object form
+ * keeps the close policy as its default and lets caller keys override it.
+ */
+export function resolveMask(
+  mask: AntModalProps['mask'],
+  closableByDefault: boolean,
+  maskClosable?: boolean,
+): AntModalProps['mask'] {
+  if (typeof mask === 'boolean') return mask;
+  return { closable: maskClosable ?? closableByDefault, ...(mask ?? {}) };
+}
+
+/**
  * Single swap point for declarative AntD Modals. Width comes only from the token
  * scale; callers cannot inject a raw CSS width through `widthScale`.
  */
@@ -29,18 +43,20 @@ export function Modal({
   footer,
   closable,
   mask,
+  maskClosable,
   title,
   ...rest
 }: ModalProps) {
   const resolvedFooter = footerPolicy === 'none' ? null : footer;
+  const closableByDefault = closePolicy === 'closable';
   return (
     <AntModal
       {...withoutUndefined(rest)}
       width={width ?? getOverlayWidth(widthScale)}
       footer={resolvedFooter}
       title={title}
-      closable={closePolicy === 'closable' ? (closable ?? true) : false}
-      mask={{ closable: closePolicy === 'closable', ...(typeof mask === 'object' ? mask : {}) }}
+      closable={closableByDefault ? (closable ?? true) : false}
+      {...withoutUndefined({ maskClosable, mask: resolveMask(mask, closableByDefault, maskClosable) })}
     />
   );
 }

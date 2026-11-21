@@ -88,6 +88,23 @@ describe('overlay policy', () => {
     expect(document.querySelector('.ant-modal-close')).not.toBeNull();
   });
 
+  it('honours an explicit mask={false} on Modal and Drawer (WR-04)', () => {
+    const { unmount } = render(<Modal open title="No mask" mask={false} onCancel={() => {}} />);
+    expect(document.querySelector('.ant-modal-mask')).toBeNull();
+    unmount();
+    render(<Drawer open title="No mask" mask={false} onClose={() => {}} />);
+    expect(document.querySelector('.ant-drawer-mask')).toBeNull();
+  });
+
+  it('passes a raw CSS width straight through to Drawer (WR-04)', () => {
+    // jsdom rejects min()/clamp() in inline styles; calc() proves raw CSS reaches AntD
+    // (previously the wrapper coerced it through the numeric size scale).
+    const cssWidth = 'calc(100vw - 32px)';
+    render(<Drawer open title="Wide" width={cssWidth} onClose={() => {}} />);
+    const panel = document.querySelector('.ant-drawer-content-wrapper') as HTMLElement;
+    expect(panel.style.width).toBe(cssWidth);
+  });
+
   it('supports silent close and no-footer policies', () => {
     render(<Modal open title="Chỉ đọc" footerPolicy="none" closePolicy="silent" onCancel={() => {}} />);
     expect(document.querySelector('.ant-modal-footer')).toBeNull();
