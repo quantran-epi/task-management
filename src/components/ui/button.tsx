@@ -1,7 +1,9 @@
 import type { ButtonProps as AntButtonProps } from 'antd';
 import type { CSSProperties, MouseEventHandler, ReactNode } from 'react';
 import { classNames } from './native/classNames';
+import { LoadingOutlined } from './icon';
 import buttonStyles from './openidea/Button.module.css';
+import spinnerStyles from './openidea/Spinner.module.css';
 import { getSharedControlTokens, withoutUndefined, type ControlSize } from './tokens.contract';
 
 /** Wrapper policy prop: maps to AntD `type`/`danger` (D-02). */
@@ -78,7 +80,13 @@ export function Button({
 
   const content: ReactNode = (
     <>
-      {icon ? <span aria-hidden="true">{icon}</span> : null}
+      {loading ? (
+        <span className={spinnerStyles.spinner} role="status" aria-hidden="true">
+          <LoadingOutlined />
+        </span>
+      ) : icon ? (
+        <span aria-hidden="true">{icon}</span>
+      ) : null}
       {children}
     </>
   );
@@ -114,6 +122,7 @@ export function Button({
  * Default size is `middle`, taken from the same ControlSize union as AntD.
  */
 export function IconButton({ 'aria-label': label, size = 'middle', icon, ...rest }: IconButtonProps) {
+  const isSmall = size === 'small';
   return (
     <Button
       {...rest}
@@ -121,6 +130,14 @@ export function IconButton({ 'aria-label': label, size = 'middle', icon, ...rest
       icon={icon}
       aria-label={label}
       data-oi-control="icon-button"
+      style={{
+        width: isSmall ? 20 : 24,
+        minWidth: isSmall ? 20 : 24,
+        height: isSmall ? 20 : 24,
+        padding: 0,
+        borderRadius: 4,
+        ...rest.style,
+      }}
       className={classNames(buttonStyles.iconButton, ICON_SIZE_CLASS[size], rest.className)}
     />
   );

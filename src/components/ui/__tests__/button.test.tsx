@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { SearchOutlined } from '../icon';
 import { Button, IconButton, type IconButtonProps } from '../button';
@@ -32,6 +32,24 @@ describe('Button wrapper', () => {
     expect(button).toHaveAttribute('data-state', 'ghost');
     expect(button.style.padding).toBe('0px');
     expect(button.getAttribute('style')).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
+  });
+
+  it('renders a spinner for loading buttons instead of only a label', () => {
+    render(<Button loading>Lưu thay đổi</Button>);
+    const button = screen.getByRole('button', { name: /Lưu thay đổi/ });
+    expect(button.querySelector('[role="status"]')).not.toBeNull();
+    expect(button.querySelector('svg')).not.toBeNull();
+  });
+
+  it('keeps IconButton square and icon-sized, including small', () => {
+    const { rerender } = render(<IconButton aria-label="Cài đặt" icon={<span>⚙</span>} />);
+    const button = screen.getByRole('button', { name: 'Cài đặt' });
+    expect(button.style.width).toBe('24px');
+    expect(button.style.height).toBe('24px');
+    expect(button.style.minWidth).toBe('24px');
+    rerender(<IconButton aria-label="Cài đặt" size="small" icon={<span>⚙</span>} />);
+    expect(button.style.width).toBe('20px');
+    expect(button.style.height).toBe('20px');
   });
 
   it('forwards loading and disabled states with native semantics', () => {
