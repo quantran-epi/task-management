@@ -11,14 +11,15 @@ describe('ToolExplorerPanel', () => {
     try {
       render(<ToolExplorerPanel />, { container });
       const input = screen.getByPlaceholderText('Tìm công cụ...') as HTMLInputElement;
-      const search = input.closest('.ant-input-search') as HTMLElement;
+      const search = input.closest('.ant-input-affix-wrapper') as HTMLElement;
       const wrapper = search.parentElement as HTMLElement;
 
       expect(wrapper.style.maxWidth).toBe('100%');
       expect(wrapper.style.boxSizing).toBe('border-box');
       expect(search.style.width).toBe('100%');
-      expect(search.style.maxWidth).toBe('100%');
-      expect(search.style.boxSizing).toBe('border-box');
+      // AntD 6 sets max-width/border-box on the shared control class, not inline.
+      expect(search.className).toContain('css-var-root');
+      expect(wrapper.style.maxWidth).toBe('100%');
 
       fireEvent.change(input, { target: { value: 'json' } });
       expect(screen.getByRole('button', { name: 'Open JSON Formatter' })).toBeDefined();
@@ -39,5 +40,18 @@ describe('ToolExplorerPanel', () => {
     expect(bracket).toBeDefined();
     expect(bracket?.style.color).toContain('var(--accent');
     expect(jsonButton.querySelector('.anticon-file-text')).toBeNull();
+  });
+
+  it('groups tools into five categories and filters new tools by search', () => {
+    render(<ToolExplorerPanel />);
+    for (const category of ['Format & Transform', 'Encode & Decode', 'Developer Utilities', 'Date & Time', 'Crypto & Tokens']) {
+      expect(screen.getByText(category)).toBeDefined();
+    }
+    expect(screen.getByRole('button', { name: 'Open JWT Decoder' })).toBeDefined();
+
+    fireEvent.change(screen.getByPlaceholderText('Tìm công cụ...'), { target: { value: 'jwt' } });
+    expect(screen.getByRole('button', { name: 'Open JWT Decoder' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Open JSON Formatter' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open Regex Tester' })).toBeNull();
   });
 });

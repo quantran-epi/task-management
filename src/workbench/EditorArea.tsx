@@ -102,6 +102,14 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
     case 'xml_formatter':
     case 'text_compare':
     case 'markdown_viewer':
+    case 'encoder_decoder':
+    case 'regex_tester':
+    case 'timestamp_converter':
+    case 'date_calculation':
+    case 'text_utilities':
+    case 'cron_expression':
+    case 'hash_uuid':
+    case 'jwt_decoder':
       return utilityToolIcon(viewType, size);
     default:
       return <FileTextOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
@@ -675,6 +683,14 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'xml_formatter':
       case 'text_compare':
       case 'markdown_viewer':
+      case 'encoder_decoder':
+      case 'regex_tester':
+      case 'timestamp_converter':
+      case 'date_calculation':
+      case 'text_utilities':
+      case 'cron_expression':
+      case 'hash_uuid':
+      case 'jwt_decoder':
         return <UtilityToolPanel viewType={tab.viewType} />;
       default:
         return <TasksView {...dbProp} />;

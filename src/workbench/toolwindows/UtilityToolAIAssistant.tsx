@@ -22,6 +22,14 @@ const TOOL_NAMES: Record<string, string> = {
   xml_formatter: 'XML Formatter',
   text_compare: 'Text Compare',
   markdown_viewer: 'Markdown Viewer',
+  encoder_decoder: 'Encoder/Decoder',
+  regex_tester: 'Regex Tester',
+  timestamp_converter: 'Timestamp Converter',
+  date_calculation: 'Date Calculation',
+  text_utilities: 'Text Utilities',
+  cron_expression: 'Cron Expression',
+  hash_uuid: 'Hash & UUID',
+  jwt_decoder: 'JWT Decoder',
 };
 
 export interface UtilityToolAIAssistantProps {
