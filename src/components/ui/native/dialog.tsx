@@ -24,11 +24,13 @@ export interface DialogSurfaceProps {
   /** Transparent backdrop when true; when false, no backdrop node is rendered at all. */
   masked?: boolean;
   onClose?: (reason?: DialogCloseReason) => void;
-  label?: string;
-  className?: string;
-  style?: CSSProperties;
+  label?: string | undefined;
+  className?: string | undefined;
+  style?: CSSProperties | undefined;
   /** Measurement hook for Phase 57; never a wrapper prop. */
   control?: string;
+  /** Optional panel chrome around the dialog, rendered inside the same portal (drawer panels). */
+  wrapper?: (dialog: ReactNode) => ReactNode;
 }
 
 const FOCUSABLE = [
@@ -67,6 +69,7 @@ export function DialogSurface({
   className,
   style,
   control = 'dialog',
+  wrapper,
 }: DialogSurfaceProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -174,6 +177,7 @@ export function DialogSurface({
     </div>
   );
 
+  const surface = wrapper ? wrapper(dialog) : dialog;
   return createPortal(
     masked ? (
       <div
@@ -183,10 +187,10 @@ export function DialogSurface({
           if (closable && event.target === event.currentTarget) close('outside');
         }}
       >
-        {dialog}
+        {surface}
       </div>
     ) : (
-      dialog
+      surface
     ),
     document.body,
   );
