@@ -1,7 +1,7 @@
 import type { TimePickerProps as AntTimePickerProps, TimeRangePickerProps } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { classNames } from './native/classNames';
 import { Popup } from './native/popup';
 import inputStyles from './openidea/Input.module.css';
@@ -155,6 +155,8 @@ function fieldProps(width: 'full' | 'auto', style: CSSProperties | undefined, cl
 export function TimePicker({ width = 'full', style, className, value, defaultValue, format: formatProp = 'HH:mm:ss', placeholder, disabled, allowClear, onChange, onBlur, status, 'aria-invalid': ariaInvalid, 'aria-label': ariaLabel }: TimeFieldProps) {
   const format = formatProp as string;
   const anchorRef = useRef<HTMLInputElement>(null);
+  // useId may contain ':' which breaks the '#id-index' querySelector below.
+  const idBase = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   // Focusing the anchor after a pick would re-trigger onFocus and reopen the
   // popup, so suppress that one restore-focus event.
   const suppressOpen = useRef(false);
@@ -207,10 +209,10 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
       ) : null}
       <Popup open={state.open} anchorRef={anchorRef} onClose={close} className={selectStyles.popup ?? ''} control="time-picker-popup" label={ariaLabel ?? placeholder ?? 'Chọn giờ'}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
-          <TimeColumn id="tp-h" values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second)} />
-          <TimeColumn id="tp-m" values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second)} />
+          <TimeColumn id={`${idBase}-tp-h`} values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second)} />
+          <TimeColumn id={`${idBase}-tp-m`} values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second)} />
           {active.seconds.length > 0 ? (
-            <TimeColumn id="tp-s" values={active.seconds} value={second} lead={leads[2]} label="Giây" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], prev.lead[1], index] }))} onPick={(s) => pick(hour, minute, s)} />
+            <TimeColumn id={`${idBase}-tp-s`} values={active.seconds} value={second} lead={leads[2]} label="Giây" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], prev.lead[1], index] }))} onPick={(s) => pick(hour, minute, s)} />
           ) : null}
         </div>
       </Popup>
@@ -225,6 +227,7 @@ export function TimeRangePicker({
   const format = formatProp as string;
   const startRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLInputElement>(null);
+  const idBase = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   // Same focus-restore guard as TimePicker: suppress the onFocus fired by the
   // programmatic focus after a pick so the popup stays closed.
   const suppressOpen = useRef(false);
@@ -285,9 +288,9 @@ export function TimeRangePicker({
       ) : null}
       <Popup open={rangeOpen} anchorRef={anchorRef as React.RefObject<HTMLElement | null>} onClose={() => { setRangeOpen(false); anchorRef.current?.focus(); }} className={selectStyles.popup ?? ''} control="time-picker-range-popup" label={ariaLabel ?? 'Chọn khoảng thời gian'}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
-          <TimeColumn id="tr-h" values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
-          <TimeColumn id="tr-m" values={grid.minutes} value={parsed.minute()} lead={rangeLead[1]} label="Phút" onLead={(index) => setRangeLead((prev) => [prev[0], index, prev[2]])} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
-          {grid.seconds.length > 0 ? <TimeColumn id="tr-s" values={grid.seconds} value={parsed.second()} lead={rangeLead[2]} label="Giây" onLead={(index) => setRangeLead((prev) => [prev[0], prev[1], index])} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
+          <TimeColumn id={`${idBase}-tr-h`} values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
+          <TimeColumn id={`${idBase}-tr-m`} values={grid.minutes} value={parsed.minute()} lead={rangeLead[1]} label="Phút" onLead={(index) => setRangeLead((prev) => [prev[0], index, prev[2]])} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
+          {grid.seconds.length > 0 ? <TimeColumn id={`${idBase}-tr-s`} values={grid.seconds} value={parsed.second()} lead={rangeLead[2]} label="Giây" onLead={(index) => setRangeLead((prev) => [prev[0], prev[1], index])} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
         </div>
       </Popup>
     </>

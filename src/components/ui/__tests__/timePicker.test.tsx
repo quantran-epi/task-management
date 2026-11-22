@@ -27,4 +27,18 @@ describe('native TimePicker', () => {
     expect(popup()).toBeNull();
     view.unmount();
   });
+
+  it('gives each picker instance unique option ids', () => {
+    const view = render(<><TimePicker /><TimePicker /></>);
+    const inputs = view.container.querySelectorAll('[data-oi-control="time-picker"]');
+    fireEvent.focus(inputs[0]!);
+    fireEvent.focus(inputs[1]!);
+    const ids = Array.from(document.querySelectorAll('[data-oi-control="list-row"]'))
+      .map((row) => row.id)
+      .filter(Boolean);
+    // Both pickers render hour/minute/second options; no two share an id.
+    expect(ids.length).toBe(288);
+    expect(new Set(ids).size).toBe(288);
+    view.unmount();
+  });
 });
