@@ -3,7 +3,7 @@ import type { ThemeConfig } from 'antd';
 import type { ThemeMode } from '../../styles/tokens';
 import { applyCssVariables, lightTokens, darkTokens } from '../../styles/tokens';
 import { useThemeMode } from '../../hooks/useThemeMode';
-import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
+import { withoutUndefined } from './tokens.contract';
 
 export type ConfigProviderProps = {
   theme?: ThemeConfig;
@@ -31,7 +31,6 @@ export function ThemeConfigProvider({ theme, children }: ConfigProviderProps) {
 
   useEffect(() => {
     void config;
-    void getSharedControlTokens();
     if (wrapperRef.current) applyCssVariables(resolvedMode, wrapperRef.current);
   }, [resolvedMode]);
 

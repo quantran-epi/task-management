@@ -15,7 +15,7 @@ import { classNames, domProps } from './native/classNames';
 import { Popup } from './native/popup';
 import listStyles from './openidea/List.module.css';
 import selectStyles from './openidea/Select.module.css';
-import { getSharedControlTokens, withoutUndefined, type ControlSize } from './tokens.contract';
+import { withoutUndefined, type ControlSize } from './tokens.contract';
 import { controlStyle, controlWidthStyle, type InputWidth } from './input';
 
 export interface SelectProps<
@@ -71,7 +71,6 @@ export function Select<
   ValueType = unknown,
   OptionType extends BaseOptionType = DefaultOptionType,
 >({ width = 'full', allowClear=true, status, style, className, ...rest }: SelectProps<ValueType, OptionType>) {
-  void getSharedControlTokens();
   const idBase = useId();
   const triggerRef = useRef<HTMLButtonElement | HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);

@@ -14,7 +14,7 @@ import { Popup } from './native/popup';
 import inputStyles from './openidea/Input.module.css';
 import listStyles from './openidea/List.module.css';
 import selectStyles from './openidea/Select.module.css';
-import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
+import { getSharedControlTokens } from './tokens.contract';
 
 dayjs.extend(customParseFormat);
 
@@ -254,4 +254,3 @@ export function DateRangePicker({
   );
 }
 
-void withoutUndefined;
