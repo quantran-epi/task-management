@@ -1,6 +1,6 @@
 import React, { useEffect, useSyncExternalStore, useState } from 'react';
 import { Button, Empty, Popconfirm, Tag, Tooltip, Typography, useAntdToken, EmptyImageSimple } from '../../ui';
-import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, CopyOutlined, SyncOutlined } from '../../ui/icon';
+import { CheckCircleOutlined, CloseCircleOutlined, CloseOutlined, CopyOutlined, StopOutlined, SyncOutlined } from '../../ui/icon';
 import dayjs from 'dayjs';
 import type { AgentLiveStep, AgentRunState } from '../../../types/aiOffice';
 import {
@@ -51,7 +51,7 @@ export interface AgentActivityPanelProps {
   codingZoneSlot?: React.ReactNode | undefined;
 }
 
-type ToolStatus = 'running' | 'done' | 'error';
+type ToolStatus = 'running' | 'done' | 'cancelled' | 'error';
 type TabKey = 'timeline' | 'prompts';
 
 interface TimelineRow {
@@ -152,6 +152,7 @@ function formatClock(ms: number): string {
 
 function statusFromStep(step: AgentLiveStep): ToolStatus {
   if (step.status === 'error') return 'error';
+  if (step.status === 'cancelled') return 'cancelled';
   if (step.status === 'running') return 'running';
   return 'done';
 }
@@ -178,14 +179,17 @@ function toTimelineRow(step: AgentLiveStep, agentId: string, nameOf: (id: string
  * A store snapshot becomes a UI row so a tool task stays visible and cancellable even after
  * its chat tab was closed. Existing live-step rows win by call id; the store only fills gaps.
  */
-function toStoreRow(snapshot: { callId: string; status: string; updatedAt: number }): TimelineRow {
+function toStoreRow(snapshot: { callId: string; status: string; startedAt: number; updatedAt: number }): TimelineRow {
   const step: AgentLiveStep = {
     id: snapshot.callId,
     label: snapshot.callId,
-    at: new Date(snapshot.updatedAt).toISOString(),
+    at: new Date(snapshot.startedAt).toISOString(),
     toolName: snapshot.callId,
     phase: 'call',
-    status: snapshot.status === 'running' ? 'running' : snapshot.status === 'error' ? 'error' : 'done',
+    status: snapshot.status === 'running' ? 'running'
+      : snapshot.status === 'error' ? 'error'
+      : snapshot.status === 'cancelled' ? 'cancelled'
+      : 'done',
   };
   return {
     step,
@@ -206,6 +210,7 @@ const TimelineEventRow: React.FC<{ row: TimelineRow; onCancel?: ((id: string) =>
   const statusMeta = {
     running: { icon: <SyncOutlined spin />, label: 'đang chạy', color: token.colorWarning },
     done: { icon: <CheckCircleOutlined />, label: 'xong', color: token.colorSuccess },
+    cancelled: { icon: <StopOutlined />, label: 'đã hủy', color: token.colorTextTertiary },
     error: { icon: <CloseCircleOutlined />, label: 'lỗi', color: token.colorError },
   }[status];
   const args = capPreview(step.detail);
@@ -645,6 +650,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = React.memo(
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-12)', marginBottom: 8, fontSize: 'var(--font-size-xs)', color: token.colorTextTertiary }}>
           <span>✓ xong</span>
           <span>› đang chạy</span>
+          <span>■ đã hủy</span>
           <span>! lỗi</span>
         </div>
         {visibleRows.length === 0 ? (

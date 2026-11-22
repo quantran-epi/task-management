@@ -19,6 +19,8 @@ export interface ToolTaskSnapshot {
   stdout: string;
   stderr: string;
   finishReason?: string | undefined;
+  /** Set once on the first snapshot of a call; `updatedAt` moves on every output chunk. */
+  startedAt: number;
   updatedAt: number;
 }
 
@@ -77,6 +79,7 @@ export function upsertToolTask(patch: Partial<ToolTaskSnapshot> & { callId: stri
     ...(patch.finishReason !== undefined || current?.finishReason !== undefined
       ? { finishReason: patch.finishReason ?? current?.finishReason }
       : {}),
+    startedAt: current?.startedAt ?? patch.startedAt ?? Date.now(),
     updatedAt: Date.now(),
   };
   if (!current) {

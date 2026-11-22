@@ -293,7 +293,7 @@ export interface AgentLiveStep {
   startedAt?: string | undefined;
   endedAt?: string | undefined;
   durationMs?: number | undefined;
-  status?: 'running' | 'done' | 'error' | undefined;
+  status?: 'running' | 'done' | 'cancelled' | 'error' | undefined;
   resultPreview?: string | undefined;
 }
 
