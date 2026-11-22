@@ -10,6 +10,7 @@
 - Phase 56: AntD Removal, Guardrails & Focused Verification (v1.6)
 - Phase 57: Chrome Visual & Behavior Sweep — dummy data, light/dark (v1.6)
 - Phase 58: Defect Closure & Milestone Sign-off (v1.6)
+- Phase 59: Control Parity Rework — per-control Chrome compare (v1.6)
 
 ## Milestone: v1.6 Native UI Controls
 
@@ -33,6 +34,7 @@
 - [ ] **Phase 56: AntD Removal, Guardrails & Focused Verification** — gỡ dependency, ESLint guard, focused test, cổng tổng hợp (CLEAN-01..03)
 - [ ] **Phase 57: Chrome Visual & Behavior Sweep** — seed dummy data, quét mọi màn hình light/dark, đo computed style, screenshot, log pass/fail, tương tác thật (VIS-01..04)
 - [ ] **Phase 58: Defect Closure & Milestone Sign-off** — sửa hết defect, re-quét, chốt milestone không cần sếp duyệt từng màn hình (VIS-05)
+- [ ] **Phase 59: Control Parity Rework** — xử lý từng control 1, compare trực tiếp OpenIDEA trên Chrome, render + behavior + size light/dark (new remediation, chặn phases 55-58)
 
 ## Phase Details
 
@@ -156,6 +158,21 @@
 
 **UI hint**: yes
 
+### Phase 59: Control Parity Rework — per-control Chrome compare
+
+**Goal:** Sửa tận gốc chất lượng bộ control: từng wrapper một được đối chiếu trực tiếp với control tương ứng trong OpenIDEA/IntelliJ trên Chrome, cả render lẫn behavior, light + dark. Không coi phase 54 là đạt cho tới khi xong phase này.
+**Depends on:** Phase 54 (remediation) — chặn Phase 55/56/57/58 cho tới khi pass.
+**Requirements**: NAT-02 (reopened), mới: PAR-01..PAR-04 (sẽ thêm vào REQUIREMENTS.md khi lập kế hoạch).
+**Success Criteria** (what must be TRUE):
+
+  1. Với mỗi control trong 56 wrapper, có evidence Chrome cặp: OpenIDEA reference và TaskMate wrapper cùng viewport/theme, screenshot + DOM + computed geometry (width/height/font/padding/margin/radius/border/shadow/icon/alignment/overflow), light và dark.
+  2. Với mỗi control, có evidence tương tác thật: click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, mở/đóng popup — so sánh behavior với reference, không có shape tự chế.
+  3. Mọi diff được sửa trong wrapper/CSS module tương ứng; mỗi control đạt pass riêng trước khi chuyển control kế; có log pass/fail lưu artifact.
+  4. Không có console error trong lúc thao tác; focused test được cập nhật để assert behavior thật thay vì shape giả; không chạy full Vitest suite.
+  5. Code review + verifier độc lập xác nhận từng control pass; phase 55 chỉ được lập/execute sau khi phase 59 pass.
+
+**UI hint**: yes
+
 ## Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -167,7 +184,8 @@
 | 55. Full Surface Adoption & Theme/Offline Parity | 0/TBD | Not started | — |
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
 | 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
-| 58. Defect Closure & Milestone Sign-off | 0/TBD | Not started | — |
+| 58. Defect Closure & Milestone Sign-off | 0/TBD | Blocked by 59 | — |
+| 59. Control Parity Rework | 0/TBD | Not started | — |
 
 ## Previous Milestone: v1.5 Design System & UI Consistency
 
@@ -1339,6 +1357,17 @@ Plans:
 **Wave 4** *(blocked on Wave 2 + Wave 3)*
 
 - [x] 48-04-PLAN.md — Focused gate + Chrome Playwright UAT + clean re-review complete; guarded merge/push delivered to feature/intellij-workbench (D-19..D-22)
+
+### Phase 59: Control parity rework per-control Chrome compare
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 58
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 59 to break down)
 
 ---
 

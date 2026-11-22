@@ -30,6 +30,13 @@
 - [ ] **CLEAN-02**: ESLint guard chặn mọi import trực tiếp `antd` / `@ant-design/icons` trong `src`; vi phạm làm lint fail.
 - [ ] **CLEAN-03**: Focused test kiểm tra wrapper render đúng token light/dark, accessible name, API tương thích, popup/keyboard/focus/validation policy; không chạy full Vitest suite.
 
+### Control Parity Rework (PAR) — reopened remediation, blocks 55-58
+
+- [ ] **PAR-01**: Với mỗi control trong 56 wrapper, chạy cặp OpenIDEA reference và TaskMate wrapper trên Chrome cùng viewport/theme; ghi screenshot, DOM, computed geometry (padding/margin/height/radius/font/border/shadow/icon size/alignment/overflow) ở light và dark.
+- [ ] **PAR-02**: Với mỗi control, thao tác thật trên Chrome (click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, popup open/close) và đối chiếu behavior với reference; mọi diff được ghi và sửa.
+- [ ] **PAR-03**: Sửa từng control một trong wrapper/CSS module tương ứng; mỗi control có log pass riêng trước khi chuyển control kế; focused test assert behavior thật, không certify shape giả.
+- [ ] **PAR-04**: Code review + verifier độc lập xác nhận parity từng control; phase 55/56/57/58 chỉ tiếp tục sau khi phase 59 pass.
+
 ### Visual & Browser Verification (VIS)
 
 - [ ] **VIS-01**: Seed dummy data rồi chạy app trên Chrome, tự quét từng route/view/tool window/settings/CR/notes/AI Office/modal/drawer/menu/tooltip ở cả light và dark, kể cả mọi feature nhỏ và mọi trạng thái control.
@@ -57,7 +64,7 @@
 
 ## Traceability
 
-Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending until the phase executes.
+Each of the 22 v1.6 requirements maps to exactly one phase. Status stays Pending until the phase executes.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -79,11 +86,15 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 | VIS-03 | 57 | Pending |
 | VIS-04 | 57 | Pending |
 | VIS-05 | 58 | Pending |
+| PAR-01 | 59 | Pending |
+| PAR-02 | 59 | Pending |
+| PAR-03 | 59 | Pending |
+| PAR-04 | 59 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 18 total
-- Mapped to phases: 18
+- v1 requirements: 22 total
+- Mapped to phases: 22
 - Unmapped: 0
 
 | Phase | Requirements |
@@ -96,7 +107,8 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 | 56 | CLEAN-01, CLEAN-02, CLEAN-03 |
 | 57 | VIS-01, VIS-02, VIS-03, VIS-04 |
 | 58 | VIS-05 |
+| 59 | PAR-01, PAR-02, PAR-03, PAR-04 |
 
 ---
 *Requirements defined: 2026-11-21*
-*Last updated: 2026-11-21 after milestone v1.6 definition*
+*Last updated: 2026-11-22 after control-quality rework decision*
