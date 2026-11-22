@@ -86,9 +86,13 @@ export function Col({ style, className, children, span, xs, sm, md, lg, xl, xxl,
   const activeOffset = typeof active === 'object' && active !== null && 'offset' in active ? (active as { offset?: number }).offset
     : offset;
   const resolvedSpan = spanValue((activeSpan as number | undefined) ?? (span as number | undefined));
+  // CSS grid lines are 1-based; AntD offset N starts at line N+1. Without an
+  // offset a bare `span N` is required — `0 / span N` is invalid and dropped.
   const gridColumn = resolvedSpan !== undefined
-    ? `${activeOffset ?? 0} / span ${resolvedSpan}`
-    : activeOffset !== undefined ? `${activeOffset} / auto` : undefined;
+    ? activeOffset !== undefined
+      ? `${activeOffset + 1} / span ${resolvedSpan}`
+      : `span ${resolvedSpan}`
+    : activeOffset !== undefined ? `${activeOffset + 1} / auto` : undefined;
 
   return (
     <div

@@ -85,10 +85,19 @@ describe('fake-render regression: real behavior + metrics (N-08)', () => {
   it('Grid.Col maps responsive span to gridColumn without leaking DOM attributes', () => {
     const view = render(<Col span={8} xs={12} offset={2} data-testid="col">x</Col>);
     const col = screen.getByTestId('col');
-    expect(col.style.gridColumn).toBe('2 / span 12');
+    // CSS grid lines are 1-based; offset 2 starts at line 3.
+    expect(col.style.gridColumn).toBe('3 / span 12');
     expect(col.hasAttribute('xs')).toBe(false);
     expect(col.hasAttribute('span')).toBe(false);
     expect(col.hasAttribute('offset')).toBe(false);
+    view.unmount();
+  });
+
+  it('Grid.Col without offset emits a valid bare span (no invalid 0 / span N)', () => {
+    const view = render(<Col span={8} data-testid="col-no-offset">x</Col>);
+    const col = screen.getByTestId('col-no-offset');
+    expect(col.style.gridColumn).toBe('span 8');
+    expect(col.style.gridColumn).not.toBe('');
     view.unmount();
   });
 
