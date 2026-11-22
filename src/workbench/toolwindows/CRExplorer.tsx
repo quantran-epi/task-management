@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Tree, Input, Button, Empty, Tag, Typography, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
+import { Tree, SearchInput, Button, Empty, Tag, Typography, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
 import type { MenuProps } from 'antd';
-import { SearchOutlined, InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined } from '../../components/ui/icon';
+import { InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -235,14 +235,11 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
           gap: 'var(--gap-6)',
         }}
       >
-        <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
+        <SearchInput
           placeholder="Lọc CR, tác vụ..."
-          allowClear
-          size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ flex: 1, fontSize: 'var(--font-size-small)', borderRadius: 'var(--radius-control, 4px)' }}
+          style={{ flex: 1 }}
         />
         <Button
           type="primary"

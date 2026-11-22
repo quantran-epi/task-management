@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Empty, Input, List, Modal, Space, Spin, Tag, Typography, useAntdToken, useMessage, ListItem, Paragraph } from '../ui';
-import { ApiOutlined, CodeOutlined, CopyOutlined, DatabaseOutlined, ReloadOutlined, SearchOutlined, TeamOutlined, ToolOutlined } from '../ui/icon';
+import { Alert, Button, Card, Empty, SearchInput, List, Modal, Space, Spin, Tag, Typography, useAntdToken, useMessage, ListItem, Paragraph } from '../ui';
+import { ApiOutlined, CodeOutlined, CopyOutlined, DatabaseOutlined, ReloadOutlined, TeamOutlined, ToolOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
   getAllAvailableToolDefinitions,
@@ -127,9 +127,7 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
         />
       )}
 
-      <Input
-        allowClear
-        prefix={<SearchOutlined />}
+      <SearchInput
         aria-label="Tìm theo tên hoặc mô tả công cụ"
         placeholder="Tìm theo tên hoặc mô tả"
         value={search}

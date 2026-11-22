@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Select, Input, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, EmptyImageSimple, IconButton } from '../../components/ui';
+import { Select, Input, SearchInput, Tree, Button, Tooltip, Tag, Spin, Alert, Empty, EmptyImageSimple, IconButton } from '../../components/ui';
 import type { DataNode } from 'antd/es/tree';
 import FolderOutlined from '@ant-design/icons/FolderOutlined';
 import FolderOpenOutlined from '@ant-design/icons/FolderOpenOutlined';
@@ -849,16 +849,13 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
           <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
             Tìm toàn kho
           </span>
-          <Input
-            size="small"
-            style={{ flex: 1, fontSize: 'var(--font-size-small)' }}
-            prefix={<span style={{ color: 'var(--fg-muted)' }}>⌕</span>}
+          <SearchInput
+            style={{ flex: 1 }}
             placeholder="Tìm tệp/thư mục trong toàn kho"
             value={globalQuery}
             onChange={(e) => setGlobalQuery(e.target.value)}
             onKeyDown={handleGlobalKeyDown}
             disabled={!globalSearchReady}
-            allowClear
             data-testid="global-search-input"
           />
         </div>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Input, Button, Dropdown, Tooltip, Typography, Empty, Select, useMessage, useTaskMateModal, EmptyImageSimple, Modal } from '../../components/ui';
+import { Input, SearchInput, Button, Dropdown, Tooltip, Typography, Empty, Select, useMessage, useTaskMateModal, EmptyImageSimple, Modal } from '../../components/ui';
 import type { MenuProps } from 'antd';
-import { FolderOutlined, FolderOpenOutlined, PlusOutlined, FileTextOutlined, DeleteOutlined, MoreOutlined, EditOutlined, FolderAddOutlined, CaretRightOutlined, CaretDownOutlined, SearchOutlined, UndoOutlined, CheckSquareOutlined, ProjectOutlined, FlagOutlined, CopyOutlined, SwapOutlined, LinkOutlined, CodeOutlined, PushpinFilled, PushpinOutlined } from '../../components/ui/icon';
+import { FolderOutlined, FolderOpenOutlined, PlusOutlined, FileTextOutlined, DeleteOutlined, MoreOutlined, EditOutlined, FolderAddOutlined, CaretRightOutlined, CaretDownOutlined, UndoOutlined, CheckSquareOutlined, ProjectOutlined, FlagOutlined, CopyOutlined, SwapOutlined, LinkOutlined, CodeOutlined, PushpinFilled, PushpinOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Note, NoteEntityType } from '../../types/models';
@@ -924,18 +924,11 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
       {contextHolder}
       {/* 1. Search Bar + Create Button */}
       <div style={{ marginBottom: 8, padding: '0 4px', display: 'flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
-        <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
+        <SearchInput
           placeholder="Tìm kiếm biểu đồ..."
-          allowClear
-          size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            flex: 1,
-            fontSize: 'var(--font-size-small)',
-            borderRadius: 'var(--radius-control, 4px)',
-          }}
+          style={{ flex: 1 }}
         />
         <Button
           type="primary"

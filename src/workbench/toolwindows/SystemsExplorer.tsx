@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Tree, Input, Empty, Typography, Button, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
+import { Tree, SearchInput, Empty, Typography, Button, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
 import type { MenuProps } from 'antd';
-import { SearchOutlined, InboxOutlined, PlusOutlined, EditOutlined, DeleteOutlined, ExportOutlined, RocketOutlined, CloudServerOutlined, CodeOutlined } from '../../components/ui/icon';
+import { InboxOutlined, PlusOutlined, EditOutlined, DeleteOutlined, ExportOutlined, RocketOutlined, CloudServerOutlined, CodeOutlined } from '../../components/ui/icon';
 import {
   getSystemTypeIcon,
   useSystemTypeLookup,
@@ -282,18 +282,11 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
           alignItems: 'center',
         }}
       >
-        <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small)' }} />}
+        <SearchInput
           placeholder="Lọc hệ thống, subsystem..."
-          allowClear
-          size="small"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            fontSize: 'var(--font-size-small, 12px)',
-            borderRadius: 'var(--radius-control, 4px)',
-            flex: 1,
-          }}
+          style={{ flex: 1 }}
         />
         <Button
           type="primary"

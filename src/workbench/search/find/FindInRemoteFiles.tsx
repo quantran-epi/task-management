@@ -370,6 +370,7 @@ export function FindInRemoteFiles(props: FindInRemoteFilesProps) {
           <Input
             aria-label="Pattern"
             className="find-pattern"
+            placeholder="Tìm kiếm mẫu..."
             value={pattern}
             onChange={(e) => setPattern(e.target.value)}
             allowClear

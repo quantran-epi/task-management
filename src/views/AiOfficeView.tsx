@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Button, Empty, Input, Segmented, Space, useAntdToken, EmptyImageSimple } from '../components/ui';
-import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '../components/ui/icon';
+import { Alert, Button, Empty, SearchInput, Segmented, Space, useAntdToken, EmptyImageSimple } from '../components/ui';
+import { PlusOutlined, UploadOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -253,20 +253,11 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
               border: '1px solid var(--border, #e9eaee)',
             }}
           >
-            <Space size="middle">
-              <Input
-                prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />}
-                placeholder={copy.placeholder}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                allowClear
-                style={{ width: 280 }}
-              />
-            </Space>
-
-            <Button icon={<ReloadOutlined />} onClick={() => setSearch('')}>
-              Đặt lại bộ lọc
-            </Button>
+            <SearchInput
+              placeholder={copy.placeholder}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
 
           {visibleCount === 0 ? (
