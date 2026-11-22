@@ -61,6 +61,8 @@ interface CalendarProps {
   value: DateValue;
   /** Inclusive range bounds — used only by the range picker for in-range tint. */
   range?: [DateValue, DateValue];
+  /** Human hint for the current selection step (range picker). */
+  hint?: string;
   disabledDate: AntDatePickerProps['disabledDate'];
   onMonth: (month: Dayjs) => void;
   onPick: (date: Dayjs) => void;
@@ -68,7 +70,7 @@ interface CalendarProps {
 }
 
 /** N-08 real calendar: month/year header, 7-column grid, today marker, footer. */
-function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear }: CalendarProps) {
+function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear, hint }: CalendarProps) {
   const offset = month.startOf('month').day();
   const daysInMonth = month.daysInMonth();
   const cells = useMemo(() => Array.from(
@@ -113,6 +115,7 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
 
   return (
     <div className={calendarStyles.calendar} data-oi-control="calendar" role="group" aria-label="Lịch">
+      {hint ? <div className={calendarStyles.hint} data-oi-control="calendar-hint">{hint}</div> : null}
       <div className={calendarStyles.header}>
         <button
           type="button"
@@ -180,6 +183,7 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
               data-disabled={disabled || undefined}
               data-outside={outside || undefined}
               data-in-range={inRange(date) || undefined}
+              data-range-boundary={(range?.[0]?.isSame(date, 'day') || range?.[1]?.isSame(date, 'day')) || undefined}
               aria-selected={selected}
               aria-disabled={disabled || undefined}
               aria-label={date.format('YYYY-MM-DD')}
@@ -326,13 +330,17 @@ export function DateRangePicker({
     const updated: [DateValue, DateValue] = active === 0 ? [next, draft[1]] : [draft[0], next];
     setDraft(updated);
     setTexts([formatValue(updated[0], format), formatValue(updated[1], format)]);
-    setOpen(false);
-    anchorRef.current?.focus();
+    const completed = active === 0 ? updated[1] !== null : updated[0] !== null;
     onChange?.(
       updated as [Dayjs | null, Dayjs | null],
       [updated[0]?.format(format) ?? '', updated[1]?.format(format) ?? ''],
     );
-    if (active === 0) setActive(1);
+    if (!completed) {
+      setActive(1);
+      return; // keep the same calendar open: the user is picking the second end
+    }
+    setOpen(false);
+    anchorRef.current?.focus();
   }
 
   function clear() {
@@ -360,7 +368,7 @@ export function DateRangePicker({
           className={classNames(inputStyles.input, inputStyles.framed)}
           style={passed}
           data-oi-control="date-picker"
-          data-state={index === active && open ? 'expanded' : 'framed'}
+          data-state={index === active && open ? 'expanded' : draft[index] ? 'filled' : 'framed'}
           value={texts[index]}
           onClick={() => { setActive(index); setOpen(true); }}
           onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -382,6 +390,7 @@ export function DateRangePicker({
           month={month}
           value={draft[active]}
           range={draft}
+          hint={draft[0] && draft[1] ? `${draft[0].format(format)} → ${draft[1].format(format)}` : active === 0 ? 'Chọn ngày bắt đầu' : 'Chọn ngày kết thúc'}
           disabledDate={rest.disabledDate}
           onMonth={setMonth}
           onPick={commit}
