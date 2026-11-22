@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 import { CONTROL_REGISTRY, type ControlEntry } from '../parity/parityEvidenceIntegrity.test';
 import {
-  controlDir, prepareControlDir, screenshotHash, writeDiff, writeDom, writeGeometry,
+  controlDir, prepareControlDir, resolveSp, screenshotHash, writeDiff, writeDom, writeGeometry,
   writeHandoff, writeInteractions, writePass, type Geometry, type Interaction,
 } from './parityEvidence';
 
@@ -14,21 +14,21 @@ import {
  */
 
 /**
- * WR-05: scratchpad lives in /private/tmp (wiped on reboot). Resolve from env
- * first; harness is reproducible only when the caller supplies an SP that
- * contains openidea/ and oi-prototype/ fixtures. preflight() hard-fails with a
- * clear missing-fixture message instead of silently capturing nothing.
+ * WR-R2-02: no session-specific default. PARITY_SP is resolved lazily on first
+ * use so importing CONTROL_REGISTRY (Playwright collection) never hard-crashes;
+ * preflight()/startServer() call requireSp() and fail hard when it is absent.
  */
-export const SP = process.env.PARITY_SP
-  ?? '/private/tmp/claude-503/-Users-tranducquan-Working-Personal-task-management/32c7be2b-546e-433a-aa53-76345c15954c/scratchpad';
+export { resolveSp };
+function requireSp(): string { return resolveSp(); }
 
 function assertFixtures(): void {
+  const sp = requireSp();
   for (const app of ['openidea', 'oi-prototype'] as const) {
-    const dir = resolve(SP, app);
+    const dir = resolve(sp, app);
     if (!existsSync(dir)) {
       throw new Error(
         `PARITY FIXTURES MISSING [${app}] ${dir}. Set PARITY_SP to a scratchpad root containing ` +
-        'openidea/ and oi-prototype/ with their ?fixture=<id> routes (see phase 59 review WR-05).',
+        'openidea/ and oi-prototype/ with their ?fixture=<id> routes (see phase 59 SMOKE.md / PATTERNS §0.1).',
       );
     }
   }
@@ -50,7 +50,7 @@ function logPath(app: string): string {
 }
 
 function startServer(app: 'reference' | 'proof'): void {
-  const cwd = resolve(SP, app === 'reference' ? 'openidea' : 'oi-prototype');
+  const cwd = resolve(requireSp(), app === 'reference' ? 'openidea' : 'oi-prototype');
   mkdirSync(SERVER_LOG_DIR, { recursive: true });
   // WR-02: append, never overwrite — a truncated log loses startup context.
   writeFileSync(logPath(app), '');
@@ -107,8 +107,8 @@ export async function preflight(): Promise<void> {
   ];
   for (const [app, url] of entries) {
     if (await probeUrl(url)) continue;
-    const command = app === 'reference' ? `npm --prefix ${resolve(SP, 'openidea')} run dev`
-      : app === 'proof' ? `npm --prefix ${resolve(SP, 'oi-prototype')} run dev`
+    const command = app === 'reference' ? `npm --prefix ${resolve(requireSp(), 'openidea')} run dev`
+      : app === 'proof' ? `npm --prefix ${resolve(requireSp(), 'oi-prototype')} run dev`
         : 'npm run dev -- --host 127.0.0.1';
     const log = app === 'wrapper' ? '(Playwright webServer output)' : logPath(app);
     throw new Error(`PRE-FLIGHT FAILED [${app}] ${url} unreachable after 30s. Start: ${command}. Log: ${log}`);

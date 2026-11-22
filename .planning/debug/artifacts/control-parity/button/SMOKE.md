@@ -34,7 +34,7 @@ npx tsc --noEmit
 
 ## Ghi chú
 
-- Fixture scratchpad nằm ngoài repo (`/private/tmp`), truyền qua `PARITY_SP`. Fresh clone cần cung cấp scratchpad root có 2 app fixture (WR-05); pre-flight chặn rõ khi thiếu.
+- Fixture scratchpad nằm ngoài repo (~600 MB, cố tình không commit), **`PARITY_SP` là precondition bắt buộc** — không có default `/private/tmp` cứng (WR-R2-02). Fresh clone phải chuẩn bị scratchpad root có `openidea/` + `oi-prototype/` rồi `export PARITY_SP=<root>`; harness resolve lazily qua `resolveSp()`, thiếu → throw rõ trong `preflight()`, không `test.skip`. Xem `59-PATTERNS.md` §0.1 / `59-01-PLAN.md` Task 1.
 - Console noiseBenign (404 favicon, React warning `block` ở `segmented.tsx`) bị lọc; deferred, không đụng production code.
 - Reference dark dùng `data-theme="dark"`; proof dùng `button.themeBtn` + dataset.
 - Không đụng `src/components/ui/button.tsx`. Không dependency mới. Không PWA. Không full Vitest.

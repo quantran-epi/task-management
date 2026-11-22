@@ -33,7 +33,7 @@ Chuỗi bắt buộc: `implement → self-verify → independent code review + v
 | Proof fixture | `http://127.0.0.1:5180/` | `npm run dev` | `SP/oi-prototype` |
 | TaskMate wrapper | `http://127.0.0.1:5173/task-management/` | `npm run dev -- --host 127.0.0.1` | repo root (Playwright `webServer` đã làm) |
 
-`SP = /private/tmp/claude-503/-Users-tranducquan-Working-Personal-task-management/32c7be2b-546e-433a-aa53-76345c15954c/scratchpad` (đọc từ PROOF.md). Chạy reference/proof bằng `npm --prefix <CWD> run dev` hoặc spawn pb với `cwd=<CWD>`; giữ process sống suốt phase, log stdout/stderr vào `.planning/debug/artifacts/control-parity/server-logs/`. `waitOnUrl` từng URL (30s timeout, poll 500ms): nếu fail → throw kèm URL + lệnh start + log path; KHÔNG skip. Đây là điều kiện cần để mọi verify ở §1 chạy.
+**`PARITY_SP` là precondition bắt buộc** (WR-R2-02): export `PARITY_SP=<scratchpad root>` chứa `openidea/` + `oi-prototype/`. Không có default `/private/tmp` cứng — path đó là session-specific, mất sau reboot và không tồn tại trên fresh clone. Harness resolve lazily qua `resolveSp()` (`tests/helpers/parityEvidence.ts`); thiếu → throw rõ ngay trong `preflight()`, KHÔNG `test.skip`. Fixture ~600 MB nên cố tình giữ ngoài repo (`git ls-files` rỗng); fresh clone phải tự chuẩn bị scratchpad 2 app rồi truyền `PARITY_SP`. Chạy reference/proof bằng `npm --prefix <CWD> run dev` hoặc spawn pb với `cwd=<CWD>`; giữ process sống suốt phase, log stdout/stderr vào `.planning/debug/artifacts/control-parity/server-logs/`. `waitOnUrl` từng URL (30s timeout, poll 500ms): nếu fail → throw kèm URL + lệnh start + log path; KHÔNG skip. Đây là điều kiện cần để mọi verify ở §1 chạy.
 
 ## 1. Quy trình MỖI control (trước khi handoff)
 

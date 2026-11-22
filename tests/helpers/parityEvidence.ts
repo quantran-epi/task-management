@@ -9,6 +9,24 @@ import { resolve } from 'node:path';
 
 export const ARTIFACT_ROOT = resolve(process.cwd(), '.planning/debug/artifacts/control-parity');
 
+/**
+ * WR-R2-02: scratchpad fixtures live outside the repo (~600 MB, not committed).
+ * PARITY_SP is an explicit precondition — no session-specific /private/tmp
+ * default that vanishes on reboot and silently looks runnable on fresh clone.
+ * Pure + lazy so importing this module never hard-crashes test collection.
+ */
+export function resolveSp(env: NodeJS.ProcessEnv = process.env): string {
+  const value = typeof env.PARITY_SP === 'string' ? env.PARITY_SP.trim() : '';
+  if (!value) {
+    throw new Error(
+      'PARITY_SP is required: set it to the scratchpad root containing openidea/ and ' +
+      'oi-prototype/ fixtures (see phase 59 SMOKE.md / PATTERNS §0.1). ' +
+      'Fixtures are ~600 MB and kept outside the repo by design.',
+    );
+  }
+  return value;
+}
+
 export function controlDir(id: string): string {
   return resolve(ARTIFACT_ROOT, id);
 }
