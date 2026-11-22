@@ -17,6 +17,8 @@ export interface PopupProps {
   control?: string;
   /** Preferred side from the caller's AntD `placement` prop; flip/shift still applies. */
   preferredPlacement?: 'top' | 'bottom' | 'left' | 'right' | undefined;
+  /** Override the anchor-derived popup width (calendar popups use their intrinsic grid width). */
+  width?: number | string;
 }
 
 const EDGE_PADDING = 6; // OpenIDEA middleware flip/shift padding; offset is 4px per 52-UI-SPEC §8.
@@ -31,7 +33,7 @@ export function preferredSide(placement?: string): PopupProps['preferredPlacemen
   return undefined;
 }
 
-export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup', preferredPlacement }: PopupProps) {
+export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup', preferredPlacement, width }: PopupProps) {
   const onCloseRef = useRef(onClose);
   const requestedPlacement = `${preferredPlacement ?? 'bottom'}-start` as const;
   const { refs, floatingStyles, placement } = useFloating({
@@ -92,7 +94,7 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
       data-floating=""
       data-placement={placement}
       className={classNames(popupStyles.popup, popupStyles.surface, className)}
-      style={{ ...floatingStyles, width: anchorRef.current?.getBoundingClientRect().width }}
+      style={{ ...floatingStyles, width: width ?? anchorRef.current?.getBoundingClientRect().width }}
     >
       {children}
     </div>,

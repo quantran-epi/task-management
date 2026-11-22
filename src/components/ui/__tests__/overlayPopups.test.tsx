@@ -394,10 +394,24 @@ describe('N-08 native DatePicker', () => {
     expect(popup).not.toBeNull();
     expect(popup.parentElement).toBe(document.body);
     expect(popup.style.position).toBe('fixed');
-    const disabled = Array.from(popup.querySelectorAll('[aria-disabled="true"]')) as HTMLElement[];
+    // Real calendar: header month/year, 7 weekday columns, 7-column grid, footer.
+    expect(popup.querySelector('[data-oi-control="calendar"]')).not.toBeNull();
+    expect(popup.querySelector('[data-oi-control="calendar-month"]')).not.toBeNull();
+    expect(popup.querySelector('[data-oi-control="calendar-year"]')).not.toBeNull();
+    const weekdays = popup.querySelectorAll('[data-oi-control="calendar-weekday"]');
+    expect(weekdays.length).toBe(7);
+    const grid = popup.querySelector('[data-oi-control="date-grid"]') as HTMLElement;
+    expect(grid).not.toBeNull();
+    expect(grid.getAttribute('role')).toBe('grid');
+    const cells = Array.from(grid.querySelectorAll('[data-oi-control="calendar-cell"]')) as HTMLElement[];
+    expect(cells.length % 7).toBe(0);
+    expect(cells.length).toBeGreaterThanOrEqual(35);
+    const disabled = cells.filter((cell) => cell.getAttribute('aria-disabled') === 'true');
     expect(disabled.length).toBeGreaterThan(0);
-    const cells = Array.from(popup.querySelectorAll('[data-oi-control="list-row"]')) as HTMLElement[];
-    const selectable = cells.find((cell) => cell.textContent === '5')!;
+    expect(disabled.some((cell) => cell.textContent === '6')).toBe(true);
+    expect(popup.querySelector('[data-oi-control="calendar-clear"]')).not.toBeNull();
+    const selectable = cells.find((cell) => cell.getAttribute('data-date') === '2026-01-05')!;
+    expect(selectable).toBeDefined();
     fireEvent.click(selectable);
     expect(onChange).toHaveBeenCalledTimes(1);
     const [dates, strings] = onChange.mock.calls[0]!;
@@ -417,8 +431,9 @@ describe('N-08 native DatePicker', () => {
     fireEvent.click(input);
     const popup = document.querySelector('[data-oi-control="select-popup"]') as HTMLElement;
     expect(popup).not.toBeNull();
-    const cell = Array.from(popup.querySelectorAll('[data-oi-control="list-row"]'))
-      .find((node) => node.textContent === '5') as HTMLElement;
+    expect(popup.querySelector('[data-oi-control="calendar"]')).not.toBeNull();
+    const cell = popup.querySelector('[data-oi-control="calendar-cell"][data-date="2026-01-05"]') as HTMLElement;
+    expect(cell).not.toBeNull();
     fireEvent.click(cell);
     expect(onChange).toHaveBeenCalledWith(expect.anything(), expect.any(String));
     expect(onChange.mock.calls[0]![1]).toBe('2026-01-05');

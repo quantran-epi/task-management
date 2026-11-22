@@ -190,9 +190,13 @@ export function wrapIcon(descriptor: IconSvgDescriptor): WrappedIcon {
     const { mode } = useThemeMode();
     const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
     const metrics = getSharedControlTokens();
+    // OpenIDEA SvgIcon defaults size=16 and always sets width/height. Leaving them
+    // unset makes the browser use the 300x150 default SVG box ("icon khủng khiếp").
+    const px = typeof size === 'number' ? size : size ? parseFloat(size) : parseFloat(metrics.iconSize);
+    const dimension = Number.isFinite(px) ? px : 16;
     const resolvedStyle = {
       '--ui-control-height': `${metrics.controlHeight}px`,
-      fontSize: typeof size === 'number' ? `${size}px` : size ?? metrics.iconSize,
+      fontSize: `${dimension}px`,
       ...(tone ? { color: getStatusTokens(tone, mode) } : {}),
       ...(rotate ? { transform: `rotate(${rotate}deg)` } : {}),
       ...style,
@@ -207,8 +211,8 @@ export function wrapIcon(descriptor: IconSvgDescriptor): WrappedIcon {
         className={classes}
         viewBox={descriptor.viewBox}
         fill="none"
-        width={typeof size === 'number' ? size : undefined}
-        height={typeof size === 'number' ? size : undefined}
+        width={dimension}
+        height={dimension}
         aria-hidden={ariaLabel ? undefined : true}
         role={ariaLabel ? (role ?? 'img') : undefined}
         aria-label={ariaLabel}
