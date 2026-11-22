@@ -63,7 +63,15 @@ export interface OracleQueryArgs extends OracleConnectionSelector {
   explain?: boolean;
 }
 
-export type OracleDescribeAction = 'list_tables' | 'describe_table' | 'get_ddl';
+/** Legacy three actions stay valid; the extra actions power the Database Explorer. */
+export type OracleDescribeAction =
+  | 'list_tables'
+  | 'describe_table'
+  | 'get_ddl'
+  | 'list_schemas'
+  | 'list_objects'
+  | 'describe_object'
+  | 'get_object_source';
 
 export interface OracleDescribeArgs extends OracleConnectionSelector {
   /** Action: list_tables (summary of tables), describe_table (columns, types, constraints), get_ddl (full DDL) */
@@ -74,12 +82,67 @@ export interface OracleDescribeArgs extends OracleConnectionSelector {
   schema?: string;
   /** Optional search filter for list_tables */
   search?: string;
+  /** Object name for list_objects / describe_object / get_object_source (alias of tableOrView) */
+  objectName?: string;
+  /** Oracle OBJECT_TYPE from the service whitelist (required for object actions) */
+  objectType?: string;
+  /** Zero-based page offset for paged metadata (clamped by the service) */
+  pageOffset?: number;
+  /** Page size for paged metadata (clamped to 200 by the service) */
+  pageSize?: number;
 }
+
+export interface OracleSchemaEntry {
+  USERNAME: string;
+  [key: string]: unknown;
+}
+
+export interface OracleObjectEntry {
+  OWNER: string;
+  OBJECT_NAME: string;
+  OBJECT_TYPE: string;
+  [key: string]: unknown;
+}
+
+export interface OracleSourceLine {
+  LINE: number;
+  TEXT: string;
+  [key: string]: unknown;
+}
+
+/** Typed result shared by the AI JSON envelope and the Workbench query grid. */
+export interface OracleQueryResult {
+  success: boolean;
+  action?: 'query' | 'explain';
+  /** Original JSON payload kept for the AI tool contract. */
+  data?: unknown;
+  /** Column names derived from the same payload as `rows` — no second parse in the UI. */
+  columns: string[];
+  /** Row-major cell grid (already capped by the service). */
+  rows: unknown[][];
+  rowCount?: number;
+  executionTimeMs?: number;
+  truncated?: boolean;
+  error?: string;
+  /** SQL actually sent to SQLcl (never contains the connection string). */
+  executedSql?: string;
+}
+
+export type OracleDescribeResultAction = OracleDescribeAction | 'query' | 'explain';
 
 export interface OracleToolExecutionResult {
   success: boolean;
-  action: 'query' | 'explain' | 'list_tables' | 'describe_table' | 'get_ddl';
+  action?: OracleDescribeResultAction;
   data?: unknown;
+  columns?: unknown;
+  rows?: unknown[][];
+  source?: string;
+  ddl?: string;
+  table?: string;
+  schema?: string;
+  objectType?: string;
+  hasMore?: boolean;
+  offset?: number;
   rowCount?: number;
   executionTimeMs?: number;
   truncated?: boolean;

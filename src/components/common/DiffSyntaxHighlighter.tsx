@@ -17,24 +17,45 @@ const KEYWORDS = new Set([
   'def', 'self', 'lambda', 'with', 'as', 'pass', 'raise', 'package', 'func'
 ]);
 
+/** Oracle SQL/PLSQL keywords. Lookups are case-insensitive (`.toUpperCase()`). */
+export const ORACLE_KEYWORDS = new Set([
+  'SELECT', 'FROM', 'WHERE', 'WITH', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'ON',
+  'GROUP', 'ORDER', 'BY', 'HAVING', 'UNION', 'ALL', 'DISTINCT', 'AS', 'IN', 'EXISTS', 'BETWEEN',
+  'LIKE', 'CASE', 'WHEN', 'THEN', 'ELSE', 'ELSIF', 'END', 'NULL', 'IS', 'NOT', 'AND', 'OR',
+  'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'GRANT',
+  'REVOKE', 'COMMENT', 'PROCEDURE', 'FUNCTION', 'PACKAGE', 'BODY', 'BEGIN', 'IF', 'LOOP',
+  'WHILE', 'FOR', 'CURSOR', 'RETURN', 'PRAGMA', 'EXCEPTION', 'TABLE', 'VIEW', 'INDEX',
+  'SEQUENCE', 'TRIGGER', 'SYNONYM', 'TYPE', 'MATERIALIZED', 'DBMS_METADATA', 'CONNECT', 'START',
+  'FETCH', 'FIRST', 'NEXT', 'ROWS', 'ONLY', 'OFFSET', 'ROWNUM', 'USING', 'INTO', 'VALUES',
+  'PRIOR', 'MINUS', 'INTERSECT', 'LEVEL', 'DUAL', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX',
+]);
+
 const TYPES = new Set([
   'string', 'number', 'boolean', 'any', 'void', 'never', 'unknown', 'object', 'symbol',
   'Promise', 'Array', 'Record', 'Map', 'Set', 'React', 'FC', 'Props', 'State',
   'i32', 'i64', 'u32', 'u64', 'f32', 'f64', 'usize', 'isize', 'str', 'String', 'Vec'
 ]);
 
-export function tokenizeCodeLine(line: string): TokenSpan[] {
+export function tokenizeCodeLine(line: string, language: 'sql' | 'auto' = 'auto'): TokenSpan[] {
   if (!line) return [];
+
+  const sql = language === 'sql';
 
   // 1. Comments
   const trimmed = line.trimStart();
-  if (trimmed.startsWith('//') || trimmed.startsWith('#')) {
+  if (
+    trimmed.startsWith('//') ||
+    trimmed.startsWith('#') ||
+    (sql && (trimmed.startsWith('--') || trimmed.startsWith('/*')))
+  ) {
     return [{ text: line, type: 'comment' }];
   }
 
   const spans: TokenSpan[] = [];
-  // Regex to split line into strings, identifiers/words, numbers, comments, and symbols
-  const regex = /(\/\*[\s\S]*?\*\/|\/\/.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][A-Za-z0-9_$]*\b|[^\s\w]+|\s+)/g;
+  // Oracle q'[...]' quotes stay one literal token; single quotes allow escaped ''.
+  const regex = sql
+    ? /(--[^\n]*|\/\*[\s\S]*?\*\/|q'\[[\s\S]*?\]'|q'\{[\s\S]*?\}'|q'\([\s\S]*?\)'|'(?:''|[^'])*'|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$#][A-Za-z0-9_$#]*\b|[^\s\w]+|\s+)/g
+    : /(\/\*[\s\S]*?\*\/|\/\/.*|#.*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b\d+(?:\.\d+)?\b|\b[A-Za-z_$][A-Za-z0-9_$]*\b|[^\s\w]+|\s+)/g;
 
   let match: RegExpExecArray | null;
   while ((match = regex.exec(line)) !== null) {
@@ -44,11 +65,11 @@ export function tokenizeCodeLine(line: string): TokenSpan[] {
     const firstChar = text.charAt(0);
 
     // Comment
-    if (text.startsWith('//') || text.startsWith('/*') || text.startsWith('#')) {
+    if (text.startsWith('//') || text.startsWith('/*') || text.startsWith('#') || text.startsWith('--')) {
       spans.push({ text, type: 'comment' });
     }
     // String literal
-    else if (firstChar === '"' || firstChar === "'" || firstChar === '`') {
+    else if (firstChar === '"' || firstChar === "'" || firstChar === '`' || (sql && text.startsWith("q'"))) {
       spans.push({ text, type: 'string' });
     }
     // Number literal
@@ -57,7 +78,7 @@ export function tokenizeCodeLine(line: string): TokenSpan[] {
     }
     // Keyword or Type or Function
     else if (/^[A-Za-z_$]/.test(text)) {
-      if (KEYWORDS.has(text)) {
+      if (ORACLE_KEYWORDS.has(text.toUpperCase()) || KEYWORDS.has(text)) {
         spans.push({ text, type: 'keyword' });
       } else if (TYPES.has(text)) {
         spans.push({ text, type: 'type' });
@@ -106,8 +127,9 @@ export function getGithubThemeColors(isDark: boolean) {
 export const DiffLineCodeRenderer: React.FC<{
   content: string;
   isDark: boolean;
-}> = React.memo(({ content, isDark }) => {
-  const spans = React.useMemo(() => tokenizeCodeLine(content), [content]);
+  language?: 'sql' | 'auto';
+}> = React.memo(({ content, isDark, language = 'auto' }) => {
+  const spans = React.useMemo(() => tokenizeCodeLine(content, language), [content, language]);
   const colors = React.useMemo(() => getGithubThemeColors(isDark), [isDark]);
 
   if (!content) return <span> </span>;

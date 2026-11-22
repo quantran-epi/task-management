@@ -11,6 +11,7 @@ import {
   type OracleQueryArgs,
   type OracleDescribeArgs,
   type OracleToolExecutionResult,
+  type OracleQueryResult,
 } from '../../types/oracleSqlcl';
 
 export const DEFAULT_ORACLE_CONFIG: OracleToolConfig = {
@@ -199,6 +200,104 @@ export function stripCommentsAndLiterals(sql: string): string {
 }
 
 /**
+ * SQLcl directive tokens that must never appear at the start of a command line. SQLcl reads
+ * these even after a semicolon, so `SELECT 1; HOST rm -rf ...` is not a harmless suffix.
+ * The check runs on comment/string-stripped text so a directive hidden in a comment or
+ * literal cannot smuggle a second command past the guard.
+ */
+const SQLCL_DIRECTIVE_PATTERN =
+  /^\s*(SET|EXIT|HOST|SPOOL|PROMPT|DEFINE|CONNECT|CONN|CONNECT\/|@|@@|\/|!|COLUMN|COL|BREAK|COMPUTE|TTITLE|BTITLE|REPHEADER|REPFOOTER|ACCEPT|PAUSE|WHENEVER|SHOW|DESCRIBE|DESC|LIST|APPEND|CHANGE|DEL|INPUT|RUN|EXECUTE|EXEC|PASSWORD|PASSWD|DISCONNECT|STORE|GET|SAVE|START|SCRIPT|VARIABLE|VAR|PRINT|UNDEFINE|EDIT|ED|HELP)\b|^\s*(?:@|@@|\/|!)/i;
+
+/** Allowed OBJECT_TYPE values for the Database Explorer, mapped to DBMS_METADATA.GET_DDL. */
+export const ORACLE_OBJECT_TYPES: Readonly<Record<string, string>> = Object.freeze({
+  TABLE: 'TABLE',
+  VIEW: 'VIEW',
+  'MATERIALIZED VIEW': 'MATERIALIZED_VIEW',
+  PACKAGE: 'PACKAGE',
+  'PACKAGE BODY': 'PACKAGE_BODY',
+  PROCEDURE: 'PROCEDURE',
+  FUNCTION: 'FUNCTION',
+  TRIGGER: 'TRIGGER',
+  SEQUENCE: 'SEQUENCE',
+  SYNONYM: 'SYNONYM',
+  TYPE: 'TYPE',
+  'TYPE BODY': 'TYPE_BODY',
+  INDEX: 'INDEX',
+});
+
+/** Object types whose source lives in ALL_SOURCE (the rest expose DDL via DBMS_METADATA). */
+const SOURCE_OBJECT_TYPES = new Set([
+  'PACKAGE',
+  'PACKAGE BODY',
+  'PROCEDURE',
+  'FUNCTION',
+  'TRIGGER',
+  'TYPE',
+  'TYPE BODY',
+]);
+
+/** Whitelist an Oracle OBJECT_TYPE before it reaches a SQL literal or GET_DDL call. */
+export function assertOracleObjectType(value: string | undefined, label = 'Loại đối tượng'): string {
+  const normalized = (value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!ORACLE_OBJECT_TYPES[normalized]) {
+    throw new Error(`${label} không hợp lệ.`);
+  }
+  return normalized;
+}
+
+/**
+ * Guardrail: exactly one SQL statement, with at most one optional trailing semicolon.
+ * Rejects SQLcl client directives (including ones after `;`) and any extra statement text.
+ * Call before assertReadOnlyQuery / applyQueryLimit so a second statement can never be built
+ * into the script sent over SSH.
+ */
+export function assertSqlclSingleStatement(sql: string): string {
+  const stripped = stripCommentsAndLiterals(sql);
+  if (!stripped) throw new Error('Câu lệnh SQL rỗng.');
+
+  for (const line of stripped.split(/\r?\n/)) {
+    if (SQLCL_DIRECTIVE_PATTERN.test(line)) {
+      const token = line.trim().split(/\s+/)[0] ?? '?';
+      throw new Error(`Bị từ chối: directive SQLcl '${token}' không được phép trong truy vấn.`);
+    }
+  }
+
+  // Strip a single trailing semicolon; any semicolon left belongs to a second statement.
+  const withoutTrailing = stripped.replace(/;\s*$/, '').trim();
+  if (withoutTrailing.includes(';')) {
+    throw new Error('Bị từ chối: chỉ cho phép một câu lệnh SQL duy nhất.');
+  }
+
+  return withoutTrailing;
+}
+
+/**
+ * Accepts a plain unquoted identifier or a strictly quoted one. Never allows an escaped quote
+ * inside the quoted form — `HR."X" UNION...` and `HR."A""B"` are both rejected. The returned
+ * value is a single normalized token safe for literal interpolation, never a SQL fragment.
+ */
+export function safeOracleObjectIdentifier(value: string | undefined, label: string): string {
+  const raw = (value ?? '').trim();
+  if (!raw || raw.includes("'") || raw.includes(';') || raw.includes('--')) {
+    throw new Error(`${label} không hợp lệ.`);
+  }
+  const parts = raw.split('.');
+  if (parts.length > 2) throw new Error(`${label} không hợp lệ.`);
+  const normalized = parts.map((part) => {
+    const token = part.trim();
+    if (/^"[A-Za-z][A-Za-z0-9_$#]*"$/.test(token)) return token;
+    if (token.includes('"')) throw new Error(`${label} không hợp lệ.`);
+    return safeOracleIdentifier(token, label);
+  });
+  return normalized.join('.');
+}
+
+/** True when the object type stores its body in ALL_SOURCE rather than DBMS_METADATA. */
+export function isOracleSourceObjectType(objectType: string): boolean {
+  return SOURCE_OBJECT_TYPES.has(assertOracleObjectType(objectType));
+}
+
+/**
  * Strict read-only guardrail check.
  * Throws an Error with explanation if query attempts mutation or non-SELECT operations.
  */
@@ -309,6 +408,71 @@ export function extractJsonFromSqlclOutput(stdout: string): unknown {
   return stdout;
 }
 
+/** SQLcl JSON comes as an array of row objects, or as `{ results: [{ items: [...] }] }`. */
+export function extractGridRows(parsed: unknown): Record<string, unknown>[] {
+  const asItems = (value: unknown): Record<string, unknown>[] =>
+    Array.isArray(value)
+      ? value.filter((row): row is Record<string, unknown> => row !== null && typeof row === 'object')
+      : [];
+  if (Array.isArray(parsed)) return asItems(parsed);
+  if (parsed && typeof parsed === 'object' && 'results' in parsed) {
+    const groups = (parsed as { results?: unknown }).results;
+    return Array.isArray(groups)
+      ? groups.flatMap((group: any) => asItems(group?.items))
+      : [];
+  }
+  return [];
+}
+
+/** Derive stable column names from the first row, falling back to a finite key union. */
+function gridColumns(rows: Record<string, unknown>[]): string[] {
+  const keys = new Set<string>();
+  for (const row of rows.slice(0, 50)) for (const key of Object.keys(row)) keys.add(key);
+  return [...keys];
+}
+
+/** Ceiling applied to both the AI JSON envelope and the UI grid to bound memory. */
+const MAX_QUERY_ROWS = 1000;
+const MAX_CELL_CHARS = 2000;
+const MAX_UI_PAYLOAD_CHARS = 500_000;
+
+function capCell(value: unknown): unknown {
+  if (typeof value === 'string' && value.length > MAX_CELL_CHARS) {
+    return `${value.slice(0, MAX_CELL_CHARS)}…`;
+  }
+  if (value && typeof value === 'object') {
+    // Objects stringify beyond the cell cap; keep a bounded representation.
+    const text = JSON.stringify(value);
+    return text.length > MAX_CELL_CHARS ? `${text.slice(0, MAX_CELL_CHARS)}…` : value;
+  }
+  return value;
+}
+
+/** Build a typed, capped `{columns, rows}` grid from SQLcl's JSON payload. */
+export function buildOracleGrid(parsed: unknown): {
+  columns: string[];
+  rows: unknown[][];
+  rowCount: number;
+  truncated: boolean;
+} {
+  const sourceRows = extractGridRows(parsed);
+  const columns = gridColumns(sourceRows);
+  const kept = sourceRows.slice(0, MAX_QUERY_ROWS);
+  const rows = kept.map((row) => columns.map((col) => capCell(row[col])));
+  let truncated = sourceRows.length > kept.length;
+  let total = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const size = rows[i]!.reduce<number>((sum, cell) => sum + String(cell ?? '').length, 0);
+    if (total + size > MAX_UI_PAYLOAD_CHARS) {
+      rows.length = i;
+      truncated = true;
+      break;
+    }
+    total += size;
+  }
+  return { columns, rows, rowCount: sourceRows.length, truncated };
+}
+
 /**
  * Checks stdout/stderr for Oracle ORA- or SP2- error messages.
  */
@@ -328,18 +492,27 @@ export function extractOracleError(stdout: string, stderr: string): string | nul
  * result or model-visible error. Covers the full `user/pass@host` string and the bare
  * password component, which a shell/SSH error may echo back.
  */
-function redactConnectionSecrets(message: string, config: OracleToolConfig): string {
-  let out = message;
+export function redactOracleText(message: string, config: OracleToolConfig): string {
+  let out = message || '';
   const cs = config.connectionString?.trim();
   if (!cs) return out;
+
+  // Full string first (covers `user/pass@host:1521/service` and any connect descriptor),
+  // then the bare password component, which shells/errors often echo on its own.
   out = out.split(cs).join('***');
   const atIdx = cs.indexOf('@');
   const beforeAt = atIdx >= 0 ? cs.slice(0, atIdx) : cs;
   const slashIdx = beforeAt.indexOf('/');
   const password = slashIdx >= 0 ? beforeAt.slice(slashIdx + 1) : '';
-  if (password) out = out.split(password).join('***');
+  if (password) {
+    out = out.split(password).join('***');
+    // Even when only a fragment like `pass@host` is echoed, mask the token after `/`.
+    out = out.replace(/(\/)[^/@\s'"]+(?=@)/g, '$1***');
+  }
   return out;
 }
+
+const redactConnectionSecrets = redactOracleText;
 
 /**
  * Detects a remote command failure that `extractOracleError` cannot see (SSH auth failure,
@@ -470,32 +643,34 @@ export async function executeOracleQuery(
   callId?: string
 ): Promise<string> {
   const startTime = Date.now();
+  const emptyGrid = { columns: [], rows: [] };
 
-  // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
-  // Execution here only checks that the connection is configured; payload gating is in chatTurnTools.
   const profiles = await getOracleConnectionProfiles(db);
   if (!profiles.length) {
     return JSON.stringify({
       success: false,
       error:
         'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
-    } satisfies Partial<OracleToolExecutionResult>);
+      ...emptyGrid,
+    } satisfies OracleQueryResult);
   }
 
-  let config: OracleToolConfig;
+  let config: OracleToolConfig = DEFAULT_ORACLE_CONFIG;
   try {
     config = resolveOracleConnection(profiles, args);
   } catch (err: any) {
     return JSON.stringify({
       success: false,
-      error: err?.message || 'Không tìm thấy kết nối Oracle phù hợp.',
-    } satisfies Partial<OracleToolExecutionResult>);
+      error: redactOracleText(err?.message || 'Không tìm thấy kết nối Oracle phù hợp.', config),
+      ...emptyGrid,
+    } satisfies OracleQueryResult);
   }
   if (!config.sshConfigId || !config.connectionString) {
     return JSON.stringify({
       success: false,
       error: 'Kết nối Oracle đã chọn chưa được cấu hình đầy đủ (SSH hoặc connection string).',
-    } satisfies Partial<OracleToolExecutionResult>);
+      ...emptyGrid,
+    } satisfies OracleQueryResult);
   }
 
   try {
@@ -504,29 +679,34 @@ export async function executeOracleQuery(
       return JSON.stringify({
         success: false,
         error: 'Vui lòng cung cấp câu truy vấn query.',
-      });
+        ...emptyGrid,
+      } satisfies OracleQueryResult);
     }
 
-    // Guardrail: Assert query is read-only
-    assertReadOnlyQuery(query);
+    // Single-statement first: a directive or second statement must fail before any script
+    // is built, never after the read-only check has blessed only the first statement.
+    const singleSql = assertSqlclSingleStatement(query);
+    assertReadOnlyQuery(singleSql);
 
     const limit = args.limit || config.maxRows || 100;
 
     if (args.explain) {
-      // Explain Plan execution
-      const explainSql = query.replace(/;+\s*$/, '');
       const script = `
 SET PAGESIZE 0;
 SET FEEDBACK OFF;
 SET LINESIZE 200;
-EXPLAIN PLAN FOR ${explainSql};
+SET TRANSACTION READ ONLY;
+EXPLAIN PLAN FOR ${singleSql};
 SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY());
 EXIT;
       `.trim();
 
       const res = await runSqlclScriptOverSsh(config, script, db, callId);
       const executionTimeMs = Date.now() - startTime;
-      const oracleError = extractOracleError(res.stdout, res.stderr);
+      const oracleError = extractOracleError(
+        redactOracleText(res.stdout, config),
+        redactOracleText(res.stderr, config)
+      );
       const remoteFailure = detectRemoteFailure(res, config);
 
       if (oracleError || remoteFailure) {
@@ -535,20 +715,21 @@ EXIT;
           action: 'explain',
           error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
           executionTimeMs,
-        } satisfies OracleToolExecutionResult);
+          ...emptyGrid,
+        } satisfies OracleQueryResult);
       }
 
       return JSON.stringify({
         success: true,
         action: 'explain',
-        data: res.stdout.trim(),
+        data: redactOracleText(res.stdout.trim(), config),
         executionTimeMs,
-        executedSql: explainSql,
-      } satisfies OracleToolExecutionResult);
+        executedSql: singleSql,
+        ...emptyGrid,
+      } satisfies OracleQueryResult);
     }
 
-    // Normal query with SET TRANSACTION READ ONLY + SET SQLFORMAT JSON
-    const limitedSql = applyQueryLimit(query, limit);
+    const limitedSql = applyQueryLimit(singleSql, limit);
     const script = `
 SET SQLFORMAT JSON;
 SET FEEDBACK OFF;
@@ -563,7 +744,8 @@ EXIT;
 
     const res = await runSqlclScriptOverSsh(config, script, db, callId);
     const executionTimeMs = Date.now() - startTime;
-    const oracleError = extractOracleError(res.stdout, res.stderr);
+    const stdout = redactOracleText(res.stdout, config);
+    const oracleError = extractOracleError(stdout, redactOracleText(res.stderr, config));
     const remoteFailure = detectRemoteFailure(res, config);
 
     if (oracleError || remoteFailure) {
@@ -573,53 +755,86 @@ EXIT;
         error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
         executionTimeMs,
         executedSql: limitedSql,
-      } satisfies OracleToolExecutionResult);
+        ...emptyGrid,
+      } satisfies OracleQueryResult);
     }
 
-    const parsedJson = extractJsonFromSqlclOutput(res.stdout);
-    const isArray = Array.isArray(parsedJson);
-    const rowCount = isArray
-      ? (parsedJson as unknown[]).length
-      : parsedJson && typeof parsedJson === 'object' && 'results' in parsedJson
-        ? (parsedJson as any).results?.reduce(
-            (sum: number, group: any) => sum + (Array.isArray(group?.items) ? group.items.length : 0),
-            0
-          ) ?? 0
-        : undefined;
+    const parsedJson = extractJsonFromSqlclOutput(stdout);
+    const grid = buildOracleGrid(parsedJson);
 
-    // Truncate output string if payload exceeds safety token budget (~60KB)
-    let jsonString = JSON.stringify(parsedJson);
-    let truncated = false;
-    if (jsonString.length > 60000) {
-      truncated = true;
-      if (isArray) {
-        const half = (parsedJson as unknown[]).slice(0, Math.floor(limit / 2));
-        jsonString = JSON.stringify(half);
-      }
-    }
+    // Keep the legacy AI envelope shape: SQLcl normally emits a row array; for the
+    // `{results:[{items:[]}]}` variant preserve that shape after a string cap.
+    const capEnvelope = (value: unknown): unknown => {
+      const text = JSON.stringify(value) ?? '';
+      if (text.length <= 60000) return value;
+      if (Array.isArray(value)) return value.slice(0, Math.max(1, Math.floor(limit / 2)));
+      return text.slice(0, 60000);
+    };
+    const cappedData = Array.isArray(parsedJson)
+      ? grid.rows.map((cells) =>
+          Object.fromEntries(grid.columns.map((col, idx) => [col, cells[idx]]))
+        )
+      : capEnvelope(parsedJson);
 
     return JSON.stringify({
       success: true,
       action: 'query',
-      rowCount,
-      data: JSON.parse(jsonString),
-      truncated,
+      rowCount: grid.rowCount,
+      data: cappedData,
+      columns: grid.columns,
+      rows: grid.rows,
+      truncated: grid.truncated,
       executionTimeMs,
       executedSql: limitedSql,
-    } satisfies OracleToolExecutionResult);
+    } satisfies OracleQueryResult);
   } catch (err: any) {
     const executionTimeMs = Date.now() - startTime;
     return JSON.stringify({
       success: false,
       action: 'query',
-      error: err?.message || 'Lỗi thực thi Oracle SQLcl',
+      error: redactOracleText(err?.message || 'Lỗi thực thi Oracle SQLcl', config),
       executionTimeMs,
-    } satisfies OracleToolExecutionResult);
+      ...emptyGrid,
+    } satisfies OracleQueryResult);
   }
 }
 
 /**
  * Inspects database metadata (list tables, describe columns, constraints, or get DDL).
+ */
+/** Standard read-only/format preamble for every metadata script. */
+const METADATA_PREAMBLE = `
+SET SQLFORMAT JSON;
+SET FEEDBACK OFF;
+SET PAGESIZE 0;
+SET LINESIZE 32767;
+SET TRIMSPOOL ON;
+SET LONG 200000;
+SET TRANSACTION READ ONLY;`.trim();
+
+const SYSTEM_SCHEMAS = `('SYS', 'SYSTEM', 'MDSYS', 'CTXSYS', 'XDB', 'WMSYS', 'LBACSYS', 'DVSYS', 'GSMADMIN_INTERNAL', 'AUDSYS', 'OUTLN', 'ORDSYS', 'ORDDATA', 'WMSYS', 'APPQOSSYS', 'DBSNMP', 'ORACLE_OCM', 'XS$NULL')`;
+
+/** Numeric clamp for metadata pagination — UI never supplies an arbitrary OFFSET/FETCH. */
+function clampMetadataPage(args: OracleDescribeArgs): { offset: number; pageSize: number } {
+  const offset = Number.isFinite(args.pageOffset) ? Math.max(0, Math.floor(args.pageOffset!)) : 0;
+  const pageSize = Number.isFinite(args.pageSize)
+    ? Math.min(200, Math.max(1, Math.floor(args.pageSize!)))
+    : 200;
+  return { offset, pageSize };
+}
+
+/** Build a read-only metadata SELECT with a validated, numerically-clamped page window. */
+function buildMetadataQuery(select: string, args: OracleDescribeArgs): string {
+  const { offset, pageSize } = clampMetadataPage(args);
+  // +1 row tells the UI whether a "load more" is available; the extra row never leaves the DB.
+  return `${select}\nOFFSET ${offset} ROWS FETCH NEXT ${pageSize + 1} ROWS ONLY;`;
+}
+
+const MAX_METADATA_TEXT = 200_000;
+
+/**
+ * Inspects database metadata (list tables, describe columns, get DDL, plus the
+ * Database Explorer actions). Every identifier/type is whitelisted before a script is built.
  */
 export async function executeOracleDescribe(
   args: OracleDescribeArgs,
@@ -628,46 +843,56 @@ export async function executeOracleDescribe(
 ): Promise<string> {
   const startTime = Date.now();
 
-  // Quick cz2: enable/disable lives on the aiTeams row, not the shared connection config.
   const profiles = await getOracleConnectionProfiles(db);
   if (!profiles.length) {
     return JSON.stringify({
       success: false,
-      error: 'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
-    });
+      error:
+        'Oracle AI Tool chưa được cấu hình. Vui lòng chọn máy chủ SSH và chuỗi kết nối trong Cài đặt hoặc Hộp công cụ AI Chat.',
+    } satisfies OracleToolExecutionResult);
   }
 
-  let config: OracleToolConfig;
+  let config: OracleToolConfig = DEFAULT_ORACLE_CONFIG;
   try {
     config = resolveOracleConnection(profiles, args);
   } catch (err: any) {
     return JSON.stringify({
       success: false,
-      error: err?.message || 'Không tìm thấy kết nối Oracle phù hợp.',
-    });
+      error: redactOracleText(err?.message || 'Không tìm thấy kết nối Oracle phù hợp.', DEFAULT_ORACLE_CONFIG),
+    } satisfies OracleToolExecutionResult);
   }
   if (!config.sshConfigId || !config.connectionString) {
     return JSON.stringify({
       success: false,
       error: 'Kết nối Oracle đã chọn chưa được cấu hình đầy đủ (SSH hoặc connection string).',
-    });
+    } satisfies OracleToolExecutionResult);
   }
+
+  /** Shared script runner: redaction, ORA-/SP2- detection and remote failure in one place. */
+  const run = async (script: string): Promise<{ stdout: string; error: string | null }> => {
+    const res = await runSqlclScriptOverSsh(config, script, db, callId);
+    const stdout = redactOracleText(res.stdout, config);
+    const oracleError = extractOracleError(stdout, redactOracleText(res.stderr, config));
+    const remoteFailure = detectRemoteFailure(res, config);
+    return { stdout, error: oracleError ?? remoteFailure ?? null };
+  };
+
+  const fail = (action: string, error: string): string =>
+    JSON.stringify({ success: false, action: (action || 'describe_table') as NonNullable<OracleToolExecutionResult['action']>, error, executionTimeMs: Date.now() - startTime } satisfies OracleToolExecutionResult);
 
   try {
     const action = args.action;
 
+    // --- Legacy actions: output shape kept byte-compatible for existing AI/tool tests. ---
     if (action === 'list_tables') {
-      // WR-03: schema is an identifier (strict validation); search is free text embedded in a
-      // LIKE literal (quote-escaped). An invalid identifier is thrown and caught below, which
-      // returns the JSON { success:false, error } path before any SSH script is built or sent.
       const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
       const search = args.search?.trim()
         ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
         : '';
-
       const schemaFilter = schema ? `AND OWNER = '${schema}'` : '';
-      const searchFilter = search ? `AND (UPPER(TABLE_NAME) LIKE '%${search}%' OR UPPER(COMMENTS) LIKE '%${search}%')` : '';
-
+      const searchFilter = search
+        ? `AND (UPPER(TABLE_NAME) LIKE '%${search}%' OR UPPER(COMMENTS) LIKE '%${search}%')`
+        : '';
       const script = `
 SET SQLFORMAT JSON;
 SET FEEDBACK OFF;
@@ -678,7 +903,7 @@ SET TRANSACTION READ ONLY;
 SELECT t.OWNER, t.TABLE_NAME, t.NUM_ROWS, t.LAST_ANALYZED, c.COMMENTS
 FROM ALL_TABLES t
 LEFT JOIN ALL_TAB_COMMENTS c ON t.OWNER = c.OWNER AND t.TABLE_NAME = c.TABLE_NAME
-WHERE t.OWNER NOT IN ('SYS', 'SYSTEM', 'MDSYS', 'CTXSYS', 'XDB', 'WMSYS', 'LBACSYS', 'DVSYS', 'GSMADMIN_INTERNAL', 'AUDSYS')
+WHERE t.OWNER NOT IN ${SYSTEM_SCHEMAS}
   ${schemaFilter}
   ${searchFilter}
 ORDER BY t.OWNER, t.TABLE_NAME
@@ -686,41 +911,41 @@ FETCH FIRST 100 ROWS ONLY;
 EXIT;
       `.trim();
 
-      const res = await runSqlclScriptOverSsh(config, script, db, callId);
-      const executionTimeMs = Date.now() - startTime;
-      const oracleError = extractOracleError(res.stdout, res.stderr);
-      const remoteFailure = detectRemoteFailure(res, config);
-      if (oracleError || remoteFailure) {
-        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
-      }
-
+      const { stdout, error } = await run(script);
+      if (error) return fail(action, error);
       return JSON.stringify({
         success: true,
         action,
-        data: extractJsonFromSqlclOutput(res.stdout),
-        executionTimeMs,
-      });
+        data: extractJsonFromSqlclOutput(stdout),
+        executionTimeMs: Date.now() - startTime,
+      } satisfies OracleToolExecutionResult);
     }
 
-    if (action === 'describe_table') {
-      if (!args.tableOrView?.trim()) {
-        return JSON.stringify({ success: false, error: 'Cần cung cấp tên bảng tableOrView.' });
-      }
-      // WR-03: validate both identifiers before interpolation; a throw is caught below and
-      // returned via the JSON { success:false, error } path, never reaching the SSH script.
-      const tableName = safeOracleIdentifier(args.tableOrView, 'Tên bảng');
-      const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
+    if (action === 'describe_table' || action === 'describe_object') {
+      const rawName = action === 'describe_table' ? args.tableOrView : args.objectName ?? args.tableOrView;
+      if (!rawName?.trim()) return fail(action, 'Cần cung cấp tên đối tượng.');
+      const name = safeOracleObjectIdentifier(rawName, 'Tên đối tượng');
+      const schema = args.schema?.trim() ? safeOracleObjectIdentifier(args.schema, 'Tên schema') : '';
+      const objectType = action === 'describe_object'
+        ? assertOracleObjectType(args.objectType)
+        : undefined;
       const schemaFilter = schema ? `AND c.OWNER = '${schema}'` : '';
+      const nameLiteral = name.includes('.') ? name.split('.').at(-1)! : name;
+      const ownerLiteral = name.includes('.') ? name.split('.')[0]! : schema;
 
-      // Queries columns, data types, nullability, comments, and primary keys
-      const script = `
-SET SQLFORMAT JSON;
-SET FEEDBACK OFF;
-SET PAGESIZE 0;
-SET LINESIZE 32767;
-SET TRIMSPOOL ON;
-SET TRANSACTION READ ONLY;
-SELECT
+      // Non-tabular PL/SQL objects expose arguments via ALL_ARGUMENTS instead of ALL_TAB_COLS.
+      const isCodeObject = objectType ? !['TABLE', 'VIEW', 'MATERIALIZED VIEW'].includes(objectType) : false;
+      const ownerArgFilter = ownerLiteral ? `AND a.OWNER = '${ownerLiteral}'` : '';
+      const select = isCodeObject
+        ? `SELECT a.OBJECT_NAME, a.PACKAGE_NAME, a.ARGUMENT_NAME, a.DATA_TYPE, a.IN_OUT, a.POSITION, a.DEFAULT_VALUE
+FROM ALL_ARGUMENTS a
+WHERE a.OBJECT_NAME = '${nameLiteral}'
+  ${ownerArgFilter}
+  AND NVL(a.PACKAGE_NAME, ' ') = ' '
+ORDER BY a.OVERLOAD, a.POSITION`
+        : `SELECT
+    c.OWNER,
+    c.TABLE_NAME AS OBJECT_NAME,
     c.COLUMN_NAME,
     c.DATA_TYPE ||
       CASE
@@ -736,74 +961,150 @@ SELECT
      WHERE pk.CONSTRAINT_TYPE = 'P' AND pk.TABLE_NAME = c.TABLE_NAME AND pcol.COLUMN_NAME = c.COLUMN_NAME AND ROWNUM = 1) AS IS_PRIMARY_KEY
 FROM ALL_TAB_COLS c
 LEFT JOIN ALL_COL_COMMENTS cm ON c.OWNER = cm.OWNER AND c.TABLE_NAME = cm.TABLE_NAME AND c.COLUMN_NAME = cm.COLUMN_NAME
-WHERE c.TABLE_NAME = '${tableName}'
+WHERE c.TABLE_NAME = '${nameLiteral}'
   ${schemaFilter}
-ORDER BY c.COLUMN_ID;
-EXIT;
-      `.trim();
+ORDER BY c.COLUMN_ID`;
 
-      const res = await runSqlclScriptOverSsh(config, script, db, callId);
-      const executionTimeMs = Date.now() - startTime;
-      const oracleError = extractOracleError(res.stdout, res.stderr);
-      const remoteFailure = detectRemoteFailure(res, config);
-      if (oracleError || remoteFailure) {
-        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
-      }
-
+      const script = `${METADATA_PREAMBLE}\n${buildMetadataQuery(select, args)}\nEXIT;`.trim();
+      const { stdout, error } = await run(script);
+      if (error) return fail(action, error);
+      const parsed = extractJsonFromSqlclOutput(stdout);
+      const items = extractGridRows(parsed).slice(0, 200);
       return JSON.stringify({
         success: true,
         action,
-        table: tableName,
-        columns: extractJsonFromSqlclOutput(res.stdout),
-        executionTimeMs,
-      });
+        table: nameLiteral,
+        schema: ownerLiteral,
+        ...(objectType ? { objectType } : {}),
+        columns: items,
+        rowCount: items.length,
+        executionTimeMs: Date.now() - startTime,
+      } satisfies OracleToolExecutionResult);
     }
 
-    if (action === 'get_ddl') {
-      if (!args.tableOrView?.trim()) {
-        return JSON.stringify({ success: false, error: 'Cần cung cấp tên bảng tableOrView.' });
+    if (action === 'get_ddl' || action === 'list_objects' || action === 'get_object_source') {
+      const rawName = args.objectName ?? args.tableOrView;
+      if (action !== 'list_objects' && !rawName?.trim()) {
+        return fail(action, 'Cần cung cấp tên đối tượng.');
       }
-      // WR-03: validate both identifiers before interpolation; a throw is caught below and
-      // returned via the JSON { success:false, error } path, never reaching the SSH script.
-      const tableName = safeOracleIdentifier(args.tableOrView, 'Tên bảng');
-      const schema = args.schema?.trim() ? safeOracleIdentifier(args.schema, 'Tên schema') : '';
-      const schemaExpr = schema ? `'${schema}'` : 'USER';
+      // list_objects filters by schema only; a name is optional and never a SQL fragment.
+      if (action === 'list_objects' && args.schema?.trim() && /[^A-Za-z0-9_$#]/.test(args.schema.trim())) {
+        return fail(action, 'Tên schema không hợp lệ.');
+      }
+      const name = rawName?.trim() ? safeOracleObjectIdentifier(rawName, 'Tên đối tượng') : '';
+      const nameLiteral = name.includes('.') ? name.split('.').at(-1)! : name;
+      const ownerLiteral = name.includes('.') ? name.split('.')[0]! : args.schema?.trim()
+        ? safeOracleObjectIdentifier(args.schema, 'Tên schema')
+        : undefined;
+      const schemaExpr = ownerLiteral ? `'${ownerLiteral}'` : 'USER';
 
-      const script = `
-SET LONG 200000;
-SET PAGESIZE 0;
-SET FEEDBACK OFF;
-SET LINESIZE 32767;
-SET HEADING OFF;
-SET TRANSACTION READ ONLY;
-SELECT DBMS_METADATA.GET_DDL('TABLE', '${tableName}', ${schemaExpr}) FROM DUAL;
-EXIT;
-      `.trim();
-
-      const res = await runSqlclScriptOverSsh(config, script, db, callId);
-      const executionTimeMs = Date.now() - startTime;
-      const oracleError = extractOracleError(res.stdout, res.stderr);
-      const remoteFailure = detectRemoteFailure(res, config);
-      if (oracleError || remoteFailure) {
-        return JSON.stringify({ success: false, action, error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.', executionTimeMs });
+      if (action === 'get_object_source') {
+        const objectType = assertOracleObjectType(args.objectType);
+        if (!isOracleSourceObjectType(objectType)) {
+          return fail(action, 'Loại đối tượng này không có source trong ALL_SOURCE.');
+        }
+        const select = `SELECT LINE, TEXT
+FROM ALL_SOURCE
+WHERE OWNER = ${schemaExpr} AND NAME = '${nameLiteral}' AND TYPE = '${ORACLE_OBJECT_TYPES[objectType]}'
+ORDER BY LINE`;
+        const script = `${METADATA_PREAMBLE}\n${select}\nFETCH FIRST 5000 ROWS ONLY;\nEXIT;`.trim();
+        const { stdout, error } = await run(script);
+        if (error) return fail(action, error);
+        const items = extractGridRows(extractJsonFromSqlclOutput(stdout)).slice(0, 5000);
+        const full = items.map((row) => String(row.TEXT ?? '')).join('\n');
+        const truncated = full.length > MAX_METADATA_TEXT;
+        return JSON.stringify({
+          success: true,
+          action,
+          source: truncated ? full.slice(0, MAX_METADATA_TEXT) : full,
+          rowCount: items.length,
+          truncated,
+          executionTimeMs: Date.now() - startTime,
+        } satisfies OracleToolExecutionResult);
       }
 
+      if (action === 'list_objects') {
+        const objectType = assertOracleObjectType(args.objectType);
+        const search = args.search?.trim()
+          ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
+          : '';
+        const ownerFilter = ownerLiteral ? `AND OWNER = '${ownerLiteral}'` : '';
+        const searchFilter = search ? `AND UPPER(OBJECT_NAME) LIKE '%${search}%'` : '';
+        const select = `SELECT OWNER, OBJECT_NAME, OBJECT_TYPE, STATUS, CREATED, LAST_DDL_TIME
+FROM ALL_OBJECTS
+WHERE OWNER NOT IN ${SYSTEM_SCHEMAS}
+  AND OBJECT_TYPE = '${objectType}'
+  ${ownerFilter}
+  ${searchFilter}
+ORDER BY OWNER, OBJECT_NAME`;
+        const script = `${METADATA_PREAMBLE}\n${buildMetadataQuery(select, args)}\nEXIT;`.trim();
+        const { stdout, error } = await run(script);
+        if (error) return fail(action, error);
+        const { offset, pageSize } = clampMetadataPage(args);
+        const all = extractGridRows(extractJsonFromSqlclOutput(stdout));
+        const hasMore = all.length > pageSize;
+        return JSON.stringify({
+          success: true,
+          action,
+          data: all.slice(0, pageSize),
+          hasMore,
+          offset: offset + Math.min(pageSize, all.length),
+          executionTimeMs: Date.now() - startTime,
+        } satisfies OracleToolExecutionResult);
+      }
+
+      // get_ddl — legacy TABLE/VIEW calls stay on the exact previous payload fields.
+      const objectType = args.objectType
+        ? assertOracleObjectType(args.objectType)
+        : 'TABLE';
+      const mapped = ORACLE_OBJECT_TYPES[objectType]!;
+      const script = `${METADATA_PREAMBLE}
+SELECT DBMS_METADATA.GET_DDL('${mapped}', '${nameLiteral}', ${schemaExpr}) AS DDL FROM DUAL;
+EXIT;`.trim();
+      const { stdout, error } = await run(script);
+      if (error) return fail(action, error);
+      const ddlText = redactOracleText(stdout.trim(), config);
+      const truncated = ddlText.length > MAX_METADATA_TEXT;
+      const payload: OracleToolExecutionResult = {
+        success: true,
+        action,
+        table: nameLiteral,
+        ddl: truncated ? ddlText.slice(0, MAX_METADATA_TEXT) : ddlText,
+        truncated,
+        executionTimeMs: Date.now() - startTime,
+      };
+      if (action !== 'get_ddl') {
+        payload.objectType = objectType;
+      }
+      return JSON.stringify(payload);
+    }
+
+    if (action === 'list_schemas') {
+      const search = args.search?.trim()
+        ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
+        : '';
+      const searchFilter = search ? `AND USERNAME LIKE '%${search}%'` : '';
+      const select = `SELECT USERNAME, CREATED
+FROM ALL_USERS
+WHERE USERNAME NOT IN ${SYSTEM_SCHEMAS}
+  ${searchFilter}
+ORDER BY USERNAME`;
+      const script = `${METADATA_PREAMBLE}\n${buildMetadataQuery(select, args)}\nEXIT;`.trim();
+      const { stdout, error } = await run(script);
+      if (error) return fail(action, error);
+      const all = extractGridRows(extractJsonFromSqlclOutput(stdout));
+      const { pageSize } = clampMetadataPage(args);
       return JSON.stringify({
         success: true,
         action,
-        table: tableName,
-        ddl: res.stdout.trim(),
-        executionTimeMs,
-      });
+        data: all.slice(0, pageSize),
+        hasMore: all.length > pageSize,
+        executionTimeMs: Date.now() - startTime,
+      } satisfies OracleToolExecutionResult);
     }
 
-    return JSON.stringify({ success: false, error: `Hành động không hỗ trợ: ${action}` });
+    return fail(action, `Hành động không hỗ trợ: ${action}`);
   } catch (err: any) {
-    const executionTimeMs = Date.now() - startTime;
-    return JSON.stringify({
-      success: false,
-      error: err?.message || 'Lỗi khi kiểm tra metadata Oracle',
-      executionTimeMs,
-    });
+    return fail(args.action, redactOracleText(err?.message || 'Lỗi khi kiểm tra metadata Oracle', config));
   }
 }
