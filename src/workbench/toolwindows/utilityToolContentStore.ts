@@ -7,11 +7,31 @@ type JsonContent = { input: string; output: string; error: string | null; format
 type TextContent = { a: string; b: string; mode: 'lines' | 'words'; ignoreCase: boolean; ignoreSpace: boolean };
 type MarkdownContent = { source: string };
 
+/** Shape đồng nhất cho 8 tool mới: input/aux là field chính, option/option2 là chế độ. */
+export type DevToolContent = {
+  input: string;
+  aux: string;
+  option: string;
+  option2: string;
+  output: string;
+  error: string | null;
+};
+
+const emptyDevTool = (): DevToolContent => ({ input: '', aux: '', option: '', option2: '', output: '', error: null });
+
 export type UtilityToolContentMap = {
   json_formatter: JsonContent;
   xml_formatter: JsonContent;
   text_compare: TextContent;
   markdown_viewer: MarkdownContent;
+  encoder_decoder: DevToolContent;
+  regex_tester: DevToolContent;
+  timestamp_converter: DevToolContent;
+  date_calculation: DevToolContent;
+  text_utilities: DevToolContent;
+  cron_expression: DevToolContent;
+  hash_uuid: DevToolContent;
+  jwt_decoder: DevToolContent;
 };
 
 type ToolId = keyof UtilityToolContentMap;
@@ -21,6 +41,14 @@ const initialContent = (): UtilityToolContentMap => ({
   xml_formatter: { input: '', output: '', error: null, formatted: false, indent: '2' },
   text_compare: { a: '', b: '', mode: 'lines', ignoreCase: false, ignoreSpace: false },
   markdown_viewer: { source: '' },
+  encoder_decoder: emptyDevTool(),
+  regex_tester: emptyDevTool(),
+  timestamp_converter: emptyDevTool(),
+  date_calculation: emptyDevTool(),
+  text_utilities: emptyDevTool(),
+  cron_expression: emptyDevTool(),
+  hash_uuid: emptyDevTool(),
+  jwt_decoder: emptyDevTool(),
 });
 
 type Store = {

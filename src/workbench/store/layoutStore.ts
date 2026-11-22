@@ -30,6 +30,15 @@ export type EditorViewType =
   | 'xml_formatter'
   | 'text_compare'
   | 'markdown_viewer'
+  // Developer utility tools (261122-w9j). Additive: persisted tabs stay valid.
+  | 'encoder_decoder'
+  | 'regex_tester'
+  | 'timestamp_converter'
+  | 'date_calculation'
+  | 'text_utilities'
+  | 'cron_expression'
+  | 'hash_uuid'
+  | 'jwt_decoder'
   // Database Explorer center tabs (261122-uha). Additive: persisted tabs stay valid.
   // oracle_object_view params: { connectionId, schema, objectType, objectName, mode: 'source'|'ddl'|'columns' }
   // oracle_sql_composer params: { connectionId?, composerId? }
