@@ -167,7 +167,7 @@
 
   1. Với mỗi control trong 56 wrapper, có evidence Chrome cặp: OpenIDEA reference và TaskMate wrapper cùng viewport/theme, screenshot + DOM + computed geometry (width/height/font/padding/margin/radius/border/shadow/icon/alignment/overflow), light và dark.
   2. Với mỗi control, có evidence tương tác thật: click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, mở/đóng popup — so sánh behavior với reference, không có shape tự chế.
-  3. Mọi diff được sửa trong wrapper/CSS module tương ứng. Sau mỗi control tôi self-verify rồi đưa sếp mở Chrome/Tauri thao tác thử; CHỈ khi sếp trả lời "pass" mới được chuyển control kế. Không pass thì sửa lại cùng control. Log pass/fail từng control lưu artifact.
+  3. Mọi diff được sửa trong wrapper/CSS module tương ứng. Sau mỗi control tôi self-verify rồi TỰ MỞ Chrome cho sếp xem/thao tác (sếp không tự mở, không tự setup): tab đúng control, data dummy, light/dark, hướng dẫn ngắn. CHỈ khi sếp trả lời "pass" mới được chuyển control kế. Không pass thì sửa lại cùng control. Log pass/fail từng control lưu artifact.
   4. Không có console error trong lúc thao tác; focused test được cập nhật để assert behavior thật thay vì shape giả; không chạy full Vitest suite.
   5. Code review + verifier độc lập xác nhận từng control trước khi handoff; phase 55 chỉ được lập/execute sau khi sếp pass TẤT CẢ control.
 
