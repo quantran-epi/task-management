@@ -105,11 +105,12 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
             id={`${id}-${index}`}
             role="option"
             aria-selected={item === value}
-            data-lead={index === lead || undefined}
             data-oi-control="list-row"
-            className={classNames(listStyles.row, (item === value || index === lead) && listStyles.active)}
+            className={classNames(listStyles.row, item === value && listStyles.active)}
+            data-lead={index === lead || undefined}
             style={{ transform: `translateY(${index * 24}px)`, height: 24 }}
-            onPointerMove={() => onLead(index)}
+            onPointerEnter={() => onLead(index)}
+            onPointerLeave={() => onLead(activeIndex)}
             onClick={() => onPick(item)}
           >
             <span className={selectStyles.optionLabel}>{pad(item)}</span>
