@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, Checkbox, IconButton, Input, InputPassword, InputSearch, Radio, RadioGroup, Switch, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Alert, Avatar, AvatarGroup, Badge, Breadcrumb, Button, Checkbox, Divider, IconButton, Input, InputPassword, InputSearch, Pagination, Progress, Radio, RadioGroup, Result, Segmented, Skeleton, Spin, Statistic, Switch, Tag, CheckableTag, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -84,7 +84,51 @@ function SwitchFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture };
+function TagFixture() {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <Tag>Đúng hạn</Tag><Tag color="blue">Đang chạy</Tag><Tag color="red">Trễ</Tag><CheckableTag checked onChange={() => {}}>Checkable</CheckableTag><Tag closable onClose={() => {}}>Closable</Tag>
+    </div>
+  );
+}
+
+function BadgeAvatarFixture() {
+  return (
+    <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+      <Badge count={3}><Avatar>NV</Avatar></Badge>
+      <Badge dot><Avatar>NV</Avatar></Badge>
+      <Badge status="success" text="Sẵn sàng" />
+      <AvatarGroup>{['A','B','C'].map((c) => <Avatar key={c}>{c}</Avatar>)}</AvatarGroup>
+    </div>
+  );
+}
+
+function FeedbackFixture() {
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 420 }}>
+      <Alert message="Lưu thành công" type="success" showIcon />
+      <Alert message="Dữ liệu chưa đồng bộ" type="warning" showIcon />
+      <Progress percent={64} />
+      <Spin spinning><div style={{ padding: 12 }}>Nội dung đang tải</div></Spin>
+      <Skeleton active paragraph={{ rows: 2 }} />
+      <Statistic title="Tổng task" value={128} />
+      <Divider />
+      <Result status="success" title="Hoàn tất" subTitle="Mọi thay đổi đã được lưu" />
+    </div>
+  );
+}
+
+function NavFixture() {
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 420 }}>
+      <Breadcrumb items={[{ title: 'Trang chủ' }, { title: 'Task' }, { title: 'Chi tiết' }]} />
+      <Pagination current={2} total={50} pageSize={10} />
+      <Segmented options={['Ngày', 'Tuần', 'Tháng']} value="Tuần" onChange={() => {}} />
+    </div>
+  );
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, tag: TagFixture, badge: BadgeAvatarFixture, feedback: FeedbackFixture, nav: NavFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
