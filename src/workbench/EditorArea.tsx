@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { CloseOutlined, InboxOutlined, PushpinOutlined, PushpinFilled, DownOutlined, ReloadOutlined, FundProjectionScreenOutlined, FileTextOutlined, UserOutlined, TeamOutlined } from '../components/ui/icon';
+import { CloseOutlined, InboxOutlined, PushpinOutlined, PushpinFilled, DownOutlined, ReloadOutlined, FundProjectionScreenOutlined, FileTextOutlined, UserOutlined, TeamOutlined, DatabaseOutlined, CodeOutlined } from '../components/ui/icon';
 import { Dropdown, Tooltip } from '../components/ui';
 import type { MenuProps } from 'antd';
 import {
@@ -48,6 +48,8 @@ import { MermaidAssistantView } from '../views/MermaidAssistantView';
 import { StaffDetailView } from '../views/StaffDetailView';
 import { TeamWorkspaceView } from '../views/TeamWorkspaceView';
 import { RemoteFileViewer } from './editor/RemoteFileViewer';
+import { OracleObjectViewer } from './editor/OracleObjectViewer';
+import { OracleSqlComposer } from './editor/OracleSqlComposer';
 import { DocumentSetDetail } from './DocumentSetDetail';
 import { DocSetLibrary } from './DocSetLibrary';
 import { UtilityToolPanel, utilityToolIcon } from './toolwindows/UtilityToolPanel';
@@ -82,6 +84,10 @@ export function getEditorTabIcon(viewType: EditorViewType, size = 13): React.Rea
       return <JetBrainsDiagramIcon size={size} />;
     case 'remote_file':
       return <JetBrainsRemoteGitIcon size={size} />;
+    case 'oracle_object_view':
+      return <DatabaseOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
+    case 'oracle_sql_composer':
+      return <CodeOutlined style={{ fontSize: size - 1, color: 'var(--accent, #3871e1)' }} />;
     case 'config-profiles':
       return <JetBrainsProfilesIcon size={size} />;
     case 'insight':
@@ -601,6 +607,10 @@ export function EditorArea({ db }: EditorAreaProps) {
         return <SystemDetailView systemId={tab.params?.systemId || ''} {...dbProp} />;
       case 'remote_file':
         return <RemoteFileViewer {...tab.params} />;
+      case 'oracle_object_view':
+        return <OracleObjectViewer {...tab.params} {...dbProp} />;
+      case 'oracle_sql_composer':
+        return <OracleSqlComposer {...tab.params} {...dbProp} />;
       case 'insight':
         return (
           <ItemInsightView

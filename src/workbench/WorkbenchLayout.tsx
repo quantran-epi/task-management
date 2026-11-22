@@ -34,7 +34,7 @@ import {
   JetBrainsOfficeIcon,
   JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
-import { AppstoreOutlined } from '../components/ui/icon';
+import { AppstoreOutlined, DatabaseOutlined } from '../components/ui/icon';
 import '../styles/workbench-tokens.css';
 import '../components/ui/ui-tokens.css';
 
@@ -64,6 +64,11 @@ const DEFAULT_LEFT_ITEMS: ToolWindowItem[] = [
     name: 'Remote Git Explorer',
     icon: <JetBrainsRemoteGitIcon size={16} />,
     shortcut: 'Alt+5',
+  },
+  {
+    id: 'database_explorer',
+    name: 'Database Explorer',
+    icon: <DatabaseOutlined style={{ fontSize: 16, color: 'var(--accent, #3871e1)' }} />,
   },
 ];
 

@@ -29,7 +29,12 @@ export type EditorViewType =
   | 'json_formatter'
   | 'xml_formatter'
   | 'text_compare'
-  | 'markdown_viewer';
+  | 'markdown_viewer'
+  // Database Explorer center tabs (261122-uha). Additive: persisted tabs stay valid.
+  // oracle_object_view params: { connectionId, schema, objectType, objectName, mode: 'source'|'ddl'|'columns' }
+  // oracle_sql_composer params: { connectionId?, composerId? }
+  | 'oracle_object_view'
+  | 'oracle_sql_composer';
 
 export interface EditorTab {
   id: string;

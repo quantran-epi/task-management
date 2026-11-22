@@ -1,5 +1,5 @@
 import { Tooltip } from '../../components/ui';
-import { MinusOutlined } from '../../components/ui/icon';
+import { MinusOutlined, DatabaseOutlined } from '../../components/ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../store/layoutStore';
 import {
@@ -13,6 +13,7 @@ import {
 import { CRExplorer } from './CRExplorer';
 import { DocsExplorer } from './DocsExplorer';
 import { RemoteGitExplorer } from './RemoteGitExplorer';
+import { DatabaseExplorer } from './DatabaseExplorer';
 import { SystemsExplorer } from './SystemsExplorer';
 import { AiStaffExplorer } from './AiStaffExplorer';
 import { AiOfficeExplorer } from './AiOfficeExplorer';
@@ -32,6 +33,7 @@ export function LeftToolWindow({
   const isSystems = leftActiveId === 'systems';
   const isDocs = leftActiveId === 'docs';
   const isRemoteExplorer = leftActiveId === 'remote_explorer';
+  const isDatabaseExplorer = leftActiveId === 'database_explorer';
   const isAiStaff = leftActiveId === 'ai_staff';
   const isAiOffice = leftActiveId === 'ai_office';
 
@@ -39,6 +41,8 @@ export function LeftToolWindow({
     ? 'Systems Explorer'
     : isRemoteExplorer
     ? 'Remote Git Explorer'
+    : isDatabaseExplorer
+    ? 'Database Explorer'
     : isDocs
     ? 'Docs Explorer'
     : isAiStaff
@@ -51,6 +55,8 @@ export function LeftToolWindow({
     <JetBrainsSystemsIcon size={15} />
   ) : isRemoteExplorer ? (
     <JetBrainsRemoteGitIcon size={15} />
+  ) : isDatabaseExplorer ? (
+    <DatabaseOutlined style={{ fontSize: 15, color: 'var(--accent, #3871e1)' }} />
   ) : isDocs ? (
     <JetBrainsDocsIcon size={15} />
   ) : isAiStaff ? (
@@ -127,6 +133,8 @@ export function LeftToolWindow({
           <SystemsExplorer db={db} />
         ) : isRemoteExplorer ? (
           <RemoteGitExplorer db={db} />
+        ) : isDatabaseExplorer ? (
+          <DatabaseExplorer db={db} />
         ) : isDocs ? (
           <DocsExplorer db={db} />
         ) : isAiStaff ? (
