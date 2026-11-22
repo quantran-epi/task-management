@@ -1,5 +1,5 @@
 import type { BreadcrumbProps as AntBreadcrumbProps } from 'antd';
-import type { CSSProperties, ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { classNames } from './native/classNames';
 import menuStyles from './openidea/Menu.module.css';
 import { getSharedControlTokens } from './tokens.contract';
@@ -118,7 +118,7 @@ export function Breadcrumb({ style, items, children, separator = '/', className,
           const last = index === crumbs.length - 1;
           const href = crumb.href ?? (typeof crumb.path === 'string' ? crumb.path : undefined);
           return (
-            <span key={String(crumb.key ?? index)} style={{ display: 'contents' }}>
+            <Fragment key={String(crumb.key ?? index)}>
               <li
                 // Current crumb carries aria-current="page" for the measurement hook.
                 className={classNames(menuStyles.item, crumb.className)}
@@ -138,7 +138,7 @@ export function Breadcrumb({ style, items, children, separator = '/', className,
                   {explicitSeparator ?? (typeof separator === 'string' || typeof separator === 'number' ? separator : '/')}
                 </BreadcrumbSeparator>
               )}
-            </span>
+            </Fragment>
           );
         })}
       </ol>
