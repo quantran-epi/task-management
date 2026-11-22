@@ -228,12 +228,56 @@ function assertLeaderUnlocked(existing: AiTeam, nextLeadId: string | undefined):
   }
 }
 
+/** Flags are plain team-row fields; no roster/docs side effects. */
+const TEAM_BOOLEAN_FLAGS = [
+  'autoSplitEnabled',
+  'autoApproveMutations',
+  'mcpEnabled',
+  'sshFsToolsEnabled',
+  'oracleToolsEnabled',
+] as const;
+
+function applyBooleanFlags(
+  updated: AiTeam,
+  validated: AiTeamUpdate,
+  patch: AiTeamUpdate,
+): void {
+  for (const key of TEAM_BOOLEAN_FLAGS) {
+    if (!(key in patch)) continue;
+    const value = validated[key];
+    if (value === undefined) {
+      delete updated[key];
+    } else {
+      updated[key] = value;
+    }
+  }
+}
+
 export async function updateTeam(
   id: string,
   patch: AiTeamUpdate,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<AiTeam> {
   const validated = AiTeamUpdateSchema.parse(patch);
+
+  // Mode toggles touch only the team row. A 6-table transaction here invalidated
+  // unrelated live queries (notes, settings, roster) on every click — the whole
+  // shell re-rendered for one boolean. Keep the wide transaction for structural
+  // writes; this path runs the same validation and persisted shape.
+  const keys = Object.keys(patch) as Array<keyof AiTeamUpdate>;
+  if (keys.length > 0 && keys.every((key) => TEAM_BOOLEAN_FLAGS.includes(key as never))) {
+    return db.transaction('rw', db.aiTeams, async () => {
+      const existing = await db.aiTeams.get(id);
+      if (!existing) throw new Error(`Không tìm thấy nhóm: ${id}`);
+      const updated: AiTeam = {
+        ...existing,
+        updatedAt: new Date().toISOString(),
+      };
+      applyBooleanFlags(updated, validated, patch);
+      await db.aiTeams.put(updated);
+      return updated;
+    });
+  }
 
   // D-09/D-10: the tree is created and destroyed inside this transaction, so the folder rows
   // and the root setting roll back with the team row. `db.aiEmployees` is reached only by the
@@ -252,43 +296,7 @@ export async function updateTeam(
     if (validated.name !== undefined) updated.name = validated.name;
     if (validated.leadId !== undefined) updated.leadId = validated.leadId;
     if (validated.budgetTokens !== undefined) updated.budgetTokens = validated.budgetTokens;
-    if ('autoSplitEnabled' in patch) {
-      if (validated.autoSplitEnabled !== undefined) {
-        updated.autoSplitEnabled = validated.autoSplitEnabled;
-      } else {
-        delete updated.autoSplitEnabled;
-      }
-    }
-    if ('autoApproveMutations' in patch) {
-      if (validated.autoApproveMutations !== undefined) {
-        updated.autoApproveMutations = validated.autoApproveMutations;
-      } else {
-        delete updated.autoApproveMutations;
-      }
-    }
-    if ('mcpEnabled' in patch) {
-      if (validated.mcpEnabled !== undefined) {
-        updated.mcpEnabled = validated.mcpEnabled;
-      } else {
-        delete updated.mcpEnabled;
-      }
-    }
-    // Quick cz2: same add/remove idiom as mcpEnabled so `undefined` clears the key
-    // (exactOptionalPropertyTypes forbids persisting an explicit `undefined`).
-    if ('sshFsToolsEnabled' in patch) {
-      if (validated.sshFsToolsEnabled !== undefined) {
-        updated.sshFsToolsEnabled = validated.sshFsToolsEnabled;
-      } else {
-        delete updated.sshFsToolsEnabled;
-      }
-    }
-    if ('oracleToolsEnabled' in patch) {
-      if (validated.oracleToolsEnabled !== undefined) {
-        updated.oracleToolsEnabled = validated.oracleToolsEnabled;
-      } else {
-        delete updated.oracleToolsEnabled;
-      }
-    }
+    applyBooleanFlags(updated, validated, patch);
     // Phase 45 D-16: same add/remove idiom; an empty-string pin is normalized to absent so
     // no pin means no field on the row (and therefore no segment and no chat badge).
     if ('pinnedContext' in patch) {

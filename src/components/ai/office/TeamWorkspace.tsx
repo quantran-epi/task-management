@@ -182,6 +182,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   // persisted user row arrives. Team chat passes onMessageRead, so its passive scroll is off.
   const [scrollTrigger, setScrollTrigger] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Mode switches paint on click; the persisted row stays authoritative. A failed
+  // write reverts to the last known prop value instead of leaving a lying switch.
+  const [autoSplitEnabled, setAutoSplitEnabled] = useState(team.autoSplitEnabled === true);
+  const [autoApproveMutations, setAutoApproveMutations] = useState(
+    team.autoApproveMutations === true,
+  );
+  useEffect(() => setAutoSplitEnabled(team.autoSplitEnabled === true), [team.autoSplitEnabled]);
+  useEffect(
+    () => setAutoApproveMutations(team.autoApproveMutations === true),
+    [team.autoApproveMutations],
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
@@ -985,6 +996,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         <SplitterPanel defaultSize={300} min={260} max={380}>
           <TeamSidebar
             team={team}
+            autoSplitEnabled={autoSplitEnabled}
+            autoApproveMutations={autoApproveMutations}
             lead={lead}
             members={liveMembers}
             employees={employees}
@@ -998,10 +1011,18 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             }}
             onOpenSettings={() => setSettingsOpen(true)}
             onToggleAutoSplit={(next) => {
-              runAction(() => updateTeam(team.id, { autoSplitEnabled: next }, db));
+              setAutoSplitEnabled(next);
+              void updateTeam(team.id, { autoSplitEnabled: next }, db).catch(() => {
+                setAutoSplitEnabled(team.autoSplitEnabled === true);
+                setActionError(ACTION_ERROR_COPY);
+              });
             }}
             onToggleAutoApprove={(next) => {
-              runAction(() => updateTeam(team.id, { autoApproveMutations: next }, db));
+              setAutoApproveMutations(next);
+              void updateTeam(team.id, { autoApproveMutations: next }, db).catch(() => {
+                setAutoApproveMutations(team.autoApproveMutations === true);
+                setActionError(ACTION_ERROR_COPY);
+              });
             }}
             onAddLink={() => setPickerOpen(true)}
             onRemoveLink={(linkId) => {

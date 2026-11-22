@@ -90,6 +90,20 @@ describe('TeamWorkspace settings drawer persists autoSplitEnabled', () => {
     });
   });
 
+  it('flips the sidebar switch before the persisted row arrives', async () => {
+    render(<TeamWorkspace team={{ ...team, autoSplitEnabled: false }} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
+    const toggle = await screen.findByRole('switch', { name: 'Tự động chia việc' });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(toggle);
+    // No waitFor: the visible state must be optimistic, not DB-round-trip bound.
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await waitFor(async () => {
+      const stored = await getTeam(team.id, db);
+      expect(stored?.autoSplitEnabled).toBe(true);
+    });
+  });
+
   it('persists an enabled autoSplit switch to the team row on save', async () => {
     render(<TeamWorkspace team={{ ...team, autoSplitEnabled: false }} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
 

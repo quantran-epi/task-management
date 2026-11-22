@@ -24,7 +24,7 @@ export interface WrapperPolicy {
  * Single home for control metrics. Values come from tokens.ts only; wrappers
  * must never spell a hex or raw metric themselves (CTRL-06, D-02, D-10).
  */
-export function getSharedControlTokens(): WrapperPolicy {
+const SHARED_CONTROL_TOKENS: WrapperPolicy = (() => {
   const { controlHeight, borderRadius, fontSize, buttonPaddingInline } = sharedTokens;
   return {
     controlHeight,
@@ -33,6 +33,11 @@ export function getSharedControlTokens(): WrapperPolicy {
     paddingInline: buttonPaddingInline,
     iconSize: sharedTokens.spacing.md,
   };
+})();
+
+/** Static policy: one object for every wrapper render, no per-control allocation. */
+export function getSharedControlTokens(): WrapperPolicy {
+  return SHARED_CONTROL_TOKENS;
 }
 
 /** Status color comes only from the shared D-12 map — never a view literal. */

@@ -20,6 +20,9 @@ export interface TeamSidebarLiveUsage {
 
 export interface TeamSidebarProps {
   team: AiTeam;
+  /** Optimistic mode state owned by the workspace so the switch flips on click. */
+  autoSplitEnabled?: boolean | undefined;
+  autoApproveMutations?: boolean | undefined;
   lead: AiLead | undefined;
   members: AiTeamMember[];
   employees: AiEmployee[];
@@ -80,6 +83,8 @@ interface MemberFigures {
 /** UI-SPEC §5c sidebar: members, team budget, links, mode switches. */
 export const TeamSidebar: React.FC<TeamSidebarProps> = ({
   team,
+  autoSplitEnabled,
+  autoApproveMutations,
   lead,
   members,
   employees,
@@ -383,7 +388,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
           <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động chia việc</span>
           <Switch
             size="small"
-            checked={team.autoSplitEnabled === true}
+            checked={autoSplitEnabled ?? team.autoSplitEnabled === true}
             onChange={onToggleAutoSplit}
             aria-label="Tự động chia việc"
           />
@@ -392,7 +397,7 @@ export const TeamSidebar: React.FC<TeamSidebarProps> = ({
           <span style={{ fontSize: 'var(--font-size-small)' }}>Tự động duyệt thay đổi</span>
           <Switch
             size="small"
-            checked={team.autoApproveMutations === true}
+            checked={autoApproveMutations ?? team.autoApproveMutations === true}
             onChange={onToggleAutoApprove}
             aria-label="Tự động duyệt thay đổi"
           />
