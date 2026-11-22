@@ -1,5 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { App, useApp } from '../app';
+import { ThemeConfigProvider } from '../config-provider';
+import { Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutSider } from '../layout';
 import { ThemeAppHolder, messageChannel, useMessage } from '../message';
 import {
   notificationChannel,
@@ -42,6 +45,66 @@ function ConfigProbe() {
   const config = useNotificationConfig();
   return <span data-testid="notify-config">{JSON.stringify(config)}</span>;
 }
+
+describe('native App, ConfigProvider and Layout', () => {
+  it('keeps --ui-app-font-size and exposes bound message/notification/modal via useApp', () => {
+    function BoundConsumer() {
+      const app = useApp();
+      expect(typeof app.message.success).toBe('function');
+      expect(typeof app.notification.success).toBe('function');
+      expect(typeof app.modal.confirm).toBe('function');
+      return <span>bound</span>;
+    }
+    const { container } = render(
+      <App style={{ padding: 4 }}>
+        <BoundConsumer />
+      </App>,
+    );
+    const app = container.querySelector('[data-oi-control="app"]') as HTMLElement;
+    expect(app.style.getPropertyValue('--ui-app-font-size')).toBe('13px');
+    expect(app.style.padding).toBe('4px');
+    expect(screen.getByText('bound')).toBeInTheDocument();
+  });
+
+  it('injects the accent on wrapper and documentElement for both modes', () => {
+    const { container, unmount } = render(
+      <ThemeConfigProvider><span>light</span></ThemeConfigProvider>,
+    );
+    const wrapper = container.querySelector('.taskmate-theme-context') as HTMLElement;
+    expect(wrapper).toHaveAttribute('data-theme', 'light');
+    expect(wrapper.style.getPropertyValue('--accent')).toBe('#3871e1');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#3871e1');
+    unmount();
+
+    render(
+      <ThemeConfigProvider theme={{ token: { colorBgBase: '#11151d' } } as never}>
+        <span>dark</span>
+      </ThemeConfigProvider>,
+    );
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#3871e1');
+  });
+
+  it('renders landmarks and collapses the sider with the caller callback', () => {
+    const onCollapse = vi.fn();
+    const { container } = render(
+      <Layout>
+        <LayoutHeader>Header</LayoutHeader>
+        <LayoutSider onCollapse={onCollapse} width={220}>Sider</LayoutSider>
+        <LayoutContent>Content</LayoutContent>
+        <LayoutFooter>Footer</LayoutFooter>
+      </Layout>,
+    );
+    expect(container.querySelector('header')).toBeInTheDocument();
+    expect(container.querySelector('main')).toBeInTheDocument();
+    expect(container.querySelector('footer')).toBeInTheDocument();
+    const sider = container.querySelector('[data-oi-control="layout-sider"]') as HTMLElement;
+    expect(sider.style.width).toBe('220px');
+    fireEvent.click(screen.getByLabelText('Thu gọn thanh bên'));
+    expect(onCollapse).toHaveBeenCalledWith(true, 'clickTrigger');
+    expect(sider).toHaveAttribute('data-state', 'collapsed');
+  });
+});
 
 describe('native message holder', () => {
   it('renders string and object args and preserves hook shape', () => {

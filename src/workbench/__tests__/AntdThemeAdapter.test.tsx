@@ -42,7 +42,8 @@ describe('AntdThemeAdapter', () => {
         </ThemeAppHolder>
       </AntdThemeAdapter>,
     );
-    expect(container.querySelector('.ant-app')).not.toBeNull();
+    expect(container.querySelector('[data-oi-control="message"]')).not.toBeNull();
+    expect(container.querySelector('[data-oi-control="notification"]')).not.toBeNull();
     expect(screen.getByTestId('token-consumer')).not.toBeNull();
     expect(screen.getByTestId('color-primary').textContent).toBe('#3871e1');
   });
