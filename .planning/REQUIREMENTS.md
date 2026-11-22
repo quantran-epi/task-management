@@ -34,8 +34,8 @@
 
 - [ ] **PAR-01**: Với mỗi control trong 56 wrapper, chạy cặp OpenIDEA reference và TaskMate wrapper trên Chrome cùng viewport/theme; ghi screenshot, DOM, computed geometry (padding/margin/height/radius/font/border/shadow/icon size/alignment/overflow) ở light và dark.
 - [ ] **PAR-02**: Với mỗi control, thao tác thật trên Chrome (click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, popup open/close) và đối chiếu behavior với reference; mọi diff được ghi và sửa.
-- [ ] **PAR-03**: Sửa từng control một trong wrapper/CSS module tương ứng; mỗi control có log pass riêng trước khi chuyển control kế; focused test assert behavior thật, không certify shape giả.
-- [ ] **PAR-04**: Code review + verifier độc lập xác nhận parity từng control; phase 55/56/57/58 chỉ tiếp tục sau khi phase 59 pass.
+- [ ] **PAR-03**: Sửa từng control một trong wrapper/CSS module tương ứng; mỗi control sau self-verify phải chờ sếp xác nhận "pass" thì mới chuyển control kế; nếu không pass thì sửa lại control đó; focused test assert behavior thật, không certify shape giả; áp dụng cho toàn bộ 56 wrapper, không sót control nào.
+- [ ] **PAR-04**: Code review + verifier độc lập xác nhận parity từng control trước khi handoff; human gate per-control là điều kiện duy nhất để đi tiếp; phase 55/56/57/58 chỉ tiếp tục sau khi sếp pass toàn bộ 56 control.
 
 ### Visual & Browser Verification (VIS)
 

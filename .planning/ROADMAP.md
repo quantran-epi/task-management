@@ -10,7 +10,7 @@
 - Phase 56: AntD Removal, Guardrails & Focused Verification (v1.6)
 - Phase 57: Chrome Visual & Behavior Sweep — dummy data, light/dark (v1.6)
 - Phase 58: Defect Closure & Milestone Sign-off (v1.6)
-- Phase 59: Control Parity Rework — per-control Chrome compare (v1.6)
+- Phase 59: Control Parity Rework — per-control Chrome compare + human gate (v1.6)
 
 ## Milestone: v1.6 Native UI Controls
 
@@ -34,7 +34,7 @@
 - [ ] **Phase 56: AntD Removal, Guardrails & Focused Verification** — gỡ dependency, ESLint guard, focused test, cổng tổng hợp (CLEAN-01..03)
 - [ ] **Phase 57: Chrome Visual & Behavior Sweep** — seed dummy data, quét mọi màn hình light/dark, đo computed style, screenshot, log pass/fail, tương tác thật (VIS-01..04)
 - [ ] **Phase 58: Defect Closure & Milestone Sign-off** — sửa hết defect, re-quét, chốt milestone không cần sếp duyệt từng màn hình (VIS-05)
-- [ ] **Phase 59: Control Parity Rework** — xử lý từng control 1, compare trực tiếp OpenIDEA trên Chrome, render + behavior + size light/dark (new remediation, chặn phases 55-58)
+- [ ] **Phase 59: Control Parity Rework** — từng control 1: compare OpenIDEA trên Chrome, sửa, đưa sếp thao tác thử; chỉ đi tiếp khi sếp trả lời pass (chặn 55-58)
 
 ## Phase Details
 
@@ -158,7 +158,7 @@
 
 **UI hint**: yes
 
-### Phase 59: Control Parity Rework — per-control Chrome compare
+### Phase 59: Control Parity Rework — per-control Chrome compare + human gate
 
 **Goal:** Sửa tận gốc chất lượng bộ control: từng wrapper một được đối chiếu trực tiếp với control tương ứng trong OpenIDEA/IntelliJ trên Chrome, cả render lẫn behavior, light + dark. Không coi phase 54 là đạt cho tới khi xong phase này.
 **Depends on:** Phase 54 (remediation) — chặn Phase 55/56/57/58 cho tới khi pass.
@@ -167,9 +167,9 @@
 
   1. Với mỗi control trong 56 wrapper, có evidence Chrome cặp: OpenIDEA reference và TaskMate wrapper cùng viewport/theme, screenshot + DOM + computed geometry (width/height/font/padding/margin/radius/border/shadow/icon/alignment/overflow), light và dark.
   2. Với mỗi control, có evidence tương tác thật: click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, mở/đóng popup — so sánh behavior với reference, không có shape tự chế.
-  3. Mọi diff được sửa trong wrapper/CSS module tương ứng; mỗi control đạt pass riêng trước khi chuyển control kế; có log pass/fail lưu artifact.
+  3. Mọi diff được sửa trong wrapper/CSS module tương ứng. Sau mỗi control tôi self-verify rồi đưa sếp mở Chrome/Tauri thao tác thử; CHỈ khi sếp trả lời "pass" mới được chuyển control kế. Không pass thì sửa lại cùng control. Log pass/fail từng control lưu artifact.
   4. Không có console error trong lúc thao tác; focused test được cập nhật để assert behavior thật thay vì shape giả; không chạy full Vitest suite.
-  5. Code review + verifier độc lập xác nhận từng control pass; phase 55 chỉ được lập/execute sau khi phase 59 pass.
+  5. Code review + verifier độc lập xác nhận từng control trước khi handoff; phase 55 chỉ được lập/execute sau khi sếp pass TẤT CẢ control.
 
 **UI hint**: yes
 
