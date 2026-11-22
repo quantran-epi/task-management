@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Alert, Avatar, AvatarGroup, Badge, Breadcrumb, Button, Checkbox, Divider, IconButton, Input, InputPassword, InputSearch, Pagination, Progress, Select, Radio, RadioGroup, Result, Segmented, Skeleton, Spin, Statistic, Switch, Tag, CheckableTag, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Alert, Avatar, AvatarGroup, Badge, Breadcrumb, Button, Checkbox, Divider, IconButton, Input, InputPassword, InputSearch, DatePicker, DateRangePicker, Pagination, Progress, Select, Radio, RadioGroup, Result, Segmented, Skeleton, Spin, Statistic, Switch, Tag, CheckableTag, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -84,6 +84,17 @@ function SwitchFixture() {
   );
 }
 
+function DatePickerFixture() {
+  const [value, setValue] = React.useState<import('dayjs').Dayjs | null>(null);
+  const [range, setRange] = React.useState<[import('dayjs').Dayjs | null, import('dayjs').Dayjs | null] | null>(null);
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 320 }}>
+      <label>Ngày<DatePicker value={value} onChange={(v) => setValue(v)} /></label>
+      <label>Khoảng ngày<DateRangePicker value={range} onChange={(v) => setRange(v)} /></label>
+    </div>
+  );
+}
+
 function SelectFixture() {
   const [value, setValue] = React.useState('Islands Light');
   return (
@@ -140,7 +151,7 @@ function NavFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, 'date-picker': DatePickerFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
