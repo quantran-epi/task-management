@@ -181,6 +181,64 @@ export async function generateXlsxBlobWithExcelJS(
   });
 }
 
+/** Maximum rows written by a grid export; callers cap earlier as well. */
+export const XLSX_GRID_MAX_ROWS = 1000;
+/** Maximum characters per cell kept in an Excel export (same ceiling as the query grid). */
+export const XLSX_GRID_MAX_CELL_CHARS = 2000;
+
+/**
+ * Exports a real SQL result grid (column names + row-major cells) to a styled .xlsx blob.
+ * No text-grid conversion, no formula interpretation: every value is written as text or a
+ * plain number, so a hostile cell starting with `=` stays a string in Excel.
+ */
+export async function generateXlsxBlobFromGrid(
+  columns: string[],
+  rows: unknown[][],
+  sheetTitle?: string
+): Promise<Blob> {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetTitle || 'Sheet1');
+
+  worksheet.addRow(columns.map((name) => String(name)));
+  for (const row of rows.slice(0, XLSX_GRID_MAX_ROWS)) {
+    const cells = columns.map((_, idx) => {
+      const value = row[idx];
+      let text = value === null || value === undefined ? '' : String(value);
+      if (text.length > XLSX_GRID_MAX_CELL_CHARS) {
+        text = `${text.slice(0, XLSX_GRID_MAX_CELL_CHARS)}…`;
+      }
+      // Excel formula injection: prefix any leading formula trigger with an apostrophe.
+      if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+      const numeric = text !== '' && !Number.isNaN(Number(text)) && !text.startsWith("'");
+      return numeric ? Number(text) : text;
+    });
+    const excelRow = worksheet.addRow(cells);
+    excelRow.eachCell((cell) => {
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
+    });
+  }
+
+  worksheet.getRow(1).eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FF1E293B' }, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+    cell.border = { bottom: { style: 'medium', color: { argb: 'FF94A3B8' } } };
+  });
+
+  worksheet.columns.forEach((column) => {
+    let maxLen = 12;
+    column.eachCell?.({ includeEmpty: true }, (cell) => {
+      const val = cell.value === undefined || cell.value === null ? '' : String(cell.value);
+      if (val.length > maxLen) maxLen = Math.min(60, val.length + 3);
+    });
+    column.width = maxLen;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
 /**
  * Converts markdown text into a styled Word document (.docx) using docx library.
  */

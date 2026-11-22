@@ -5,6 +5,7 @@ import {
   generateDocxBlobWithDocx,
   sanitizeScript,
   SCRIPT_TIMEOUT_MS,
+  generateXlsxBlobFromGrid,
 } from '../dynamicFileSandbox';
 
 describe('dynamicFileSandbox', () => {
@@ -31,6 +32,16 @@ describe('dynamicFileSandbox', () => {
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(100);
     expect(blob.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  });
+
+  it('generates xlsx from a real column/row grid without formula injection', async () => {
+    const blob = await generateXlsxBlobFromGrid(
+      ['ID', 'NAME'],
+      [[1, 'Alice'], [2, '=HYPERLINK("http://evil")']],
+      'Results'
+    );
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBeGreaterThan(100);
   });
 
   it('generates docx blob using docx library', async () => {

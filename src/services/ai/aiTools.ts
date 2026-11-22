@@ -2128,18 +2128,44 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'oracle_describe',
       description:
-        'Inspect Oracle database metadata on a named connection: list tables/views, inspect columns, types, nullability, constraints, comments, or retrieve full table DDL. Use oracle_list_connections to discover valid selectors; omit selector to use the active connection.',
+        'Inspect Oracle database metadata on a named connection (read-only): list schemas/objects, inspect columns/types/constraints, retrieve full DDL or stored PL/SQL source. Use oracle_list_connections to discover valid selectors; omit selector to use the active connection.',
       parameters: {
         type: 'object',
         properties: {
           action: {
             type: 'string',
-            enum: ['list_tables', 'describe_table', 'get_ddl'],
-            description: 'Action: list_tables (summary of tables), describe_table (columns, types, constraints), get_ddl (full DDL).',
+            enum: [
+              'list_tables',
+              'describe_table',
+              'get_ddl',
+              'list_schemas',
+              'list_objects',
+              'describe_object',
+              'get_object_source',
+            ],
+            description:
+              'list_tables (legacy), describe_table (legacy columns), get_ddl (legacy table DDL), list_schemas, list_objects (requires objectType), describe_object (requires objectType + objectName), get_object_source (PL/SQL source).',
           },
           tableOrView: {
             type: 'string',
-            description: 'Table or view name (required for describe_table and get_ddl).',
+            description: 'Table or view name (required for legacy describe_table and get_ddl).',
+          },
+          objectName: {
+            type: 'string',
+            description: 'Object name for list_objects/describe_object/get_object_source.',
+          },
+          objectType: {
+            type: 'string',
+            description:
+              'Oracle OBJECT_TYPE from whitelist: TABLE, VIEW, MATERIALIZED VIEW, PACKAGE, PACKAGE BODY, PROCEDURE, FUNCTION, TRIGGER, SEQUENCE, SYNONYM, TYPE, TYPE BODY, INDEX.',
+          },
+          pageOffset: {
+            type: 'number',
+            description: 'Optional zero-based pagination offset for list_schemas/list_objects (max 200 per page).',
+          },
+          pageSize: {
+            type: 'number',
+            description: 'Optional page size for list_schemas/list_objects (1..200).',
           },
           schema: {
             type: 'string',
@@ -2147,7 +2173,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           search: {
             type: 'string',
-            description: 'Optional search keyword to filter table names for list_tables.',
+            description: 'Optional search keyword for list_tables/list_schemas/list_objects.',
           },
           connectionId: {
             type: 'string',
