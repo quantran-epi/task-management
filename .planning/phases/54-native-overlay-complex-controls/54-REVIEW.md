@@ -3,124 +3,113 @@ phase: 54-native-overlay-complex-controls
 reviewed: 2026-11-22
 depth: deep
 diff_base: c5a8cdd2
-files_reviewed: 48
+files_reviewed: 61
 critical: 0
-warning: 5
-info: 5
-status: needs-fix
+warning: 0
+info: 2
+status: clean
 ---
 
-# Phase 54: Deep Code Review — NAT-02 Native Overlay & Complex Controls
+# Phase 54: Deep Code Review — NAT-02 Native Overlay & Complex Controls (post-fix, post-migration)
 
-**Phạm vi:** 48 file theo `/tmp/review54-files.txt`, diff `c5a8cdd2..HEAD`, đối chiếu `52-UI-SPEC.md` §7/§8/§9, `54-PATTERNS.md`, `54-VERIFICATION.md`.
-**Kết luận:** Gate tự báo `PASSED` là có thật ở mức đo đã chạy, nhưng có 5 warning vi phạm đúng hợp đồng §7 (props/event/popup/focus) cần sửa trước khi coi phase `clean`. Không có critical: không credential, không network/backend mới, không phá export guard, license OpenIDEA nguyên vẹn.
+**Phạm vi:** chỉ review source HIỆN TẠI sau các commit fix `e61e0bad`, `cbe2f79a`, `ab9f5073`, `629d1179` và migration `d28718a6` (+ docs `6a756bc0`, `9cf02f12`). Không review lại hand-rolled popup cũ. Đối chiếu `52-UI-SPEC.md` §7/§8/§9, `54-PATTERNS.md`, `54-REVIEW-FIX.md`.
 
-## Kiểm chứng độc lập đã chạy
+**Kết luận:** W-01..W-05 đã được sửa đúng và Floating UI migration đúng hợp đồng. Tuy nhiên fix W-05 sinh ra **1 regression mới (W-06)**: `focusin` guard của `DialogSurface` kéo focus về dialog ngoài khi có dialog lồng nhau, làm keyboard user không thể tới nút của confirm mở từ trong Modal/Drawer. W-06 đã được sửa tại commit `1d1a276a` (topmost guard trong `onFocusIn` + test stacked-dialog 11/11 pass); sign-off `clean`.
+
+## Kiểm chứng độc lập đã chạy lại
 
 | Gate | Kết quả |
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
-| `node scripts/check-native-imports.mjs $(28 file từ 54-PATTERNS.md §1)` | exit 0 |
+| `node scripts/check-native-imports.mjs $(28 wrapper từ 54-PATTERNS.md §1)` | exit 0 |
+| runtime `antd` / `@ant-design/icons` import trong 28 overlay wrapper | 0 |
 | `scanWrappers()` / `findMissingWrappers()` | `257` / `[]` |
 | `grep -c '^export const .* = wrapIcon(' src/components/ui/icon.tsx` | `141` |
 | `find src/components/ui -maxdepth 1 -name '*.tsx' \| wc -l` | `56` |
-| 6 overlay suites + `controls.test.tsx` + 4 migrated caller suites | pass khi chạy lẻ từng file (tổng 182 test như báo cáo) |
-| `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium --reporter=list` | `2 passed (18.5s)`, light + dark, 0 console.error/pageerror |
-| `npx vitest run src/components/agents/__tests__/AgentDiffReviewer.test.tsx` | pass, nhưng stderr có React warning prop leak (xem INFO-01) |
-
-Không chạy full Vitest suite theo memory rule.
-
----
-
-## W-01 — Modal footer bỏ `okButtonProps` / `cancelButtonProps` (API regression, đã xác nhận bằng probe)
-
-**Vị trí:** `src/components/ui/modal.tsx:64-95`, `src/components/ui/modal.tsx:118-146`.
-
-`defaultFooter()` chỉ đọc `cancelText`, `okText`, `okType`, `okButtonProps?.danger` qua `okDanger()`. Các field còn lại của `okButtonProps` (`disabled`, `loading`, `style`, `className`) và toàn bộ `cancelButtonProps` bị bỏ. Hệ quả thực tế:
-
-- `src/components/settings/ImportPreviewModal.tsx:229-233` truyền `disabled: confirmText !== 'RESTORE' || !validationResult.valid` và `loading`. Nút "Xác nhận khôi phục" vẫn sáng/click được trước khi gõ đúng `RESTORE`; `onOk` có guard nên chưa mất dữ liệu, nhưng đúng là vi phạm §7.1 "props preserved / default policy unchanged" và làm sai UX của luồng xác nhận sao lưu.
-- `src/components/settings/ImportProfilePreviewModal.tsx:180` truyền `disabled`, `loading`; bị bỏ tương tự.
-- Nhiều caller dùng `okButtonProps={{ danger: true }}` với footer mặc định chỉ được màu danger nhờ `okDanger()`, mất mọi thuộc tính khác.
-
-Probe trực tiếp (render `<Modal open okButtonProps={{ disabled: true, loading: true }} />`) cho `<button ...>OK</button>` với `disabled=false`, không có `aria-busy`.
-
-**Required fix:** trong `defaultFooter(config, dismiss)`, tạo `okButtonProps`/`cancelButtonProps` từ config, spread `className`, `style`, `disabled`, `loading`, `danger` vào đúng button; khi `okButtonProps.loading === true` thì disabled cả OK lẫn Cancel theo semantics AntD; giữ `okDanger()` cho CSS class. Thêm focused test trong `src/components/ui/__tests__/overlayComposite.test.tsx`: assert `disabled`, `aria-busy`/loading class, click vào OK disabled không gọi `onOk`. Không đổi caller.
-
-## W-02 — `onOk` reject sinh unhandled rejection trong confirm + footer mặc định
-
-**Vị trí:** `src/components/ui/modal.tsx:84` (`void Promise.resolve(config.onOk?.(confirmEvent(event) as never)).then(dismiss);`) và `src/components/ui/modal.tsx:64-95` dùng chung cho declarative Modal.
-
-`config.onOk?.()` được gọi trước `Promise.resolve`, nên synchronous throw thoát click handler; async reject không có rejection handler → `Uncaught (in promise)`. Probe với `modal.confirm({ onOk: async () => { throw new Error('reject'); } })` tái hiện lỗi reject không được xử lý. AntD giữ dialog mở khi `onOk` thất bại; native cũng cần giữ mở nhưng không được phát unhandled rejection — đây là rủi ro trực tiếp cho criterion 5 (zero console error) trong UAT thực tế.
-
-**Required fix:** đổi thành `void Promise.resolve().then(() => config.onOk?.(confirmEvent(event) as never)).then(dismiss, () => { /* giữ dialog mở, caller tự notification */ });` (hoặc tương đương có `catch`). Thêm test: reject async → dialog vẫn còn, listener `unhandledrejection` không nhận event; resolve → dialog đóng.
-
-## W-03 — Tooltip/Popover/Dropdown/Popconfirm bỏ hoàn toàn prop `placement`
-
-**Vị trí:** `src/components/ui/native/popup.tsx:28-47` (`place()` chỉ tính below/above + shift), `src/components/ui/tooltip.tsx:31`, `src/components/ui/popover.tsx:25`, `src/components/ui/dropdown.tsx:42`, `src/components/ui/popconfirm.tsx:41`.
-
-Các wrapper nhận `AntTooltipProps`/`AntPopoverProps`/`AntDropdownProps`/`AntPopconfirmProps` (có `placement`) nhưng không đọc `rest.placement`; mọi popup luôn mở bên dưới anchor, chỉ flip khi hết chỗ. App có caller thật: `src/components/tasks/TaskTable.tsx:403,428` (`placement="top"`), `src/components/ai/office/DiffHunkView.tsx:215,330,389` (`placement="left"`), `src/components/tasks/TaskTable.tsx:963`, `src/components/ai/ActiveAiTurnIndicator.tsx:289` (`bottomRight`), `src/components/notes/DocFolderTree.tsx:494,651,905`. Đây là regression props so với §7.1 và khác vị trí AntD trước Phase 54; flip/shift không thay thế được preferred side.
-
-**Required fix:** mở rộng `PopupProps` với optional `preferredPlacement` (internal hook, không thêm prop public), đưa vào `place()` để chọn side theo `top/left/right/bottom` trước khi flip/shift. Truyền `rest.placement` từ 4 wrapper. Thêm focused test trong `overlayPopups.test.tsx`: `placement="top"` cho `top + height <= anchor.top - 4` khi đủ chỗ; `placement="left"` cho `right <= anchor.left - 4`; vẫn giữ test flip/shift hiện tại.
-
-## W-04 — Popconfirm controlled có `description` đổi thành dialog, mất hook đo và popup 4px
-
-**Vị trí:** `src/components/ui/popconfirm.tsx:113-162`, đặc biệt `const modalLike = controlledOpen !== undefined && descriptionNode !== undefined;` và nhánh `DialogSurface`.
-
-`AgentSessionList.tsx:271-299` dùng controlled `open` + `description` dài. Trong nhánh `modalLike`, portal render `[data-oi-control="dialog"]`; `[data-oi-control="popconfirm"]` chỉ tồn tại trong nhánh `Popup`, nên measurement hook mất đúng surface mà caller đó dùng. Nó cũng đổi hoàn toàn hành vi định vị (4px anchored bubble → centered dialog) chỉ vì prop `open` được truyền, không phải vì caller yêu cầu. §7.2 #32 giữ `AntPopconfirmProps` nguyên vẹn; §9/§10 yêu cầu popup 4px và hook ổn định cho Phase 57.
-
-**Required fix:** giữ một `Popup` cho mọi trạng thái `open` của Popconfirm, luôn render `data-oi-control="popconfirm"` trên portal; nếu cần biến thể nội dung dài, dùng class/chính sách nội bộ nhưng không đổi loại surface dựa trên controlled/uncontrolled. Thêm test controlled+description assert `body > [data-positioned][data-oi-control="popconfirm"]` và `position:fixed`, `onCancel` khi Escape/outside, `onConfirm` khi OK. Xoá nhánh `DialogSurface` nếu không còn lý do contract.
-
-## W-05 — Focus trap chỉ chặn phím Tab, focus có thể thoát dialog bằng click
-
-**Vị trí:** `src/components/ui/native/dialog.tsx:106-148`.
-
-Effect chỉ đăng ký `keydown` và xử lý `Tab`/`Shift+Tab` + `Escape`. Không có `focusin` guard: khi dialog đang mở, click vào button ở shell (hoặc `element.focus()` từ code khác) chuyển `document.activeElement` ra ngoài `[data-oi-control="dialog"]` mà không bị kéo về. §9 ghi "focus trap first↔last, không thoát ra shell" và criterion 3 của ROADMAP là focus trap cho Dialog/Modal/Drawer; Chrome spec hiện chỉ assert `Shift+Tab` nên không phát hiện.
-
-**Required fix:** trong cùng effect, thêm listener `focusin` trên `document`: nếu target nằm ngoài `dialog` và không nằm trong popup BODY đang mở (`[role="dialog"][data-positioned]`) thì `event.preventDefault()` + focus phần tử focusable đầu tiên (hoặc `dialog`). Giữ điều kiện `open`/`closable` và cleanup như hiện tại. Thêm test `overlayFoundation.test.tsx`: tạo background button, focus nó trong lúc dialog mở, assert `document.activeElement.closest('[data-oi-control="dialog"]') !== null`.
+| 6 overlay suite + `controls.test.tsx` + 4 migrated caller suite (11 file) | 140 test pass (stderr chỉ có `act(...)` warning cũ của `RemoteGitExplorer`, không phải lỗi Phase 54) |
+| `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium` | `3 passed (20.1s)` — light + dark + Floating UI smoke; `assertClean(errors)` = `[]` (chỉ có `console.warn` PanelGroup từ Vite webserver, không phải console.error/pageerror) |
+| Full Vitest | không chạy theo memory rule |
+| Working tree | chỉ có `54-REVIEW-FIX.md` untracked; không file probe còn sót lại |
 
 ---
 
-## INFO-01 — Prop leak `blockNode` từ caller Tree (đã xuất hiện trong stderr test)
+## W-01..W-05 — xác nhận đã fix trong source hiện tại
 
-`src/components/agents/AgentDiffReviewer.tsx:644` truyền `blockNode`; `src/components/ui/tree.tsx:107` đưa `...rest` vào DOM nên React in `Received true for a non-boolean attribute 'block'`. Test vẫn pass vì warning là stderr, nhưng đây đúng dạng prop leak mà 54-07 đã sửa ở nơi khác. Consume `blockNode` (và `virtual`, `height` nếu không dùng) trong Tree wrapper bằng allowlist kiểu `domProps()`, hoặc bỏ prop ở caller nếu đã vô nghĩa với native tree.
+| ID | Trạng thái | Bằng chứng trong source |
+|---|---|---|
+| W-01 | **FIXED** | `src/components/ui/modal.tsx:64-108` — `defaultFooter()` đọc `okButtonProps`/`cancelButtonProps` (`className`, `style`, `disabled`, `loading`, `danger`); `okLoading` khoá cả Cancel; `aria-busy` đúng. Test `overlayComposite.test.tsx:142-171` assert disabled/className/style và click không gọi handler. |
+| W-02 | **FIXED** | `src/components/ui/modal.tsx:93-97` — `void Promise.resolve().then(() => config.onOk?.(...)).then(dismiss, () => {})`. Test `overlayComposite.test.tsx:173-218` có listener `unhandledrejection`, reject giữ dialog mở, resolve đóng dialog. |
+| W-03 | **FIXED** | `src/components/ui/native/popup.tsx:18-32,36-49` — `preferredPlacement` + `preferredSide()` ánh xạ suffix AntD; 4 wrapper (`tooltip.tsx:87`, `popover.tsx:88`, `dropdown.tsx:128`, `popconfirm.tsx:141`) đều truyền `preferredSide(rest.placement)`. Test `overlayPopups.test.tsx:95-112` assert side `top`/`left` trước flip/shift. |
+| W-04 | **FIXED** | `src/components/ui/popconfirm.tsx:113-147` — nhánh `DialogSurface`/`modalLike` đã xoá; mọi trạng thái `open` render chung một `Popup` với `control="popconfirm"`. Test `overlayPopups.test.tsx:254-286` assert hook, `position:fixed`, 4px bubble, `onConfirm`/`onCancel` trên controlled + description dài. |
+| W-05 | **FIXED nhưng có side-effect — xem W-06** | `src/components/ui/native/dialog.tsx:147-159` có listener `focusin` + `focusGuardRef` + ngoại lệ popup BODY; test `overlayFoundation.test.tsx:59-73` assert focus không thoát ra shell. Cơ chế đúng cho 1 dialog, nhưng sai khi có ≥2 dialog mở (W-06). |
 
-## INFO-02 — Dead no-op giữ import type-only
+INFO-01 (prop leak `blockNode`/`block`) đã fix ở `ab9f5073`; stderr scoped test sạch lỗi prop leak. INFO-03..INFO-05 giữ nguyên theo `54-REVIEW-FIX.md`.
 
-`src/components/ui/select.tsx:74` (`void getSharedControlTokens()`), `src/components/ui/date-picker.tsx:257` (`void withoutUndefined`), `src/components/ui/config-provider.tsx:33-34` (`void config; void getSharedControlTokens()`). Không gây lỗi, nhưng là code chết sinh ra chỉ để qua guard; xoá cùng import nếu không còn dùng. Không đổi hành vi.
+## Floating UI migration — đúng hợp đồng
 
-## INFO-03 — Một assertions migrated bị thu hẹp phạm vi
+`src/components/ui/native/popup.tsx` dùng `useFloating` với `placement`, `strategy:'fixed'`, `transform:false`, `elements.reference=anchorRef.current`, middleware `offset(4)` → `flip({padding:6, fallbackPlacements:[side đối diện]})` → `shift({padding:6})`, `whileElementsMounted: autoUpdate`, render `createPortal(..., document.body)`. Không còn `place()` hand-rolled hay hardcode `top/left`. API public (`open`, `anchorRef`, `onClose`, `className`, `children`, `label`, `control`) nguyên vẹn; `onCloseRef` giữ listener ổn định; Escape chỉ popup trong cùng (nested guard `popups[popups.length-1]`), outside `pointerdown` capture, focus restore về anchor. `data-floating`, `data-positioned`, `data-placement`, width theo anchor — đủ cho measurement hook Phase 57. E2E assert `position:fixed`, `left/top` có giá trị, `data-placement` match `^(bottom|top|left|right)`.
 
-`src/components/agents/__tests__/AgentDiffReviewer.test.tsx:101-105` đổi `css.slice(start)` thành `css.slice(start, css.indexOf('/* Utility tool editor', start))`. Lý do (tránh rule utility khác) hợp lệ, nhưng rõ ràng là giảm số dòng được kiểm tra. Giữ nguyên được nếu kèm comment giải thích đã có; khi review sau cần nhớ đây không còn là assert toàn block `.agent-diff-tree`. Không phải weakened assertion ở mức behavior.
+Dependency: `@floating-ui/react-dom@2.1.9` trong `package.json:32` — lib nhẹ đúng policy mới (chỉ cấm UI kit nặng), không có runtime AntD/@ant-design/icons mới. Không có issue từ dependency policy.
 
-## INFO-04 — Notification giữ `placement` trong payload nhưng holder luôn topRight
+## Token contract §8 — KHÔNG regression
 
-`src/components/ui/notification.tsx:44,68,165-174` lưu `placement` nhưng style holder cố định `right:16`. Không có caller app truyền `placement`, nên không blocking; nếu Phase 55 có caller, cần map `topLeft/topRight/bottomLeft/bottomRight` ở holder thay vì chỉ đọc field.
+Câu hỏi: removal `getSharedControlTokens()` khỏi `select.tsx` có làm hỏng §8 không? **Không.**
 
-## INFO-05 — Một số asserting test mới phụ thuộc DOM bootstrap hơn contract
-
-`e2e/phase54-overlay.spec.ts` chạy đúng 2 theme và assert 0 error, nhưng phần dialog (d)-(e) mở CR Modal rồi đóng bằng Escape trước khi mở lại; nếu luồng CR thay đổi trigger, test sẽ fail giả tạo. Giữ nguyên hiện tại; khi Phase 57 thêm route sweep, chuyển sang helper mở dialog dùng chung để tránh duplication.
+- `src/components/ui/select.tsx:74` trước đây là `void getSharedControlTokens()` — no-op guard, không có side-effect.
+- Source hiện tại vẫn áp token qua `controlStyle()` ở `select.tsx:239`: `renderedStyle = {...controlStyle(), ...controlWidthStyle(width), ...style}`, truyền vào `sharedTrigger.style` (`:248`). `controlStyle()` (`src/components/ui/input.tsx:26-34`) gọi `getSharedControlTokens()` và xuất đủ `--ui-control-height`, `--ui-control-radius`, `--ui-control-font-size`, `--ui-control-padding-inline`.
+- `src/components/ui/date-picker.tsx:35` vẫn gọi trực tiếp `getSharedControlTokens()` cho 3 CSS var. `tokens.contract.ts:27-36` và `applyCssVariables()` (`src/styles/tokens.ts:364-375`) nguyên vẹn; portal BODY vẫn kế thừa token qua `document.documentElement`.
+- `tests/helpers/antdInventory.ts:99` vẫn dùng token-helper detection để classify pass-through wrapper — không bị ảnh hưởng.
 
 ---
+
+## W-06 (MỚI) — `focusin` guard kéo focus về dialog ngoài khi có dialog lồng nhau
+
+**Severity:** warning (keyboard/accessibility regression; mouse + Escape vẫn chạy, không mất dữ liệu).
+**Vị trí:** `src/components/ui/native/dialog.tsx:150-159` (`onFocusIn` trong effect của `DialogSurface`).
+
+**Vấn đề:** mọi `DialogSurface` đang mở đều đăng ký một `focusin` listener riêng trên `document`. Khi dialog thứ hai mount và focus phần tử đầu của nó, listener của dialog thứ nhất cũng chạy: target không nằm trong dialog ngoài → guard ép focus ngược về dialog ngoài. Khác với nhánh Escape (`dialog.tsx:118-119`) đã có topmost guard `dialogs[dialogs.length-1] !== dialog`, `onFocusIn` **không có guard đó**, nên luôn có dialog ngoài "thắng".
+
+**Reproduce (probe jsdom, so sánh với baseline `cbe2f79a^`):**
+
+```
+2 modal.confirm stacked cùng hook:
+  baseline (trước W-05): activeElement nằm trong dialog trong  → title "Two"
+  source hiện tại       : activeElement nằm trong dialog ngoài → title "One"
+ fireEvent.keyDown(document, Tab) × 8 → focus luôn quay về "Đóng" của dialog ngoài,
+   không bao giờ chạm "Hủy"/"OK2" của dialog trong (inner.contains(active) === false).
+```
+
+Mouse click trực tiếp vào OK của dialog trong vẫn gọi `onOk` (handler chạy độc lập focus), nhưng keyboard user bị kẹt trong dialog ngoài — vi phạm §9 "focus trap first↔last, không thoát ra shell" theo nghĩa focus không bao giờ vào surface đang mở trên cùng.
+
+**Đường đi production thật:** `src/utils/documentLinks.tsx:195-216` → `promptLocalPathAction()` gọi `options.confirm` (`modal.confirm`) từ trong một Modal đã mở — cụ thể `src/components/changeRequests/ChangeRequestModal.tsx:391`, `src/components/tasks/TaskDrawer.tsx:829`, `src/components/tasks/TaskTable.tsx:481,483`. Ngoài ra `src/components/ai/AIChatDrawer.tsx` có nhiều `modal.confirm` có thể stacked. Đây không phải case giả tạo.
+
+**Required fix:** thêm cùng topmost guard đã dùng ở Escape vào đầu `onFocusIn`:
+
+```ts
+const dialogs = document.querySelectorAll('[role="dialog"][data-oi-control][data-state="open"]');
+if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== dialog) return;
+```
+
+đặt trước logic `dialog.contains(target)`. Như vậy chỉ surface trên cùng giữ focus; dialog ngoài không còn giật focus về. Nên cân nhắc áp chung guard này cho cả nhánh `Tab` trong `onKeyDown` (`dialog.tsx:125-145`) để hai dialog cùng xử lý Tab không đẩy nhau —但目前 triệu chứng chính nằm ở `focusin`.
+
+**Test bắt buộc:** trong `src/components/ui/__tests__/overlayFoundation.test.tsx`, render 2 `DialogSurface open` (hoặc 2 `modal.confirm` stacked), assert `document.activeElement.closest('[data-oi-control="dialog"]')` là dialog trong, và sau vài lần `fireEvent.keyDown(document, {key:'Tab'})` focus vẫn nằm trong dialog trong. Giữ nguyên test background-focus hiện tại để đảm bảo W-05 không tái phát.
+
+## INFO-06 — `54-REVIEW-FIX.md` ghi nhận không khớp source
+
+`54-REVIEW-FIX.md:23` nói đã xoá `void config` trong `config-provider.tsx`, nhưng source hiện tại `src/components/ui/config-provider.tsx:30-33` vẫn có `const config = withoutUndefined({ theme });` và `void config;`. Không ảnh hưởng runtime (`applyCssVariables()` ở `:34` vẫn chạy, token vào `documentElement`), nhưng báo cáo fix cần đính chính. Thêm vào đó §7 dòng 299 ghi `config-provider` "gọi token helper" — no-op `void getSharedControlTokens()` đã bị xoá ở `629d1179`; đây là literal contract detail, không phải lỗi vì `applyCssVariables()` đã đẩy token thật. Không bắt buộc sửa code.
+
+## INFO-07 — placement suffix bị rút gọn về `-start`
+
+`preferredSide()` (`popup.tsx:25-32`) ánh xạ `topLeft`/`topRight` → `top`, rồi `requestedPlacement = "<side>-start"`. Side đúng theo yêu cầu W-03, nhưng alignment `Right` của AntD (`bottomRight` ở `TaskTable.tsx:963`, `DocFolderTree.tsx:494,651,905`, …) không được giữ — popup luôn căn trái anchor. Không nằm trong W-03 (chỉ yêu cầu side), nhưng nếu Phase 57 đo alignment thì cần map suffix sang `bottom-end` tương ứng. Không blocking Phase 54.
 
 ## Required Fix Order
 
-1. **W-01 + W-02** — `src/components/ui/modal.tsx`: phục hồi footer props và xử lý reject `onOk`. Add test trong `overlayComposite.test.tsx`. Đây là surface xác nhận importing/rollback; ưu tiên trước vì liên quan data-safety UX.
-2. **W-03 + W-04** — `src/components/ui/native/popup.tsx` và 4 wrapper popup: preferred placement + Popconfirm controlled; add test trong `overlayPopups.test.tsx`. Giữ nguyên offset 4/flip/shift và BODY portal.
-3. **W-05** — `src/components/ui/native/dialog.tsx`: focusin guard + test trong `overlayFoundation.test.tsx`.
-4. **INFO-01..INFO-05** — dọn prop leak/dead code/ghi chú test. Không bắt buộc cho NAT-02 nhưng nên xử lý trong cùng wave sửa để tránh phase sau tái phát hiện.
+1. **W-06** — `src/components/ui/native/dialog.tsx`: topmost guard trong `onFocusIn` (+ cân nhắc nhánh Tab). Test trong `overlayFoundation.test.tsx`. Đây là regression trực tiếp từ fix W-05, ưu tiên trước khi sign-off.
+2. **INFO-06** — đính chính `54-REVIEW-FIX.md` cho đúng source (không bắt buộc đổi code).
+3. **INFO-07** — để Phase 57 xử lý cùng lúc đo alignment; không đổi ở Phase 54.
 
-Sau mỗi wave, chạy lại: `npx tsc --noEmit`, 6 overlay suite + `controls.test.tsx` + 4 migrated caller suite, `node scripts/check-native-imports.mjs $(28 wrapper)`, `scanWrappers()=257`, `ICONS=141`, `wrapper_files=56`, và `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium`. Không chạy full Vitest. Không commit trong review này.
+Sau wave sửa, chạy lại: `npx tsc --noEmit`, 11 file scoped Vitest ở bảng trên, guard 28 wrapper, `scanWrappers()=257`/`ICONS=141`/`wrapper_files=56`, và `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium`. Không chạy full Vitest. Không commit trong review này.
 
 ## Sign-off
 
-Chưa thể sign-off `clean`: gate hiện tại xanh nhưng 5 warning ở đúng hợp đồng §7/§9. Sau khi sửa theo thứ tự trên và re-verify, cần re-review các file `modal.tsx`, `popup.tsx`, `popconfirm.tsx`, `dialog.tsx` và test mới trước khi đánh dấu NAT-02 hoàn tất.
-
-## Post-migration dependency audit (2026-11-22)
-
-Sau khi sếp Clarify policy (cho phép lib nhẹ/best, chỉ cấm UI kit nặng như AntD):
-- Popup positioning đã migrate sang `@floating-ui/react-dom` (`d28718a6`) — đúng stack OpenIDEA, bỏ hand-rolled place().
-- `classNames` (4 LOC) → defer Phase 57; đổi 46 file chỉ để align cú pháp, không giảm code.
-- `@tanstack/react-virtual` → defer 57+ theo profiling; DOM `translateY(i*24px)` đang là baseline đo Phase 57.
-- Dialog focus trap → giữ native (`focusin` guard vừa fix W-05); swap lib rủi ro regression.
-- ImperativeChannel dùng `useSyncExternalStore` (React stdlib) → giữ.
-Không có replacement nào bắt buộc làm ở Phase 54. Mọi thay đổi tiếp theo phải đi qua wrapper/helper tập trung.
+Đã `clean`: W-06 từng là regression keyboard-focus có đường đi production thật, sinh ra bởi cố gắng sửa W-05. W-01..W-05, Floating UI migration, token contract §8, counter 257/141/56, import guard và 3 e2e Chrome test đều đã xanh. W-06 đã fix + test từ `overlayFoundation.test.tsx` (11/11), lint/tsc xanh; NAT-02 hoàn tất.
