@@ -155,6 +155,9 @@ function fieldProps(width: 'full' | 'auto', style: CSSProperties | undefined, cl
 export function TimePicker({ width = 'full', style, className, value, defaultValue, format: formatProp = 'HH:mm:ss', placeholder, disabled, allowClear, onChange, onBlur, status, 'aria-invalid': ariaInvalid, 'aria-label': ariaLabel }: TimeFieldProps) {
   const format = formatProp as string;
   const anchorRef = useRef<HTMLInputElement>(null);
+  // Focusing the anchor after a pick would re-trigger onFocus and reopen the
+  // popup, so suppress that one restore-focus event.
+  const suppressOpen = useRef(false);
   const { state, setState, current, commit } = useTimeField(value as Dayjs | undefined, defaultValue as Dayjs | undefined, format);
   const invalid = status === 'error' || ariaInvalid === true;
   const active = useMemo(() => ranges(format), [format]);
@@ -165,8 +168,10 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
   const leads = state.lead;
 
   function close() {
+    suppressOpen.current = true;
     setState((prev) => ({ ...prev, open: false }));
     anchorRef.current?.focus();
+    queueMicrotask(() => { suppressOpen.current = false; });
   }
 
   function pick(h: number, m: number, s: number) {
@@ -190,7 +195,7 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
           const parsed = dayjs(text, format, true);
           if (parsed.isValid()) commit(parsed, onChange as ((value: Dayjs | null) => void) | undefined);
         }}
-        onFocus={() => setState((prev) => ({ ...prev, open: true }))}
+        onFocus={() => { if (!suppressOpen.current) setState((prev) => ({ ...prev, open: true })); }}
         onBlur={onBlur as unknown as (event: React.FocusEvent<HTMLInputElement>) => void}
         onKeyDown={(event: KeyboardEvent<HTMLInputElement>) => {
           if (event.key === 'ArrowDown') { event.preventDefault(); setState((prev) => ({ ...prev, open: true })); }
@@ -220,6 +225,9 @@ export function TimeRangePicker({
   const format = formatProp as string;
   const startRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLInputElement>(null);
+  // Same focus-restore guard as TimePicker: suppress the onFocus fired by the
+  // programmatic focus after a pick so the popup stays closed.
+  const suppressOpen = useRef(false);
   const range = value ?? defaultValue ?? [null, null];
   const [drafts, setDrafts] = useState<[string, string]>([
     display(range[0] as Dayjs | null, format),
@@ -243,8 +251,10 @@ export function TimeRangePicker({
     setDrafts((prev) => active === 0 ? [next.format(format), prev[1]] : [prev[0], next.format(format)]);
     commitIndex(active, next);
     setActive(active === 0 ? 1 : 0);
+    suppressOpen.current = true;
     setRangeOpen(false);
     anchorRef.current?.focus();
+    queueMicrotask(() => { suppressOpen.current = false; });
   }
 
   const rangeDisabled = Array.isArray(disabled) ? disabled[active] : disabled;
@@ -258,7 +268,7 @@ export function TimeRangePicker({
           ref={index === 0 ? startRef : endRef}
           value={drafts[index]}
           aria-label={`${ariaLabel ?? placeholder ?? 'Khoảng thời gian'} ${index === 0 ? 'bắt đầu' : 'kết thúc'}`}
-          onFocus={() => { setActive(index); setRangeOpen(true); }}
+          onFocus={() => { if (suppressOpen.current) return; setActive(index); setRangeOpen(true); }}
           onChange={(event) => {
             const text = event.target.value;
             setDrafts((prev) => index === 0 ? [text, prev[1]] : [prev[0], text]);
