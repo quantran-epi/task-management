@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, IconButton } from '../src/components/ui';
+import { Button, IconButton, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -16,9 +16,9 @@ function ButtonFixture() {
       <Button disabled>Disabled</Button>
       <Button loading aria-label="Loading">Loading</Button>
       <Button aria-pressed={pressed} onClick={() => setPressed(!pressed)}>Selected</Button>
-      <IconButton aria-label="Settings" icon={<span>⚙</span>} />
-      <IconButton aria-label="Refreshing" loading icon={<span>⟳</span>} />
-      <IconButton aria-label="Small settings" size="small" icon={<span>⚙</span>} />
+      <IconButton aria-label="Settings" icon={<SettingOutlined />} />
+      <IconButton aria-label="Refreshing" loading icon={<SyncOutlined />} />
+      <IconButton aria-label="Small settings" size="small" icon={<SettingOutlined />} />
       <Button loading aria-label="Loading label">Lưu thay đổi</Button>
     </>
   );
