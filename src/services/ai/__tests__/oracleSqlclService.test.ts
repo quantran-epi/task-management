@@ -723,6 +723,23 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     expect(res.error).not.toContain('pass@host');
   });
 
+  it('metadata search matches both raw and Vietnamese-folded terms', async () => {
+    seedActiveProfile({});
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([{ id: 'ssh-1', name: 'B' } as any]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValue('secret-pass');
+    const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+      stdout: '[]', stderr: '', exitStatus: 0,
+    });
+    await executeOracleDescribe(
+      { action: 'list_objects', search: 'Đơn hàng', searchAlt: 'don hang', pageSize: 10 },
+      fakeDb
+    );
+    const command = execSpy.mock.calls[0]?.[1] as string;
+    expect(command).toContain("UPPER(OBJECT_NAME) LIKE '%ĐƠN HÀNG%'");
+    expect(command).toContain("UPPER(OBJECT_NAME) LIKE '%DON HANG%'");
+    expect(command).toContain(' OR ');
+  });
+
   it('metadata actions build whitelisted, paginated ALL_* scripts and cap source', async () => {
     seedActiveProfile({});
     vi.spyOn(sshService, 'getSshConfigs').mockResolvedValue([{ id: 'ssh-1', name: 'B' } as any]);

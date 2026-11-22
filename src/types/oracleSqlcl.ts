@@ -80,8 +80,10 @@ export interface OracleDescribeArgs extends OracleConnectionSelector {
   tableOrView?: string;
   /** Optional schema/owner name */
   schema?: string;
-  /** Optional search filter for list_tables */
+  /** Optional search filter for list_tables / list_objects / list_schemas */
   search?: string;
+  /** Vietnamese-folded variant of `search` (shared searchText helper), matched as an OR term. */
+  searchAlt?: string;
   /** Object name for list_objects / describe_object / get_object_source (alias of tableOrView) */
   objectName?: string;
   /** Oracle OBJECT_TYPE from the service whitelist (required for object actions) */

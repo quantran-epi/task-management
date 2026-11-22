@@ -370,6 +370,20 @@ export function escapeOracleLikeFilter(value: string): string {
 }
 
 /**
+ * Build a LIKE predicate for a free-text search plus its Vietnamese-folded variant.
+ * Both terms pass the same escaping/control-character boundary before interpolation.
+ */
+function oracleLikePredicate(column: string, args: OracleDescribeArgs): string {
+  const terms = [args.search, args.searchAlt]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => escapeOracleLikeFilter(value.trim().toUpperCase()))
+    .filter((value, index, all) => all.indexOf(value) === index);
+  if (!terms.length) return '';
+  const clauses = terms.map((term) => `${column} LIKE '%${term}%'`).join(' OR ');
+  return `AND (${clauses})`;
+}
+
+/**
  * Wraps SQL query with row limit if query does not already limit rows.
  */
 export function applyQueryLimit(sql: string, maxRows: number): string {
@@ -1065,11 +1079,8 @@ ORDER BY LINE`;
           ? assertOracleObjectType(args.objectType)
           : undefined;
         const typeFilter = objectType ? `AND OBJECT_TYPE = '${objectType}'` : '';
-        const search = args.search?.trim()
-          ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
-          : '';
         const ownerFilter = ownerLiteral ? `AND OWNER = '${ownerLiteral}'` : '';
-        const searchFilter = search ? `AND UPPER(OBJECT_NAME) LIKE '%${search}%'` : '';
+        const searchFilter = oracleLikePredicate('UPPER(OBJECT_NAME)', args);
         const select = `SELECT OWNER, OBJECT_NAME, OBJECT_TYPE, STATUS, CREATED, LAST_DDL_TIME
 FROM ALL_OBJECTS
 WHERE OWNER NOT IN ${SYSTEM_SCHEMAS}
@@ -1122,10 +1133,7 @@ EXIT;`.trim();
     }
 
     if (action === 'list_schemas') {
-      const search = args.search?.trim()
-        ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
-        : '';
-      const searchFilter = search ? `AND USERNAME LIKE '%${search}%'` : '';
+      const searchFilter = oracleLikePredicate('USERNAME', args);
       const select = `SELECT USERNAME, CREATED
 FROM ALL_USERS
 WHERE USERNAME NOT IN ${SYSTEM_SCHEMAS}

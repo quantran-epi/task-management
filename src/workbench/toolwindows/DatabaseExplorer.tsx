@@ -13,6 +13,7 @@ import {
 } from '../../services/ai/oracleSqlclService';
 import { extractGridRows, isOracleSourceObjectType, assertOracleObjectType } from '../../services/ai/oracleSqlclService';
 import { useLayoutStore } from '../store/layoutStore';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const PAGE_SIZE = 200;
 const TYPE_GROUPS = Object.keys(ORACLE_OBJECT_TYPES);
@@ -124,10 +125,17 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
           connectionId,
           pageSize: PAGE_SIZE,
           search: debouncedObjectFilter,
+          searchAlt: foldForSearch(debouncedObjectFilter),
         });
         nodes = extractGridRows(result.data)
           .slice(0, PAGE_SIZE)
           .filter((row) => TYPE_GROUPS.includes(String(row.OBJECT_TYPE ?? '')))
+          .filter((row) =>
+            searchIncludes(
+              `${String(row.OWNER ?? '')}.${String(row.OBJECT_NAME ?? '')}`,
+              debouncedObjectFilter
+            )
+          )
           .map((row) => ({
             key: nodeKey([
               'object', connectionId, String(row.OWNER ?? ''),
@@ -140,10 +148,14 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
         const result = await query({
           action: 'list_schemas',
           connectionId,
-          ...(debouncedFilter ? { search: debouncedFilter } : {}),
+          ...(debouncedFilter
+            ? { search: debouncedFilter, searchAlt: foldForSearch(debouncedFilter) }
+            : {}),
           pageSize: PAGE_SIZE,
         });
-        nodes = extractGridRows(result.data).slice(0, PAGE_SIZE).map((row) => {
+        nodes = extractGridRows(result.data)
+          .filter((row) => !debouncedFilter || searchIncludes(String(row.USERNAME ?? ''), debouncedFilter))
+          .slice(0, PAGE_SIZE).map((row) => {
           const name = String(row.USERNAME ?? '');
           return {
             key: nodeKey(['schema', connectionId, name]),
@@ -159,7 +171,9 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
           connectionId,
           schema,
           pageSize: PAGE_SIZE,
-          ...(debouncedObjectFilter ? { search: debouncedObjectFilter } : {}),
+          ...(debouncedObjectFilter
+            ? { search: debouncedObjectFilter, searchAlt: foldForSearch(debouncedObjectFilter) }
+            : {}),
         });
         const rows = extractGridRows(result.data);
         const allowedTypes = new Set<string>();
@@ -188,7 +202,9 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
           connectionId,
           schema,
           objectType,
-          ...(debouncedObjectFilter ? { search: debouncedObjectFilter } : {}),
+          ...(debouncedObjectFilter
+            ? { search: debouncedObjectFilter, searchAlt: foldForSearch(debouncedObjectFilter) }
+            : {}),
           pageSize: PAGE_SIZE,
         });
         nodes = extractGridRows(result.data)
