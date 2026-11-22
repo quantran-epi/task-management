@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -101,8 +103,15 @@ export const PREFLIGHT_URLS = [
 ] as const;
 
 const INTERACTION_VERBS = /\b(click|type|key|focus|hover)\b/i;
-const BEHAVIOR_CALL = /\b(fireEvent|userEvent)\./;
-const STATE_ASSERTION = /\b(toHaveBeenCalled|aria-|getAttribute|toBeFocused|textContent|value)\b/i;
+// WR-04: strip comments before scanning. A fireEvent inside `//` or `/* */`
+// is prose, not a real dispatch.
+const stripComments = (source: string): string => source
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+const BEHAVIOR_CALL = /\b(fireEvent|userEvent)\.\s*(click|type|key|focus|hover|change|input|keyDown|keyUp)\b/i;
+// A real assertion takes an expect(...) argument and chains a matcher. Counting
+// a bare `getAttribute` mention (CR-02 style) is shape-only certification.
+const STATE_ASSERTION = /expect\((?:[^()]|\([^()]*\))*\)\s*\.\s*(?:not\s*\.\s*)?(?:toHaveBeenCalled(?:Times|Once)?|toBe|toEqual|toBeDisabled|toBeEnabled|toBeFocused|toHaveAttribute|toHaveTextContent|toHaveLength)\s*\(/;
 const STATIC_ONLY_ASSERTION = /\b(expect\([^)]*\.className|expect\([^)]*\.style\b)/;
 
 export interface PassArtifact {
@@ -141,11 +150,25 @@ export function checkInteractions(trace: Interaction[] | null, entry: ControlEnt
   const errors: string[] = [];
   if (!Array.isArray(trace) || !trace.length) return ['interactions.json missing or empty'];
   for (const row of trace) {
-    if (!entry.states.includes(String(row.state))) errors.push(`unknown state ${String(row.state)}`);
+    const state = String(row.state);
+    if (!entry.states.includes(state)) errors.push(`unknown state ${state}`);
     if (!INTERACTION_VERBS.test(String(row.action ?? ''))) errors.push(`no real interaction verb in ${String(row.action)}`);
     if (!row.before || !row.after) errors.push('missing before/after');
+    // CR-02/CR-03: an interaction is only real when state actually changed.
+    if (row.before && row.after && row.before === row.after) errors.push(`no state change for ${state}`);
     if (row.asserted !== true) errors.push('state not asserted');
     if (!row.reference || !row.wrapper) errors.push('missing reference/wrapper observation');
+    // CR-02: reference/wrapper are distinct app observations, never the same
+    // literal string, and must mirror the recorded before/after.
+    if (row.reference && row.wrapper && row.reference === row.wrapper) {
+      errors.push(`reference/wrapper observation identical for ${state}`);
+    }
+    if (row.reference && row.reference !== row.before) {
+      errors.push(`reference observation does not match before for ${state}`);
+    }
+    if (row.wrapper && row.wrapper !== row.after) {
+      errors.push(`wrapper observation does not match after for ${state}`);
+    }
   }
   return errors;
 }
@@ -157,10 +180,11 @@ export function focusedTestSource(id: string): string | null {
 
 export function focusedTestErrors(source: string | null): string[] {
   if (!source) return ['focused test file missing'];
+  const code = stripComments(source);
   const errors: string[] = [];
-  if (!BEHAVIOR_CALL.test(source)) errors.push('no fireEvent/userEvent');
-  if (!STATE_ASSERTION.test(source)) errors.push('no state-change assertion');
-  if (STATIC_ONLY_ASSERTION.test(source)) errors.push('static shape assertion present');
+  if (!BEHAVIOR_CALL.test(code)) errors.push('no fireEvent/userEvent');
+  if (!STATE_ASSERTION.test(code)) errors.push('no state-change assertion');
+  if (STATIC_ONLY_ASSERTION.test(code)) errors.push('static shape assertion present');
   return errors;
 }
 
@@ -171,6 +195,53 @@ export function preflightUnreachable(urls: readonly string[], reachable: (url: s
 export function checkScreenshotsDiffer(lightHash: unknown, darkHash: unknown): string[] {
   if (!lightHash || !darkHash) return ['screenshot hash missing'];
   return lightHash === darkHash ? ['light and dark screenshots identical'] : [];
+}
+
+/** WR-01: DOM evidence must contain the control's selector, not just any HTML. */
+export function checkDomSelectors(dir: string, entry: ControlEntry): string[] {
+  const errors: string[] = [];
+  for (const theme of ['light', 'dark'] as const) {
+    for (const app of ['reference', 'proof', 'wrapper'] as const) {
+      const file = `dom-${app}-${theme}.json`;
+      const path = resolve(dir, file);
+      if (!existsSync(path)) { errors.push(`${file} missing`); continue; }
+      const snap = JSON.parse(readFileSync(path, 'utf8')) as { controlHtml?: string; html?: string; truncated?: boolean };
+      const control = snap.controlHtml ?? '';
+      // entry.wrapperSelector is a CSS selector; the attribute is what appears
+      // in serialized outerHTML. Derive the attribute name/value pair.
+      const match = /^\[([^=\]]+)="([^"]+)"\]$/.exec(entry.wrapperSelector);
+      const attribute = match ? `${match[1]}="${match[2]}"` : entry.wrapperSelector;
+      if (!control.includes(attribute)) {
+        errors.push(`${file} missing control selector ${entry.wrapperSelector}`);
+      }
+      if (typeof snap.truncated !== 'boolean') errors.push(`${file} missing truncation flag`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * CR-01/CR-03: hash the actual PNG bytes on disk, never the hash recorded in
+ * geometry-*.json (which a forged wrapper copy can leave stale). Uses the
+ * wrapper files because the §5 contract ships exactly those as the captured
+ * wrapper screenshot for each theme.
+ */
+export function checkOnDiskScreenshots(dir: string): string[] {
+  const errors: string[] = [];
+  const hash = (file: string): string | null => {
+    const path = resolve(dir, file);
+    if (!existsSync(path)) { errors.push(`${file} missing on disk`); return null; }
+    return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
+  };
+  const light = hash('wrapper-light.png');
+  const dark = hash('wrapper-dark.png');
+  if (light && dark) errors.push(...checkScreenshotsDiffer(light, dark));
+  // CR-01: wrapper PNG must be its own capture, never a byte copy of proof.
+  const proofLight = hash('proof-light.png');
+  const proofDark = hash('proof-dark.png');
+  if (light && proofLight && light === proofLight) errors.push('wrapper-light.png is a copy of proof-light.png');
+  if (dark && proofDark && dark === proofDark) errors.push('wrapper-dark.png is a copy of proof-dark.png');
+  return errors;
 }
 
 export function registryErrors(ids: string[]): string[] {
@@ -198,7 +269,8 @@ export function assertEvidence(id: string, registry: ControlEntry[] = CONTROL_RE
 
   const dir = resolve(ARTIFACTS, id);
   const files = [
-    'reference-light.png', 'reference-dark.png', 'wrapper-light.png', 'wrapper-dark.png',
+    'reference-light.png', 'reference-dark.png', 'proof-light.png', 'proof-dark.png',
+    'wrapper-light.png', 'wrapper-dark.png',
     'dom-light.json', 'dom-dark.json', 'geometry-light.json', 'geometry-dark.json',
     'interactions.json', 'DIFF.md', 'PASS.md', 'PASS.json',
   ];
@@ -212,9 +284,10 @@ export function assertEvidence(id: string, registry: ControlEntry[] = CONTROL_RE
   const trace = readJson(resolve(dir, 'interactions.json')) as unknown;
   expect(checkInteractions(trace as Interaction[] | null, entry!)).toEqual([]);
 
-  const light = readJson(resolve(dir, 'geometry-light.json')) as { screenshotHash?: string } | null;
-  const dark = readJson(resolve(dir, 'geometry-dark.json')) as { screenshotHash?: string } | null;
-  expect(checkScreenshotsDiffer(light?.screenshotHash, dark?.screenshotHash)).toEqual([]);
+  // CR-03: verify real PNG bytes on disk — the JSON hash alone is self-certifying.
+  expect(checkOnDiskScreenshots(dir)).toEqual([]);
+  // WR-01: DOM snapshots must actually contain the measured control selector.
+  expect(checkDomSelectors(dir, entry!)).toEqual([]);
 }
 
 // Playwright imports CONTROL_REGISTRY from this module; Vitest's describe()
@@ -232,7 +305,7 @@ if (runGateSuite) describe('Phase 59 parity evidence integrity gate', () => {
   };
   const validTrace: Interaction[] = button.states.slice(0, 2).map((state) => ({
     state, action: 'click', before: 'aria-pressed=false', after: 'aria-pressed=true',
-    asserted: true, reference: 'reference observation', wrapper: 'wrapper observation',
+    asserted: true, reference: 'aria-pressed=false', wrapper: 'aria-pressed=true',
   }));
 
   it('artifact missing interactions.json fails', () => {
@@ -267,6 +340,71 @@ if (runGateSuite) describe('Phase 59 parity evidence integrity gate', () => {
     expect(checkScreenshotsDiffer('aaa', 'aaa')).toContain('light and dark screenshots identical');
     expect(checkScreenshotsDiffer('aaa', 'bbb')).toEqual([]);
     expect(checkScreenshotsDiffer(null, 'bbb')).toContain('screenshot hash missing');
+  });
+
+  // --- Regression tests for review findings CR-01 / CR-02 / CR-03 / WR-04 ---
+  // These describe the DESIRED behaviour. They must FAIL against the old gate
+  // (that is the proof the old gate self-certified forged evidence).
+
+  it('CR-02/CR-03: identical before/after is rejected even with asserted:true', () => {
+    expect(checkInteractions([{ ...validTrace[0]!, before: 'same', after: 'same' }], button))
+      .toContain('no state change for default');
+  });
+
+  it('CR-02/CR-03: hardcoded reference/wrapper strings are rejected', () => {
+    const forged = {
+      ...validTrace[0]!,
+      before: 'observed', after: 'observed',
+      reference: 'observed via [data-oi-control="button"] after real click',
+      wrapper: 'observed via [data-oi-control="button"] after real click',
+    };
+    expect(checkInteractions([forged], button))
+      .toEqual(expect.arrayContaining([
+        'no state change for default',
+        'reference/wrapper observation identical for default',
+      ]));
+  });
+
+  it('CR-02/CR-03: reference/wrapper must mirror the real before/after observations', () => {
+    const mismatched = { ...validTrace[0]!, reference: 'reference observation', wrapper: 'wrapper observation' };
+    expect(checkInteractions([mismatched], button)).toEqual(expect.arrayContaining([
+      'reference observation does not match before for default',
+      'wrapper observation does not match after for default',
+    ]));
+  });
+
+  it('CR-01/CR-03: gate hashes PNG bytes on disk, not geometry json', () => {
+    const tmp = mkdtempSync(resolve(tmpdir(), 'parity-gate-'));
+    try {
+      // Disk bytes identical (the CR-01 copyFileSync forgery) while the JSON
+      // geometry claims two different hashes. The old gate read JSON and passed.
+      writeFileSync(resolve(tmp, 'wrapper-light.png'), Buffer.from('same-png-bytes'));
+      writeFileSync(resolve(tmp, 'wrapper-dark.png'), Buffer.from('same-png-bytes'));
+      writeFileSync(resolve(tmp, 'geometry-light.json'), JSON.stringify({ screenshotHash: 'aaa' }));
+      writeFileSync(resolve(tmp, 'geometry-dark.json'), JSON.stringify({ screenshotHash: 'bbb' }));
+      expect(checkOnDiskScreenshots(tmp)).toContain('light and dark screenshots identical');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('CR-01: wrapper PNG copied from proof is rejected', () => {
+    const tmp = mkdtempSync(resolve(tmpdir(), 'parity-copy-'));
+    try {
+      writeFileSync(resolve(tmp, 'wrapper-light.png'), 'proof-bytes');
+      writeFileSync(resolve(tmp, 'wrapper-dark.png'), 'other-wrapper-bytes');
+      writeFileSync(resolve(tmp, 'proof-light.png'), 'proof-bytes');
+      writeFileSync(resolve(tmp, 'proof-dark.png'), 'other-proof-bytes');
+      expect(checkOnDiskScreenshots(tmp)).toContain('wrapper-light.png is a copy of proof-light.png');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('WR-04: fireEvent in a comment does not certify a focused test', () => {
+    const commented = ["// fireEvent.click(el)", "expect(el.getAttribute('aria-pressed')).toBe('true')"].join('\n');
+    expect(focusedTestErrors(commented)).toContain('no fireEvent/userEvent');
+    expect(focusedTestErrors("fireEvent.click(el); expect(onClick).toHaveBeenCalledTimes(1)")).toEqual([]);
   });
 
   it('on-disk button evidence satisfies every criterion', () => {
