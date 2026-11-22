@@ -206,13 +206,13 @@
 
 .timeColumn {
   display: block;
-  width: 72px;
-  max-height: 260px;
+  width: 80px;
+  max-height: 360px;
   overflow: auto;
-  flex: 0 0 72px;
+  flex: 0 0 80px;
 }
 
-.timeColumnWrap { display: flex; flex-direction: column; flex: 0 0 72px; }
+.timeColumnWrap { display: flex; flex-direction: column; flex: 0 0 80px; }
 .timeColumnLabel {
   height: 20px;
   line-height: 20px;
