@@ -148,70 +148,83 @@ impl ToolTaskRegistry {
     /// thread's cancel-poll loops too. Both look the task up by id, so removing it here
     /// would leave the remote process running. `run_cancellable_remote_command` removes
     /// each task exactly once when its reader has exited.
-    pub fn cancel_all(&self) {
+    /// Returns one receiver per spawned SSH kill, so shutdown can wait for them.
+    pub fn cancel_all(&self) -> Vec<mpsc::Receiver<()>> {
         let tasks: Vec<LiveTask> = self
             .tasks
             .lock()
             .map(|tasks| tasks.values().cloned().collect())
             .unwrap_or_default();
-        for task in tasks {
-            let _ = task.cancel();
-        }
+        tasks.iter().filter_map(|task| task.cancel().ok().flatten()).collect()
     }
 }
 
 impl LiveTask {
-    fn cancel(&self) -> Result<(), String> {
+    fn cancel(&self) -> Result<Option<mpsc::Receiver<()>>, String> {
         self.cancelled.store(true, Ordering::SeqCst);
-        if let Some(pgid) = self.pgid {
-            self.kill_pgid(pgid)?;
+        match self.pgid {
+            Some(pgid) => self.kill_pgid(pgid).map(Some),
+            None => Ok(None),
         }
-        Ok(())
     }
 
     /// SIGTERM an explicitly known process group (used when cancel preceded PGID discovery).
-    fn kill_pgid(&self, pgid: u32) -> Result<(), String> {
+    fn kill_pgid(&self, pgid: u32) -> Result<mpsc::Receiver<()>, String> {
         kill_remote_process_group(&self.config, self.secret.as_deref(), pgid)
     }
 }
 
 pub fn cleanup_on_exit(registry: &ToolTaskRegistry) {
-    registry.cancel_all();
+    let pending = registry.cancel_all();
+    let deadline = Instant::now() + SHUTDOWN_KILL_WAIT;
+    // A process exit right after spawning the SSH kill threads can orphan the remote job.
+    // Wait briefly for each kill to finish, with one total budget shared across all tasks.
+    for rx in pending {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        let _ = rx.recv_timeout(remaining);
+    }
 }
 
-/// SIGTERM the remote process group, asynchronously: this function returns immediately so
-/// app shutdown (and explicit Cancel) never waits on an SSH connection. The spawned thread
-/// owns its own config/secret clone and sends SIGTERM to the negative PGID printed by
-/// `setsid`, which also terminates children spawned by the tool.
+/// Overall budget for remote SIGTERM connections during app shutdown.
+const SHUTDOWN_KILL_WAIT: Duration = Duration::from_secs(3);
+
+/// SIGTERM the remote process group on a detached thread so explicit Cancel never waits on
+/// SSH. The returned receiver fires when the kill attempt finishes, letting app shutdown
+/// wait briefly instead of exiting while the remote job is still alive.
 fn spawn_kill_remote_process_group(
     config: &SshConfig,
     secret: Option<&str>,
     pgid: u32,
-) -> Result<(), String> {
+) -> Result<mpsc::Receiver<()>, String> {
     let config = config.clone();
     let secret = secret.map(str::to_string);
+    let (done_tx, done_rx) = mpsc::channel();
     thread::Builder::new()
         .name(format!("tool-kill-{}", pgid))
         .spawn(move || {
-            let session = match connect_and_auth_without_socket_timeout(&config, secret.as_deref()) {
-                Ok(session) => session,
-                Err(_) => return,
-            };
-            let mut channel = match session.channel_session() {
-                Ok(channel) => channel,
-                Err(_) => return,
-            };
-            // Negative target = process group. `setsid` made the command its own leader.
-            let _ = channel.exec(&format!("kill -TERM -{} 2>/dev/null || true", pgid));
-            let mut sink = Vec::new();
-            let _ = channel.read_to_end(&mut sink);
+            let session = connect_and_auth_without_socket_timeout(&config, secret.as_deref()).ok();
+            if let Some(session) = session {
+                if let Ok(mut channel) = session.channel_session() {
+                    // Negative target = process group. `setsid` made the command its own leader.
+                    let _ = channel.exec(&format!("kill -TERM -{} 2>/dev/null || true", pgid));
+                    let mut sink = Vec::new();
+                    let _ = channel.read_to_end(&mut sink);
+                }
+            }
+            let _ = done_tx.send(());
         })
         .map_err(|e| format!("Không thể tạo thread hủy tool: {}", e))?;
-    Ok(())
+    Ok(done_rx)
 }
 
-/// Backward-compatible synchronous variant used only by registry unit tests / direct callers.
-fn kill_remote_process_group(config: &SshConfig, secret: Option<&str>, pgid: u32) -> Result<(), String> {
+fn kill_remote_process_group(
+    config: &SshConfig,
+    secret: Option<&str>,
+    pgid: u32,
+) -> Result<mpsc::Receiver<()>, String> {
     spawn_kill_remote_process_group(config, secret, pgid)
 }
 
@@ -683,6 +696,23 @@ mod tests {
         registry.remove("a");
         registry.remove("b");
         assert_eq!(registry.cancel("a").unwrap(), false);
+    }
+
+    #[test]
+    fn cancel_all_returns_kill_completion_handles_for_known_pgids() {
+        let registry = ToolTaskRegistry::default();
+        let token = Arc::new(AtomicBool::new(false));
+        let mut task = live_task(Arc::clone(&token));
+        task.pgid = Some(4242);
+        registry.register("exit".into(), task);
+        let pending = registry.cancel_all();
+        assert!(token.load(Ordering::SeqCst));
+        assert_eq!(pending.len(), 1, "shutdown must be able to await the SSH kill");
+        // test_config has an empty host, so the kill thread fails fast and signals completion.
+        pending[0]
+            .recv_timeout(Duration::from_secs(2))
+            .expect("kill thread must signal completion");
+        registry.remove("exit");
     }
 
     #[test]
