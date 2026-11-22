@@ -14,6 +14,7 @@ import {
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
 import { EMPLOYEE_ONLY_TEAM_TOOLS, TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
+import { WORKTREE_AMBIGUITY_LINE } from '../../../../src/services/ai/office/teamPrompts';
 import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 import {
   createEmployee,
@@ -26,7 +27,7 @@ import {
   isSkillInUse,
   reset,
 } from '../../../../src/services/ai/office/liveUseRegistry';
-import { addTeamMember, createTeam, getTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
+import { addTeamLink, addTeamMember, createTeam, getTeam, updateTeam } from '../../../../src/db/repositories/aiTeamRepo';
 import { getCursor } from '../../../../src/services/ai/office/teamEventLog';
 import { USER_PARTICIPANT_ID } from '../../../../src/types/teamChat';
 import {
@@ -51,7 +52,10 @@ import type { AiEmployee, AiLead, AiSkill, AiTeam } from '../../../../src/types/
 import type { AiOrchestratorLoopOptions } from '../../../../src/services/ai/aiOrchestratorLoop';
 import type { AiToolDefinition } from '../../../../src/services/ai/aiTools';
 import type { ChatTurnRuntimeDeps } from '../../../../src/components/ai/runtime/chatTurnRuntime';
-import { READ_ONLY_REFUSAL } from '../../../../src/components/ai/runtime/chatTurnRuntime';
+import {
+  READ_ONLY_REFUSAL,
+  SANITIZED_TURN_ERROR,
+} from '../../../../src/components/ai/runtime/chatTurnRuntime';
 import {
   resetTokenEstimatorForTests,
   setEncoderLoaderForTests,
@@ -273,6 +277,16 @@ interface HarnessOptions {
   mcpDiscoveryTimeoutMs?: number;
   /** Phase 43 D-04: the provider window the coordinator forwards into every turn request. */
   contextWindowTokens?: number;
+  /**
+   * 261121-r78 test seam: a worktree target with no `remoteRepoPath` makes
+   * `provisionAgentSession` throw the local `WORKTREE_NOT_AVAILABLE` error.
+   */
+  agentDeveloperWorktree?: { sshConfigId: string; remoteRepoPath: string };
+  /** 261121-s4k CR-01: initial ambiguity plus catalog rows for send-time resolution. */
+  worktreeAmbiguousSystems?: readonly string[];
+  linkedSystems?: Array<{ name: string; code: string; sshConfigId: string; remoteRepoPath: string }>;
+  onAgentDeveloperWorktreeSet?: (target?: { sshConfigId: string; remoteRepoPath: string }) => void;
+  onWorktreeAmbiguousSystemsSet?: (names: readonly string[]) => void;
 }
 
 interface Harness {
@@ -319,6 +333,22 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
     db
   );
   const employees = [employeeA, employeeB, employeeC];
+  // 261121-r78: the developer must exist at construction so the coordinator's roster and
+  // team membership both contain it when `provisionAgentSession` runs.
+  if (options.agentDeveloperWorktree !== undefined) {
+    employees.push(
+      await createEmployee(
+        {
+          name: 'Agent Developer',
+          role: 'Chuyên viên',
+          capability: 'Code',
+          persona: 'Bạn là Agent Developer.',
+          model: EMP_D_MODEL,
+        },
+        db
+      )
+    );
+  }
   // Task 1 of 37-04 needs a batch larger than the limit; the extra members keep the three
   // canonical employees untouched so no existing test changes shape.
   const extraNames = ['Dũng', 'Em'];
@@ -364,6 +394,20 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
   );
   const threadId = (await ensureTeamThread(team.id, db)).id;
 
+  for (const row of options.linkedSystems ?? []) {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await db.systems.add({
+      id,
+      ...row,
+      parentId: null,
+      type: 'SERVICE',
+      createdAt: now,
+      updatedAt: now,
+    });
+    await addTeamLink({ teamId: team.id, itemType: 'system', itemId: id }, db);
+  }
+
   const createRuntimeDeps = (agentId: string): Partial<ChatTurnRuntimeDeps> => ({
     runLoop: ((loopOptions: AiOrchestratorLoopOptions) => {
       // D-24: the synthesis turn is a separate lead turn. Default it to a canned answer so a
@@ -404,6 +448,18 @@ async function createHarness(options: HarnessOptions): Promise<Harness> {
       : {}),
     ...(options.contextWindowTokens !== undefined
       ? { contextWindowTokens: options.contextWindowTokens }
+      : {}),
+    ...(options.agentDeveloperWorktree !== undefined
+      ? { agentDeveloperWorktree: options.agentDeveloperWorktree }
+      : {}),
+    ...(options.worktreeAmbiguousSystems !== undefined
+      ? { worktreeAmbiguousSystems: options.worktreeAmbiguousSystems }
+      : {}),
+    ...(options.onAgentDeveloperWorktreeSet !== undefined
+      ? { onAgentDeveloperWorktreeSet: options.onAgentDeveloperWorktreeSet }
+      : {}),
+    ...(options.onWorktreeAmbiguousSystemsSet !== undefined
+      ? { onWorktreeAmbiguousSystemsSet: options.onWorktreeAmbiguousSystemsSet }
       : {}),
     // A fresh snapshot object per turn, so a later mutation of `roster` cannot reach a turn.
     ...(options.useSeam
@@ -2812,6 +2868,215 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       for (const row of messages) {
         expect(row.content).not.toContain('raw provider secret detail');
       }
+      const report = await current.db.chatMessages.get(assignment.reportMessageId!);
+      expect(report!.content).toBe(SANITIZED_TURN_ERROR);
+      expect(report!.content).not.toContain('raw provider secret detail');
+    });
+
+    // 261121-r78: local app throws get a truthful bounded bubble; provider text never does.
+    describe('truthful local errors (261121-r78)', () => {
+      const LOCAL_MARKER = 'WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree';
+
+      const withDeveloper = async (opts: {
+        useSeam?: boolean;
+        scripts: Record<string, LoopScript>;
+        synthesisScript?: LoopScript;
+      }): Promise<Harness> => {
+        const h = await createHarness({
+          ...(opts.useSeam !== undefined ? { useSeam: opts.useSeam } : {}),
+          scripts: opts.scripts,
+          ...(opts.synthesisScript ? { synthesisScript: opts.synthesisScript } : {}),
+          teamPatch: { autoSplitEnabled: true },
+          agentDeveloperWorktree: { sshConfigId: 'ssh-missing-config', remoteRepoPath: '' },
+        });
+        return h;
+      };
+
+      const developerOf = (h: Harness) => h.employees.find((row) => row.name === 'Agent Developer')!;
+
+      const truthfulReportFor = async (h: Harness): Promise<string> => {
+        const developerId = developerOf(h).id;
+        const assignment = (await h.db.aiTeamAssignments.toArray()).find(
+          (row) => row.runStatus === 'error' && row.agentId === developerId
+        );
+        expect(assignment).toBeDefined();
+        expect(assignment!.stopReason).toBe('provider');
+        const report = await h.db.chatMessages.get(assignment!.reportMessageId!);
+        expect(report).toBeDefined();
+        expect(report!.content).toContain(LOCAL_MARKER);
+        expect(report!.content).not.toContain(SANITIZED_TURN_ERROR);
+        return report!.content;
+      };
+
+      it('shows the real local message in the assignment report bubble', async () => {
+        harness = await withDeveloper({
+          useSeam: true,
+          scripts: {
+            [LEAD_MODEL]: delegatingLead(() => harness!),
+            [EMP_D_MODEL]: async () => loopResult('should never run'),
+          },
+        });
+        const current = harness;
+
+        await current.coordinator.send('Giao việc cho Agent Developer');
+        await waitForReady(current.coordinator);
+
+        const report = await truthfulReportFor(current);
+        expect(report).toContain('Không thể chuẩn bị môi trường làm việc:');
+      });
+
+      it('shows the real local message on a direct-mention turn with no assignment row', async () => {
+        harness = await withDeveloper({
+          scripts: {
+            [EMP_D_MODEL]: async () => loopResult('should never run'),
+          },
+        });
+        const current = harness;
+
+        const developerId = developerOf(current).id;
+        // Send rethrows the provisioning failure, but the catch still settles the agent and
+        // persists the truthful bubble before the throw reaches the caller.
+        await expect(
+          current.coordinator.send('@[Agent Developer](agent:' + developerId + ') sửa giúp lỗi')
+        ).rejects.toThrow(LOCAL_MARKER);
+
+        // Provisioning throws before the runtime marks the agent running, so no live agent
+        // row exists to settle; the durable bubble is the visible proof of the failure.
+        const messages = await current.db.chatMessages
+          .where('threadId')
+          .equals(current.threadId)
+          .toArray();
+        const local = messages.filter((row) => row.content.includes(LOCAL_MARKER));
+        // WR-04: exactly one report bubble, not "at least one" — a duplicate here would mean
+        // the throw path inserted both a chat row and a report row.
+        expect(local).toHaveLength(1);
+        const report = local[0]!;
+        expect(report.messageKind).toBe('report');
+        expect(report.runStatus).toBe('error');
+        expect(report.agentId).toBe(developerId);
+        expect(report.content).toContain(LOCAL_MARKER);
+        const logRow = await current.db.teamMessages.get(report.id);
+        expect(logRow?.kind).toBe('report');
+        expect(logRow?.from).toBe(developerId);
+      });
+
+      it('keeps provider error copy sanitized even when it repeats a local marker', async () => {
+        harness = await createHarness({
+          scripts: {
+            [LEAD_MODEL]: delegatingLead(() => harness!),
+            [EMP_A_MODEL]: async () => {
+              throw new Error(`${LOCAL_MARKER}: từ nhà cung cấp`);
+            },
+          },
+          teamPatch: { autoSplitEnabled: true },
+        });
+        const current = harness;
+        current.employees = current.employees.slice(0, 1);
+        current.roster.employees = current.employees;
+
+        await current.coordinator.send('Giao việc cho An');
+        await waitForReady(current.coordinator);
+
+        const rows = await current.db.chatMessages
+          .where('threadId')
+          .equals(current.threadId)
+          .toArray();
+        const report = rows.find((row) => row.agentId === current.employees[0]!.id && row.messageKind === 'report');
+        expect(report?.content).toBe(SANITIZED_TURN_ERROR);
+        expect(report?.content).not.toContain(LOCAL_MARKER);
+      });
+
+      it('addresses a provisioning failure to the peer that sent the message (WR-03)', async () => {
+        harness = await createHarness({
+          scripts: {
+            [LEAD_MODEL]: async (options) => {
+              await options.executeToolFn!(
+                'send_message',
+                { to: [harness!.employees.find((row) => row.name === 'Agent Developer')!.id], content: 'Sửa lỗi giúp' },
+                harness!.db,
+                options.signal
+              );
+              return loopResult('Đã hỏi.');
+            },
+            [EMP_D_MODEL]: async () => loopResult('should never run'),
+          },
+          teamPatch: { autoSplitEnabled: true },
+          agentDeveloperWorktree: { sshConfigId: 'ssh-missing-config', remoteRepoPath: '' },
+        });
+        const current = harness;
+        const leaderId = current.lead.id;
+        const developerId = developerOf(current).id;
+
+        await current.coordinator.send('Nhờ Agent Developer sửa lỗi');
+        await waitForReady(current.coordinator);
+
+        const reportRows = (await current.db.chatMessages
+          .where('threadId')
+          .equals(current.threadId)
+          .toArray()).filter((row) => row.content.includes(LOCAL_MARKER));
+        expect(reportRows).toHaveLength(1);
+        const logRows = await current.db.teamMessages
+          .where('teamId')
+          .equals(current.team.id)
+          .toArray();
+        const bubble = logRows.find((row) => row.id === reportRows[0]!.id);
+        expect(bubble?.from).toBe(developerId);
+        expect(bubble?.to).toEqual([leaderId]);
+        expect(bubble?.to).not.toContain(USER_PARTICIPANT_ID);
+        expect(bubble?.kind).toBe('report');
+      });
+
+      it('resolves an ambiguity answer to a catalog row before the next turn (CR-01)', async () => {
+        const targetCalls: Array<{ sshConfigId: string; remoteRepoPath: string } | undefined> = [];
+        const ambiguityCalls: Array<readonly string[]> = [];
+        const prompts: string[] = [];
+        harness = await createHarness({
+          scripts: {
+            [LEAD_MODEL]: async (options) => {
+              prompts.push(options.messages.map((row) => String(row.content ?? '')).join('\n'));
+              return loopResult('Đã rõ.');
+            },
+          },
+          worktreeAmbiguousSystems: ['Core', 'Payments'],
+          linkedSystems: [
+            { name: 'Core', code: 'CORE', sshConfigId: 'ssh-core', remoteRepoPath: '/srv/core' },
+            { name: 'Payments', code: 'PAY', sshConfigId: 'ssh-payments', remoteRepoPath: '/srv/payments' },
+          ],
+          onAgentDeveloperWorktreeSet: (target) => { targetCalls.push(target); },
+          onWorktreeAmbiguousSystemsSet: (names) => { ambiguityCalls.push([...names]); },
+        });
+        const current = harness;
+
+        await current.coordinator.send('Chọn hệ thống để làm việc');
+        expect(prompts[0]).toContain(WORKTREE_AMBIGUITY_LINE);
+        expect(targetCalls).toHaveLength(0);
+
+        await current.coordinator.send('Làm trên Payments');
+        expect(targetCalls).toEqual([{ sshConfigId: 'ssh-payments', remoteRepoPath: '/srv/payments' }]);
+        expect(ambiguityCalls).toEqual([[]]);
+        expect(prompts[1]).not.toContain(WORKTREE_AMBIGUITY_LINE);
+      });
+
+      it('keeps the question open for zero or multiple system names (CR-01)', async () => {
+        const targetCalls: unknown[] = [];
+        harness = await createHarness({
+          scripts: {
+            [LEAD_MODEL]: async () => loopResult('Vẫn chưa rõ.'),
+          },
+          worktreeAmbiguousSystems: ['Core', 'Payments'],
+          linkedSystems: [
+            { name: 'Core', code: 'CORE', sshConfigId: 'ssh-core', remoteRepoPath: '/srv/core' },
+            { name: 'Payments', code: 'PAY', sshConfigId: 'ssh-payments', remoteRepoPath: '/srv/payments' },
+          ],
+          onAgentDeveloperWorktreeSet: (target) => { targetCalls.push(target); },
+        });
+        const current = harness;
+
+        await current.coordinator.send('Không biết chọn hệ thống nào');
+        await current.coordinator.send('Core hoặc Payments đều được');
+
+        expect(targetCalls).toEqual([]);
+      });
     });
   });
 

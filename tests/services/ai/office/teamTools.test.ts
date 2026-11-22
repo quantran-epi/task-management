@@ -6,6 +6,7 @@ import {
   LEAD_ONLY_TEAM_TOOLS,
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
+  resolveAgentDeveloperWorktree,
   type TeamToolContext,
 } from '../../../../src/services/ai/office/teamTools';
 import { ensureTeamThread, saveTeamMessage } from '../../../../src/db/repositories/teamTranscriptRepo';
@@ -1865,5 +1866,95 @@ describe('teamTools — write_doc folder-scoped document write (AIO-DOCS-02..04,
     expect(rows).toHaveLength(1);
     expect(rows[0].noteId).toBe(doc.id);
     expect(rows[0].type).toBe('document');
+  });
+});
+
+describe('teamTools — resolveAgentDeveloperWorktree (261121-qpp)', () => {
+  let db: TaskPlannerDatabase;
+  let teamId: string;
+
+  const addSystem = async (id: string, name: string, repo?: string, ssh = 'ssh-1') => {
+    const now = new Date().toISOString();
+    await db.systems.add({
+      id, name, code: name, parentId: null, type: 'SERVICE',
+      ...(ssh ? { sshConfigId: ssh } : {}),
+      ...(repo ? { remoteRepoPath: repo } : {}),
+      createdAt: now, updatedAt: now,
+    });
+  };
+  const addCrLink = async (crId: string, targets: { systemId: string }[]) => {
+    const now = new Date().toISOString();
+    await db.changeRequests.add({
+      id: crId, name: 'CR', code: crId, status: 'Open', type: 'ENHANCEMENT',
+      targets, createdAt: now, updatedAt: now,
+    });
+    await db.aiTeamLinks.add({ id: generateId(), teamId, itemType: 'cr', itemId: crId, createdAt: now });
+  };
+  const addSystemLink = async (systemId: string) => {
+    await db.aiTeamLinks.add({
+      id: generateId(), teamId, itemType: 'system', itemId: systemId,
+      createdAt: new Date().toISOString(),
+    });
+  };
+
+  beforeEach(async () => {
+    db = new TaskPlannerDatabase('TestWorktreeResolution_' + Math.random().toString(36).slice(2));
+    await db.open();
+    teamId = generateId();
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('auto-selects a directly linked usable system', async () => {
+    await addSystem('sys-1', 'Core', '/srv/repo');
+    await addSystemLink('sys-1');
+
+    expect(await resolveAgentDeveloperWorktree(teamId, db)).toEqual({
+      worktree: { sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo' },
+      ambiguousSystemNames: [],
+    });
+  });
+
+  it('auto-selects a usable system reachable only through a CR target', async () => {
+    await addSystem('sys-1', 'Core', '/srv/repo');
+    await addCrLink('cr-1', [{ systemId: 'sys-1' }]);
+
+    expect(await resolveAgentDeveloperWorktree(teamId, db)).toEqual({
+      worktree: { sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo' },
+      ambiguousSystemNames: [],
+    });
+  });
+
+  it('dedupes a system linked both directly and via a CR', async () => {
+    await addSystem('sys-1', 'Core', '/srv/repo');
+    await addSystemLink('sys-1');
+    await addCrLink('cr-1', [{ systemId: 'sys-1' }]);
+
+    const result = await resolveAgentDeveloperWorktree(teamId, db);
+    expect(result.worktree).toEqual({ sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo' });
+    expect(result.ambiguousSystemNames).toEqual([]);
+  });
+
+  it('returns names only, no path, when two systems are usable', async () => {
+    await addSystem('sys-1', 'Core', '/srv/repo');
+    await addSystem('sys-2', 'Payments', '/srv/pay', 'ssh-2');
+    await addSystemLink('sys-1');
+    await addSystemLink('sys-2');
+
+    const result = await resolveAgentDeveloperWorktree(teamId, db);
+    expect(result.worktree).toBeUndefined();
+    expect(result.ambiguousSystemNames).toEqual(['Core', 'Payments']);
+    expect(JSON.stringify(result)).not.toContain('/srv/');
+  });
+
+  it('excludes systems missing either half of the worktree config', async () => {
+    await addSystem('sys-no-repo', 'NoRepo', undefined, 'ssh-1');
+    await addSystem('sys-no-ssh', 'NoSsh', '/srv/repo', '');
+    await addSystemLink('sys-no-repo');
+    await addSystemLink('sys-no-ssh');
+
+    expect(await resolveAgentDeveloperWorktree(teamId, db)).toEqual({ ambiguousSystemNames: [] });
   });
 });

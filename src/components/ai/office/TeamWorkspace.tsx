@@ -46,7 +46,7 @@ import {
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { cancelToolCall } from '../../../services/sshService';
-import { CODE_EDIT_AGENT_NAME } from '../../../services/ai/office/teamTools';
+import { CODE_EDIT_AGENT_NAME, resolveAgentDeveloperWorktree } from '../../../services/ai/office/teamTools';
 
 /** Bounded prompt-debug log shown in the activity rail (never grows without limit). */
 const MAX_DEBUG_LOGS = 100;
@@ -326,15 +326,12 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         return;
       }
 
-      // CR-02: the Agent Developer worktree target comes from the persisted linked System,
-      // the same row the Coding Zone trigger reads. Resolved here from `db`, NOT from a
-      // live-query array whose identity would become an effect dependency and tear down a
-      // running coordinator (WR-06). Absent config means provisioning refuses truthfully.
-      const systemLink = (await listTeamLinks(team.id, db)).find((link) => link.itemType === 'system');
-      const devSystem = systemLink ? await db.systems.get(systemLink.itemId) : undefined;
-      const agentDeveloperWorktree = devSystem?.sshConfigId && devSystem.remoteRepoPath
-        ? { sshConfigId: devSystem.sshConfigId, remoteRepoPath: devSystem.remoteRepoPath }
-        : undefined;
+      // 261121-qpp: the worktree target comes from the shared resolver — direct system links
+      // AND CR targets — the same source the Coding Zone chip reads. Resolved here from `db`,
+      // NOT from a live-query array whose identity would become an effect dependency and tear
+      // down a running coordinator (WR-06). Absent config means provisioning refuses truthfully.
+      const resolution = await resolveAgentDeveloperWorktree(team.id, db);
+      const agentDeveloperWorktree = resolution.worktree;
 
       // D-18: the manager owns the entry, so a stale-thread coordinator is disposed before
       // the replacement is handed back — one live coordinator per team at every instant.
@@ -359,6 +356,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         endpoint: config.endpoint,
         apiKey,
         ...(agentDeveloperWorktree ? { agentDeveloperWorktree } : {}),
+        ...(resolution.ambiguousSystemNames.length > 0
+          ? { worktreeAmbiguousSystems: resolution.ambiguousSystemNames }
+          : {}),
         // D-04: the window makes `tokenBudget > 0`, so in-loop compaction can run on a
         // read-heavy turn. `getNineRouterConfig` always returns a positive default.
         contextWindowTokens: config.contextWindowTokens,
@@ -613,12 +613,33 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const developerId = employees.find((employee) => employee.agentKind === 'developer')?.id
     ?? employees.find((employee) => employee.name === CODE_EDIT_AGENT_NAME)?.id
     ?? '';
-  const codingZoneSystem = useLiveQuery(async () => {
-    const systemLink = links.find((link) => link.itemType === 'system');
-    return systemLink ? db.systems.get(systemLink.itemId) : undefined;
-  }, [db, links]);
-  const codingZoneSshConfigId = codingZoneSystem?.sshConfigId;
-  const codingZoneRepoPath = codingZoneSystem?.remoteRepoPath;
+  // 261121-qpp: same resolver as the coordinator, so the chip and provisioning target one repo.
+  const worktreeResolution = useLiveQuery(
+    () => resolveAgentDeveloperWorktree(team.id, db),
+    [db, team.id]
+  );
+  // 261121-s4k WR-02: push live resolver changes into the ALIVE coordinator. Primitive deps only
+  // — no array identity, no `getOrCreateRun`, so the creation effect (WR-06) never re-runs.
+  const ambiguityKey = (worktreeResolution?.ambiguousSystemNames ?? []).join('|');
+  useEffect(() => {
+    if (!coordinator) return;
+    coordinator.setWorktreeAmbiguousSystems(ambiguityKey ? ambiguityKey.split('|') : []);
+    const sshConfigId = worktreeResolution?.worktree?.sshConfigId;
+    const remoteRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
+    // Always push, including `undefined`: when the live resolver becomes ambiguous or loses
+    // its usable system, the alive coordinator must drop the stale target instead of keeping
+    // code_edit granted for a repo that is no longer selected.
+    coordinator.setAgentDeveloperWorktree(
+      sshConfigId && remoteRepoPath ? { sshConfigId, remoteRepoPath } : undefined
+    );
+  }, [
+    coordinator,
+    worktreeResolution?.worktree?.sshConfigId,
+    worktreeResolution?.worktree?.remoteRepoPath,
+    ambiguityKey,
+  ]);
+  const codingZoneSshConfigId = worktreeResolution?.worktree?.sshConfigId;
+  const codingZoneRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
   const codingZoneDescriptor = useMemo(() => {
     if (!codingZoneActive || !codingZoneSshConfigId || !codingZoneRepoPath || !developerId) return undefined;
     return {
