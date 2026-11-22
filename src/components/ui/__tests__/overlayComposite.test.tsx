@@ -139,6 +139,84 @@ describe('imperative confirm', () => {
     expect(dialogs()).toHaveLength(0);
   });
 
+  it('keeps default footer button props (disabled/loading/style/className)', () => {
+    const onOk = vi.fn();
+    const onCancel = vi.fn();
+    render(
+      <Modal
+        open
+        title="Footer props"
+        onOk={onOk}
+        onCancel={onCancel}
+        okButtonProps={{ disabled: true, loading: true, className: 'custom-ok', style: { width: '111px' } }}
+        cancelButtonProps={{ disabled: true, className: 'custom-cancel' }}
+      >
+        body
+      </Modal>,
+    );
+    const footer = document.querySelector('[data-oi-control="dialog-footer"]')!;
+    const ok = Array.from(footer.querySelectorAll('button')).find((button) => button.textContent === 'OK')!;
+    const cancel = Array.from(footer.querySelectorAll('button')).find((button) => button.textContent === 'Hủy')!;
+    expect(ok.disabled).toBe(true);
+    expect(ok.getAttribute('aria-busy')).toBe('true');
+    expect(ok.className).toContain('custom-ok');
+    expect(ok.style.width).toBe('111px');
+    // A loading OK locks Cancel, matching AntD's default footer semantics.
+    expect(cancel.disabled).toBe(true);
+    expect(cancel.className).toContain('custom-cancel');
+    fireEvent.click(ok);
+    fireEvent.click(cancel);
+    expect(onOk).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('keeps confirm open on rejected onOk without unhandled rejection, dismisses on resolve', async () => {
+    const onUnhandled = vi.fn();
+    window.addEventListener('unhandledrejection', onUnhandled);
+    const rejecting = vi.fn(async () => { throw new Error('reject'); });
+    const resolving = vi.fn(async () => {});
+    type Handle = { destroy: () => void };
+    function Consumer() {
+      const { modal, contextHolder } = useTaskMateModal();
+      return (
+        <>
+          <button type="button" onClick={() => { (window as unknown as { handle: Handle }).handle = modal.confirm({ title: 'Reject', onOk: rejecting }); }}>
+            Reject
+          </button>
+          <button type="button" onClick={() => { (window as unknown as { handle: Handle }).handle = modal.confirm({ title: 'Resolve', onOk: resolving }); }}>
+            Resolve
+          </button>
+          {contextHolder}
+        </>
+      );
+    }
+    try {
+      render(<Consumer />);
+      fireEvent.click(screen.getByText('Reject'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(rejecting).toHaveBeenCalled();
+      expect(dialogs()).toHaveLength(1);
+      expect(onUnhandled).not.toHaveBeenCalled();
+
+      await act(async () => { (window as unknown as { handle: Handle }).handle.destroy(); });
+      fireEvent.click(screen.getByText('Resolve'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(resolving).toHaveBeenCalled();
+      expect(dialogs()).toHaveLength(0);
+      expect(onUnhandled).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('unhandledrejection', onUnhandled);
+    }
+  });
+
   it('renders exactly two dialogs from one hook across three mounted holders', () => {
     function Holder() {
       const { modal, contextHolder } = useTaskMateModal();

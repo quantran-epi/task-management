@@ -62,11 +62,18 @@ function okDanger(config: ModalFuncProps): boolean {
 }
 
 function defaultFooter(config: ModalFuncProps, dismiss: () => void): ReactNode {
+  // AntD semantics: a loading OK also locks Cancel. A rejected onOk keeps the
+  // dialog open and must never surface as an unhandled rejection (W-01/W-02).
+  const okLoading = config.okButtonProps?.loading === true;
+  const cancelLoading = config.cancelButtonProps?.loading === true;
   const cancel = (
     <button
       type="button"
       data-oi-control="button"
-      className={classNames(buttonStyles.button, buttonStyles.secondary)}
+      className={classNames(buttonStyles.button, buttonStyles.secondary, config.cancelButtonProps?.className)}
+      style={config.cancelButtonProps?.style}
+      disabled={config.cancelButtonProps?.disabled === true || okLoading}
+      aria-busy={cancelLoading ? 'true' : undefined}
       onClick={(event) => {
         config.onCancel?.(confirmEvent(event) as never);
         dismiss();
@@ -79,9 +86,14 @@ function defaultFooter(config: ModalFuncProps, dismiss: () => void): ReactNode {
     <button
       type="button"
       data-oi-control="button"
-      className={classNames(buttonStyles.button, buttonStyles.primary, okDanger(config) && buttonStyles.danger)}
+      className={classNames(buttonStyles.button, buttonStyles.primary, okDanger(config) && buttonStyles.danger, config.okButtonProps?.className)}
+      style={config.okButtonProps?.style}
+      disabled={config.okButtonProps?.disabled === true || okLoading}
+      aria-busy={okLoading ? 'true' : undefined}
       onClick={(event) => {
-        void Promise.resolve(config.onOk?.(confirmEvent(event) as never)).then(dismiss);
+        void Promise.resolve()
+          .then(() => config.onOk?.(confirmEvent(event) as never))
+          .then(dismiss, () => { /* keep dialog open; caller owns notification */ });
       }}
     >
       {config.okText ?? 'OK'}
