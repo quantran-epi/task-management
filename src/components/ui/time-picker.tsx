@@ -286,7 +286,21 @@ export function TimeRangePicker({
       {allowClear && (range[0] || range[1]) && !rangeDisabled ? (
         <button type="button" aria-label="Xóa khoảng thời gian" onClick={() => { setDrafts(['', '']); (onChange as ((value: [Dayjs | null, Dayjs | null] | null) => void) | undefined)?.(null); }}>×</button>
       ) : null}
-      <Popup open={rangeOpen} anchorRef={anchorRef as React.RefObject<HTMLElement | null>} onClose={() => { setRangeOpen(false); anchorRef.current?.focus(); }} className={selectStyles.popup ?? ''} control="time-picker-range-popup" label={ariaLabel ?? 'Chọn khoảng thời gian'}>
+      <Popup
+        open={rangeOpen}
+        anchorRef={anchorRef as React.RefObject<HTMLElement | null>}
+        onClose={() => {
+          // Escape/outside-click focuses the anchor; suppress that onFocus so a
+          // focused TimeColumn cannot immediately reopen the range popup (WR-02 class).
+          suppressOpen.current = true;
+          setRangeOpen(false);
+          anchorRef.current?.focus();
+          queueMicrotask(() => { suppressOpen.current = false; });
+        }}
+        className={selectStyles.popup ?? ''}
+        control="time-picker-range-popup"
+        label={ariaLabel ?? 'Chọn khoảng thời gian'}
+      >
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
           <TimeColumn id={`${idBase}-tr-h`} values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
           <TimeColumn id={`${idBase}-tr-m`} values={grid.minutes} value={parsed.minute()} lead={rangeLead[1]} label="Phút" onLead={(index) => setRangeLead((prev) => [prev[0], index, prev[2]])} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
