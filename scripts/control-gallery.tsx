@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, IconButton, Input, InputPassword, InputSearch, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Button, Checkbox, IconButton, Input, InputPassword, InputSearch, Radio, RadioGroup, Switch, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -48,7 +48,39 @@ function TextareaFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture };
+function CheckboxFixture() {
+  const [checked, setChecked] = React.useState(true);
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Checkbox checked={checked} onChange={(e) => setChecked(e.target.checked)}>Cho phép gửi thông báo</Checkbox>
+      <Checkbox checked={false} readOnly>Không chọn</Checkbox>
+      <Checkbox checked disabled>Vô hiệu hoá</Checkbox>
+    </div>
+  );
+}
+
+function RadioFixture() {
+  const [value, setValue] = React.useState('plan');
+  return (
+    <RadioGroup value={value} onChange={(e) => setValue(e.target.value)}>
+      <Radio value="plan">Kế hoạch</Radio>
+      <Radio value="actual">Thực tế</Radio>
+      <Radio value="disabled" disabled>Không dùng</Radio>
+    </RadioGroup>
+  );
+}
+
+function SwitchFixture() {
+  const [on, setOn] = React.useState(true);
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <Switch checked={on} onChange={setOn} aria-label="Bật tính năng" />
+      <Switch checked={false} disabled aria-label="Vô hiệu hoá" />
+    </div>
+  );
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
