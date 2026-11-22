@@ -35,12 +35,7 @@ export function Tag({ status, style, className, children, icon, closable, onClos
       className={classNames(chipStyles.surface, chipStyles.chip, className)}
       data-oi-control="chip"
       data-state={status ?? 'default'}
-      style={{
-        ...tagStyle(statusColor, style),
-        fontSize: 'var(--font-size-small)',
-        padding: 'var(--status-badge-pad)',
-        ...(style as object),
-      }}
+      style={tagStyle(statusColor, style)}
     >
       {icon !== undefined && <span className={chipStyles.icon}>{icon}</span>}
       <span className={chipStyles.label}>{children}</span>
