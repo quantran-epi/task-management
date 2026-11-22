@@ -1,61 +1,39 @@
-# 59-CHECK — Plan Check Phase 59
+# 59-CHECK — Plan Check Phase 59 (re-check sau sửa blocker)
 
-Ngày: 2026-11-22. Phạm vi: 59-PATTERNS.md + 59-01..59-21-PLAN.md. Goal-backward trước khi execute.
+Ngày: 2026-11-22. Phạm vi: 59-PATTERNS.md + 59-01..59-21-PLAN.md. Goal-backward trước execute. Đối chiếu verdict BLOCK cũ (4 blocker B1-B4, 2 flag F1-F2).
 
-## VERDICT: BLOCK
+## VERDICT: PASS
 
-4 BLOCKER, 2 FLAG. Không execute cho tới khi sửa 4 blocker. Mọi thứ khác (coverage 56/56, tuyến tính 01->21, human gate, không fix dồn, không full Vitest) ĐÚNG — giữ nguyên.
+4 blocker + 2 flag cũ đều ĐÃ SỬA. 0 blocker, 0 warning còn lại. Cho phép execute. Mọi cấu trúc cũ giữ nguyên (56 control / tuyến tính 01->21 / human gate / không fix dồn / không full Vitest).
 
-## Đã verify ĐÚNG (không sửa)
+## Kiểm tra blocker cũ — đã đóng
 
-- 56 control registry (59-PATTERNS §4) khớp đúng 56 task `checkpoint:human-verify`, đúng thứ tự, không sót/không trùng. 18 plan x 3 + plan 20 x 2 = 56.
-- depends_on tuyến tính `01->02->...->21`, wave 1..21, không chu trình, không forward ref, ref dạng `59-01` đúng convention phase 54/53.
-- requirements: NAT-02, PAR-01..04 đều có trong REQUIREMENTS.md và frontmatter plan. PAR-01..04 tồn tại, map phase 59.
-- Mỗi control task có `files`/`action` (PAR-01..03, HGC-01/02/05)/`what-built`/`how-to-verify` (2-3 bước tiếng Việt)/`resume-signal`; PASS.json `pending-human`, `humanVerdict:null`; chờ chữ "pass" của sếp. Không auto-pass, không fix dồn.
-- Không có ngôn ngữ thu hẹp phạm vi (v1/simplified/static/stub/future...). Không full Vitest (chỉ gate + focused, có filter). Không dependency/PWA mới. Scope 2-3 task/plan.
-- Ports đúng: TaskMate :5173 (vite.config.ts), proof :5180 (oi-prototype/vite.config.js), OpenIDEA :1420 (openidea/vite.config.ts) — khớp PROOF.md. Selector ổn định tồn tại trên 53/56 wrapper.
-- Dimension 8 (Nyquist): SKIP — phase không có RESEARCH.md. Dimension 7c/11/12: SKIP — không có responsibility map / RESEARCH.md / PATTERNS dạng File Classification.
+- **B1 (fixture map 56 control) — ĐÓNG.** `59-PATTERNS.md` §1.1 định nghĩa `CONTROL_REGISTRY` 56 entry, mỗi entry `{id, wrapperSelector, referenceSelector, proofSelector, states, fixture}`. Plan 01 Task 2 export đủ 56 id (Test 7 kiểm tra map, thiếu → FAIL); §4 registry đúng 56 dòng. Plan 01 Task 1 mở rộng proof `oi-prototype/src/main.jsx` route `?fixture=<id>` render ĐỦ 56 control bằng CSS module vendored gốc; id không có analog 7 họ (date-picker/time-picker/table/tree) mount component thật từ `openidea/src/ui/` qua reference `?fixture=<id>`. Selector không resolve = FAIL CỨNG, không skip id. Diff 56 task id vs 56 registry id: MATCH 56/56.
+- **B2 (setTheme riêng từng app) — ĐÓNG.** `59-PATTERNS.md` §1.2 bảng 3 app: TaskMate bấm `getByRole('button',{name:'Chuyển đổi giao diện sáng/tối'})` + poll `.taskmate-workbench-theme`; proof bấm `button.themeBtn` hoặc evaluate `document.documentElement.dataset.theme`; reference evaluate attr root (themeWatch/themes), poll ổn định 2 lần. Plan 01 Task 1 action viện dẫn đúng 3 chiến lược, "KHÔNG dùng selector chung", assert hash L != D cả 3 app.
+- **B3 (pre-flight start :1420/:5180, fail cứng) — ĐÓNG.** `59-PATTERNS.md` §0/§0.1 bảng cwd+lệnh start cho 3 app (OpenIDEA SP/openidea `npm run dev` -> :1420; proof SP/oi-prototype -> :5180; TaskMate Playwright webServer -> :5173). `waitOnUrl` 30s/500ms; unreachable → throw + nonzero, KHÔNG `test.skip`, skip chỉ khi có lý do đã log. Plan 01 Task 1 action + Test 8 gate + plan 21 Task 1 đều gọi pre-flight.
+- **B4 (smoke plan 01 tự nhất quán) — ĐÓNG.** Plan 01 Task 3 tạo `src/components/ui/__tests__/parity-button.test.tsx` NGAY TRONG PLAN 01 (fireEvent/userEvent + assertion state đổi, không assert tĩnh), smoke dùng `button` (có analog thật 3 app). Chế độ `SMOKE=1` ở PATTERNS §6 + Task 2 Test 9 + Task 3 verify: validate cùng tiêu chí (0)-(5),(7), KHÔNG nới gate. Plan 01 `files_modified` đã liệt kê focused test. Plan 02 Task 1 chỉ mở rộng test có sẵn. Không đụng `button.tsx`.
 
-## BLOCKERS (phải sửa trước execute)
+## Kiểm tra flag cũ — đã đóng
 
-### B1. Harness không capture được 56 control trên 3 app (goal-backward cốt lõi)
-- Plan: 01 (Task 1/3), ảnh hưởng 02-21.
-- `PARITY_CONTROL=<id>` được giả định là tìm được control đó trong cả 3 app. Thực tế: proof app `oi-prototype/src/main.jsx` chỉ render ~7 họ control (Button, Checkbox/Radio/Toggle, Input, Select/List, Tabs, Chip, Dialog) — KHÔNG có date-picker, time-picker, table, tree,...; OpenIDEA `:1420` là IDE đầy đủ nhưng plan không có selector map vị trí 56 control. Không plan nào mở rộng fixture app hay định nghĩa map selector.
-- Hệ quả trực tiếp: smoke plan 01 dùng `date-picker` — control KHÔNG tồn tại trong proof app -> không có evidence cặp.
-- Sửa: thêm task/điều kiện đảm bảo mỗi trong 56 control render được ở reference + proof (mở rộng fixture hoặc bảng selector map theo id), hoặc đổi chiến lược capture có fixture riêng. Ghi rõ trong PATTERNS §1.
+- **F1 (independent reviewer/verifier trước handoff, human pass duy nhất) — ĐÓNG.** `59-PATTERNS.md` HGC-06 + §1 bước 6: trước handoff bắt buộc code review + verifier độc lập (không phải executor), ghi findings vào artifact, reviewer KHÔNG gán pass. Mọi control task (56) có cụm "Independent code review + verifier khác executor ... reviewer KHÔNG gán pass" — 56/56 (60 lần HGC-06 toàn phase). `.planning/config.json` xác nhận `code_review:true` + `verifier:true` → authority cho cơ chế review. PATTERNS là authority cho chuỗi handoff. Chữ "pass" của sếp = điều kiện DUY NHẤT (HGC-01/02/06). Plan 21 Task 2 nhắc lại F1. Không còn "chỉ gán nhãn PAR-04".
+- **F2 (data hook cho 3 wrapper) — ĐÓNG.** `59-PATTERNS.md` §1.3 map fallback. Plan 15 Task 3 (status-dot): thêm `data-oi-control="status-dot"` + `data-state`, fallback `[role="img"], span[aria-hidden="true"]` lọc `--ui-status-color`. Plan 19 Task 2 (config-provider): thêm `data-oi-control="config-provider"` + `data-state`, fallback `.taskmate-theme-context[data-theme]`. Plan 20 Task 2 (empty): thêm `data-oi-control="empty"` + `data-state`, fallback `.ant-empty`. Mọi fallback ghi rõ trong CONTROL_REGISTRY, selector không xác định = FAIL CỨNG.
 
-### B2. `setTheme` sai cho 2/3 app -> không capture được light+dark cặp
-- Plan: 01 Task 1 (`setTheme(page, theme)` bấm nút "Chuyển đổi giao diện sáng/tối" + poll `data-theme`).
-- Nhãn đó chỉ có ở TaskMate (`src/workbench/TitleBar.tsx:317`). Proof app dùng nút `.themeBtn` nhãn `Theme: light` (`oi-prototype/src/main.jsx:213`). OpenIDEA `:1420` KHÔNG có nút đó — theme do `themeWatch.ts`/Tauri IPC. poll `data-theme` ở wrapper workbench là TaskMate-specific (`native-controls-parity.spec.ts`).
-- Sửa: định nghĩa chiến lược theme riêng từng app (proof: `.themeBtn`/`documentElement.dataset.theme`; reference: set `data-theme` trên `documentElement` qua evaluate hoặc hook themeWatch) + poll phù hợp. Không dùng một selector chung.
+## Regression check — không có hồi quy
 
-### B3. Không plan nào khởi động reference :1420 + proof :5180
-- Playwright `webServer` chỉ boot TaskMate `:5173`. PATTERNS §0/§1 chỉ ghi URL, không có bước "start 2 app trước". Harness `test.skip` khi unreachable (plan 01 Task 1).
-- Hệ quả: nếu 2 app không chạy -> skip -> không artifact -> done criteria (`screenshot L/D, PASS.json`) không đạt; gate không fail cứng nên dễ tưởng xanh.
-- Sửa: thêm pre-flight task khởi động 2 app (kèm cwd/lệnh) trong plan 01, và đổi `test.skip` thành fail rõ ràng khi reference/proof unreachable (skip chỉ khi có lý do đã log, không tự coi là xanh).
+- **56/56 task checkpoint:** plan 02-19 = 18x3 = 54, plan 20 = 2 → 56 control checkpoint `checkpoint:human-verify` `gate="blocking"`, đúng thứ tự registry, khớp id 56/56. Plan 21 thêm 1 checkpoint ký duyệt cuối (ngoài 56, đúng thiết kế). Tổng `checkpoint:human-verify` = 57.
+- **Tuyến tính 01->21:** `depends_on` wave N = [N-1], 01 = [], wave 1..21, không chu trình, không forward ref.
+- **Không auto-pass:** mọi PASS.json `status:"pending-human"`, `humanVerdict:null`; FINAL-GATE.json `humanSignoff:"pending"`; chuyển sang pass chỉ sau chữ "pass" của sếp. Gate integrity chặn tự gán (Test 4).
+- **Không fix dồn:** HGC-02 lặp ở mọi control task; 1 control = 1 checkpoint; plan `autonomous:false` cho 02-21.
+- **Không full Vitest:** mọi lệnh verify là scoped (`parityEvidenceIntegrity.test.ts`, `parity-<id>.test.tsx`, prefix `parity-`), có `--grep`/filter; các plan ghi rõ "Không chạy full Vitest". Không watch mode.
+- **Scope:** plan 01 = 3 task (1 auto + 1 tdd + 1 auto); control plan 2-3 task/plan; plan 21 = 2 task. Không vượt ngưỡng.
+- **Không ngôn ngữ thu hẹp phạm vi** (v1/simplified/stub/static-for-now/future/placeholder); không dependency/PWA mới.
+- Requirements NAT-02, PAR-01..04 có trong ROADMAP/REQUIREMENTS và frontmatter mọi plan.
 
-### B4. Smoke plan 01 tự mâu thuẫn — gate chắc chắn FAIL
-- Plan 01 Task 3 chạy `parityEvidenceIntegrity.test.ts` chế độ single-control cho `date-picker`. Gate (plan 01 Task 2 + PATTERNS §6) bắt buộc tồn tại `src/components/ui/__tests__/parity-date-picker.test.tsx` (có fireEvent/userEvent + assertion state đổi) VÀ interactions trace đầy đủ.
-- Thực tế: file test đó KHÔNG tồn tại (sẽ tạo ở plan 05 Task 1, phụ thuộc 02-04); plan 01 `files_modified` không liệt kê; plan 01 cấm sửa `date-picker.tsx`. 0 file `parity-*.test.tsx` hiện có. -> gate FAIL ngay ở plan 01 -> verify không xong -> chặn 20 plan sau.
-- Sửa: smoke dùng control có focused test thật (tạo focused test smoke trong plan 01), hoặc tách gate: chế độ smoke chỉ validate schema/harness, chế độ control validate full behavior. Không nới tiêu chí gate để "cho qua".
+## Dimensions bị SKIP (giữ nguyên verdict cũ)
 
-## FLAGS (nên sửa, không chặn execute nếu đã xử lý blocker)
+- D8 Nyquist: SKIP — phase không có RESEARCH.md/VALIDATION.md.
+- D7c/11/12: SKIP — không responsibility map / RESEARCH.md / PATTERNS dạng File Classification.
 
-### F1. PAR-04 clause "code review + verifier độc lập xác nhận từng control trước khi handoff" không có task
-- REQUIREMENTS PAR-04 + ROADMAP SC5 yêu cầu review + verifier độc lập PER CONTROL trước handoff. Control plan chỉ có "self-verify" (cùng executor). PATTERNS HGC-04 thu hẹp PAR-04 thành human gate — sếp gate đã đầy đủ, nhưng clause độc lập không được implement ở task nào.
-- Sửa: hoặc thêm bước reviewer/verifier độc lập vào mỗi control task, hoặc ghi rõ artifact planning rằng config `code_review`/`verifier`-level workflow thỏa clause này và PATTERNS là nguồn authority. Tránh "claims PAR-04 nhưng chỉ gán nhãn".
+## Kết luận
 
-### F2. 3 wrapper thiếu stable selector `data-oi-control`
-- `config-provider.tsx`, `empty.tsx`, `status-dot.tsx` không có `data-oi-control`; 52-UI-SPEC §10 yêu cầu mọi control có `data-oi-control` + `data-state`. Control plan tương ứng (plan 19 task 2, plan 20 task 2, plan 15 task 3) không nhắc thêm; harness `computed(page, selector)` dùng selector cố định -> selector cho 3 control này không xác định.
-- Sửa: thêm bước thêm/xác nhận selector trong 3 control task (hoặc map selector thay thế trong harness).
-
-## Required revisions (tóm tắt cho planner)
-
-1. B1: fixture/selector-map cho 56 control trên reference+proof; đổi hoặc bổ sung smoke control.
-2. B2: theme strategy riêng từng app trong harness.
-3. B3: pre-flight start :1420/:5180 + fail-chard khi unreachable.
-4. B4: sửa smoke để gate có focused test thật (tạo trong plan 01) hoặc tách chế độ gate.
-5. F1: làm rõ/implement independent verifier per control cho PAR-04.
-6. F2: selector cho config-provider/empty/status-dot.
-
-Sau khi sửa 4 blocker, re-check. Giữ nguyên cấu trúc 01 harness / 02-20 controls / 21 final gate.
+4 blocker + 2 flag đã đóng bằng artifact cụ thể (selector map 56 id, theme 3 app, pre-flight fail cứng, smoke button tự nhất quán, HGC-06 mọi control, F2 hooks), có lệnh verify đi kèm. Không blocker còn lại. Execute phase 59 theo thứ tự 01->21, mỗi control chờ chữ "pass" của sếp.
