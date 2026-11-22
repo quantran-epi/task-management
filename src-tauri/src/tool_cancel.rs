@@ -288,15 +288,21 @@ impl OutputCoalescer {
 pub fn build_remote_command(command: &str) -> String {
     let encoded = base64::engine::general_purpose::STANDARD.encode(command.as_bytes());
     format!(
-        "setsid sh -c 'echo $$; exec sh -c \"$(printf %s {encoded} | base64 -d)\"'",
-        encoded = encoded
+        "setsid sh -c 'echo {pgid_prefix}$$; exec sh -c \"$(printf %s {encoded} | base64 -d)\"'",
+        encoded = encoded,
+        pgid_prefix = PGID_LINE_PREFIX,
     )
 }
 
-/// Read a PGID from one output chunk. The first numeric line is the leader; banner lines are
-/// skipped so login banners cannot spoof the id.
+/// Unique marker on the PGID line. SSH login banners and command output can contain arbitrary
+/// numeric lines; only a line with this exact prefix is the `setsid` leader id.
+const PGID_LINE_PREFIX: &str = "TASKMATE_PGID:";
+
+/// Read a PGID from one output chunk. Only the sentinel-prefixed line is accepted; arbitrary
+/// numeric banner lines can no longer be mistaken for the process-group leader.
 fn read_pgid_line(text: &str) -> Option<u32> {
-    text.lines().find_map(|line| line.trim().parse::<u32>().ok())
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix(PGID_LINE_PREFIX)?.trim().parse::<u32>().ok())
 }
 
 /// The short socket timeout on the tool session is a wake-up, never a termination reason.
@@ -397,20 +403,22 @@ pub fn run_cancellable_remote_command(
                     Ok(n) => {
                         let mut payload = &buf[..n];
                         if !pgid_scanned {
-                            // Accumulate until the first newline; that line is the PGID.
-                            let end = payload.iter().position(|b| *b == b'\n');
-                            match end {
-                                Some(idx) => {
-                                    prefix.push_str(&String::from_utf8_lossy(&payload[..idx + 1]));
-                                    if let Some(pgid) = read_pgid_line(&prefix) {
-                                        // The command thread records the PGID in the registry
-                                        // and kills it if cancel arrived before discovery.
-                                        let _ = tx.send(Chunk::Pgid(pgid));
-                                    }
+                            // Scan line by line until the sentinel-marked PGID line arrives.
+                            // A banner line before it must not consume the scan.
+                            loop {
+                                let Some(idx) = payload.iter().position(|b| *b == b'\n') else {
+                                    prefix.push_str(&String::from_utf8_lossy(payload));
+                                    break;
+                                };
+                                prefix.push_str(&String::from_utf8_lossy(&payload[..idx + 1]));
+                                payload = &payload[idx + 1..];
+                                if let Some(pgid) = read_pgid_line(&prefix) {
+                                    // The command thread records the PGID in the registry
+                                    // and kills it if cancel arrived before discovery.
+                                    let _ = tx.send(Chunk::Pgid(pgid));
                                     pgid_scanned = true;
-                                    payload = &payload[idx + 1..];
+                                    break;
                                 }
-                                None => prefix.push_str(&String::from_utf8_lossy(payload)),
                             }
                         }
                         if stdout_len < MAX_OUTPUT_BYTES && !payload.is_empty() {
@@ -712,7 +720,7 @@ mod tests {
     fn remote_command_wraps_in_setsid_and_preserves_original_command() {
         let command = build_remote_command("sqlcl -S");
         assert!(command.contains("setsid sh -c"));
-        assert!(command.contains("echo $$"));
+        assert!(command.contains(&format!("echo {PGID_LINE_PREFIX}$$")));
         assert!(command.contains("exec sh -c"));
         assert_eq!(decode_wrapped_command(&command), "sqlcl -S");
         // No raw command text inside the outer single-quoted wrapper: a quote/heredoc in
@@ -741,14 +749,20 @@ mod tests {
             .unwrap()
             .0;
         assert!(!outer.contains('\''));
-        assert!(outer.contains("echo $$; exec sh -c"));
+        assert!(outer.contains(&format!("echo {PGID_LINE_PREFIX}$$; exec sh -c")));
     }
 
     #[test]
-    fn pgid_line_parses_first_numeric_line_and_skips_banners() {
-        assert_eq!(read_pgid_line("12345\n"), Some(12345));
-        assert_eq!(read_pgid_line("banner\n12345\n"), Some(12345));
+    fn pgid_line_requires_sentinel_and_ignores_banner_numbers() {
+        let marker = PGID_LINE_PREFIX;
+        assert_eq!(read_pgid_line(&format!("{marker}12345\n")), Some(12345));
+        // Login-banner numeric lines must never be mistaken for the process group.
+        assert_eq!(read_pgid_line("12345\n"), None);
+        assert_eq!(read_pgid_line(&format!("banner\n12345\n{marker}4242\n")), Some(4242));
         assert_eq!(read_pgid_line("not-a-pid\n"), None);
+        // The remote wrapper actually emits the sentinel-prefixed line.
+        let wrapper = build_remote_command("sqlcl -S");
+        assert!(wrapper.contains(&format!("echo {marker}$$")));
     }
 
     #[test]
