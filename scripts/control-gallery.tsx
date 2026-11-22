@@ -171,7 +171,7 @@ function NumberPickersFixture() {
       <label>Số<InputNumber value={n} onChange={(v) => setN(Number(v ?? 0))} min={0} max={100} /></label>
       <label>Nhắc tên<Mentions value={mention} onChange={setMention} placeholder="@agent" options={[{ value: 'leader', label: 'leader' }, { value: 'researcher', label: 'researcher' }]} /></label>
       <label>Gợi ý<AutoComplete value={auto} onChange={setAuto} options={['TaskMate', 'Task', 'Timeline'].map((v) => ({ value: v }))} /></label>
-      <label>Cây chọn<TreeSelect value={tree} onChange={setTree} treeData={[{ title: 'Projects', value: 'projects', children: [{ title: 'TaskMate', value: 'taskmate' }] }]} placeholder="Chọn" /></label>
+      <label>Cây chọn<TreeSelect value={tree as never} onChange={(v) => setTree(v)} treeData={[{ title: 'Projects', value: 'projects', children: [{ title: 'TaskMate', value: 'taskmate' }] }]} placeholder="Chọn" /></label>
     </div>
   );
 }
