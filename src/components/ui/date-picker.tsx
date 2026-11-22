@@ -305,13 +305,21 @@ export function DateRangePicker({
   const [active, setActive] = useState<0 | 1>(0);
   const [month, setMonth] = useState(pair[0] ?? pair[1] ?? dayjs());
   const anchorRef = active === 0 ? startRef : endRef;
+  // Callers often rebuild dayjs objects inline each render. Key on the date
+  // strings so identity churn does not snap the user's calendar navigation
+  // back to the value's month (WR-01 R3).
+  const lastValueKey = useRef('');
 
   useEffect(() => {
     setDraft(pair);
     setTexts([formatValue(pair[0], format), formatValue(pair[1], format)]);
     // External value change (reset/preset) must move the visible calendar
     // month too, else input text and opened calendar disagree (WR-01).
-    if (pair[0] || pair[1]) setMonth(pair[0] ?? pair[1]!);
+    const key = `${pair[0]?.format('YYYY-MM-DD') ?? ''}|${pair[1]?.format('YYYY-MM-DD') ?? ''}`;
+    if (key !== lastValueKey.current) {
+      lastValueKey.current = key;
+      if (pair[0] || pair[1]) setMonth(pair[0] ?? pair[1]!);
+    }
   }, [pair[0], pair[1], format]);
 
   function commit(next: Dayjs) {

@@ -513,4 +513,27 @@ describe('controlled value regressions', () => {
     expect(month.value).toBe('2'); // March (0-based)
     view.unmount();
   });
+
+  it('keeps navigated month when rerendered with equivalent fresh Dayjs objects (WR-01 R3)', () => {
+    const view = render(
+      <DateRangePicker value={[dayjs('2026-01-05'), dayjs('2026-01-07')]} />,
+    );
+    let month = document.querySelector('[data-oi-control="calendar-month"]') as HTMLSelectElement;
+    // Open then navigate to March while value stays in January.
+    const inputs = view.container.querySelectorAll('[data-oi-control="date-picker"]');
+    fireEvent.click(inputs[0]!);
+    month = document.querySelector('[data-oi-control="calendar-month"]') as HTMLSelectElement;
+    expect(month.value).toBe('0'); // January
+    fireEvent.change(month, { target: { value: '2' } });
+    month = document.querySelector('[data-oi-control="calendar-month"]') as HTMLSelectElement;
+    expect(month.value).toBe('2'); // March (user navigation)
+
+    // Parent rerender with equal dates but fresh objects must not snap back.
+    view.rerender(
+      <DateRangePicker value={[dayjs('2026-01-05'), dayjs('2026-01-07')]} />,
+    );
+    month = document.querySelector('[data-oi-control="calendar-month"]') as HTMLSelectElement;
+    expect(month.value).toBe('2');
+    view.unmount();
+  });
 });
