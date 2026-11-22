@@ -22,6 +22,7 @@ export interface ChangeRequestTableProps {
   onDeleteChangeRequest: (cr: ChangeRequest) => void;
   onViewTasks?: (crId: string) => void;
   loading?: boolean;
+  emptyText?: React.ReactNode;
   db?: TaskPlannerDatabase;
 }
 
@@ -73,6 +74,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
   onDeleteChangeRequest,
   onViewTasks,
   loading = false,
+  emptyText,
   db = defaultDb,
 }) => {
   const { token } = useAntdToken();
@@ -422,7 +424,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
           },
         }}
         locale={{
-          emptyText: (
+          emptyText: emptyText ?? (
             <EmptyState
               heading="Chưa có Change Request (CR) nào"
               body="Tạo Change Request mới (Tính năng mới, Nâng cấp, hoặc Sửa lỗi) và chọn các subsystem bị ảnh hưởng."

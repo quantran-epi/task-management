@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Typography, Button, Segmented, Tag, Space, Empty, Popconfirm, Tooltip, Dropdown, Tree, Input, ThemeConfigProvider, Popover, Select, useAntdToken, useMessage } from '../ui';
+import { Typography, Button, Segmented, Tag, Space, Empty, Popconfirm, Tooltip, Dropdown, Tree, Input, SearchInput, ThemeConfigProvider, Popover, Select, useAntdToken, useMessage } from '../ui';
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import { CheckOutlined, UndoOutlined, FileTextOutlined, FolderOutlined, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, CopyOutlined, SearchOutlined, EyeOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CommentOutlined, FolderOpenOutlined, SettingOutlined } from '../ui/icon';
+import { CheckOutlined, UndoOutlined, FileTextOutlined, FolderOutlined, ReloadOutlined, FullscreenOutlined, FullscreenExitOutlined, CopyOutlined, EyeOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CommentOutlined, FolderOpenOutlined, SettingOutlined } from '../ui/icon';
 import type { DiffFile, DiffHunk, DiffViewMode } from '../../types/agent';
 import { DiffHunkView } from './DiffHunkView';
 import { DiffInlineCommentModal } from './DiffInlineCommentModal';
@@ -628,13 +628,10 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
                 style={{ fontSize: 'var(--font-size-xs)' }}
               />
 
-              <Input
-                size="small"
-                prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+              <SearchInput
                 placeholder="Tìm tập tin..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                allowClear
               />
             </div>
 

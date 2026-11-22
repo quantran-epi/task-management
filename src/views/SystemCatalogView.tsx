@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Input, Select, Space, Empty, useMessage, EmptyImageSimple } from '../components/ui';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from '../components/ui/icon';
+import { Button, SearchInput, Select, Space, Empty, useMessage, EmptyImageSimple } from '../components/ui';
+import { PlusOutlined, ReloadOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems, createSystem, updateSystem, deleteSystem } from '../db/repositories/systemRepo';
@@ -135,13 +135,10 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
         }}
       >
         <Space size="middle">
-          <Input
-            prefix={<SearchOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />}
+          <SearchInput
             placeholder="Tìm kiếm hệ thống theo tên, code, repo..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            allowClear
-            style={{ width: 280 }}
           />
 
           <Select
@@ -164,7 +161,7 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
       </div>
 
       {/* Body: Hierarchical System Table or Empty State */}
-      {systems.length === 0 ? (
+      {filteredSystems.length === 0 ? (
         <div
           style={{
             padding: '48px 16px',
@@ -177,19 +174,25 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
           <Empty
             image={EmptyImageSimple}
             description={
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
-                  Chưa có hệ thống nào trong danh mục
+              searchQuery.trim() ? (
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Không tìm thấy kết quả cho từ khóa đã nhập</div>
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+                    Chưa có hệ thống nào trong danh mục
+                  </div>
+                  <div style={{ color: 'var(--fg-secondary, #5f6269)', maxWidth: 460, margin: '0 auto 16px' }}>
+                    Tạo nhóm hệ thống logic (Parent System) hoặc subsystem deployable (dịch vụ, schema DB) để quản lý cấu hình SSH và mã nguồn.
+                  </div>
                 </div>
-                <div style={{ color: 'var(--fg-secondary, #5f6269)', maxWidth: 460, margin: '0 auto 16px' }}>
-                  Tạo nhóm hệ thống logic (Parent System) hoặc subsystem deployable (dịch vụ, schema DB) để quản lý cấu hình SSH và mã nguồn.
-                </div>
-              </div>
+              )
             }
           >
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateParent}>
-              Tạo hệ thống
-            </Button>
+            {!searchQuery.trim() && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreateParent}>
+                Tạo hệ thống
+              </Button>
+            )}
           </Empty>
         </div>
       ) : (

@@ -9,7 +9,7 @@ import { getAntdTheme, statusColorMap, type ThemeMode } from '../../../styles/to
 import { StatusTag } from '../tag';
 import { Badge } from '../badge';
 import { StatusDot } from '../status-dot';
-import { Input, InputSearch } from '../input';
+import { Input, InputSearch, SearchInput } from '../input';
 import { Textarea, DEFAULT_TEXTAREA_MIN_ROWS } from '../textarea';
 import { Select } from '../select';
 import { InputNumber } from '../input-number';
@@ -61,6 +61,16 @@ describe('input-family policy', () => {
     expect(style).toContain(`--ui-control-radius: ${metrics.borderRadius}px`);
     expect(style).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
     expect(style).toContain('width: 100%');
+  });
+
+  it('gives SearchInput the shared metrics and a search prefix', () => {
+    render(<SearchInput placeholder="Tìm chung" />);
+    const root = screen.getByPlaceholderText('Tìm chung').closest('.ant-input-affix-wrapper');
+    expect(root).not.toBeNull();
+    const style = root!.getAttribute('style') ?? '';
+    expect(style).toContain(`--ui-control-height: ${metrics.controlHeight}px`);
+    expect(root!.querySelector('.anticon-search')).not.toBeNull();
+    expect(root!.querySelector('.ant-input-clear-icon')).not.toBeNull();
   });
 
   it('maps aria-invalid to error status and keeps disabled/value passthrough', () => {

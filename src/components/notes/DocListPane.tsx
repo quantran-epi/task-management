@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Input, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, EmptyImageSimple } from '../ui';
+import { SearchInput, Select, Typography, Empty, Tag, Dropdown, Button, Tooltip, EmptyImageSimple } from '../ui';
 import type { MenuProps } from 'antd';
 import { useDocWorkerSearch } from '../../hooks/useDocWorkerSearch';
-import { SearchOutlined, PushpinFilled, PushpinOutlined, FolderOutlined, FolderFilled, PlusOutlined, DeleteOutlined, MoreOutlined, FileTextOutlined, FormOutlined, UndoOutlined } from '../ui/icon';
+import { PushpinFilled, PushpinOutlined, FolderOutlined, FolderFilled, PlusOutlined, DeleteOutlined, MoreOutlined, FileTextOutlined, FormOutlined, UndoOutlined } from '../ui/icon';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { matchesDocSearch } from '../../utils/docSearch';
@@ -276,13 +276,10 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
           </div>
         )}
 
-        <Input
+        <SearchInput
           placeholder="Tìm trong danh sách..."
-          prefix={<SearchOutlined style={{ color: 'var(--fg-secondary)' }} />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          allowClear
-          size="middle"
         />
         {activeFilter === 'quick_notes' && (
           <Select

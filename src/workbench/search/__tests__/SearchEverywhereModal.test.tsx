@@ -43,7 +43,7 @@ describe('SearchEverywhereModal', () => {
   it('renders dialog, input, and tabs when open is true', () => {
     render(<SearchEverywhereModal open={true} onClose={vi.fn()} db={mockDb} />);
     expect(screen.getByRole('dialog')).toBeDefined();
-    expect(screen.getByPlaceholderText("Search everywhere, or type '>' for actions...")).toBeDefined();
+    expect(screen.getByPlaceholderText("Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh...")).toBeDefined();
     expect(screen.getByRole('tab', { name: 'All' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'Tasks' })).toBeDefined();
     expect(screen.getByRole('tab', { name: 'CR' })).toBeDefined();
@@ -54,7 +54,7 @@ describe('SearchEverywhereModal', () => {
 
   it('switches tabs on Tab key press', () => {
     render(<SearchEverywhereModal open={true} onClose={vi.fn()} db={mockDb} />);
-    const input = screen.getByPlaceholderText("Search everywhere, or type '>' for actions...");
+    const input = screen.getByPlaceholderText("Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh...");
 
     expect(screen.getByRole('tab', { name: 'All' }).getAttribute('aria-selected')).toBe('true');
 
@@ -68,7 +68,7 @@ describe('SearchEverywhereModal', () => {
   it('calls onClose on Escape key press', () => {
     const onClose = vi.fn();
     render(<SearchEverywhereModal open={true} onClose={onClose} db={mockDb} />);
-    const input = screen.getByPlaceholderText("Search everywhere, or type '>' for actions...");
+    const input = screen.getByPlaceholderText("Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh...");
 
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -76,7 +76,7 @@ describe('SearchEverywhereModal', () => {
 
   it('filters actions when query starts with >', () => {
     render(<SearchEverywhereModal open={true} onClose={vi.fn()} db={mockDb} />);
-    const input = screen.getByPlaceholderText("Search everywhere, or type '>' for actions...");
+    const input = screen.getByPlaceholderText("Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh...");
 
     fireEvent.change(input, { target: { value: '> New Task' } });
 
@@ -117,7 +117,7 @@ describe('SearchEverywhereModal', () => {
     });
 
     render(<SearchEverywhereModal open={true} onClose={onClose} db={mockDb} />);
-    const input = screen.getByPlaceholderText("Search everywhere, or type '>' for actions...");
+    const input = screen.getByPlaceholderText("Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh...");
 
     fireEvent.change(input, { target: { value: '> Run Specific' } });
     fireEvent.keyDown(input, { key: 'Enter' });

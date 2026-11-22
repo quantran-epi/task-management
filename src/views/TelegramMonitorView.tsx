@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Tabs, Table, Switch, Badge, Tag, Modal, Form, Input, Select, InputNumber, Progress, Space, Button, Alert, Typography, Tooltip, Popconfirm, Checkbox, useMessage, FormItem, InputPassword, InputSearch, RadioButton, RadioGroup, TextArea, useForm } from '../components/ui';
+import { Card, Tabs, Table, Switch, Badge, Tag, Modal, Form, Input, Select, InputNumber, Progress, Space, Button, Alert, Typography, Tooltip, Popconfirm, Checkbox, useMessage, FormItem, InputPassword, SearchInput, RadioButton, RadioGroup, TextArea, useForm } from '../components/ui';
 import { SendOutlined, CheckCircleOutlined, StopOutlined, UnlockOutlined, PlusOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, SafetyCertificateOutlined, SettingOutlined, ClockCircleOutlined, NotificationOutlined, UserOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -449,12 +449,10 @@ export const TelegramMonitorView: React.FC = () => {
                     }}
                   >
                     <Space>
-                      <InputSearch
+                      <SearchInput
                         placeholder="Tìm kiếm nội dung tin nhắn..."
-                        allowClear
                         value={logSearch}
                         onChange={(e) => setLogSearch(e.target.value)}
-                        style={{ width: 280 }}
                       />
                       {logChatFilter && (
                         <Tag

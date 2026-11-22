@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Input, Select, Space, useMessage, useTaskMateModal } from '../components/ui';
-import { PlusOutlined, SearchOutlined, FilterOutlined } from '../components/ui/icon';
+import { Button, Empty, SearchInput, Select, Space, useMessage, useTaskMateModal, EmptyImageSimple } from '../components/ui';
+import { PlusOutlined, FilterOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
@@ -148,13 +148,10 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
           border: '1px solid #e9eaee',
         }}
       >
-        <Input
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted)' }} />}
+        <SearchInput
           placeholder="Tìm theo tên hoặc mã CR..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ width: 260 }}
-          allowClear
           data-testid="cr-search-input"
         />
 
@@ -194,6 +191,11 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         changeRequests={filteredCRs}
         tasks={tasks}
         systems={systems}
+        emptyText={
+          searchQuery.trim() ? (
+            <Empty image={EmptyImageSimple} description="Không tìm thấy kết quả cho từ khóa đã nhập" />
+          ) : undefined
+        }
         onEditChangeRequest={handleOpenEditCR}
         onDeleteChangeRequest={handleDeleteCRPrompt}
         onViewTasks={(crId) => {

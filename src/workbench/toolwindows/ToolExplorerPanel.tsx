@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Tooltip, InputSearch } from '../../components/ui';
+import { Tooltip, SearchInput } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { UTILITY_TOOLS } from './utilityTools';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
@@ -23,12 +23,10 @@ export function ToolExplorerPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', padding: 10, flexShrink: 0 }}>
-        <InputSearch
-          allowClear
+        <SearchInput
           placeholder="Tìm công cụ..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
         />
       </div>
       <div style={{ padding: '4px 12px', color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-xs, 11px)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>

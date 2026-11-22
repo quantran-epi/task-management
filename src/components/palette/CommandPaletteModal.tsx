@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, List, Tag, Typography, Space, Empty, Button, Tooltip, ListItem } from '../ui';
-import { SearchOutlined, CheckSquareOutlined, ProjectOutlined, ApartmentOutlined, FileTextOutlined, PlusOutlined, CalendarOutlined, BarChartOutlined, SettingOutlined, DashboardOutlined, QuestionCircleOutlined, RobotOutlined } from '../ui/icon';
+import { Modal, SearchInput, List, Tag, Typography, Space, Empty, Button, Tooltip, ListItem } from '../ui';
+import { CheckSquareOutlined, ProjectOutlined, ApartmentOutlined, FileTextOutlined, PlusOutlined, CalendarOutlined, BarChartOutlined, SettingOutlined, DashboardOutlined, QuestionCircleOutlined, RobotOutlined } from '../ui/icon';
 import { useAIChat } from '../../context/AIChatContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -55,7 +55,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCheatsheet, setShowCheatsheet] = useState(false);
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<import('antd').InputRef>(null);
   const { openChat } = useAIChat();
   const openTab = useLayoutStore((s) => s.openTab);
 
@@ -434,10 +434,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>
         {/* Search input bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
-          <Input
+          <SearchInput
             ref={inputRef}
             size="large"
-            prefix={<SearchOutlined style={{ color: 'var(--fg-secondary)', fontSize: 18 }} />}
             placeholder="Tìm công việc, CR, hệ thống, màn hình, lệnh... (gõ '?' để xem cú pháp)"
             value={query}
             onChange={(e) => {

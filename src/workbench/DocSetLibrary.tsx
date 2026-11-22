@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Empty, List, Space, Tag, Typography, useMessage, InputSearch, EmptyImageSimple, ListItem, ListItemMeta } from '../components/ui';
+import { Button, Empty, List, Space, Tag, Typography, useMessage, SearchInput, EmptyImageSimple, ListItem, ListItemMeta } from '../components/ui';
 import { PlusOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -104,18 +104,24 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
           <Button icon={<PlusOutlined />} onClick={() => setCreating(true)} block>
             Tạo bộ tài liệu
           </Button>
-          <InputSearch
+          <SearchInput
             placeholder="Tìm bộ tài liệu"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            allowClear
           />
         </Space>
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <List
             size="small"
             dataSource={filteredSets}
-            locale={{ emptyText: <Empty image={EmptyImageSimple} description="Chưa có bộ tài liệu" /> }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={EmptyImageSimple}
+                  description={search.trim() ? 'Không tìm thấy bộ tài liệu phù hợp' : 'Chưa có bộ tài liệu'}
+                />
+              ),
+            }}
             renderItem={(set) => {
               const active = set.id === selectedId && !creating;
               return (

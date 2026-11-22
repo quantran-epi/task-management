@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Button, Dropdown, Input, Modal, Segmented, Tooltip, Typography, Empty, EmptyImageSimple } from '../ui';
+import { Button, Dropdown, Input, SearchInput, Modal, Segmented, Tooltip, Typography, Empty, EmptyImageSimple } from '../ui';
 import type { MenuProps } from 'antd';
-import { FolderOutlined, FolderOpenOutlined, PlusOutlined, PushpinOutlined, PushpinFilled, FileTextOutlined, FormOutlined, DeleteOutlined, TagOutlined, MoreOutlined, EditOutlined, FileAddOutlined, FolderAddOutlined, UploadOutlined, CaretRightOutlined, CaretDownOutlined, SearchOutlined, UndoOutlined, CheckSquareOutlined, ThunderboltOutlined, BranchesOutlined, DownloadOutlined, ApartmentOutlined } from '../ui/icon';
+import { FolderOutlined, FolderOpenOutlined, PlusOutlined, PushpinOutlined, PushpinFilled, FileTextOutlined, FormOutlined, DeleteOutlined, TagOutlined, MoreOutlined, EditOutlined, FileAddOutlined, FolderAddOutlined, UploadOutlined, CaretRightOutlined, CaretDownOutlined, UndoOutlined, CheckSquareOutlined, ThunderboltOutlined, BranchesOutlined, DownloadOutlined, ApartmentOutlined } from '../ui/icon';
 import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { DocPublishBadge } from '../knowledge/DocPublishBadge';
@@ -968,14 +968,10 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
     >
       {/* 1. Search Bar & Scope Toggle */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>
-        <Input
+        <SearchInput
           placeholder="Tìm kiếm tài liệu (BM25)..."
-          prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
-          allowClear
-          size="middle"
-          style={{ borderRadius: 'var(--radius-control)' }}
         />
         <Segmented<'all' | 'folder'>
           size="small"

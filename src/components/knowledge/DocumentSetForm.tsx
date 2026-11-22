@@ -1,5 +1,5 @@
 import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined, FolderOutlined, FileTextOutlined } from '../ui/icon';
-import { Button, Checkbox, Collapse, Form, Input, List, Modal, Radio, Select, Space, Tag, Tooltip, Tree, Typography, useAntdToken, FormItem, InputSearch, ListItem, RadioGroup } from '../ui';
+import { Button, Checkbox, Collapse, Form, Input, List, Modal, Radio, Select, Space, Tag, Tooltip, Tree, Typography, useAntdToken, FormItem, SearchInput, ListItem, RadioGroup } from '../ui';
 import type { TreeDataNode } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import type {
@@ -656,13 +656,12 @@ export function DocumentSetForm({
           setPickerOpen(false);
         }}
       >
-        <InputSearch
+        <SearchInput
           aria-label="Tìm tài liệu"
           placeholder="Tìm theo tiêu đề, hashtag..."
           style={{ marginBottom: token.marginSM }}
           value={searchDocQuery}
           onChange={(e) => setSearchDocQuery(e.target.value)}
-          allowClear
         />
         <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 'var(--radius-control)', padding: 8 }}>
           {treeData.length === 0 ? (

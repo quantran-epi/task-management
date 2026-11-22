@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, Typography, Tag, Space, useAntdToken } from '../ui';
-import { SearchOutlined, CompassOutlined, AppstoreOutlined, CheckSquareOutlined, FileTextOutlined } from '../ui/icon';
+import { Modal, SearchInput, Typography, Tag, Space, useAntdToken } from '../ui';
+import { CompassOutlined, AppstoreOutlined, CheckSquareOutlined, FileTextOutlined } from '../ui/icon';
 import type { ShortcutItem, ShortcutCategory } from '../../types/shortcuts';
 import { formatShortcutKeys } from '../../utils/keyboard';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
@@ -30,7 +30,7 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
   const { token } = useAntdToken();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<import('antd').InputRef>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Filter shortcuts: match query and relevant scope
@@ -120,18 +120,12 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
       }}
     >
       <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-        <Input
+        <SearchInput
           ref={inputRef}
-          prefix={<SearchOutlined style={{ color: token.colorTextSecondary, marginRight: 6 }} />}
           placeholder="Tìm phím tắt hoặc hành động... (Dùng ↑ ↓ để chọn, Enter để chạy)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          variant="borderless"
-          style={{
-            fontSize: 15,
-            padding: 0,
-          }}
         />
       </div>
 
