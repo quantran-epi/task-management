@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import type { ChangeRequest, System, Task, TaskPriority, TaskStatus, WorkType } from '../types/models';
 import { resolveInheritedTags } from '../domain/inheritance';
+import { foldForSearch, searchIncludes } from './searchText';
 
 export interface TaskFilterState {
   search: string;
@@ -120,15 +121,15 @@ export function filterTasks(
     typeof context === 'string' ? { todayStr: context } : context;
   const { todayStr, crMap, systemMap, executionTaskIds, worklogTaskIds } = normalizedContext;
 
-  const searchTerm = filterState.search.trim().toLowerCase();
+  const searchTerm = foldForSearch(filterState.search);
 
   return tasks.filter((task) => {
     // 1. Text search across name, description, notes, and jiraKey (D-18, JIRA-04)
     if (searchTerm) {
-      const matchName = task.name.toLowerCase().includes(searchTerm);
-      const matchDesc = (task.description ?? '').toLowerCase().includes(searchTerm);
-      const matchNotes = (task.notes ?? '').toLowerCase().includes(searchTerm);
-      const matchJira = (task.jiraKey ?? '').toLowerCase().includes(searchTerm);
+      const matchName = searchIncludes(task.name, searchTerm);
+      const matchDesc = searchIncludes(task.description ?? '', searchTerm);
+      const matchNotes = searchIncludes(task.notes ?? '', searchTerm);
+      const matchJira = searchIncludes(task.jiraKey ?? '', searchTerm);
       if (!matchName && !matchDesc && !matchNotes && !matchJira) {
         return false;
       }
