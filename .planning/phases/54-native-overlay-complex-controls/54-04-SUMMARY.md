@@ -109,6 +109,7 @@ None - plan executed with the specified native architecture and API preservation
 
 - The external store returns `ImperativeRecord` wrappers; an initial confirm implementation read the record itself as the config. Fixed during Task 3 to read `record.payload`, and the focused suite now asserts caller copy and lifecycle.
 - Legacy `controls.test.tsx` still asserts AntD selectors for overlay wrappers. Per plan, selector migration stays in 54-07; this plan added a focused native suite instead.
+- Chrome smoke check on Vite dev after reload: Tasks view renders the native grid with native column headers, sort buttons, filter select and inline pagination; no runtime crash in the four converted wrappers. Console shows five pre-existing errors/warnings from untouched Select/Splitter code (non-boolean `ellipsis`, nested button in Select trigger, unknown `optionType`/`buttonStyle` DOM props, missing resize handle), outside this plan's scope.
 - No full Vitest run, per project rule.
 
 ## User Setup Required
