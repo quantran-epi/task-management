@@ -90,10 +90,10 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
         aria-label={label}
         aria-activedescendant={`${id}-${activeIndex}`}
         tabIndex={0}
-        style={{ width: 80, maxHeight: 360 }}
+        style={{ width: 72, maxHeight: 480 }}
         onKeyDown={onColumnKeyDown}
       >
-        <div className={listStyles.sizer} style={{ height: values.length * 32 }}>
+        <div className={listStyles.sizer} style={{ height: values.length * 24 }}>
         {values.map((item, index) => (
           <div
             key={item}
@@ -103,7 +103,7 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
             data-lead={index === lead || undefined}
             data-oi-control="list-row"
             className={classNames(listStyles.row, (item === value || index === lead) && listStyles.active)}
-            style={{ transform: `translateY(${index * 32}px)`, height: 32 }}
+            style={{ transform: `translateY(${index * 24}px)`, height: 24 }}
             onPointerMove={() => onLead(index)}
             onClick={() => onPick(item)}
           >
