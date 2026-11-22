@@ -608,9 +608,9 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'remote_file':
         return <RemoteFileViewer {...tab.params} />;
       case 'oracle_object_view':
-        return <OracleObjectViewer {...tab.params} {...dbProp} />;
+        return <OracleObjectViewer {...tab.params} />;
       case 'oracle_sql_composer':
-        return <OracleSqlComposer {...tab.params} {...dbProp} />;
+        return <OracleSqlComposer {...tab.params} />;
       case 'insight':
         return (
           <ItemInsightView

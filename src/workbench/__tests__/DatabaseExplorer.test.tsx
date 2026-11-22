@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { WorkbenchLayout } from '../WorkbenchLayout';
 import { EditorArea } from '../EditorArea';
@@ -17,9 +17,31 @@ vi.mock('../toolwindows/DocsExplorer', () => ({
   DocsExplorer: () => <div data-testid="mock-docs-explorer">Docs Explorer Body</div>,
 }));
 
-vi.mock('../toolwindows/DatabaseExplorer', () => ({
-  DatabaseExplorer: () => <div data-testid="mock-database-explorer">Database Explorer Body</div>,
-}));
+import { DatabaseExplorer } from '../toolwindows/DatabaseExplorer';
+import * as oracleService from '../../services/ai/oracleSqlclService';
+
+vi.mock('../../services/ai/oracleSqlclService', async (importOriginal) => {
+  const actual = await importOriginal<typeof oracleService>();
+  return {
+    ...actual,
+    getOracleConnectionProfiles: vi.fn(async () => [
+      {
+        id: 'c1', name: 'Main SIT', environment: 'SIT', isActive: true,
+        sshConfigId: 'ssh-1', connectionString: 'user/pass@secret-host:1521/SIT',
+      },
+    ]),
+    executeOracleDescribe: vi.fn(async (args: any) =>
+      JSON.stringify({
+        success: true,
+        action: args.action,
+        data:
+          args.action === 'list_schemas'
+            ? [{ USERNAME: 'HR' }]
+            : [{ OWNER: 'HR', OBJECT_NAME: 'EMPLOYEES', OBJECT_TYPE: 'TABLE' }],
+      })
+    ),
+  };
+});
 
 vi.mock('../editor/OracleObjectViewer', () => ({
   OracleObjectViewer: ({ objectName }: { objectName?: string }) => (
@@ -60,7 +82,49 @@ describe('Database Explorer workbench shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Database Explorer/i }));
     expect(useLayoutStore.getState().leftActiveId).toBe('database_explorer');
     expect(screen.getByText('Database Explorer')).toBeDefined();
-    expect(screen.getByTestId('mock-database-explorer')).toBeDefined();
+    expect(screen.getByTestId('database-explorer')).toBeDefined();
+  });
+
+  it('loads tree lazily on expand, caches branches, and opens object tabs without leaking credentials', async () => {
+    const describe = oracleService.executeOracleDescribe as any;
+    describe.mockClear();
+    render(<DatabaseExplorer />);
+    await waitFor(() => expect(screen.getByText('Main SIT (SIT)')).toBeDefined());
+    expect(describe).not.toHaveBeenCalled(); // lazy: no metadata fetch at mount
+    // Debug: print switcher HTML on failure of next assertion.
+
+    const root = screen.getByText('Main SIT (SIT)').closest('.ant-tree-treenode')!;
+    const switcher = root.querySelector('.ant-tree-switcher')!;
+    expect(switcher.className).toContain('ant-tree-switcher_close');
+    fireEvent.click(switcher, { bubbles: true });
+    await waitFor(() => expect(describe.mock.calls.map((c: any[]) => c[0]?.action)).toContain('list_schemas'), { timeout: 1000 });
+    expect(describe).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText('HR')).toBeDefined());
+
+    fireEvent.click(root.querySelector('.ant-tree-switcher')!); // collapse
+    fireEvent.click(root.querySelector('.ant-tree-switcher')!); // expand again
+    await waitFor(() => expect(screen.getByText('HR')).toBeDefined());
+    expect(describe).toHaveBeenCalledTimes(1); // cache hit
+
+    const schema = screen.getByText('HR').closest('.ant-tree-treenode')!;
+    fireEvent.click(schema.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(describe.mock.calls.map((c: any[]) => c[0]?.action)).toContain('list_objects'));
+    await waitFor(() => expect(screen.getByText('TABLE')).toBeDefined());
+
+    const type = screen.getByText('TABLE').closest('.ant-tree-treenode')!;
+    fireEvent.click(type.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(screen.getByText('EMPLOYEES')).toBeDefined());
+    fireEvent.click(screen.getByText('EMPLOYEES'));
+
+    const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'oracle_object_view');
+    expect(tab?.params).toMatchObject({
+      connectionId: 'c1', schema: 'HR', objectType: 'TABLE', objectName: 'EMPLOYEES', mode: 'ddl',
+    });
+    expect(document.body.textContent).not.toContain('pass@secret-host');
+
+    fireEvent.click(screen.getByRole('button', { name: /SQL Composer/i }));
+    const composer = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'oracle_sql_composer');
+    expect(composer?.params).toMatchObject({ composerId: 'composer:active' });
   });
 
   it('renders object/composer tabs in the center editor and keeps two objects independent', () => {

@@ -812,7 +812,7 @@ SET TRIMSPOOL ON;
 SET LONG 200000;
 SET TRANSACTION READ ONLY;`.trim();
 
-const SYSTEM_SCHEMAS = `('SYS', 'SYSTEM', 'MDSYS', 'CTXSYS', 'XDB', 'WMSYS', 'LBACSYS', 'DVSYS', 'GSMADMIN_INTERNAL', 'AUDSYS', 'OUTLN', 'ORDSYS', 'ORDDATA', 'WMSYS', 'APPQOSSYS', 'DBSNMP', 'ORACLE_OCM', 'XS$NULL')`;
+const SYSTEM_SCHEMAS = `('SYS', 'SYSTEM', 'MDSYS', 'CTXSYS', 'XDB', 'WMSYS', 'LBACSYS', 'DVSYS', 'GSMADMIN_INTERNAL', 'AUDSYS', 'OUTLN', 'ORDSYS', 'ORDDATA', 'APPQOSSYS', 'DBSNMP', 'ORACLE_OCM', 'XS$NULL')`;
 
 /** Numeric clamp for metadata pagination — UI never supplies an arbitrary OFFSET/FETCH. */
 function clampMetadataPage(args: OracleDescribeArgs): { offset: number; pageSize: number } {
@@ -1005,7 +1005,7 @@ ORDER BY c.COLUMN_ID`;
         }
         const select = `SELECT LINE, TEXT
 FROM ALL_SOURCE
-WHERE OWNER = ${schemaExpr} AND NAME = '${nameLiteral}' AND TYPE = '${ORACLE_OBJECT_TYPES[objectType]}'
+WHERE OWNER = ${schemaExpr} AND NAME = '${nameLiteral}' AND TYPE = '${objectType}'
 ORDER BY LINE`;
         const script = `${METADATA_PREAMBLE}\n${select}\nFETCH FIRST 5000 ROWS ONLY;\nEXIT;`.trim();
         const { stdout, error } = await run(script);
@@ -1024,7 +1024,12 @@ ORDER BY LINE`;
       }
 
       if (action === 'list_objects') {
-        const objectType = assertOracleObjectType(args.objectType);
+        // Omitting objectType is allowed for a schema-wide scan; the UI whitelists the
+        // returned OBJECT_TYPE before it becomes a tree node or a GET_DDL argument.
+        const objectType = args.objectType?.trim()
+          ? assertOracleObjectType(args.objectType)
+          : undefined;
+        const typeFilter = objectType ? `AND OBJECT_TYPE = '${objectType}'` : '';
         const search = args.search?.trim()
           ? escapeOracleLikeFilter(args.search.trim().toUpperCase())
           : '';
@@ -1033,7 +1038,7 @@ ORDER BY LINE`;
         const select = `SELECT OWNER, OBJECT_NAME, OBJECT_TYPE, STATUS, CREATED, LAST_DDL_TIME
 FROM ALL_OBJECTS
 WHERE OWNER NOT IN ${SYSTEM_SCHEMAS}
-  AND OBJECT_TYPE = '${objectType}'
+  ${typeFilter}
   ${ownerFilter}
   ${searchFilter}
 ORDER BY OWNER, OBJECT_NAME`;
