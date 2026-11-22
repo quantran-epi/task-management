@@ -152,6 +152,11 @@ function DialogSurface({
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (dialog.contains(target) || document.querySelector('[role="dialog"][data-positioned]')) return;
+      // Stacked dialogs: only the topmost dialog owns the focus trap. Without
+      // this, focusing a button in an inner confirm yanks focus back to the
+      // outer dialog (W-06).
+      const dialogs = document.querySelectorAll('[role="dialog"][data-oi-control][data-state="open"]');
+      if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== dialog) return;
       focusGuardRef.current = true;
       const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE);
       (firstFocusable ?? dialog).focus();

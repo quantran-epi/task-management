@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DialogSurface } from '../native/dialog';
@@ -70,6 +70,25 @@ describe('DialogSurface focus contract', () => {
     const dialog = screen.getByRole('dialog', { name: 'Hộp thoại' });
     background.focus();
     expect(document.activeElement?.closest('[data-oi-control="dialog"]')).toBe(dialog);
+  });
+
+  it('lets the topmost stacked dialog keep focus (W-06)', () => {
+    render(
+      <>
+        <DialogSurface open title="Ngoài">
+          <button type="button">Outer button</button>
+        </DialogSurface>
+        <DialogSurface open title="Trong">
+          <button type="button">Inner button</button>
+        </DialogSurface>
+      </>,
+    );
+    const outer = screen.getByRole('dialog', { name: 'Ngoài' });
+    const inner = screen.getByRole('dialog', { name: 'Trong' });
+    const innerButton = within(inner).getByRole('button', { name: 'Inner button' });
+    innerButton.focus();
+    expect(document.activeElement).toBe(innerButton);
+    expect(outer).toBeTruthy();
   });
 
   it('renders no backdrop when masked=false and no close button when closable=false', () => {
