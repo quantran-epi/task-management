@@ -38,6 +38,9 @@ export function tableStyle(): CSSProperties {
 
 const ROW_HEIGHT: Record<TableSize, number> = { small: 22, middle: 24, large: 28 };
 
+type SortState = { key: string; order: 'ascend' | 'descend' } | null;
+type FilterState = Record<string, (string | number | boolean)[]>;
+
 type RowKeySpec<RecordType> = string | keyof RecordType | ((record: RecordType, index?: number) => unknown);
 
 function recordKey<RecordType>(record: RecordType, index: number, rowKey: RowKeySpec<RecordType> | undefined): string {
@@ -57,6 +60,40 @@ function textOf(value: unknown): string {
     return typeof children === 'string' ? children : '';
   }
   return '';
+}
+
+/** Pure sort+filter over a given state snapshot, shared by render and onChange. */
+function computeData<RecordType>(
+  rows: readonly RecordType[],
+  columns: AntTableProps<RecordType>['columns'],
+  sortState: SortState,
+  filterState: FilterState,
+): RecordType[] {
+  let result: RecordType[] = [...rows];
+  if (sortState) {
+    const column = (columns ?? []).find((entry: { key?: unknown }) => entry.key === sortState.key) as
+      | { sorter?: unknown }
+      | undefined;
+    const compare = typeof column?.sorter === 'function' ? column.sorter as (a: RecordType, b: RecordType, order: 'ascend' | 'descend') => number : undefined;
+    if (compare) result.sort((a, b) => compare(a, b, sortState.order));
+    if (sortState.order === 'descend') result.reverse();
+  }
+  const entries = Object.entries(filterState).filter(([, values]) => values.length > 0);
+  if (entries.length === 0) return result;
+  return result.filter((record) => entries.every(([key, values]) => {
+    const column = (columns ?? []).find((entry: { key?: unknown }) => entry.key === key) as
+      | { dataIndex?: unknown; onFilter?: unknown }
+      | undefined;
+    if (typeof column?.onFilter === 'function') {
+      return values.some((value) => (column.onFilter as (v: unknown, r: RecordType) => boolean)(value, record));
+    }
+    const index = column?.dataIndex;
+    return values.includes(String(
+      typeof index === 'string' || typeof index === 'number' || typeof index === 'symbol'
+        ? (record as Record<string | number | symbol, unknown>)[index]
+        : undefined,
+    ));
+  }));
 }
 
 /** Native generic data grid: sort/filter/selection/pagination payloads keep AntD shape. */
@@ -83,42 +120,16 @@ export function Table<RecordType = unknown>({
   const effectiveDensity: TableSize = density ?? (size === 'small' || size === 'large' ? size : 'middle');
   const rowHeight = ROW_HEIGHT[effectiveDensity] ?? 24;
   const rows = (dataSource ?? []) as readonly RecordType[];
-  const [sortState, setSortState] = useState<{ key: string; order: 'ascend' | 'descend' } | null>(null);
-  const [filterState, setFilterState] = useState<Record<string, (string | number | boolean)[]>>({});
+  const [sortState, setSortState] = useState<SortState>(null);
+  const [filterState, setFilterState] = useState<FilterState>({});
   const [expanded, setExpanded] = useState<readonly string[]>([]);
   const [innerPage, setInnerPage] = useState(1);
   const [innerPageSize, setInnerPageSize] = useState<number | undefined>(undefined);
 
-  const sorted = useMemo(() => {
-    if (!sortState) return [...rows];
-    const column = (columns ?? []).find((entry: { key?: unknown }) => entry.key === sortState.key) as
-      | { sorter?: unknown; dataIndex?: unknown }
-      | undefined;
-    const compare = typeof column?.sorter === 'function' ? column.sorter as (a: RecordType, b: RecordType, order: 'ascend' | 'descend') => number : undefined;
-    const result = [...rows];
-    if (compare) result.sort((a, b) => compare(a, b, sortState.order));
-    if (sortState.order === 'descend') result.reverse();
-    return result;
-  }, [rows, columns, sortState]);
-
-  const filtered = useMemo(() => {
-    const entries = Object.entries(filterState).filter(([, values]) => values.length > 0);
-    if (entries.length === 0) return sorted;
-    return sorted.filter((record) => entries.every(([key, values]) => {
-      const column = (columns ?? []).find((entry: { key?: unknown }) => entry.key === key) as
-        | { dataIndex?: unknown; onFilter?: unknown }
-        | undefined;
-      if (typeof column?.onFilter === 'function') {
-        return values.some((value) => (column.onFilter as (v: unknown, r: RecordType) => boolean)(value, record));
-      }
-      const index = column?.dataIndex;
-      return values.includes(String(
-        typeof index === 'string' || typeof index === 'number' || typeof index === 'symbol'
-          ? (record as Record<string | number | symbol, unknown>)[index]
-          : undefined,
-      ));
-    }));
-  }, [sorted, columns, filterState]);
+  const filtered = useMemo(
+    () => computeData(rows, columns, sortState, filterState),
+    [rows, columns, sortState, filterState],
+  );
 
   const pageConfig = pagination === false ? undefined : (pagination ?? {}) as TablePaginationConfig;
   const pageSize = innerPageSize ?? pageConfig?.pageSize ?? 10;
@@ -151,7 +162,9 @@ export function Table<RecordType = unknown>({
       { ...pageConfig, current: nextPage, pageSize: nextSize } as TablePaginationConfig,
       filters as never,
       sorter as never,
-      { currentDataSource: [...filtered], action },
+      // Compute from the next state; `filtered` is the stale render snapshot
+      // because onChange fires synchronously before React re-renders (WR-02).
+      { currentDataSource: computeData(rows, columns, nextSort, nextFilters), action },
     );
   }
 

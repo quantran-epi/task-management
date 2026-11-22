@@ -316,6 +316,39 @@ describe('native Table', () => {
     expect(onChange).toHaveBeenCalledTimes(2);
   });
 
+  it('reports post-change currentDataSource on filter and sort (WR-02)', () => {
+    const onChange = vi.fn();
+    const columns = [
+      {
+        title: 'Status', dataIndex: 'status', key: 'status',
+        filters: [{ text: 'Done', value: 'done' }, { text: 'Open', value: 'open' }],
+      },
+      { title: 'Name', dataIndex: 'name', key: 'name', sorter: (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name) },
+    ];
+    const filterView = render(<Table dataSource={rows} columns={columns} onChange={onChange} />);
+    const filter = screen.getByLabelText('lọc Status') as HTMLSelectElement;
+
+    // Filter must report only rows that pass, not the pre-change snapshot.
+    fireEvent.change(filter, { target: { value: 'done' } });
+    const extraFilter = onChange.mock.calls.at(-1)![3];
+    expect(extraFilter.action).toBe('filter');
+    expect(extraFilter.currentDataSource).toHaveLength(1);
+    expect(extraFilter.currentDataSource[0]).toMatchObject({ status: 'done' });
+    filterView.unmount();
+
+    // Sort must report the just-applied order (ascend then descend).
+    const nameSort = { title: 'Name', dataIndex: 'name', key: 'name', sorter: (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name) };
+    const sortView = render(<Table dataSource={rows} columns={[nameSort]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: /sort Name/i }));
+    const extraAsc = onChange.mock.calls.at(-1)![3];
+    expect(extraAsc.action).toBe('sort');
+    expect(extraAsc.currentDataSource.map((r: { name: string }) => r.name)).toEqual(['Alpha', 'Beta']);
+    fireEvent.click(screen.getByRole('button', { name: /sort Name/i }));
+    const extraDesc = onChange.mock.calls.at(-1)![3];
+    expect(extraDesc.currentDataSource.map((r: { name: string }) => r.name)).toEqual(['Beta', 'Alpha']);
+    sortView.unmount();
+  });
+
   it('renders emptyText and loading hooks and honours row density', () => {
     const { unmount } = render(
       <Table dataSource={[]} columns={[]} locale={{ emptyText: <span data-testid="custom-empty">Không có dữ liệu</span> }} />,
