@@ -114,3 +114,13 @@ Sau mỗi wave, chạy lại: `npx tsc --noEmit`, 6 overlay suite + `controls.te
 ## Sign-off
 
 Chưa thể sign-off `clean`: gate hiện tại xanh nhưng 5 warning ở đúng hợp đồng §7/§9. Sau khi sửa theo thứ tự trên và re-verify, cần re-review các file `modal.tsx`, `popup.tsx`, `popconfirm.tsx`, `dialog.tsx` và test mới trước khi đánh dấu NAT-02 hoàn tất.
+
+## Post-migration dependency audit (2026-11-22)
+
+Sau khi sếp Clarify policy (cho phép lib nhẹ/best, chỉ cấm UI kit nặng như AntD):
+- Popup positioning đã migrate sang `@floating-ui/react-dom` (`d28718a6`) — đúng stack OpenIDEA, bỏ hand-rolled place().
+- `classNames` (4 LOC) → defer Phase 57; đổi 46 file chỉ để align cú pháp, không giảm code.
+- `@tanstack/react-virtual` → defer 57+ theo profiling; DOM `translateY(i*24px)` đang là baseline đo Phase 57.
+- Dialog focus trap → giữ native (`focusin` guard vừa fix W-05); swap lib rủi ro regression.
+- ImperativeChannel dùng `useSyncExternalStore` (React stdlib) → giữ.
+Không có replacement nào bắt buộc làm ở Phase 54. Mọi thay đổi tiếp theo phải đi qua wrapper/helper tập trung.
