@@ -212,7 +212,7 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
         <button type="button" aria-label="Xóa giờ" onClick={() => { commit(null, onChange as ((value: Dayjs | null) => void) | undefined); close(); }}>×</button>
       ) : null}
       <Popup open={state.open} anchorRef={anchorRef} onClose={close} className={selectStyles.popup ?? ''} control="time-picker-popup" label={ariaLabel ?? placeholder ?? 'Chọn giờ'}>
-        <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
+        <div className={selectStyles.popupInner} style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
           <TimeColumn id={`${idBase}-tp-h`} values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second, 0)} />
           <TimeColumn id={`${idBase}-tp-m`} values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second, 1)} />
           {active.seconds.length > 0 ? (
@@ -317,7 +317,7 @@ export function TimeRangePicker({
         control="time-picker-range-popup"
         label={ariaLabel ?? 'Chọn khoảng thời gian'}
       >
-        <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
+        <div className={selectStyles.popupInner} style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
           <TimeColumn id={`${idBase}-tr-h`} values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
           <TimeColumn id={`${idBase}-tr-m`} values={grid.minutes} value={parsed.minute()} lead={rangeLead[1]} label="Phút" onLead={(index) => setRangeLead((prev) => [prev[0], index, prev[2]])} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
           {grid.seconds.length > 0 ? <TimeColumn id={`${idBase}-tr-s`} values={grid.seconds} value={parsed.second()} lead={rangeLead[2]} label="Giây" onLead={(index) => setRangeLead((prev) => [prev[0], prev[1], index])} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
