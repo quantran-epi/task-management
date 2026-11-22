@@ -3,6 +3,7 @@ import { Modal, Input, Typography, Tag, Space, useAntdToken } from '../ui';
 import { SearchOutlined, CompassOutlined, AppstoreOutlined, CheckSquareOutlined, FileTextOutlined } from '../ui/icon';
 import type { ShortcutItem, ShortcutCategory } from '../../types/shortcuts';
 import { formatShortcutKeys } from '../../utils/keyboard';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -34,18 +35,18 @@ export const ShortcutHUD: React.FC<ShortcutHUDProps> = ({
 
   // Filter shortcuts: match query and relevant scope
   const filteredShortcuts = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldForSearch(query);
     return shortcuts.filter((item) => {
       // If item has a specific scope and doesn't match currentRoute, skip unless searching
       if (item.scope && currentRoute && item.scope !== currentRoute && !q) {
         return false;
       }
       if (!q) return true;
-      const titleMatch = item.title.toLowerCase().includes(q);
-      const descMatch = item.description.toLowerCase().includes(q);
-      const catMatch = item.categoryLabel.toLowerCase().includes(q);
-      const keyMatch = item.keys.some((k) => k.toLowerCase().includes(q));
-      const keywordMatch = item.keywords?.some((kw) => kw.toLowerCase().includes(q));
+      const titleMatch = searchIncludes(item.title, q);
+      const descMatch = searchIncludes(item.description, q);
+      const catMatch = searchIncludes(item.categoryLabel, q);
+      const keyMatch = item.keys.some((k) => searchIncludes(k, q));
+      const keywordMatch = item.keywords?.some((kw) => searchIncludes(kw, q));
       return titleMatch || descMatch || catMatch || keyMatch || keywordMatch;
     });
   }, [shortcuts, query, currentRoute]);

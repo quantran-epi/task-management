@@ -21,6 +21,7 @@ import type {
   TelegramStatusEvent,
 } from '../services/telegram/telegramTypes';
 import { isTauriApp } from '../utils/timerPopout';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 const { Text, Title } = Typography;
 
@@ -316,12 +317,13 @@ export const TelegramMonitorView: React.FC = () => {
 
   // Filtered Logs
   const filteredLogs = useMemo(() => {
+    const q = foldForSearch(logSearch);
     return logs.filter((log) => {
       const matchSearch =
-        !logSearch ||
-        log.userMessage.toLowerCase().includes(logSearch.toLowerCase()) ||
-        log.aiResponse.toLowerCase().includes(logSearch.toLowerCase()) ||
-        (log.userName && log.userName.toLowerCase().includes(logSearch.toLowerCase()));
+        !q ||
+        searchIncludes(log.userMessage, q) ||
+        searchIncludes(log.aiResponse, q) ||
+        (log.userName && searchIncludes(log.userName, q));
       const matchChat = !logChatFilter || log.chatId === logChatFilter;
       return matchSearch && matchChat;
     });
