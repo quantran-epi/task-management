@@ -193,6 +193,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => setAutoApproveMutations(team.autoApproveMutations === true),
     [team.autoApproveMutations],
   );
+  // A failed write must revert to the value the store has NOW, not the prop captured by the
+  // render that started the write: a successful concurrent write may have landed meanwhile.
+  const teamFlagsRef = useRef(team);
+  teamFlagsRef.current = team;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [planDecision, setPlanDecision] = useState<'approved' | 'rejected' | undefined>(undefined);
@@ -1013,14 +1017,14 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             onToggleAutoSplit={(next) => {
               setAutoSplitEnabled(next);
               void updateTeam(team.id, { autoSplitEnabled: next }, db).catch(() => {
-                setAutoSplitEnabled(team.autoSplitEnabled === true);
+                setAutoSplitEnabled(teamFlagsRef.current.autoSplitEnabled === true);
                 setActionError(ACTION_ERROR_COPY);
               });
             }}
             onToggleAutoApprove={(next) => {
               setAutoApproveMutations(next);
               void updateTeam(team.id, { autoApproveMutations: next }, db).catch(() => {
-                setAutoApproveMutations(team.autoApproveMutations === true);
+                setAutoApproveMutations(teamFlagsRef.current.autoApproveMutations === true);
                 setActionError(ACTION_ERROR_COPY);
               });
             }}
