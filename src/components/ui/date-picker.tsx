@@ -280,7 +280,7 @@ export function DatePicker({ width = 'full', style, onChange, value, ...rest }: 
           onClear={allowClear ? () => commit(null) : undefined}
         />
       </Popup>
-    </span>
+    </>
   );
 }
 
@@ -403,6 +403,6 @@ export function DateRangePicker({
           onClear={allowClear ? clear : undefined}
         />
       </Popup>
-    </>
+    </span>
   );
 }
