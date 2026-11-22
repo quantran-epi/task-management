@@ -5,7 +5,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { ModalFuncProps, ModalProps as AntModalProps } from 'antd';
-import { classNames } from './native/classNames';
+import { classNames, domProps } from './native/classNames';
 import { DialogSurface, type DialogCloseReason } from './native/dialog';
 import {
   createImperativeChannel,
@@ -162,7 +162,7 @@ export function Modal({
         onCancel?.(new MouseEvent('click') as never);
       }}
     >
-      <div {...withoutUndefined(rest)}>{children}</div>
+      <div {...domProps(rest)}>{children}</div>
     </DialogSurface>
   );
 }

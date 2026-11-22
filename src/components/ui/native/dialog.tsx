@@ -79,6 +79,14 @@ function DialogSurface({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  // Capture the opener during render, before React's commitMount applies a
+  // child's autoFocus; layout effects already run too late (NAT-02 focus restore).
+  const previouslyOpenRef = useRef(false);
+  if (open && !previouslyOpenRef.current && typeof document !== 'undefined') {
+    triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+  previouslyOpenRef.current = open;
+
   const close = useCallback((reason: DialogCloseReason) => {
     onCloseRef.current?.(reason);
     triggerRef.current?.focus();
@@ -90,7 +98,6 @@ function DialogSurface({
     if (!dialog) return;
 
     if (!wasOpenRef.current) {
-      triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       wasOpenRef.current = true;
       const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE);
       (firstFocusable ?? dialog).focus();
@@ -99,6 +106,9 @@ function DialogSurface({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key === 'Escape' && closable) {
+        // An inner BODY-portal popup (Select/DatePicker/Dropdown) owns Escape
+        // while open; dismissing the dialog too would lose the caller's form.
+        if (document.querySelector('[role="dialog"][data-positioned]')) return;
         const dialogs = document.querySelectorAll('[role="dialog"][data-oi-control][data-state="open"]');
         if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== dialog) return;
         event.preventDefault();

@@ -144,7 +144,7 @@ export function DatePicker({ width = 'full', style, onChange, value, ...rest }: 
         onClick={() => { if (rest.disabled !== true) setOpen(!open); }}
         onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
           if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); }
-          if (event.key === 'Escape') { setOpen(false); anchorRef.current?.focus(); }
+          if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); anchorRef.current?.focus(); }
         }}
       />
       <Popup
@@ -228,7 +228,7 @@ export function DateRangePicker({
           onClick={() => { setActive(index); setOpen(true); }}
           onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
             if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); }
-            if (event.key === 'Escape') { setOpen(false); anchorRef.current?.focus(); }
+            if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); setOpen(false); anchorRef.current?.focus(); }
           }}
         />
       ))}

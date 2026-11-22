@@ -11,6 +11,11 @@ export function createFocusRestorer(): () => void {
     if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
       setTimeout(() => {
         try {
+          // Native DialogSurface already restores focus to the real trigger.
+          // Never steal it back to a node that is inside a closing dialog or
+          // has already unmounted.
+          if (!previousActiveElement.isConnected) return;
+          if (previousActiveElement.closest('[data-oi-control="dialog"]')) return;
           previousActiveElement.focus();
         } catch {
           // Element may have unmounted or become disabled
