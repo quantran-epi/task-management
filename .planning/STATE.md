@@ -117,6 +117,7 @@ Progress: [█████████░] 91%
 | 261121-hza | Sửa seen receipt cho lead reply xếp hàng, bỏ nhãn untrusted cho lệnh hiện tại, prompt ủy thác code_edit cho Agent Developer | 2026-11-21 | e1b0c0ba | [261121-hza-fix-ai-team-seen-receipts-untrusted-inst](./quick/261121-hza-fix-ai-team-seen-receipts-untrusted-inst/) |
 | 261121-qpp | Resolve Agent Developer worktree repo từ system link trực tiếp hoặc CR targets; nhiều ứng viên thì lead hỏi tên hệ thống | 2026-11-21 | f5efc9be | [261121-qpp-resolve-agent-developer-worktree-repo-fr](./quick/261121-qpp-resolve-agent-developer-worktree-repo-fr/) |
 | 261121-r78 | Hiện lỗi local (worktree/config/SSH) thật trong bubble agent; lỗi provider vẫn sanitized | 2026-11-21 | 1d7bd676 | [261121-r78-show-truthful-local-errors-instead-of-ge](./quick/261121-r78-show-truthful-local-errors-instead-of-ge/) |
+| 261122-ut7 | Verify and fix 4 code-review findings in TS team/AI workspace | 2026-11-22 | 40e04955, d3aeef22 | [261122-ut7-verify-and-fix-4-code-review-findings-in](./quick/261122-ut7-verify-and-fix-4-code-review-findings-in/) |
 
 ## Accumulated Context
 
