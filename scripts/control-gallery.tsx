@@ -17,6 +17,9 @@ function ButtonFixture() {
       <Button loading aria-label="Loading">Loading</Button>
       <Button aria-pressed={pressed} onClick={() => setPressed(!pressed)}>Selected</Button>
       <IconButton aria-label="Settings" icon={<span>⚙</span>} />
+      <IconButton aria-label="Refreshing" loading icon={<span>⟳</span>} />
+      <IconButton aria-label="Small settings" size="small" icon={<span>⚙</span>} />
+      <Button loading aria-label="Loading label">Lưu thay đổi</Button>
     </>
   );
 }
