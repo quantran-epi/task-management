@@ -1,0 +1,47 @@
+[
+  {
+    "state": "default",
+    "action": "click",
+    "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "asserted": true,
+    "reference": "observed via [data-oi-control=\"button\"] after real click",
+    "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+  },
+  {
+    "state": "hover",
+    "action": "hover",
+    "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "asserted": true,
+    "reference": "observed via [data-oi-control=\"button\"] after real hover",
+    "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+  },
+  {
+    "state": "default",
+    "action": "click",
+    "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "asserted": true,
+    "reference": "observed via [data-oi-control=\"button\"] after real click",
+    "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+  },
+  {
+    "state": "hover",
+    "action": "hover",
+    "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+    "asserted": true,
+    "reference": "observed via [data-oi-control=\"button\"] after real hover",
+    "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+  },
+  {
+    "state": "default",
+    "action": "click",
+    "before": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
+    "after": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
+    "asserted": true,
+    "reference": "observed via [data-oi-control=\"button\"] after real click",
+    "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+  }
+]

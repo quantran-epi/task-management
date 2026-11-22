@@ -1,0 +1,99 @@
+{
+  "id": "button",
+  "chromeTabUrl": "http://127.0.0.1:5173/task-management/",
+  "seedDescription": "Fixture button — seed tĩnh do executor định nghĩa, không eval",
+  "geometry": {
+    "reference": {
+      "width": 1440,
+      "height": 28,
+      "fontSize": "13px",
+      "padding": "0px",
+      "margin": "0px",
+      "border": "0px none rgb(0, 0, 0)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "alignment": "flex/normal/normal",
+      "overflow": "visible/visible",
+      "screenshotHash": "95447dcf4eeea7a3"
+    },
+    "proof": {
+      "width": 1440,
+      "height": 28,
+      "fontSize": "13px",
+      "padding": "0px",
+      "margin": "12px 0px 0px",
+      "border": "0px none rgb(0, 0, 0)",
+      "borderRadius": "0px",
+      "boxShadow": "none",
+      "alignment": "flex/center/normal",
+      "overflow": "visible/visible",
+      "screenshotHash": "944e3040953241ed"
+    },
+    "wrapper": {
+      "width": 105.91,
+      "height": 24,
+      "fontSize": "12px",
+      "padding": "0px 7px",
+      "margin": "0px",
+      "border": "0px none rgb(95, 98, 105)",
+      "borderRadius": "3px",
+      "boxShadow": "rgb(209, 211, 217) 0px 0px 0px 1px inset",
+      "iconWidth": 14,
+      "iconHeight": 14,
+      "alignment": "flex/center/center",
+      "overflow": "visible/visible",
+      "screenshotHash": "9bf9e81518bdd3ed"
+    }
+  },
+  "interactions": [
+    {
+      "state": "default",
+      "action": "click",
+      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "asserted": true,
+      "reference": "observed via [data-oi-control=\"button\"] after real click",
+      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+    },
+    {
+      "state": "hover",
+      "action": "hover",
+      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "asserted": true,
+      "reference": "observed via [data-oi-control=\"button\"] after real hover",
+      "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+    },
+    {
+      "state": "default",
+      "action": "click",
+      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "asserted": true,
+      "reference": "observed via [data-oi-control=\"button\"] after real click",
+      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+    },
+    {
+      "state": "hover",
+      "action": "hover",
+      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "asserted": true,
+      "reference": "observed via [data-oi-control=\"button\"] after real hover",
+      "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+    },
+    {
+      "state": "default",
+      "action": "click",
+      "before": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
+      "after": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
+      "asserted": true,
+      "reference": "observed via [data-oi-control=\"button\"] after real click",
+      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+    }
+  ],
+  "consoleErrors": [],
+  "focusedTest": "src/components/ui/__tests__/parity-button.test.tsx",
+  "status": "pending-human",
+  "humanVerdict": null
+}

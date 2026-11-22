@@ -1,0 +1,15 @@
+{
+  "width": 105.91,
+  "height": 24,
+  "fontSize": "12px",
+  "padding": "0px 7px",
+  "margin": "0px",
+  "border": "0px none rgb(154, 168, 189)",
+  "borderRadius": "3px",
+  "boxShadow": "rgb(64, 67, 74) 0px 0px 0px 1px inset",
+  "iconWidth": 14,
+  "iconHeight": 14,
+  "alignment": "flex/center/center",
+  "overflow": "visible/visible",
+  "screenshotHash": "62a0451b0e835a5c"
+}
