@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Input, Button, Space, Tag, Empty, Popconfirm, Tooltip, Card, useAntdToken, useMessage, EmptyImageSimple, Text } from '../components/ui';
-import { SearchOutlined, PlusOutlined, PushpinFilled, PushpinOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined, CloseCircleOutlined, CloseOutlined } from '../components/ui/icon';
+import { SearchInput, Button, Space, Tag, Empty, Popconfirm, Tooltip, Card, useAntdToken, useMessage, EmptyImageSimple, Text } from '../components/ui';
+import { PlusOutlined, PushpinFilled, PushpinOutlined, EditOutlined, DeleteOutlined, PaperClipOutlined, CloseCircleOutlined, CloseOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, NoteEntityType } from '../types/models';
@@ -324,13 +324,10 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
           </Space>
         </div>
 
-        <Input
-          size="small"
+        <SearchInput
           placeholder="Tìm nội dung, ảnh, ghi chú..."
-          prefix={<SearchOutlined style={{ color: 'var(--fg-muted)' }} />}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
-          allowClear
         />
 
         {activeFilter && (
@@ -377,7 +374,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
         {filteredNotes.length === 0 ? (
           <Empty
             image={EmptyImageSimple}
-            description="Không có ghi chú nào"
+            description={searchText.trim() ? 'Không tìm thấy ghi chú phù hợp' : 'Không có ghi chú nào'}
             style={{ marginTop: 40 }}
           />
         ) : (
