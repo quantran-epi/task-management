@@ -1,5 +1,6 @@
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import dayjs from 'dayjs';
 import { TimePicker, TimeRangePicker } from '../time-picker';
 
@@ -61,6 +62,51 @@ describe('native TimePicker', () => {
 
     expect(rangePopup()).toBeNull();
     outside.remove();
+    view.unmount();
+  });
+
+  it('TimeRangePicker keeps the first end with a gated controlled caller (WR-03)', async () => {
+    const onChange = vi.fn();
+    type Pair = [dayjs.Dayjs | null, dayjs.Dayjs | null];
+    // Caller ignores a half-built range until both ends exist (FeasibilityModal).
+    function GatedCaller() {
+      const [value, setValue] = useState<Pair | null>(null);
+      return (
+        <TimeRangePicker
+          value={value}
+          format="HH:mm"
+          onChange={(dates) => {
+            onChange(dates);
+            if (dates && dates[0] && dates[1]) setValue(dates as Pair);
+          }}
+        />
+      );
+    }
+    const view = render(<GatedCaller />);
+    const inputs = view.container.querySelectorAll('[data-oi-control="time-picker"]');
+    const pickHour = (text: string) => {
+      const column = document.querySelector('[aria-label="Giờ"]') as HTMLElement;
+      const option = Array.from(column.querySelectorAll('[data-oi-control="list-row"]'))
+        .find((row) => row.textContent === text) as HTMLElement;
+      fireEvent.click(option);
+    };
+
+    // First pick on start input: 08:00. Caller ignores the half range.
+    fireEvent.focus(inputs[0]!);
+    pickHour('08');
+    const first = onChange.mock.calls.at(-1)![0];
+    expect(first[0]?.format('HH:mm')).toBe('08:00');
+    expect(first[1]).toBeNull();
+
+    // Flush the focus-restore guard microtask before the second focus.
+    await Promise.resolve();
+
+    // Second pick on end input: 14:00. Draft must carry the first end.
+    fireEvent.focus(inputs[1]!);
+    pickHour('14');
+    const second = onChange.mock.calls.at(-1)![0];
+    expect(second[0]?.format('HH:mm')).toBe('08:00');
+    expect(second[1]?.format('HH:mm')).toBe('14:00');
     view.unmount();
   });
 

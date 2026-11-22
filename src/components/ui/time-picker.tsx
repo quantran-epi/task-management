@@ -236,6 +236,15 @@ export function TimeRangePicker({
     display(range[0] as Dayjs | null, format),
     display(range[1] as Dayjs | null, format),
   ]);
+  // Keep drafts aligned with an externally changed value (reset/preset), same
+  // contract as DateRangePicker. A gated caller that ignores a half-range never
+  // changes `value`, so its locally built first end survives in drafts (WR-03).
+  useEffect(() => {
+    setDrafts([
+      display(range[0] as Dayjs | null, format),
+      display(range[1] as Dayjs | null, format),
+    ]);
+  }, [range[0], range[1], format]);
   const [active, setActive] = useState<0 | 1>(0);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [rangeLead, setRangeLead] = useState<[number, number, number]>([0, 0, 0]);
@@ -245,7 +254,14 @@ export function TimeRangePicker({
   const grid = ranges(format);
 
   function commitIndex(index: 0 | 1, next: Dayjs | null) {
-    const pair: [Dayjs | null, Dayjs | null] = index === 0 ? [next, range[1] as Dayjs | null] : [range[0] as Dayjs | null, next];
+    // Build from parsed drafts, not raw props: a gated caller that ignores a
+    // half-range still keeps the first pick in drafts (WR-03).
+    const parsedDraft = (s: string) => (s ? dayjs(s, format, true) : null);
+    const first = parsedDraft(drafts[0]);
+    const second = parsedDraft(drafts[1]);
+    const pair: [Dayjs | null, Dayjs | null] = index === 0
+      ? [next, second?.isValid() ? second : null]
+      : [first?.isValid() ? first : null, next];
     (onChange as ((value: [Dayjs | null, Dayjs | null] | null) => void) | undefined)?.(pair);
   }
 
