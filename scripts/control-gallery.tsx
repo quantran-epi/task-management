@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, IconButton, Input, InputPassword, InputSearch, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Button, IconButton, Input, InputPassword, InputSearch, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -37,7 +37,18 @@ function InputFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture };
+function TextareaFixture() {
+  const [value, setValue] = React.useState('Ghi chú\nDòng thứ hai');
+  return (
+    <div style={{ display: 'grid', gap: 12, maxWidth: 320 }}>
+      <label>Ghi chú<Textarea value={value} onChange={(e) => setValue(e.target.value)} /></label>
+      <label>Không hợp lệ<Textarea defaultValue="Lỗi" aria-invalid status="error" /></label>
+      <label>Vô hiệu hoá<Textarea defaultValue="Không sửa" disabled /></label>
+    </div>
+  );
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);

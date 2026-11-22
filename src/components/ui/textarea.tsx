@@ -28,7 +28,8 @@ export const Textarea = forwardRef<TextAreaRef, TextareaProps>(function Textarea
   };
   const invalid = status === 'error' || rest['aria-invalid'] === true;
   const rows = typeof resolvedAutoSize === 'object' ? resolvedAutoSize.minRows ?? DEFAULT_TEXTAREA_MIN_ROWS : undefined;
-  const text = rest.value === undefined || rest.value === null ? '' : String(rest.value);
+  const uncontrolled = rest.value === undefined || rest.value === null;
+  const text = uncontrolled ? '' : String(rest.value);
   const countText = showCount
     ? `${text.length}${rest.maxLength !== undefined ? `/${rest.maxLength}` : ''}`
     : null;
@@ -43,6 +44,8 @@ export const Textarea = forwardRef<TextAreaRef, TextareaProps>(function Textarea
 
   const merged = withoutUndefined({
     ...rest,
+    value: uncontrolled ? undefined : text,
+    defaultValue: uncontrolled ? (rest.defaultValue as string | number | readonly string[] | undefined) : undefined,
     'aria-invalid': invalid || undefined,
     className: classNames(
       styles.input,
