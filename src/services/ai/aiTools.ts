@@ -4,6 +4,7 @@ import { APP_NAME } from '../../constants/app';
 import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
 import { getTodayDateString } from '../../utils/date';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 import { wrapField } from './untrustedData';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
@@ -2443,13 +2444,13 @@ export async function executeAiTool(
         }
 
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           tasks = tasks.filter(
             (t) =>
-              t.name.toLowerCase().includes(q) ||
-              (t.description && t.description.toLowerCase().includes(q)) ||
-              (t.notes && t.notes.toLowerCase().includes(q)) ||
-              (t.jiraKey && t.jiraKey.toLowerCase().includes(q))
+              searchIncludes(t.name, q) ||
+              (t.description && searchIncludes(t.description, q)) ||
+              (t.notes && searchIncludes(t.notes, q)) ||
+              (t.jiraKey && searchIncludes(t.jiraKey, q))
           );
         }
 
@@ -2558,12 +2559,12 @@ export async function executeAiTool(
           );
         }
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           changeRequests = changeRequests.filter(
             (c) =>
-              c.code.toLowerCase().includes(q) ||
-              c.name.toLowerCase().includes(q) ||
-              (c.description && c.description.toLowerCase().includes(q))
+              searchIncludes(c.code, q) ||
+              searchIncludes(c.name, q) ||
+              (c.description && searchIncludes(c.description, q))
           );
         }
 
@@ -2618,9 +2619,9 @@ export async function executeAiTool(
           );
         }
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           systems = systems.filter(
-            (s) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
+            (s) => searchIncludes(s.code, q) || searchIncludes(s.name, q)
           );
         }
 
@@ -2821,11 +2822,11 @@ export async function executeAiTool(
           sessions = sessions.filter((s) => s.date <= args.endDate);
         }
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           sessions = sessions.filter((s) => {
-            const taskName = taskMap.get(s.taskId)?.name?.toLowerCase() || '';
-            const note = s.note?.toLowerCase() || '';
-            return taskName.includes(q) || note.includes(q);
+            const taskName = taskMap.get(s.taskId)?.name || '';
+            const note = s.note || '';
+            return searchIncludes(taskName, q) || searchIncludes(note, q);
           });
         }
         if (typeof args.minDuration === 'number') {
@@ -3213,11 +3214,11 @@ export async function executeAiTool(
           notes = notes.filter((n) => (n.updatedAt || '').slice(0, 10) <= boundary);
         }
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           notes = notes.filter(
             (n) =>
-              (n.title && n.title.toLowerCase().includes(q)) ||
-              (n.body && n.body.toLowerCase().includes(q))
+              (n.title && searchIncludes(n.title, q)) ||
+              (n.body && searchIncludes(n.body, q))
           );
         }
 
@@ -3301,8 +3302,8 @@ export async function executeAiTool(
           );
         }
         if (args.title) {
-          const q = String(args.title).toLowerCase();
-          diagrams = diagrams.filter((n) => (n.title || '').toLowerCase().includes(q));
+          const q = foldForSearch(String(args.title));
+          diagrams = diagrams.filter((n) => searchIncludes(n.title || '', q));
         }
         if (args.entityType) {
           diagrams = diagrams.filter((n) => n.entityType === args.entityType);
@@ -3575,13 +3576,13 @@ export async function executeAiTool(
           );
         }
         if (args.search) {
-          const q = String(args.search).toLowerCase();
+          const q = foldForSearch(String(args.search));
           recurring = recurring.filter(
             (t) =>
-              t.name.toLowerCase().includes(q) ||
-              (t.description && t.description.toLowerCase().includes(q)) ||
-              (t.notes && t.notes.toLowerCase().includes(q)) ||
-              (t.jiraKey && t.jiraKey.toLowerCase().includes(q))
+              searchIncludes(t.name, q) ||
+              (t.description && searchIncludes(t.description, q)) ||
+              (t.notes && searchIncludes(t.notes, q)) ||
+              (t.jiraKey && searchIncludes(t.jiraKey, q))
           );
         }
 

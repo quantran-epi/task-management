@@ -7,6 +7,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
 import type { NavigateFunction } from '../../types/navigation';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -186,7 +187,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   // Dynamic search items with prefix filtering
   const filteredItems = useMemo<PaletteItem[]>(() => {
     const raw = query.trim();
-    const q = raw.toLowerCase();
+    const q = foldForSearch(raw);
 
     // Check prefixes
     const isViewOnly = q.startsWith('>') || q.startsWith('/');
@@ -316,23 +317,23 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     // Filter by specific prefix
     if (isViewOnly) {
       if (!cleanQuery) return staticItems;
-      return staticItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+      return staticItems.filter((i) => searchIncludes(i.title, cleanQuery) || (i.subtitle && searchIncludes(i.subtitle, cleanQuery)));
     }
 
     if (isTaskOnly) {
       if (!cleanQuery) return taskItems.slice(0, 10);
-      return taskItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+      return taskItems.filter((i) => searchIncludes(i.title, cleanQuery) || (i.subtitle && searchIncludes(i.subtitle, cleanQuery)));
     }
 
     if (isCrOnly) {
       const combined = [...crItems, ...systemItems];
       if (!cleanQuery) return combined.slice(0, 10);
-      return combined.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+      return combined.filter((i) => searchIncludes(i.title, cleanQuery) || (i.subtitle && searchIncludes(i.subtitle, cleanQuery)));
     }
 
     if (isNoteOnly) {
       if (!cleanQuery) return noteItems.slice(0, 10);
-      return noteItems.filter((i) => i.title.toLowerCase().includes(cleanQuery) || i.subtitle?.toLowerCase().includes(cleanQuery));
+      return noteItems.filter((i) => searchIncludes(i.title, cleanQuery) || (i.subtitle && searchIncludes(i.subtitle, cleanQuery)));
     }
 
     // Default global search
@@ -344,8 +345,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
     const matched = all.filter(
       (item) =>
-        item.title.toLowerCase().includes(cleanQuery) ||
-        (item.subtitle && item.subtitle.toLowerCase().includes(cleanQuery))
+        searchIncludes(item.title, cleanQuery) ||
+        (item.subtitle && searchIncludes(item.subtitle, cleanQuery))
     );
 
     if (cleanQuery.length > 0) {

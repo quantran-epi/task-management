@@ -6,6 +6,7 @@ import { createNote, updateNote, addNoteAttachment } from '../../db/repositories
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { NoteAttachmentsPanel } from './NoteAttachmentsPanel';
 import { isModPressed } from '../../utils/keyboard';
+import { searchIncludes } from '../../utils/searchText';
 
 export interface NoteEditorProps {
   open: boolean;
@@ -222,7 +223,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <Select
               showSearch
               filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                searchIncludes(option?.label ?? '', input)
               }
               placeholder={currentEntityType ? 'Chọn thực thể...' : 'Không cần chọn'}
               disabled={!currentEntityType}

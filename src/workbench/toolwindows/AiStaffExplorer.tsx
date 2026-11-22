@@ -23,6 +23,7 @@ import { SkillEditorDrawer } from '../../components/ai/office/SkillEditorDrawer'
 import { AiStaffImportModal } from '../../components/ai/office/AiStaffImportModal';
 import { deleteFailureMessage } from '../../components/ai/office/deleteRefusalMessage';
 import type { AiSkill } from '../../types/aiOffice';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface AiStaffExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -51,9 +52,9 @@ export const AiStaffExplorer: React.FC<AiStaffExplorerProps> = ({ db = defaultDb
   const pendingRows =
     useLiveQuery(() => db.aiSkillVersions.where('status').equals('pending').toArray(), [db]) ?? [];
 
-  const query = search.trim().toLowerCase();
+  const query = foldForSearch(search);
   const matches = (...values: Array<string | undefined>) =>
-    !query || values.some((val) => (val ?? '').toLowerCase().includes(query));
+    !query || values.some((val) => searchIncludes(val ?? '', query));
 
   const filteredEmployees = useMemo(
     () => employees.filter((e) => matches(e.name, e.role, e.model)),

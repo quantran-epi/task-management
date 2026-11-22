@@ -13,6 +13,7 @@ import {
 } from '../../utils/worklog';
 import { createWorkSession } from '../../db/repositories/workSessionRepo';
 import { WorkSessionDetailModal } from './WorkSessionDetailModal';
+import { searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -481,7 +482,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
             placeholder="Thêm tác vụ vào bảng..."
             style={{ width: 280 }}
             filterOption={(input, option) =>
-              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+              searchIncludes(option?.label as string ?? '', input)
             }
             options={candidateTasksToAdd.map((t) => ({
               value: t.id,

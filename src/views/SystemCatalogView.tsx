@@ -10,6 +10,7 @@ import { SystemTable } from '../components/systems/SystemTable';
 import { SystemModal } from '../components/systems/SystemModal';
 import { useSystemTypeOptions } from '../services/system/systemTypeSettings';
 import type { System } from '../types/models';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 export interface SystemCatalogViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -49,13 +50,13 @@ export const SystemCatalogView: React.FC<SystemCatalogViewProps> = ({ db = defau
       list = list.filter((s) => s.type === typeFilter);
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+      const q = foldForSearch(searchQuery);
       list = list.filter(
         (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.code.toLowerCase().includes(q) ||
-          (s.description && s.description.toLowerCase().includes(q)) ||
-          (s.remoteRepoPath && s.remoteRepoPath.toLowerCase().includes(q))
+          searchIncludes(s.name, q) ||
+          searchIncludes(s.code, q) ||
+          (s.description && searchIncludes(s.description, q)) ||
+          (s.remoteRepoPath && searchIncludes(s.remoteRepoPath, q))
       );
     }
     return list;

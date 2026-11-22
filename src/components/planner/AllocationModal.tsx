@@ -12,6 +12,7 @@ import { formatMinutes } from '../../utils/time';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import type { Task, TaskPriority, ChangeRequest } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -241,7 +242,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
               }
             }}
             filterOption={(input, option) =>
-              ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+              searchIncludes(option?.label as string ?? '', input)
             }
             options={(changeRequests ?? []).map((cr) => ({
               value: cr.id,
@@ -263,12 +264,12 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             optionFilterProp="label"
             aria-label="Chọn tác vụ"
             filterOption={(input, option) => {
-              const search = input.toLowerCase();
+              const search = foldForSearch(input);
               const task = (filteredActiveTasks ?? []).find((t) => t.id === option?.value);
               if (!task) return false;
-              const taskMatch = task.name.toLowerCase().includes(search);
+              const taskMatch = searchIncludes(task.name, search);
               const cr = task.crId ? crMap.get(task.crId) : undefined;
-              const crMatch = cr ? (cr.code || cr.name).toLowerCase().includes(search) : false;
+              const crMatch = cr ? searchIncludes(cr.code || cr.name, search) : false;
               return taskMatch || crMatch;
             }}
             options={filteredActiveTasks.map((t) => {

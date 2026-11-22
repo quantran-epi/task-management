@@ -3,6 +3,7 @@ import { Button, Input, Modal, Select, useAntdToken } from '../../ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
 import type { AiTeamLinkItemType } from '../../../types/aiOffice';
+import { foldForSearch, searchIncludes } from '../../../utils/searchText';
 
 export interface LinkedItemCandidate {
   id: string;
@@ -62,9 +63,9 @@ export const LinkedItemPicker: React.FC<LinkedItemPickerProps> = ({ open, db, on
   }, [db, itemType, open]) ?? [];
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldForSearch(query);
     if (!q) return candidates;
-    return candidates.filter((row) => row.name.toLowerCase().includes(q));
+    return candidates.filter((row) => searchIncludes(row.name, q));
   }, [candidates, query]);
 
   return (

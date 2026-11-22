@@ -12,6 +12,7 @@ import { useActionRegistry, executeAction, type ActionNotify } from '../actions/
 import { useMessage } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export type SearchTabType = 'all' | 'tasks' | 'cr' | 'docs' | 'systems' | 'actions';
 
@@ -87,14 +88,14 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const filteredItems = useMemo<SearchResultItem[]>(() => {
     const trimmed = query.trim();
     const isActionQuery = trimmed.startsWith('>');
-    const searchKeyword = isActionQuery ? trimmed.slice(1).trim().toLowerCase() : trimmed.toLowerCase();
+    const searchKeyword = foldForSearch(isActionQuery ? trimmed.slice(1) : trimmed);
 
     const items: SearchResultItem[] = [];
 
     // 1. Actions
     if (activeTab === 'all' || activeTab === 'actions' || isActionQuery) {
       for (const act of allActions) {
-        if (!searchKeyword || act.title.toLowerCase().includes(searchKeyword) || act.category.toLowerCase().includes(searchKeyword)) {
+        if (!searchKeyword || searchIncludes(act.title, searchKeyword) || searchIncludes(act.category, searchKeyword)) {
           items.push({
             id: `action:${act.id}`,
             category: 'action',
@@ -119,7 +120,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     if (activeTab === 'all' || activeTab === 'tasks') {
       for (const task of tasks) {
         const taskTitle = task.name || 'Untitled Task';
-        if (!searchKeyword || taskTitle.toLowerCase().includes(searchKeyword)) {
+        if (!searchKeyword || searchIncludes(taskTitle, searchKeyword)) {
           items.push({
             id: `task:${task.id}`,
             category: 'task',
@@ -144,7 +145,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     if (activeTab === 'all' || activeTab === 'cr') {
       for (const cr of changeRequests) {
         const crTitle = cr.code || cr.name;
-        if (!searchKeyword || crTitle.toLowerCase().includes(searchKeyword) || cr.name.toLowerCase().includes(searchKeyword)) {
+        if (!searchKeyword || searchIncludes(crTitle, searchKeyword) || searchIncludes(cr.name, searchKeyword)) {
           items.push({
             id: `cr:${cr.id}`,
             category: 'cr',
@@ -169,7 +170,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     if (activeTab === 'all' || activeTab === 'docs') {
       for (const note of notes) {
         const noteTitle = note.title || 'Untitled Doc';
-        if (!searchKeyword || noteTitle.toLowerCase().includes(searchKeyword)) {
+        if (!searchKeyword || searchIncludes(noteTitle, searchKeyword)) {
           items.push({
             id: `doc:${note.id}`,
             category: 'doc',
@@ -193,7 +194,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
     // 5. Systems
     if (activeTab === 'all' || activeTab === 'systems') {
       for (const sys of systems) {
-        if (!searchKeyword || sys.name.toLowerCase().includes(searchKeyword) || sys.code.toLowerCase().includes(searchKeyword)) {
+        if (!searchKeyword || searchIncludes(sys.name, searchKeyword) || searchIncludes(sys.code, searchKeyword)) {
           items.push({
             id: `system:${sys.id}`,
             category: 'system',

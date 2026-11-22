@@ -23,6 +23,7 @@ import {
 import { SkillEditorDrawer } from '../components/ai/office/SkillEditorDrawer';
 import { AiStaffImportModal } from '../components/ai/office/AiStaffImportModal';
 import type { AiEmployee, AiLead, AiSkill } from '../types/aiOffice';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 export interface AiOfficeViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -110,9 +111,9 @@ export const AiOfficeView: React.FC<AiOfficeViewProps> = ({ db = defaultDb }) =>
     return counts;
   }, [pendingRows]);
 
-  const query = search.trim().toLowerCase();
+  const query = foldForSearch(search);
   const matches = (...values: Array<string | undefined>) =>
-    !query || values.some((value) => (value ?? '').toLowerCase().includes(query));
+    !query || values.some((value) => searchIncludes(value ?? '', query));
 
   const visibleEmployees = employees.filter((e) => matches(e.name, e.role));
   const visibleLeads = leads.filter((l) => matches(l.name, l.role));

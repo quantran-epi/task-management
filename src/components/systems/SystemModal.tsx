@@ -14,6 +14,7 @@ import {
   useSystemTypeOptions,
 } from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface SystemModalProps {
   open: boolean;
@@ -170,11 +171,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
             options={typeOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
             placeholder="Chọn hoặc nhập loại hệ thống mới"
             filterOption={(input, option) => {
-              const q = String(input ?? '').toLowerCase();
+              const q = foldForSearch(String(input ?? ''));
               const opt = typeOptions.find((o) => o.value === option?.value);
               return (
-                String(option?.value ?? '').toLowerCase().includes(q) ||
-                (opt?.label ?? '').toLowerCase().includes(q)
+                searchIncludes(String(option?.value ?? ''), q) ||
+                searchIncludes(opt?.label ?? '', q)
               );
             }}
             onChange={(typed) => {

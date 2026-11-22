@@ -8,6 +8,7 @@ import type { Task, ChangeRequest, System, Note } from '../../types/models';
 import { isTauriApp } from '../../utils/timerPopout';
 import { readBrowserFileText } from '../../services/ai/browserFileReader';
 import { agentColorFor, agentTextColorFor } from './office/AgentAttributionRow';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface ChatInputBarProps {
   onSubmit: (text: string) => void;
@@ -398,21 +399,19 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
   const options = useMemo(() => {
     const { prefix, text } = searchInfo;
-    const q = text.trim().toLowerCase();
+    const q = foldForSearch(text);
 
     if (prefix === '@') {
       const isDocMode = text.startsWith('doc:') || text.startsWith('doc');
 
       if (isDocMode) {
-        const docQuery = text.startsWith('doc:')
-          ? text.slice(4).trim().toLowerCase()
-          : text.slice(3).replace(/^[:\s]+/, '').trim().toLowerCase();
+        const docQuery = foldForSearch(text.startsWith('doc:') ? text.slice(4) : text.slice(3).replace(/^[:\s]+/, ''));
 
         const docOptions = documents
           .filter((d) => {
             if (!docQuery) return true;
-            const titleMatch = d.title?.toLowerCase().includes(docQuery);
-            const tagMatch = d.tags?.some((t) => t.toLowerCase().includes(docQuery));
+            const titleMatch = d.title && searchIncludes(d.title, docQuery);
+            const tagMatch = d.tags?.some((t) => searchIncludes(t, docQuery));
             return Boolean(titleMatch || tagMatch);
           })
           .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
@@ -477,7 +476,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         .filter((agent) => {
           if (!q) return true;
           return (
-            agent.name.toLowerCase().includes(q) || agent.role.toLowerCase().includes(q)
+            searchIncludes(agent.name, q) || searchIncludes(agent.role, q)
           );
         })
         .sort((a, b) => {
@@ -516,8 +515,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           if (t.status === 'Cancelled') return false;
           if (!q) return true;
           return (
-            t.name.toLowerCase().includes(q) ||
-            (t.jiraKey && t.jiraKey.toLowerCase().includes(q))
+            searchIncludes(t.name, q) ||
+            (t.jiraKey && searchIncludes(t.jiraKey, q))
           );
         })
         .sort((a, b) => {
@@ -612,8 +611,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           if (c.status === 'Cancelled') return false;
           if (!q) return true;
           return (
-            c.code.toLowerCase().includes(q) ||
-            c.name.toLowerCase().includes(q)
+            searchIncludes(c.code, q) ||
+            searchIncludes(c.name, q)
           );
         })
         .sort((a, b) => {
@@ -669,8 +668,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         .filter((sys) => {
           if (!q) return true;
           return (
-            sys.code.toLowerCase().includes(q) ||
-            sys.name.toLowerCase().includes(q)
+            searchIncludes(sys.code, q) ||
+            searchIncludes(sys.name, q)
           );
         })
         .sort((a, b) => a.code.localeCompare(b.code))
@@ -722,8 +721,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       return COMMANDS.filter((cmd) => {
         if (!q) return true;
         return (
-          cmd.name.toLowerCase().includes(q) ||
-          cmd.description.toLowerCase().includes(q)
+          searchIncludes(cmd.name, q) ||
+          searchIncludes(cmd.description, q)
         );
       }).map((cmd) => ({
         key: `cmd-${cmd.name}`,

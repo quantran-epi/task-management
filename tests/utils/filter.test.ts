@@ -215,6 +215,29 @@ describe('filterTasks', () => {
   });
 });
 
+describe('filterTasks Vietnamese search folding', () => {
+  const vietnameseTasks: Task[] = [
+    { ...sampleTasks[0]!, id: 'v-uu', name: 'Việc Ưu tiên' },
+    { ...sampleTasks[0]!, id: 'v-u', name: 'Công việc Ũ' },
+    { ...sampleTasks[0]!, id: 'v-duong', name: 'đường dẫn' },
+  ];
+
+  it('matches U/Ư/Ũ/đ variants and trims query whitespace', () => {
+    expect(
+      filterTasks(vietnameseTasks, { ...DEFAULT_TASK_FILTER_STATE, search: 'uu' }, today).map((t) => t.id)
+    ).toEqual(['v-uu']);
+    expect(
+      filterTasks(vietnameseTasks, { ...DEFAULT_TASK_FILTER_STATE, search: 'u' }, today).map((t) => t.id)
+    ).toEqual(['v-uu', 'v-u', 'v-duong']);
+    expect(
+      filterTasks(vietnameseTasks, { ...DEFAULT_TASK_FILTER_STATE, search: 'DUONG' }, today).map((t) => t.id)
+    ).toEqual(['v-duong']);
+    expect(
+      filterTasks(vietnameseTasks, { ...DEFAULT_TASK_FILTER_STATE, search: '  ũ  ' }, today).map((t) => t.id)
+    ).toEqual(['v-uu', 'v-u', 'v-duong']);
+  });
+});
+
 describe('matchesHorizon', () => {
   it('correctly matches Overdue, Today, and This Week without timezone drift per D-17', () => {
     // Overdue: deadline < today

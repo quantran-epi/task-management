@@ -3,6 +3,7 @@ import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, Dropdown, 
 import type { MenuProps } from 'antd';
 import { ReloadOutlined, ExperimentFilled, ExperimentOutlined, ThunderboltFilled, ThunderboltOutlined, ClearOutlined, ApiOutlined, DatabaseOutlined, FolderOpenOutlined, SettingOutlined, MoreOutlined } from '../ui/icon';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
+import { searchIncludes } from '../../utils/searchText';
 
 export interface ChatTabToolboxProps {
   // Tab ID
@@ -309,7 +310,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
               onChange={onModelChange}
               showSearch
               filterOption={(input, option) =>
-                ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+                searchIncludes((option?.label as string) ?? '', input)
               }
               style={{ minWidth: 110, maxWidth: 170, flex: 1 }}
               popupMatchSelectWidth={false}

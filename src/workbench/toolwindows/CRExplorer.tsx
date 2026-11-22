@@ -14,6 +14,7 @@ import { useLayoutStore } from '../store/layoutStore';
 import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import type { DataNode } from 'antd/es/tree';
 import type { ChangeRequest, CrStatus, CrType, Task } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface CRExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -143,8 +144,8 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
   ];
 
   const treeData = useMemo<DataNode[]>(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const matches = (value: string | undefined) => Boolean(q) && Boolean(value) && value!.toLowerCase().includes(q);
+    const q = foldForSearch(searchQuery);
+    const matches = (value: string | undefined) => Boolean(q) && Boolean(value) && searchIncludes(value!, q);
 
     return changeRequests
       .map((cr) => {

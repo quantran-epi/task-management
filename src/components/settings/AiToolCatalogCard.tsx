@@ -7,6 +7,7 @@ import {
   type ToolCatalogEntry,
   type ToolCatalogSource,
 } from '../../services/ai/chatTurnTools';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -69,13 +70,11 @@ export const AiToolCatalogCard: React.FC<AiToolCatalogCardProps> = ({ db = defau
   }, [db]);
 
   const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
+    const needle = foldForSearch(search);
     if (!needle) return entries;
-    return entries.filter((entry) => {
-      const name = entry.tool.function.name.toLowerCase();
-      const description = entry.tool.function.description.toLowerCase();
-      return name.includes(needle) || description.includes(needle);
-    });
+    return entries.filter((entry) =>
+      searchIncludes(entry.tool.function.name, needle) || searchIncludes(entry.tool.function.description, needle)
+    );
   }, [entries, search]);
 
   const handleCopy = async () => {

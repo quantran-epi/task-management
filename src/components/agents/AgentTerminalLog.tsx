@@ -9,6 +9,7 @@ import {
   formatDuration,
   formatTokenCount,
 } from '../../utils/agentMetrics';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -452,15 +453,15 @@ export const AgentTerminalLog: React.FC<AgentTerminalLogProps> = ({
   }, [mentionedFilePath, onClearMentionedFile]);
 
   const isSlashCommandPrefix = inputText.startsWith('/') && !inputText.includes(' ');
-  const skillFilter = isSlashCommandPrefix ? inputText.slice(1).toLowerCase().trim() : '';
+  const skillFilter = isSlashCommandPrefix ? foldForSearch(inputText.slice(1)) : '';
 
   const matchingSkills = useMemo(() => {
     if (!isSlashCommandPrefix) return [];
     if (!skillFilter) return availableSkills;
     return availableSkills.filter(
       (s) =>
-        s.name.toLowerCase().includes(skillFilter) ||
-        s.description.toLowerCase().includes(skillFilter)
+        searchIncludes(s.name, skillFilter) ||
+        searchIncludes(s.description, skillFilter)
     );
   }, [isSlashCommandPrefix, skillFilter, availableSkills]);
 

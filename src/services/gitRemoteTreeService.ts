@@ -2,6 +2,7 @@ import type { SshConfig } from '../types/ssh';
 import type { RemoteGitTreeNode, RemoteFilePage } from '../types/gitRemote';
 import { runGitCommand, escapeShellArg } from './gitRemoteService';
 import { execRemoteCommand } from './sshService';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 /**
  * Parses git ls-tree -l output lines:
@@ -202,7 +203,7 @@ export async function searchRemoteTree(
   secret?: string,
   callId?: string
 ): Promise<RemoteTreeSearchResult[]> {
-  const needle = query.trim().toLowerCase();
+  const needle = foldForSearch(query);
   if (!needle || !repoPath.trim() || !ref) return [];
 
   // Literals plus the escaped ref only; the search text is data, filtered below.
@@ -249,7 +250,7 @@ export async function searchRemoteTree(
     const node = parseLsTreeLine(line);
     if (!node || !node.isLeaf) continue; // ls-tree -r lists blobs; folders derive from paths
     const segments = node.key.split('/').filter(Boolean);
-    if (!segments.some((segment) => segment.toLowerCase().includes(needle))) continue;
+    if (!segments.some((segment) => searchIncludes(segment, needle))) continue;
 
     // Derive ancestors first so the final capped file still contributes its folder path.
     let ancestor = '';

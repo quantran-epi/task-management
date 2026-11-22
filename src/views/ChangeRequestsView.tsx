@@ -16,6 +16,7 @@ import { isSubsystem } from '../db/repositories/systemRepo';
 import type { ChangeRequest, CrType } from '../types/models';
 import type { ChangeRequestInput, ChangeRequestUpdate } from '../validation/schemas';
 import { useLayoutStore } from '../workbench/store/layoutStore';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 export interface ChangeRequestsViewProps {
   db?: TaskPlannerDatabase;
@@ -49,10 +50,10 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         }
       }
       if (searchQuery.trim()) {
-        const q = searchQuery.trim().toLowerCase();
-        const matchName = cr.name.toLowerCase().includes(q);
-        const matchCode = cr.code?.toLowerCase().includes(q) ?? false;
-        const matchDesc = cr.description?.toLowerCase().includes(q) ?? false;
+        const q = foldForSearch(searchQuery);
+        const matchName = searchIncludes(cr.name, q);
+        const matchCode = cr.code ? searchIncludes(cr.code, q) : false;
+        const matchDesc = cr.description ? searchIncludes(cr.description, q) : false;
         if (!matchName && !matchCode && !matchDesc) {
           return false;
         }

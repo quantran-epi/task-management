@@ -10,6 +10,7 @@ import type {
   DocumentSetScope,
   Note,
 } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -85,13 +86,13 @@ export function DocumentSetForm({
   // Build hierarchical tree data for document picker
   const treeData = useMemo(() => {
     const activeNotes = notes.filter((n) => !n.deletedAt);
-    const query = searchDocQuery.trim().toLowerCase();
+    const query = foldForSearch(searchDocQuery);
 
     // Matching documents or folders
     const matchesQuery = (n: Note) => {
       if (!query) return true;
-      const titleMatch = (n.title || '').toLowerCase().includes(query);
-      const tagMatch = (n.tags || []).some((t) => t.toLowerCase().includes(query));
+      const titleMatch = searchIncludes(n.title || '', query);
+      const tagMatch = (n.tags || []).some((t) => searchIncludes(t, query));
       return titleMatch || tagMatch;
     };
 
