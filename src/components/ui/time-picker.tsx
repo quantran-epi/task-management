@@ -81,17 +81,19 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
   }
 
   return (
-    <div
-      ref={columnRef}
-      className={classNames(selectStyles.list, calendarStyles.timeColumn)}
-      role="listbox"
-      aria-label={label}
-      aria-activedescendant={`${id}-${activeIndex}`}
-      tabIndex={0}
-      style={{ width: 64, maxHeight: 216 }}
-      onKeyDown={onColumnKeyDown}
-    >
-      <div className={listStyles.sizer} style={{ height: values.length * 24 }}>
+    <div className={calendarStyles.timeColumnWrap}>
+      <div className={calendarStyles.timeColumnLabel}>{label}</div>
+      <div
+        ref={columnRef}
+        className={classNames(selectStyles.list, calendarStyles.timeColumn)}
+        role="listbox"
+        aria-label={label}
+        aria-activedescendant={`${id}-${activeIndex}`}
+        tabIndex={0}
+        style={{ width: 64, maxHeight: 216 }}
+        onKeyDown={onColumnKeyDown}
+      >
+        <div className={listStyles.sizer} style={{ height: values.length * 24 }}>
         {values.map((item, index) => (
           <div
             key={item}
@@ -108,6 +110,7 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
             <span className={selectStyles.optionLabel}>{pad(item)}</span>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

@@ -211,3 +211,13 @@
   overflow: auto;
   flex: 0 0 64px;
 }
+
+.timeColumnWrap { display: flex; flex-direction: column; flex: 0 0 64px; }
+.timeColumnLabel {
+  height: 20px;
+  line-height: 20px;
+  text-align: center;
+  font-size: var(--fs-small);
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--border-popup);
+}
