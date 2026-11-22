@@ -57,13 +57,6 @@
 .tag { display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 9px; font-weight: 650; background: var(--surface-sunken); color: var(--fg-secondary); border: 1px solid var(--border); }
 .tag.branch { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .cz-explorer-controls { padding: 8px; border-bottom: 1px solid var(--border); background: var(--surface-strong); }
-.cz-search-wrap { position: relative; }
-.cz-search-wrap input {
-  width: 100%; height: 26px; padding: 0 8px 0 24px; border-radius: 4px;
-  border: 1px solid var(--border-strong); background: var(--bg); outline: none; font-size: 11px;
-}
-.cz-search-wrap input:focus { border-color: var(--accent); }
-.cz-search-wrap span { position: absolute; left: 8px; top: 4px; color: var(--fg-faint); font-size: 12px; }
 .cz-scope-row { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
 .cz-scope-row .cz-segmented button { padding: 2px 8px; }
 .cz-scope-hint { font-size: 9px; color: var(--fg-faint); margin-left: auto; }

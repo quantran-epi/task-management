@@ -126,6 +126,7 @@ export {
   Input,
   InputPassword,
   InputSearch,
+  SearchInput,
   controlStyle,
   controlWidthStyle,
   type InputProps,

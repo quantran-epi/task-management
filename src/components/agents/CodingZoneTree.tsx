@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { DiffFile } from '../../types/agent';
 import type { WorktreeDescriptor } from '../../types/codingZone';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
+import { SearchInput } from '../ui';
 
 /** Phase 48 D-03: compact SSH worktree tree. All paths/hunks render as escaped text. */
 export interface CodingZoneTreeProps {
@@ -166,17 +167,14 @@ export const CodingZoneTree: React.FC<CodingZoneTreeProps> = ({
         </div>
       </div>
       <div className="cz-explorer-controls">
-        <div className="cz-search-wrap">
-          <span>⌕</span>
-          <input
-            type="text"
-            value={query}
-            placeholder="Tìm file trong worktree..."
-            aria-label="Tìm file trong worktree"
-            data-testid="coding-zone-tree-search"
-            onChange={(event) => onQueryChange(event.target.value)}
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={(event) => onQueryChange(event.target.value)}
+          placeholder="Tìm file trong worktree..."
+          aria-label="Tìm file trong worktree"
+          data-testid="coding-zone-tree-search"
+          size="middle"
+        />
         <div className="cz-scope-row">
           <div className="cz-segmented" role="group" aria-label="Phạm vi cây worktree">
             <button type="button" className={scope === 'diff' ? 'on' : ''} aria-pressed={scope === 'diff'} onClick={() => onScopeChange('diff')}>Diff</button>
@@ -188,8 +186,17 @@ export const CodingZoneTree: React.FC<CodingZoneTreeProps> = ({
       <div className="cz-tree" role="tree" aria-label="Cây worktree SSH" data-testid="coding-zone-tree">
         {visibleFiles.length === 0 ? (
           <div className="cz-empty" data-testid="coding-zone-tree-empty">
-            <strong>{descriptor ? 'Chưa có file thay đổi' : 'Worktree đang tải'}</strong>
-            <p>Chưa có thay đổi trong worktree. Khi agent chỉnh sửa, các file sẽ xuất hiện ở đây.</p>
+            {query.trim() ? (
+              <>
+                <strong>Không tìm thấy file phù hợp</strong>
+                <p>Thử đổi từ khóa hoặc chuyển phạm vi sang Tất cả.</p>
+              </>
+            ) : (
+              <>
+                <strong>{descriptor ? 'Chưa có file thay đổi' : 'Worktree đang tải'}</strong>
+                <p>Chưa có thay đổi trong worktree. Khi agent chỉnh sửa, các file sẽ xuất hiện ở đây.</p>
+              </>
+            )}
           </div>
         ) : renderNodes(tree, 0)}
       </div>

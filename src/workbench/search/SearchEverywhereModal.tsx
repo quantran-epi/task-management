@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { SearchOutlined, ThunderboltOutlined, CloseOutlined } from '../../components/ui/icon';
+import { ThunderboltOutlined, CloseOutlined } from '../../components/ui/icon';
 import {
   JetBrainsTasksIcon,
   JetBrainsProjectIcon,
@@ -9,7 +9,7 @@ import { ApartmentOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useActionRegistry, executeAction, type ActionNotify } from '../actions/actionRegistry';
-import { useMessage } from '../../components/ui';
+import { useMessage, SearchInput } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { VirtualizedList } from '../virtual/VirtualizedList';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
@@ -37,7 +37,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
   const [activeTab, setActiveTab] = useState<SearchTabType>('all');
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<import('antd').InputRef>(null);
 
   const message = useMessage();
   const notify: ActionNotify = (kind, text) => message[kind](text);
@@ -415,41 +415,15 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
             gap: 'var(--gap-10)',
           }}
         >
-          <SearchOutlined style={{ fontSize: 15, color: 'var(--fg-icon)' }} />
-          <input
+          <SearchInput
             ref={inputRef}
-            type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search everywhere, or type '>' for actions..."
-            aria-label="Search input"
-            style={{
-              flex: 1,
-              border: 'none',
-              outline: 'none',
-              fontSize: 'var(--font-size-ui)',
-              fontFamily: 'inherit',
-              color: 'var(--fg-strong)',
-              background: 'transparent',
-            }}
+            placeholder="Tìm kiếm mọi nơi, hoặc gõ '>' để chạy lệnh..."
+            aria-label="Tìm kiếm"
+            size="middle"
           />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery('')}
-              aria-label="Clear search"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                padding: '2px 6px',
-                color: 'var(--fg-muted)',
-              }}
-            >
-              <CloseOutlined style={{ fontSize: 'var(--font-size-small)' }} />
-            </button>
-          )}
         </div>
 
         {/* Search Results List */}
@@ -464,7 +438,7 @@ export function SearchEverywhereModal({ open, onClose, db: propDb }: SearchEvery
               height: 120,
             }}
           >
-            No results found
+            Không tìm thấy kết quả
           </div>
         ) : (
           <VirtualizedList

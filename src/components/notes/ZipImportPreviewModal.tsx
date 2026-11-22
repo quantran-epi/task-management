@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Table, Button, Input, Checkbox, Radio, Select, Typography, Tag, Drawer, Alert, Spin, RadioGroup, InputSearch, useMessage } from '../ui';
+import { Modal, Table, Button, Input, Checkbox, Radio, Select, Typography, Tag, Drawer, Alert, Spin, RadioGroup, SearchInput, useMessage } from '../ui';
 import { FileTextOutlined, EyeOutlined, FolderAddOutlined, CheckCircleOutlined } from '../ui/icon';
 import JSZip from 'jszip';
 import type { Note } from '../../types/models';
@@ -463,12 +463,10 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
                   Chọn tất cả ({selectedCount}/{extractedDocs.length})
                 </Checkbox>
               </div>
-              <InputSearch
+              <SearchInput
                 placeholder="Tìm theo tên file hoặc tiêu đề..."
                 value={searchFilter}
                 onChange={(e) => setSearchFilter(e.target.value)}
-                allowClear
-                style={{ width: 280 }}
               />
             </div>
 

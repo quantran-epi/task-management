@@ -2,6 +2,8 @@ import { Input as AntInput, type InputProps as AntInputProps } from 'antd';
 import type { SearchProps as AntSearchProps } from 'antd/es/input/Search';
 import { forwardRef, type CSSProperties } from 'react';
 import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
+import { useAntdToken } from './antdTheme';
+import { SearchOutlined } from './icon';
 
 /** Full-width is the default; `auto` keeps the AntD intrinsic width. */
 export type InputWidth = 'full' | 'auto';
@@ -51,6 +53,23 @@ export const InputSearch = forwardRef<import('antd').InputRef, AntSearchProps>(f
       ref={ref}
       style={rootStyle}
       classNames={{ root: 'ui-search-root', ...classNames }}
+    />
+  );
+});
+
+/** Default search box for every search surface: token prefix + allowClear + middle size. */
+export const SearchInput = forwardRef<import('antd').InputRef, InputProps>(function SearchInput(
+  { allowClear = true, size = 'middle', prefix, ...rest },
+  ref,
+) {
+  const token = useAntdToken();
+  return (
+    <Input
+      {...rest}
+      ref={ref}
+      allowClear={allowClear}
+      size={size}
+      prefix={prefix ?? <SearchOutlined style={{ color: token.token.colorTextSecondary }} />}
     />
   );
 });
