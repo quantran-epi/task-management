@@ -29,9 +29,24 @@ interface StaticNodeProps {
   value?: string | number;
 }
 
-/** Self-built static tree node; callers may use it instead of `treeData`. */
+/** Self-built static tree node descriptor: `TreeSelect` reads its props from children. */
 export function TreeSelectNode(_props: StaticNodeProps) {
   return null;
+}
+
+/** Convert legacy `<TreeSelectNode>` children into AntD `treeData` nodes (recursive). */
+function nodesFromChildren(children: ReactNode): NonNullable<AntTreeSelectProps['treeData']> {
+  const list = Array.isArray(children) ? children : children ? [children] : [];
+  const nodes: NonNullable<AntTreeSelectProps['treeData']> = [];
+  for (const child of list) {
+    if (!child || typeof child !== 'object' || !('props' in child)) continue;
+    const el = child as { props: StaticNodeProps & { children?: ReactNode }; key?: React.Key };
+    const value = el.props.value ?? el.props.key ?? el.key;
+    if (value === undefined || value === null) continue;
+    const kids = nodesFromChildren(el.props.children);
+    nodes.push({ value, key: value, title: el.props.title, ...(kids.length ? { children: kids } : {}) } as never);
+  }
+  return nodes;
 }
 
 /** Static strategy values, wrapper-defined rather than re-exported from AntD. */
@@ -46,7 +61,7 @@ function keyOf(value: unknown): string {
 }
 
 /** Native S-SEL + S-TR tree select: combobox trigger, portal tree, AntD payloads. */
-export function TreeSelect({ width = 'full', style, ...rest }: TreeSelectWrapperProps) {
+export function TreeSelect({ width = 'full', style, children, ...rest }: TreeSelectWrapperProps) {
   const { controlHeight, fontSize, borderRadius } = getSharedControlTokens();
   const anchorRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
@@ -59,7 +74,10 @@ export function TreeSelect({ width = 'full', style, ...rest }: TreeSelectWrapper
   }, [rawValue]);
   const keys = controlled ? initial : innerKeys;
 
-  const data = rest.treeData ?? [];
+  const data = useMemo(
+    () => rest.treeData ?? nodesFromChildren(children),
+    [rest.treeData, children],
+  );
   const titleByKey = new Map<string, ReactNode>();
   const visit = (nodes: typeof data) => {
     nodes.forEach((node) => {

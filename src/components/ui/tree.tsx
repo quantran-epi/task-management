@@ -306,5 +306,9 @@ export function Tree({ compact = true, style, blockNode: _blockNode, virtual: _v
 }
 
 /** Self-built statics — values defined here, never re-exported from AntD (no pass-through). */
+/** Leaf descriptor: `flatten` reads its props; rendering it directly is intentionally empty. */
 export function TreeNode(_props: StaticNodeProps) { return null; }
-export function DirectoryTree(_props: TreeWrapperProps) { return null; }
+/** DirectoryTree shares the full Tree behavior; folder rows expand on click, not just the chevron. */
+export function DirectoryTree(props: TreeWrapperProps) {
+  return <Tree {...props} />;
+}

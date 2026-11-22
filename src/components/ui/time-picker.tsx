@@ -58,8 +58,38 @@ interface TimeColumnProps {
 }
 
 function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColumnProps) {
+  const activeIndex = Math.max(0, values.indexOf(value) >= 0 ? values.indexOf(value) : lead);
+  const columnRef = useRef<HTMLDivElement>(null);
+
+  function onColumnKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const delta = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (delta !== 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      const next = Math.max(0, Math.min(values.length - 1, lead + delta));
+      onLead(next);
+      const row = columnRef.current?.querySelector<HTMLElement>(`#${id}-${next}`);
+      row?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      onPick(values[lead] ?? value);
+    }
+  }
+
   return (
-    <div className={classNames(selectStyles.list, listStyles.list)} role="listbox" aria-label={label} tabIndex={0} style={{ width: 64, maxHeight: 216 }}>
+    <div
+      ref={columnRef}
+      className={classNames(selectStyles.list, listStyles.list)}
+      role="listbox"
+      aria-label={label}
+      aria-activedescendant={`${id}-${activeIndex}`}
+      tabIndex={0}
+      style={{ width: 64, maxHeight: 216 }}
+      onKeyDown={onColumnKeyDown}
+    >
       <div className={listStyles.sizer} style={{ height: values.length * 24 }}>
         {values.map((item, index) => (
           <div
@@ -197,6 +227,7 @@ export function TimeRangePicker({
   ]);
   const [active, setActive] = useState<0 | 1>(0);
   const [rangeOpen, setRangeOpen] = useState(false);
+  const [rangeLead, setRangeLead] = useState<[number, number, number]>([0, 0, 0]);
   const invalid = status === 'error' || ariaInvalid === true;
   const anchorRef = active === 0 ? startRef : endRef;
   const parsed = drafts[active] ? dayjs(drafts[active], format) : dayjs('00:00:00', 'HH:mm:ss');
@@ -244,9 +275,9 @@ export function TimeRangePicker({
       ) : null}
       <Popup open={rangeOpen} anchorRef={anchorRef as React.RefObject<HTMLElement | null>} onClose={() => { setRangeOpen(false); anchorRef.current?.focus(); }} className={selectStyles.popup ?? ''} control="time-picker-range-popup" label={ariaLabel ?? 'Chọn khoảng thời gian'}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
-          <TimeColumn id="tr-h" values={grid.hours} value={parsed.hour()} lead={0} label="Giờ" onLead={() => {}} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
-          <TimeColumn id="tr-m" values={grid.minutes} value={parsed.minute()} lead={0} label="Phút" onLead={() => {}} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
-          {grid.seconds.length > 0 ? <TimeColumn id="tr-s" values={grid.seconds} value={parsed.second()} lead={0} label="Giây" onLead={() => {}} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
+          <TimeColumn id="tr-h" values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
+          <TimeColumn id="tr-m" values={grid.minutes} value={parsed.minute()} lead={rangeLead[1]} label="Phút" onLead={(index) => setRangeLead((prev) => [prev[0], index, prev[2]])} onPick={(m) => pick(parsed.hour(), m, parsed.second())} />
+          {grid.seconds.length > 0 ? <TimeColumn id="tr-s" values={grid.seconds} value={parsed.second()} lead={rangeLead[2]} label="Giây" onLead={(index) => setRangeLead((prev) => [prev[0], prev[1], index])} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
         </div>
       </Popup>
     </>

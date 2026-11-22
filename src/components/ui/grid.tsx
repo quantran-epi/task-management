@@ -44,9 +44,10 @@ function spanValue(span: number | undefined): number | undefined {
 }
 
 /** Row swap point: gutter defaults come from the shared scale unless caller overrides. */
-export function Row({ gutter, style, className, children, ...rest }: RowProps) {
+export function Row({ gutter, style, className, children, align, justify, wrap, ...rest }: RowProps) {
   const { paddingInline } = getSharedControlTokens();
   const gap = typeof gutter === 'number' || typeof gutter === 'string' ? gutter : paddingInline;
+  const justifyMap: Record<string, string> = { start: 'start', end: 'end', center: 'center', 'space-between': 'space-between', 'space-around': 'space-around', 'space-evenly': 'space-evenly' };
   return (
     <div
       className={className}
@@ -54,6 +55,9 @@ export function Row({ gutter, style, className, children, ...rest }: RowProps) {
         display: 'grid',
         gridTemplateColumns: 'repeat(24, minmax(0, 1fr))',
         gap,
+        ...(align ? { alignItems: String(align) as CSSProperties['alignItems'] } : {}),
+        ...(justify ? { justifyContent: justifyMap[String(justify)] ?? String(justify) } : {}),
+        ...(wrap === false ? { flexWrap: 'nowrap' } : {}),
         ...gridStyle(),
         ...style,
       }}
@@ -67,17 +71,37 @@ export function Row({ gutter, style, className, children, ...rest }: RowProps) {
 
 /** Col swap point with the same token-derived metrics and responsive span props. */
 export function Col({ style, className, children, span, xs, sm, md, lg, xl, xxl, offset, push, pull, order, flex, ...rest }: ColProps) {
+  const screens = useBreakpoint();
+  // Resolve the active responsive value: smallest matching breakpoint wins,
+  // mirroring AntD's mobile-first order (xs -> xxl). Values can be a span
+  // number or a { span, offset } object.
+  const responsive = { xs, sm, md, lg, xl, xxl } as Partial<ScreenMap<unknown>>;
+  const active = (Object.keys(BREAKPOINTS) as (keyof ScreenMap<number>)[])
+    .filter((key) => screens[key] && responsive[key] !== undefined)
+    .map((key) => responsive[key])
+    .at(-1);
+  const activeSpan = typeof active === 'number' ? active
+    : active && typeof active === 'object' && 'span' in active ? (active as { span?: number }).span
+    : undefined;
+  const activeOffset = typeof active === 'object' && active !== null && 'offset' in active ? (active as { offset?: number }).offset
+    : offset;
+  const resolvedSpan = spanValue((activeSpan as number | undefined) ?? (span as number | undefined));
+  const gridColumn = resolvedSpan !== undefined
+    ? `${activeOffset ?? 0} / span ${resolvedSpan}`
+    : activeOffset !== undefined ? `${activeOffset} / auto` : undefined;
+
   return (
     <div
       className={className}
       style={{
-        gridColumn: spanValue(span as number | undefined) !== undefined ? `span ${spanValue(span as number | undefined)}` : undefined,
+        ...(gridColumn ? { gridColumn } : {}),
+        ...(order !== undefined ? { order } : {}),
         ...(flex !== undefined ? { flex } : {}),
         ...gridStyle(),
         ...style,
       } as CSSProperties}
       data-oi-control="grid-col"
-      {...({ xs, sm, md, lg, xl, xxl, offset, push, pull, order, ...rest } as object)}
+      {...(rest as object)}
     >
       {children as ReactNode}
     </div>

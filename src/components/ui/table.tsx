@@ -137,9 +137,18 @@ export function Table<RecordType = unknown>({
     const sorter = nextSort
       ? { field: nextSort.key, order: nextSort.order, columnKey: nextSort.key }
       : {};
+    // AntD filter payload is keyed by column `dataIndex` (or key); map the
+    // internal filterState so callers can read filters[key] reliably.
+    const filters: Record<string, (string | number | boolean)[] | null> = {};
+    for (const column of columns ?? []) {
+      const col = column as { key?: unknown; dataIndex?: unknown };
+      const key = col.key === undefined ? String(col.dataIndex ?? '') : String(col.key);
+      const values = filterState[key];
+      if (values && values.length > 0) filters[key] = values;
+    }
     onChange?.(
       { ...pageConfig, current: nextPage, pageSize: nextSize } as TablePaginationConfig,
-      {} as never,
+      filters as never,
       sorter as never,
       { currentDataSource: [...filtered], action },
     );
@@ -227,7 +236,7 @@ export function Table<RecordType = unknown>({
                   role="columnheader"
                   data-oi-control="table-header"
                   className={classNames(menuStyles.item, canSort && buttonStyles.button)}
-                  style={{ textAlign: col.align as CSSProperties['textAlign'], width: col.width }}
+                  style={{ textAlign: col.align as CSSProperties['textAlign'], width: col.width, ...(scroll?.y ? { position: 'sticky' as const, top: 0, zIndex: 2, background: 'var(--bg-elev)' } : {}) }}
                   onClick={canSort ? () => toggleSort(key, col.sorter, col) : undefined}
                 >
                   {col.title}
@@ -240,8 +249,14 @@ export function Table<RecordType = unknown>({
                     <select
                       aria-label={`lọc ${textOf(col.title)}`}
                       className={chipStyles.chip}
-                      value=""
-                      onChange={(event) => toggleFilter(key, event.target.value, true)}
+                      data-oi-control="table-filter"
+                      value={String(filterState[key]?.[0] ?? '')}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        const previous = filterState[key]?.[0];
+                        if (previous !== undefined && String(previous) !== nextValue) toggleFilter(key, previous, false);
+                        if (nextValue !== '') toggleFilter(key, nextValue, true);
+                      }}
                     >
                       <option value="">Tất cả</option>
                       {col.filters.map((filter) => (

@@ -22,67 +22,121 @@ export function fontRoleSize(role: FontRole): string {
   return sizes[role];
 }
 
-function roleStyle(role: FontRole, style?: CSSProperties): CSSProperties {
+function roleStyle(role: FontRole, style?: CSSProperties, extra?: CSSProperties): CSSProperties {
   return {
     fontSize: fontRoleSize(role),
     '--ui-typography-font-role': role,
+    ...extra,
     ...style,
   } as CSSProperties;
 }
 
-function nativeTypography(tag: 'span' | 'p' | 'h1' | 'a') {
+interface NativeTypographyProps {
+  fontRole?: FontRole;
+  style?: CSSProperties | undefined;
+  className?: string | undefined;
+  children?: ReactNode;
+  href?: string;
+  target?: string;
+  rel?: string;
+  title?: string;
+  id?: string;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+  'aria-label'?: string;
+  /** AntD-compatible presentational props, mapped to semantics/style instead of dropped. */
+  strong?: boolean;
+  code?: boolean;
+  copyable?: boolean | { text?: string };
+  ellipsis?: boolean | { rows?: number };
+  type?: 'secondary' | 'success' | 'warning' | 'danger' | string;
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
+}
+
+const TYPE_COLOR: Record<string, string> = {
+  secondary: 'var(--fg-muted)',
+  success: 'var(--success)',
+  warning: 'var(--warning)',
+  danger: 'var(--danger)',
+};
+
+function nativeTypography(tag: 'span' | 'p' | 'a' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6') {
   return function NativeText({
     fontRole,
     style,
     className,
     children,
+    strong,
+    code,
+    copyable,
+    ellipsis,
+    type,
+    level,
+    href,
+    target,
+    rel,
+    onClick,
     ...rest
-  }: {
-    fontRole?: FontRole;
-    style?: CSSProperties | undefined;
-    className?: string;
-    children?: ReactNode;
-    href?: string;
-    target?: string;
-    rel?: string;
-    title?: string;
-    id?: string;
-    onClick?: React.MouseEventHandler<HTMLElement>;
-    'aria-label'?: string;
-  }) {
+  }: NativeTypographyProps) {
     const Tag = tag;
+    const extra: CSSProperties = {
+      ...(strong ? { fontWeight: 600 } : {}),
+      ...(type && TYPE_COLOR[type] ? { color: TYPE_COLOR[type] } : {}),
+      ...(ellipsis
+        ? { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(typeof ellipsis === 'object' && ellipsis.rows && ellipsis.rows > 1 ? { whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: ellipsis.rows, WebkitBoxOrient: 'vertical' } : {}) }
+        : {}),
+    };
+    let content: ReactNode = children;
+    if (code) content = <code className={classNames('ui-code')}>{content}</code>;
+    const copyText = typeof copyable === 'object' ? copyable.text : undefined;
+    const showCopy = copyable === true || typeof copyable === 'object';
     return (
       <Tag
-        data-oi-control={tag === 'a' ? 'link' : 'text'}
-        className={classNames(className)}
-        style={roleStyle(fontRole ?? 'body', style)}
+        data-oi-control={tag === 'a' ? 'link' : tag.startsWith('h') ? 'heading' : 'text'}
+        data-level={level}
+        className={classNames(className, strong && 'ui-strong', code && 'ui-code-wrap')}
+        style={roleStyle(fontRole ?? (tag.startsWith('h') ? 'heading' : 'body'), style, extra)}
+        {...(href !== undefined ? { href, target, rel } : {})}
+        {...(onClick ? { onClick } : {})}
         {...domProps(rest)}
       >
-        {children}
+        {content}
+        {showCopy ? (
+          <button
+            type="button"
+            className="ui-copy"
+            aria-label="Sao chép"
+            onClick={() => {
+              const text = copyText ?? (typeof content === 'string' ? content : '');
+              if (text) void navigator.clipboard?.writeText(text);
+            }}
+          >
+            ⧉
+          </button>
+        ) : null}
       </Tag>
     );
   };
 }
 
 /** Native N-33 typography roles; type aliases stay AntD-compatible. */
-export function Text({ fontRole = 'body', style, ...rest }: TextProps & { fontRole?: FontRole }) {
+export function Text({ fontRole = 'body', ...rest }: TextProps & { fontRole?: FontRole }) {
   const Native = nativeTypography('span');
-  return <Native fontRole={fontRole} style={style} {...(rest as Record<string, unknown>)} />;
+  return <Native fontRole={fontRole} {...(rest as Record<string, unknown>)} />;
 }
 
-/** Heading role defaults to the 16px legacy display size. */
-export function Title({ fontRole = 'heading', style, ...rest }: TitleProps & { fontRole?: FontRole }) {
-  const Native = nativeTypography('h1');
-  return <Native fontRole={fontRole} style={style} {...(rest as Record<string, unknown>)} />;
+/** Heading role defaults to 16px; `level` picks the native h1..h6 tag. */
+export function Title({ fontRole = 'heading', level = 4, ...rest }: TitleProps & { fontRole?: FontRole }) {
+  const Native = nativeTypography(`h${level}` as 'h1');
+  return <Native fontRole={fontRole} level={level} {...(rest as Record<string, unknown>)} />;
 }
 
 /** Paragraph role renders a native block with the shared font metric. */
-export function Paragraph({ fontRole = 'body', style, ...rest }: ParagraphProps & { fontRole?: FontRole }) {
+export function Paragraph({ fontRole = 'body', ...rest }: ParagraphProps & { fontRole?: FontRole }) {
   const Native = nativeTypography('p');
-  return <Native fontRole={fontRole} style={style} {...(rest as Record<string, unknown>)} />;
+  return <Native fontRole={fontRole} {...(rest as Record<string, unknown>)} />;
 }
 
-/** AntD Typography namespace mirrored with a native link component. */
+/** AntD Typography namespace mirrored with native components. */
 export const Typography = {
   Text,
   Title,

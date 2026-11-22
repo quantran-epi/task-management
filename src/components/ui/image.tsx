@@ -24,9 +24,14 @@ interface PreviewState {
   items: PreviewItem[];
   open: boolean;
   index: number;
+  zoom: number;
+  rotation: number;
   show: (src: string) => void;
   close: () => void;
   step: (delta: number) => void;
+  setZoom: (next: number) => void;
+  rotate: (delta: number) => void;
+  reset: () => void;
 }
 
 const PreviewContext = createContext<PreviewState | null>(null);
@@ -36,6 +41,8 @@ export function ImagePreviewGroup({ children }: { children?: ReactNode }) {
   const [items, setItems] = useState<PreviewItem[]>([]);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
+  const [zoom, setZoomState] = useState(1);
+  const [rotation, setRotationState] = useState(0);
   const [images, setImages] = useState<PreviewItem[]>([]);
   useEffect(() => setImages(collectImages(children)), [children]);
   const show = useCallback((src: string) => {
@@ -51,17 +58,31 @@ export function ImagePreviewGroup({ children }: { children?: ReactNode }) {
     const count = allItems.length;
     if (count === 0) return;
     setIndex((value) => (value + delta + count) % count);
+    setZoomState(1);
+    setRotationState(0);
   }, [allItems.length]);
+  const setZoom = useCallback((next: number) => setZoomState(Math.max(0.25, Math.min(4, next))), []);
+  const rotate = useCallback((delta: number) => setRotationState((value) => value + delta), []);
+  const reset = useCallback(() => { setZoomState(1); setRotationState(0); }, []);
+  // Single arrow-key owner. The dialog no longer binds its own handler, so a
+  // key press cannot double-step (document listener + dialog onKeyDown).
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'ArrowLeft') { event.preventDefault(); step(-1); }
       if (event.key === 'ArrowRight') { event.preventDefault(); step(1); }
+      if (event.key === '+' || event.key === '=') { event.preventDefault(); setZoom(zoom + 0.25); }
+      if (event.key === '-') { event.preventDefault(); setZoom(zoom - 0.25); }
+      if (event.key === 'r' || event.key === 'R') { event.preventDefault(); rotate(90); }
+      if (event.key === 'Escape') { event.preventDefault(); close(); }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, step]);
-  const value = useMemo<PreviewState>(() => ({ items: allItems, open, index, show, close, step }), [allItems, open, index, show, close, step]);
+  }, [open, step, zoom, setZoom, rotate, close]);
+  const value = useMemo<PreviewState>(
+    () => ({ items: allItems, open, index, zoom, rotation, show, close, step, setZoom, rotate, reset }),
+    [allItems, open, index, zoom, rotation, show, close, step, setZoom, rotate, reset],
+  );
   return (
     <PreviewContext.Provider value={value}>
       {children}
@@ -95,21 +116,33 @@ function ImagePreviewDialog({ state }: { state: PreviewState }) {
       width="min(90vw, 900px)"
       label={current?.alt || 'Xem ảnh'}
       onClose={state.close}
-      footer={state.items.length > 1 ? (
+      footer={(
         <div className={dialogStyles.buttons}>
-          <button type="button" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.step(-1)}>‹</button>
-          <button type="button" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.step(1)}>›</button>
+          {state.items.length > 1 ? (
+            <>
+              <button type="button" aria-label="Ảnh trước" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.step(-1)}>‹</button>
+              <button type="button" aria-label="Ảnh sau" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.step(1)}>›</button>
+            </>
+          ) : null}
+          <button type="button" aria-label="Thu nhỏ" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.setZoom(state.zoom - 0.25)}>−</button>
+          <button type="button" aria-label="Phóng to" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.setZoom(state.zoom + 0.25)}>+</button>
+          <button type="button" aria-label="Xoay" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={() => state.rotate(90)}>↻</button>
+          <button type="button" aria-label="Đặt lại" data-oi-control="button" className={classNames(buttonStyles.button, buttonStyles.secondary)} onClick={state.reset}>⟲</button>
         </div>
-      ) : null}
+      )}
     >
-      <div
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') { event.preventDefault(); state.step(-1); }
-          if (event.key === 'ArrowRight') { event.preventDefault(); state.step(1); }
-        }}
-      >
-        {current ? <img src={current.src} alt={current.alt} className="image" /> : null}
+      <div style={{ overflow: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {current ? (
+          <img
+            src={current.src}
+            alt={current.alt}
+            className="image"
+            data-oi-control="image-preview"
+            data-zoom={state.zoom}
+            data-rotation={state.rotation}
+            style={{ transform: `scale(${state.zoom}) rotate(${state.rotation}deg)`, transition: 'transform 120ms ease' }}
+          />
+        ) : null}
       </div>
     </DialogSurface>
   );

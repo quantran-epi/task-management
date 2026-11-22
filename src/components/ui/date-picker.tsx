@@ -77,7 +77,8 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
     (_, index) => month.startOf('month').add(index - offset, 'day'),
   ), [month, offset, daysInMonth]);
   const today = dayjs();
-  const leadDate = value ?? month.startOf('month');
+  const [lead, setLead] = useState<Dayjs>(value ?? month.startOf('month'));
+  useEffect(() => { setLead(value ?? month.startOf('month')); }, [value, month]);
   const inRange = (date: Dayjs) => Boolean(
     range?.[0] && range?.[1] && date.isAfter(range[0], 'day') && date.isBefore(range[1], 'day'),
   );
@@ -87,13 +88,16 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
     if (event.key in moves) {
       event.preventDefault();
       const next = date.add(moves[event.key]!, 'day');
-      if (next.month() !== month.month() || next.year() !== month.year()) onMonth(next.startOf('month'));
-      requestAnimationFrame(() => {
-        const target = document.querySelector<HTMLButtonElement>(
-          `[data-oi-control="calendar-cell"][data-date="${next.format('YYYY-MM-DD')}"]`,
-        );
-        target?.focus();
-      });
+      setLead(next);
+      const crossesMonth = next.month() !== month.month() || next.year() !== month.year();
+      if (crossesMonth) onMonth(next.startOf('month'));
+      // Same grid: focus synchronously. Crossing a month: React must remount
+      // cells first, so defer focus to the next frame.
+      const focusNext = () => document.querySelector<HTMLButtonElement>(
+        `[data-oi-control="calendar-cell"][data-date="${next.format('YYYY-MM-DD')}"]`,
+      )?.focus();
+      if (crossesMonth) requestAnimationFrame(focusNext);
+      else focusNext();
       return;
     }
     if (event.key === 'Enter' || event.key === ' ') {
@@ -166,7 +170,7 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
               data-oi-control="calendar-cell"
               data-testid="calendar-cell"
               data-date={date.format('YYYY-MM-DD')}
-              data-lead={value === null && date.isSame(leadDate, 'day') || undefined}
+              data-lead={date.isSame(lead, 'day') || undefined}
               data-selected={selected || undefined}
               data-disabled={disabled || undefined}
               data-outside={outside || undefined}
@@ -174,7 +178,7 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
               aria-selected={selected}
               aria-disabled={disabled || undefined}
               aria-label={date.format('YYYY-MM-DD')}
-              tabIndex={value !== null && selected ? 0 : -1}
+              tabIndex={date.isSame(lead, 'day') ? 0 : -1}
               disabled={disabled}
               onClick={() => onPick(date)}
               onKeyDown={(event) => onCellKeyDown(event, date)}

@@ -8,14 +8,27 @@ import {
 import { classNames } from './native/classNames';
 import listStyles from './openidea/List.module.css';
 import spinnerStyles from './openidea/Spinner.module.css';
+import dialogStyles from './openidea/Dialog.module.css';
+import buttonStyles from './openidea/Button.module.css';
+import chipStyles from './openidea/Chip.module.css';
 import { getSharedControlTokens } from './tokens.contract';
 
 export type ListProps<T> = AntListProps<T>;
 
 /** Native statics keep AntD's full prop surface (actions, onClick, data-* …) so callers stay untouched. */
-function ListItemImpl({ children, className, style, classNames: _classNames, styles: _styles, extra: _extra, actions: _actions, colStyle: _colStyle, prefixCls: _prefixCls, ...domProps }: AntListItemProps) {
-  void _classNames; void _styles; void _extra; void _actions; void _colStyle; void _prefixCls;
-  return <div {...domProps} className={classNames(listStyles.row, className)} style={style}>{children}</div>;
+function ListItemImpl({ children, className, style, classNames: _classNames, styles: _styles, extra, actions, colStyle: _colStyle, prefixCls: _prefixCls, ...domProps }: AntListItemProps) {
+  void _classNames; void _styles; void _colStyle; void _prefixCls;
+  return (
+    <div {...domProps} className={classNames(listStyles.row, className)} style={style}>
+      <div className={listStyles.itemMain}>{children}</div>
+      {extra ? <div className={listStyles.itemExtra}>{extra}</div> : null}
+      {actions && actions.length > 0 ? (
+        <div className={listStyles.itemActions}>
+          {actions.map((action, index) => <span key={index} className={listStyles.itemAction}>{action}</span>)}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 function ListItemMetaImpl({ title, description, avatar, className, style, prefixCls: _prefixCls, children: _children }: AntListItemMetaProps) {
   void _prefixCls; void _children;
@@ -93,6 +106,18 @@ export function List<T>({ style, ...rest }: ListProps<T>) {
       )}
       {rest.footer ?? null}
       {items.length > 0 ? rest.children ?? null : null}
+      {rest.pagination ? (() => {
+        const page = rest.pagination as { current?: number; pageSize?: number; showTotal?: (total: number, range: [number, number]) => ReactNode; onChange?: (page: number, pageSize: number) => void };
+        const currentPage = page.current ?? 1;
+        return (
+          <div className={dialogStyles.footer} data-oi-control="list-pagination">
+            {page.showTotal ? <span className={chipStyles.chip}>{page.showTotal(items.length, [1, items.length])}</span> : null}
+            <button type="button" aria-label="Trang trước" className={buttonStyles.button} disabled={currentPage === 1} onClick={() => page.onChange?.(currentPage - 1, page.pageSize ?? 10)}>‹</button>
+            <span className={chipStyles.chip} aria-label={`Trang ${currentPage}`}>{currentPage}</span>
+            <button type="button" aria-label="Trang sau" className={buttonStyles.button} onClick={() => page.onChange?.(currentPage + 1, page.pageSize ?? 10)}>›</button>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

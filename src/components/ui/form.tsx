@@ -45,6 +45,7 @@ interface FieldConfig {
   valuePropName: string;
   trigger: string;
   dependencies: NamePath[];
+  preserve?: boolean | undefined;
 }
 
 interface FieldDataLike {
@@ -84,6 +85,7 @@ interface NativeFormMethods<Values = any> {
   getVersion: () => number;
   readErrors: (name: NamePath) => ReactNode[];
   registerField: (key: string, getter: () => FieldConfig) => () => void;
+  registerFieldInstance: (key: string, el: HTMLElement | null) => void;
   setInitialValues: (values: Record<string, unknown>, init: boolean) => void;
   validateOne: (name: NamePath) => Promise<ReactNode[]>;
   getFieldInstance: (name: NamePath) => unknown;
@@ -179,6 +181,7 @@ function createFormInstance(): FormInstance {
   let version = 0;
   const errors = new Map<string, ReactNode[]>();
   const fields = new Map<string, () => FieldConfig>();
+  const fieldInstances = new Map<string, HTMLElement>();
   const listeners = new Set<() => void>();
   const callbacks: Callbacks = { onFinish: undefined, onFinishFailed: undefined, onValuesChange: undefined };
 
@@ -270,7 +273,21 @@ function createFormInstance(): FormInstance {
         version += 1;
         listeners.forEach((listener) => listener());
       }
-      return () => { fields.delete(key); };
+      return () => {
+        fields.delete(key);
+        fieldInstances.delete(key);
+        // AntD preserve=false drops the field's value from the store on unmount.
+        if (config.preserve === false) {
+          values = deleteIn(values, JSON.parse(key) as Path) as Record<string, unknown>;
+          errors.delete(key);
+          version += 1;
+          listeners.forEach((listener) => listener());
+        }
+      };
+    },
+    registerFieldInstance(key, el) {
+      if (el) fieldInstances.set(key, el);
+      else fieldInstances.delete(key);
     },
     setInitialValues(next, init) {
       initialValues = { ...initialValues, ...next };
@@ -310,6 +327,19 @@ function createFormInstance(): FormInstance {
         if (typeof rule.len === 'number' && !isEmpty(value) && String(value).length !== rule.len) {
           messages.push(ruleMessage(rawRule, `Giá trị phải có độ dài ${rule.len}`));
           continue;
+        }
+        if (rule.type && !isEmpty(value)) {
+          const text = String(value);
+          const typeOk: Record<string, boolean> = {
+            email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text),
+            url: /^https?:\/\/\S+$/i.test(text),
+            number: !Number.isNaN(Number(text)),
+            integer: /^-?\d+$/.test(text),
+          };
+          if (typeOk[String(rule.type)] === false) {
+            messages.push(ruleMessage(rawRule, `Giá trị không đúng định dạng ${String(rule.type)}`));
+            continue;
+          }
         }
         if (typeof rule.validator === 'function') {
           try {
@@ -371,9 +401,18 @@ function createFormInstance(): FormInstance {
         },
       );
     },
-    getFieldInstance: (_name: NamePath) => undefined,
-    scrollToField: () => {},
-    focusField: () => {},
+    getFieldInstance: (name: NamePath) => fieldInstances.get(keyOf(pathOf(name as NamePath))),
+    scrollToField: (name: NamePath, options?: unknown) => {
+      const el = fieldInstances.get(keyOf(pathOf(name as NamePath)));
+      if (!el || typeof el.scrollIntoView !== 'function') return;
+      const behavior = (options as { behavior?: ScrollBehavior } | undefined)?.behavior;
+      el.scrollIntoView({ block: 'center', ...(behavior ? { behavior } : {}) });
+    },
+    focusField: (name: NamePath) => {
+      const el = fieldInstances.get(keyOf(pathOf(name as NamePath)));
+      const focusable = el?.matches('input, textarea, select, button, [tabindex]') ? el : el?.querySelector<HTMLElement>('input, textarea, select, button, [tabindex]');
+      focusable?.focus();
+    },
   };
 
   const formInstance = store as unknown as FormInstance;
@@ -388,6 +427,8 @@ interface FormContextValue {
   form: FormInstance;
   layout: Layout;
   requiredMark: AntFormProps['requiredMark'];
+  disabled: boolean;
+  preserve: boolean;
 }
 
 const FormContext = createContext<FormContextValue | null>(null);
@@ -438,8 +479,8 @@ export function Form({
   children,
   ...rest
 }: FormProps) {
-  void preserve;
-  void disabled;
+  const mergedDisabled = disabled === true;
+  const mergedPreserve = preserve !== false;
   const [innerForm] = useForm();
   const form: FormInstance = (formProp ?? innerForm) as FormInstance;
   const policyLayout: Layout = labelPolicy === 'inline' ? 'inline' : labelPolicy === 'left' ? 'horizontal' : 'vertical';
@@ -471,13 +512,14 @@ export function Form({
   };
 
   return (
-    <FormContext.Provider value={{ form, layout: mergedLayout, requiredMark: mergedRequiredMark }}>
+    <FormContext.Provider value={{ form, layout: mergedLayout, requiredMark: mergedRequiredMark, disabled: mergedDisabled, preserve: mergedPreserve }}>
       <form
         {...domOnly(rest)}
         noValidate
         className={classNames(inputStyles.framed, className)}
         data-oi-control="form"
         data-state={mergedLayout}
+        data-disabled={mergedDisabled || undefined}
         data-required-mark={mergedRequiredMark === true ? 'true' : 'false'}
         style={{ ...formStyle(), border: 0, boxShadow: 'none', ...style } as CSSProperties}
         onSubmit={submit}
@@ -528,6 +570,7 @@ function enhanceChild(
   config: FieldConfig,
   id: string,
   onChange: (...args: unknown[]) => void,
+  disabled: boolean,
 ): ReactNode {
   if (!isValidElement(child)) return child;
   const element = child as ReactElement<Record<string, unknown>>;
@@ -542,6 +585,7 @@ function enhanceChild(
     },
     'aria-invalid': errors.length > 0 ? true : existing['aria-invalid'],
     id: existing.id ?? id,
+    ...(disabled && existing.disabled !== false ? { disabled: true } : {}),
   };
   return cloneElement(element, injected);
 }
@@ -565,7 +609,7 @@ export function FormItem({
   shouldUpdate,
   children,
   ...rest
-}: AntFormItemProps) {
+}: AntFormItemProps & { preserve?: boolean; disabled?: boolean }) {
   void rest;
   const context = useContext(FormContext);
   const form = context?.form ?? DETACHED_FORM;
@@ -574,6 +618,8 @@ export function FormItem({
   void version;
   const path = pathOf(name as NamePath | undefined);
   const key = keyOf(path);
+  const itemPreserve = (rest as { preserve?: boolean }).preserve;
+  const itemDisabled = (rest as { disabled?: boolean }).disabled;
   const configRef = useRef<FieldConfig>({
     rules: [],
     initialValue: undefined,
@@ -587,6 +633,7 @@ export function FormItem({
     valuePropName,
     trigger: Array.isArray(trigger) ? String(trigger[0] ?? 'onChange') : String(trigger),
     dependencies: dependencies ?? [],
+    preserve: itemPreserve ?? context?.preserve,
   };
   const configGetterRef = useRef(() => configRef.current);
   const pathRef = useRef(path);
@@ -622,7 +669,7 @@ export function FormItem({
     ? (children as (instance: FormInstance) => ReactNode)(form)
     : (children as ReactNode);
   if (key !== '[]' && !Array.isArray(content)) {
-    content = enhanceChild(content, value, errors, configRef.current, generatedId, change);
+    content = enhanceChild(content, value, errors, configRef.current, generatedId, change, itemDisabled ?? context?.disabled ?? false);
   }
 
   const errorList = errors.length > 0 ? (
@@ -641,9 +688,11 @@ export function FormItem({
 
   return (
     <div
+      ref={(el) => { if (key !== '[]') form.registerFieldInstance(key, el); }}
       className={className}
       data-oi-control="form-item"
       data-state={errors.length > 0 ? 'invalid' : 'default'}
+      data-disabled={itemDisabled ?? context?.disabled ? 'true' : undefined}
       style={{ ...(hidden ? { display: 'none' } : {}), ...style }}
     >
       {label !== undefined && (

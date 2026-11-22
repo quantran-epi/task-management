@@ -35,12 +35,19 @@ export function Slider({ style, className, ...rest }: SliderProps) {
   const onAfterChange = rest.onAfterChange;
   const railRef = useRef<HTMLDivElement>(null);
   const dragIndex = useRef<number | null>(null);
+  // `current` is a render snapshot; onAfterChange must report the value just
+  // committed, not the stale value from the render that started the drag/key press.
+  const lastCommitted = useRef<SliderValue | undefined>(undefined);
 
   const singleProps = rest as SliderSingleProps;
   const rangeProps = rest as SliderRangeProps;
   const controlled = rest.value as SliderValue | undefined;
+  const fallback = rest.defaultValue as SliderValue | undefined;
   const uncontrolledRef = useRef<SliderValue>(
-    (Array.isArray(controlled) && controlled.length === 2 ? controlled : undefined) ?? (isRange ? [min, max] : min),
+    (Array.isArray(controlled) && controlled.length === 2 ? controlled : undefined)
+      ?? (typeof controlled === 'number' ? controlled : undefined)
+      ?? fallback
+      ?? (isRange ? [min, max] : min),
   );
   const current: SliderValue =
     (Array.isArray(controlled) && controlled.length === 2 ? controlled : undefined) ??
@@ -63,6 +70,7 @@ export function Slider({ style, className, ...rest }: SliderProps) {
       output = resolved;
     }
     if (controlled === undefined) uncontrolledRef.current = output;
+    lastCommitted.current = output;
     if (isRange) rangeProps.onChange?.(output as [number, number]);
     else singleProps.onChange?.(output as number);
   }, [current, controlled, isRange, max, min, rangeProps, singleProps, step]);
@@ -92,7 +100,7 @@ export function Slider({ style, className, ...rest }: SliderProps) {
     if (dragIndex.current === null) return;
     dragIndex.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
-    (onAfterChange as ((value: SliderValue) => void) | undefined)?.(current);
+    (onAfterChange as ((value: SliderValue) => void) | undefined)?.(lastCommitted.current ?? current);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>, index: number) {
@@ -105,7 +113,7 @@ export function Slider({ style, className, ...rest }: SliderProps) {
     if (delta === 0) return;
     event.preventDefault();
     commit((values[index] ?? min) + delta, index);
-    (onAfterChange as ((value: SliderValue) => void) | undefined)?.(current);
+    (onAfterChange as ((value: SliderValue) => void) | undefined)?.(lastCommitted.current ?? current);
   }
 
   const handleSize = 16;
