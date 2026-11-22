@@ -27,7 +27,7 @@
       "boxShadow": "none",
       "alignment": "flex/center/normal",
       "overflow": "visible/visible",
-      "screenshotHash": "0349d454d1b8faeb"
+      "screenshotHash": "7e56af2c4cb1ca88"
     },
     "wrapper": {
       "width": 105.91,
@@ -49,47 +49,47 @@
     {
       "state": "default",
       "action": "click",
-      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
-      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "before": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "after": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":true}",
       "asserted": true,
-      "reference": "observed via [data-oi-control=\"button\"] after real click",
-      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+      "reference": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "wrapper": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":true}"
     },
     {
       "state": "hover",
       "action": "hover",
-      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
-      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabled\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "before": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "after": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
       "asserted": true,
-      "reference": "observed via [data-oi-control=\"button\"] after real hover",
-      "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+      "reference": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "wrapper": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}"
     },
     {
       "state": "default",
       "action": "click",
-      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
-      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "before": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "after": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":true}",
       "asserted": true,
-      "reference": "observed via [data-oi-control=\"button\"] after real click",
-      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+      "reference": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "wrapper": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":true}"
     },
     {
       "state": "hover",
       "action": "hover",
-      "before": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
-      "after": "{\"text\":\"PrimarySecondaryGhostSmallDisabledLoadingSelected\",\"value\":null,\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null}",
+      "before": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "after": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
       "asserted": true,
-      "reference": "observed via [data-oi-control=\"button\"] after real hover",
-      "wrapper": "observed via [data-oi-control=\"button\"] after real hover"
+      "reference": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"rgb(56, 113, 225)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}",
+      "wrapper": "{\"text\":\"Primary\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":null,\"background\":\"color(srgb 0.188863 0.381098 0.758824)\",\"color\":\"rgb(255, 255, 255)\",\"boxShadow\":\"none\",\"focused\":false}"
     },
     {
       "state": "default",
       "action": "click",
-      "before": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
-      "after": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\"}",
+      "before": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\",\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(154, 168, 189)\",\"boxShadow\":\"rgb(64, 67, 74) 0px 0px 0px 1px inset\",\"focused\":false}",
+      "after": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\",\"background\":\"rgb(30, 49, 86)\",\"color\":\"rgb(56, 113, 225)\",\"boxShadow\":\"rgb(64, 67, 74) 0px 0px 0px 1px inset\",\"focused\":true}",
       "asserted": true,
-      "reference": "observed via [data-oi-control=\"button\"] after real click",
-      "wrapper": "observed via [data-oi-control=\"button\"] after real click"
+      "reference": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\",\"background\":\"rgba(0, 0, 0, 0)\",\"color\":\"rgb(154, 168, 189)\",\"boxShadow\":\"rgb(64, 67, 74) 0px 0px 0px 1px inset\",\"focused\":false}",
+      "wrapper": "{\"text\":\"Dashboard\",\"value\":\"\",\"pressed\":null,\"busy\":null,\"checked\":null,\"disabled\":false,\"expanded\":null,\"state\":\"ghost\",\"background\":\"rgb(30, 49, 86)\",\"color\":\"rgb(56, 113, 225)\",\"boxShadow\":\"rgb(64, 67, 74) 0px 0px 0px 1px inset\",\"focused\":true}"
     }
   ],
   "consoleErrors": [],

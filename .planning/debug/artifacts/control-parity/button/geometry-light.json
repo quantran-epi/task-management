@@ -11,5 +11,6 @@
   "iconHeight": 14,
   "alignment": "flex/center/center",
   "overflow": "visible/visible",
-  "screenshotHash": "9bf9e81518bdd3ed"
+  "screenshotHash": "9bf9e81518bdd3ed",
+  "app": "wrapper"
 }
