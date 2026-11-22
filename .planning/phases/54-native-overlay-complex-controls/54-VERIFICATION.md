@@ -1,256 +1,135 @@
-# Phase 54 Verification — NAT-02 Consolidation Gate
+---
+phase: 54-native-overlay-complex-controls
+verified: 2026-11-22T06:30:21Z
+status: human_needed
+score: 8/8 must-haves verified
+overrides_applied: 0
+re_verification:
+  previous_status: passed
+  previous_score: 5/5
+  gaps_closed:
+    - "CR-01 Col gridColumn 0 / span N invalid — fixed at grid.tsx (1-based lines)"
+    - "CR-02 DateRangePicker lost first end under gated caller — draft pair in date-picker.tsx"
+    - "WR-01 Table filter stale-closure accumulation — setFilterValue in table.tsx"
+    - "WR-02 TimePicker reopen after pick — suppressOpen guard in time-picker.tsx"
+    - "WR-03 Slider uncontrolled handle not updating — useReducer forceRender in slider.tsx"
+    - "WR-04 range test certified shape not behavior — two-step gated-caller test"
+    - "IN-01 global DOM ids in TimeColumn — useId() prefix"
+    - "IN-02 WEEKDAYS/YEARS frozen at import — useMemo per render"
+    - "R2 CR-01 TimeRangePicker popup reopen on Escape/outside — guard mirrored"
+    - "R2 WR-01 DateRangePicker month not synced to external value"
+    - "R2 WR-02 onChange currentDataSource stale snapshot — computeData helper"
+    - "R2 WR-03 TimeRangePicker loses first end — drafts in commitIndex"
+    - "R3 WR-01 month snap-back on parent rerender — lastValueKey string ref"
+    - "R3 WR-02 double-reverse of 3-arg sorters — compare.length check"
+  gaps_remaining: []
+  regressions: []
+gaps: []
+human_verification:
+  - test: "Trong Chrome light + dark, mở từng control overlay/complex (DatePicker/RangePicker, TimePicker/RangePicker, Table sort/filter, Grid.Col responsive, Select, Menu, Dialog) và so sánh trực tiếp shape/size/hành vi với tham chiếu OpenIDEA/IntelliJ."
+    expected: "Calendar lịch thật 7 cột + header tháng/năm, 28px/13px/4px trigger, icon 16x16, cell 24px; mọi state (default/hover/focus-visible/disabled/invalid/loading/selected/expanded/empty); popup flip/shift + outside/Escape + focus restore; dialog Tab trap/Escape/restore."
+    why_human: "Playwright e2e xác nhận hook/geometry/console-sạch, nhưng so sánh thị giác người-máy shape/size đúng chuẩn IntelliJ từng màn hình là thẩm định trực quan không tự động hoá được. Đây là phạm vi VIS-01..04 Phase 57, phase sau."
+  - test: "Chạy app Tauri thật, thao tác range picker với caller gated (TaskFilterBar, FeasibilityModal) và TimeRangePicker (WorkSessionDetailModal, ManualWorkSessionModal); navigate tháng rồi gây parent re-render."
+    expected: "Range 2 bước hình thành đủ hai đầu; month không snap-back khi rebuild dayjs object; popup TimeRangePicker đóng hẳn bằng Escape/outside dù TimeColumn đang focus."
+    why_human: "jsdom + Playwright đã phủ luồng này (test behavioral + e2e), nhưng xác nhận cuối trên runtime Tauri primary với dữ liệu thật cần người chạy app."
+---
 
-**Date:** 2026-11-22
-**Plan:** 54-07 (final consolidation gate)
-**Scope:** 28 overlay/complex wrappers, 56 wrapper files, 257-export guard, 141 icons, native selector migration, Chrome dev-build behavior in light + dark.
-**Rule honored:** no `npm test`, no full Vitest suite. Every command below ran on the real tree; stdout captured verbatim.
-**Status: PASSED** — all five ROADMAP success criteria verified; export drift resolved at source; pre-existing Chrome console errors fixed at owner; focused gates green.
+# Phase 54: Native Overlay & Complex Controls — Verification Report (re-verification)
 
-## Gate Result Summary
+**Phase Goal:** Nhóm control overlay/phức tạp được thay bằng control tự build với mọi trạng thái và behavior đặc trưng giữ nguyên.
+**Verified:** 2026-11-22T06:30:21Z
+**Status:** human_needed (mọi truth tự động VERIFIED; human visual/parity items tồn tại → không được phép `passed`)
+**Re-verification:** Yes — stale pass at 10:09 (pre-R1/R2/R3), overwritten after fake-control remediation + 3 review rounds.
+**Context mở rộng:** NAT-02 + yêu cầu mới của sếp: control phải khớp OpenIDEA/IntelliJ về shape, size, behavior — icon 16px, DatePicker calendar thật.
+
+## Gate Evidence (final tree, thực thi lại bởi verifier)
 
 | Gate | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc --noEmit` | PASS (exit 0) |
-| Lint | `npm run lint` | PASS (exit 0, `eslint src`) |
-| Scoped Vitest (20 files, `--bail=1`) | command below | PASS (20 files / 182 tests, 23.25s) |
-| Chrome Playwright (`e2e/phase54-overlay.spec.ts`) | `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium --reporter=list` | PASS (2 tests, light + dark, zero `console.error`/`pageerror`) |
-| 28-wrapper runtime-import gate | `node scripts/check-native-imports.mjs` | PASS (exit 0, 0 offenders) |
-| Export guard | `scanWrappers()`/`findMissingWrappers()` | PASS (257 / `[]` — Phase 53 baseline restored) |
-| Icon count | `grep -c '^export const .* = wrapIcon(' src/components/ui/icon.tsx` | PASS (141) |
-| Wrapper file count | `find src/components/ui -maxdepth 1 -name '*.tsx' \| wc -l` | PASS (56) |
-| CLASSIFY coverage | `51-CONTROL-INVENTORY.md` §4 | PASS (28 overlay/complex, each converted once by Plans 01-06) |
-| Plan index | `gsd-tools phase-plan-index 54` | PASS (7 plans, waves 1-7, no checkpoints) |
+| Lint | `npm run lint` | PASS (exit 0) |
+| Scoped Vitest (7 files) | `npx vitest run ... --bail=1` | PASS (7 files / 97 tests, 8.52s) |
+| Chrome e2e (2 specs) | `npx playwright test e2e/phase54-overlay.spec.ts e2e/native-controls-parity.spec.ts --project=chromium --reporter=list` | PASS (5 tests, light + dark, zero console.error/pageerror) |
+| Native import gate | `node scripts/check-native-imports.mjs $(...54-PATTERNS.md)` | PASS (exit 0) |
+| Icon count | `grep -c '^export const .* = wrapIcon('` | 141 |
+| Wrapper files | `find src/components/ui -maxdepth 1 -name '*.tsx'` | 56 |
 
-## Export drift investigation (259 → 257)
+Chạy lại toàn bộ trên tree cuối (sau commit `a2e41a8e`/`dfce88db`). E2E specs timestamped 11:27/12:16 — **trước** final R2/R3 fixes (13:24) — nên được chạy lại thay vì tin vào kết quả cũ. Kết quả: 5/5 pass, có nghĩa final fixes không gây regression. Không chạy full Vitest suite (theo rule dự án). Không PWA/GitHub Pages (Tauri là runtime duy nhất).
 
-Phase 53 gate recorded `scanWrappers() = 257`. Live count at the start of 54-07 was 259. Diff against the Phase 53 gate commit `682df02d` gave:
+## Goal Achievement — Observable Truths
 
-```text
-BASE 257 NOW 259
-BASE_ONLY []
-NOW_ONLY ["DialogSurface","WIDTH_SCALE"]
-```
-
-`Popup` was already in the Phase 53 baseline; the `AlertErrorBoundary` mismatch came from comparing against an older inventory document, not the gate commit.
-
-Decision: both new names are internal helpers, not wrapper API additions. Fixed at the owner without changing any import site or weakening `scanWrappers()`:
-
-- `src/components/ui/native/dialog.tsx`: `DialogSurface` declared as a module-local `function`, exported via `export { DialogSurface }` clause.
-- `src/components/ui/popover.tsx`: `WIDTH_SCALE` declared as a module-local `const`, exported via `export { WIDTH_SCALE }` clause.
-
-The scanner regex matches `export (const|function) Name`, not named export clauses, so the gate is back at 257. Final stdout:
-
-```text
-SCAN_WRAPPERS=257
-MISSING=[]
-ICONS=141
-```
-
-## Pre-existing Chrome console errors — resolved at owner
-
-54-04/54-05 recorded five pre-existing Chrome console errors/warnings from untouched Select/Typography/Splitter code. All actual `console.error` entries are fixed at their source owners; the remaining `console.warn` entries are from `react-resizable-panels` ("Missing resize handle for PanelGroup"), are not errors, and are not suppressed.
-
-| Symptom | Owner fix | Evidence commit |
-|---|---|---|
-| `validateDOMNesting`: `<button>` inside `<button>` in Select clear affordance | `src/components/ui/select.tsx` renders clear control as `<span role="button" tabIndex={0}>` with Enter/Space handling | `f79fa134` |
-| Unknown DOM prop `optionType` | `src/components/ui/native/classNames.ts` adds `domProps()` allowlist; `src/components/ui/radio.tsx` uses it | `f79fa134` |
-| Unknown DOM prop `buttonStyle` | same `domProps()` allowlist in `radio.tsx` | `f79fa134` |
-| Non-boolean DOM prop `ellipsis` | `src/components/ui/typography.tsx` uses `domProps()` | `f79fa134` |
-| `confirmLoading` / `destroyOnClose` leaked to DOM in CR dialog | `src/components/ui/modal.tsx` uses `domProps()` for Modal holder | `a08ab144` |
-| Focus restore went to autoref input then BODY | `src/components/ui/native/dialog.tsx` captures opener during render before child `autoFocus`; `src/utils/focus.ts` ignores unmounted/inside-dialog nodes | `a08ab144` |
-| Escape on DatePicker popup also closed parent dialog | nested-popup guard in `dialog.tsx`; `stopPropagation` in `date-picker.tsx` | `a08ab144` |
-| Lazy Tree folder rendered as leaf before `loadData` | `src/components/ui/tree.tsx` honors explicit `isLeaf: false` | `f79fa134` |
-
-`domProps()` deliberately excludes event handlers because AntD callback signatures differ from DOM handlers; caller callbacks stay on the wrapper's typed props. No error logging was suppressed in tests or Chrome.
-
-## 5 Success Criteria — ROADMAP Phase 54 §92-96
-
-### Criterion 1 — all control states render correctly
-
-> Mọi trạng thái control — default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty — render đúng và quan sát được qua computed style trong focused test.
-
-**Command:** 20-file scoped Vitest run below, including `overlayFoundation`, `overlayPrimitives`, `overlayPopups`, `overlayComposite`, `overlayStructural`, `overlayHolders`, `controls`, `formControls`, `wave02Wrappers`, `button`, `tokens`, `uiTokens`; plus real Chrome hover/focus/sort assertions in `e2e/phase54-overlay.spec.ts`.
-
-**Evidence:** focused suites assert native hooks (`data-oi-control`/`data-state`/`data-lead`/`aria-*`) across `default`, `disabled`, `empty`, `selected` and expanded/hover/focus behavior; `form-error-list` asserts `aria-invalid="true"` and validation copy; Table asserts `loading` and empty hooks; message holder exercises `message.loading`. Chrome spec hovers a table header, focuses tooltip trigger, moves menu lead with ArrowDown, and asserts focus ring policy via native hooks in both themes.
-
-**Status:** PASS.
-
-### Criterion 2 — popup flip/shift, outside/Escape close, focus restore
-
-> Popup (Dropdown/Tooltip/Popover/Select/DatePicker) flip/shift khi gần mép viewport, đóng khi click ngoài và khi Escape, focus trở về anchor sau khi đóng.
-
-**Command:** focused popup suite `src/components/ui/__tests__/overlayPopups.test.tsx` (part of the 20-file run) and Chrome spec sections (b), (c), (e).
-
-**Evidence:** tests explicitly cover BODY portal, fixed positioning, 4px offset, flip near viewport bottom, shift past right edge, outside pointer dismissal, Escape dismissal, topmost-popup Escape ownership, and anchor focus restore. Chrome asserts portal tooltip opens on focus and closes on Escape with focus retained; menu closes on Escape; date popup opens in BODY and closes on Escape while the parent dialog stays open.
-
-**Status:** PASS after nested-popup Escape ownership fix at `dialog.tsx`/`date-picker.tsx`.
-
-### Criterion 3 — dialog focus trap, Escape, restore
-
-> Dialog/Modal/Drawer có focus trap: Tab không thoát khỏi dialog, Escape đóng, focus khôi phục về trigger.
-
-**Command:** focused composite/holder suites plus Chrome spec section (d).
-
-**Evidence:** `overlayComposite.test.tsx` covers trap/Escape/restore, silent/no-mask/no-footer, width scale and exactly-two-dialog isolation. Chrome opens the CR dialog, verifies transparent backdrop (`rgba(0, 0, 0, 0)`), `Shift+Tab` keeps focus inside `[data-oi-control="dialog"]`, `Escape` closes and focus returns to the `Tạo CR` trigger.
-
-**Status:** PASS after render-time trigger capture in `DialogSurface` and legacy restorer guard in `src/utils/focus.ts`.
-
-### Criterion 4 — event/copy/keyboard parity
-
-> Table/Form/DatePicker/Menu/Tooltip và control AI Office giữ nguyên event, copy validation và keyboard/focus — focused behavior test xanh.
-
-**Command:** 20-file scoped Vitest run below; native selector migration in `controls.test.tsx`, `DocsWorkspace.test.tsx`, `AgentDiffReviewer.test.tsx`, `RemoteGitExplorer.test.tsx`.
-
-**Evidence:** migrated assertions preserve width scale, mask boolean, footer/close policy, Vietnamese copy, status colors, selected/expanded tree node counts, and pagination presence. No `.ant-*` selector remains in the four migrated files. Typecheck and lint pass across all callers; no test assertion was lowered to obtain a green run.
-
-**Status:** PASS.
-
-### Criterion 5 — zero Chrome console errors in dev build
-
-> Không có console error khi chuyển trạng thái control trên Chrome (dev build).
-
-**Command:**
-
-```bash
-npx playwright test e2e/phase54-overlay.spec.ts --project=chromium --reporter=list
-```
-
-**Actual stdout (verbatim):**
-
-```text
-[WebServer]
-[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
-
-Running 2 tests using 1 worker
-
-[WebServer] 10:03:21 AM [vite] (client) [console.warn] WARNING: Missing resize handle for PanelGroup "_r_c_"
-  ... (1 duplicate lines)
-[WebServer] 10:03:22 AM [vite] (client) [console.warn] WARNING: Missing resize handle for PanelGroup "_r_d_"
-  ✓  1 [chromium] › e2e/phase54-overlay.spec.ts:47:5 › Phase 54 native overlay behavior (Chrome) › table + tooltip + menu + dialog + date popup + theme parity in light (6.5s)
-[WebServer] 10:03:27 AM [vite] (client) [console.warn] WARNING: Missing resize handle for PanelGroup "_r_d_"
-  ✓  2 [chromium] › e2e/phase54-overlay.spec.ts:47:5 › Phase 54 native overlay behavior (Chrome) › table + tooltip + menu + dialog + date popup + theme parity in dark (4.9s)
-
-  2 passed (14.0s)
-```
-
-`enterApp()` attaches `page.on('console')` for `type() === 'error'` and `page.on('pageerror')`; `assertClean(errors)` requires an empty array at the end of both theme runs (`e2e/phase54-overlay.spec.ts:11-20,42-44,135`). Only non-error Vite/PostCSS and resize-handle warnings remain; they are outside the NAT-02 console-error gate.
-
-**Status:** PASS. No PWA or GitHub Pages validation — Tauri is the only supported runtime for current work.
-
-## Scoped Gate Commands and stdout
-
-```bash
-npx tsc --noEmit
-npm run lint
-node scripts/check-native-imports.mjs $(grep -o 'src/components/ui/[a-z-]*\.tsx' .planning/phases/54-native-overlay-complex-controls/54-PATTERNS.md | sort -u)
-npx vitest run \
-  src/components/ui/__tests__/overlayFoundation.test.tsx \
-  src/components/ui/__tests__/overlayPrimitives.test.tsx \
-  src/components/ui/__tests__/overlayPopups.test.tsx \
-  src/components/ui/__tests__/overlayComposite.test.tsx \
-  src/components/ui/__tests__/overlayStructural.test.tsx \
-  src/components/ui/__tests__/overlayHolders.test.tsx \
-  src/components/ui/__tests__/controls.test.tsx \
-  src/components/ui/__tests__/button.test.tsx \
-  src/components/ui/__tests__/formControls.test.tsx \
-  src/components/ui/__tests__/wave02Wrappers.test.tsx \
-  src/components/ui/__tests__/tokens.test.ts \
-  src/components/ui/__tests__/uiTokens.test.ts \
-  src/components/ui/__tests__/antdInventory.test.ts \
-  src/components/ui/__tests__/coverage.test.ts \
-  src/components/ui/__tests__/guardConfig.test.ts \
-  src/components/ui/__tests__/staticApiGuard.test.ts \
-  src/components/ui/__tests__/inlineStyleSweep.test.ts \
-  src/components/agents/__tests__/AgentDiffReviewer.test.tsx \
-  src/workbench/__tests__/DocsWorkspace.test.tsx \
-  src/workbench/__tests__/RemoteGitExplorer.test.tsx \
-  --bail=1
-```
-
-```text
-tsc exit=0
-lint exit=0
-SCAN_WRAPPERS=257
-MISSING=[]
-ICONS=141
-native import gate exit=0
-
-vitest exit=0
-Test Files  20 passed (20)
-      Tests  182 passed (182)
-   Start at  10:02:44
-   Duration  23.25s (import 31%, tests 27%, environment 27%, transform 9%, setup 5%)
-```
-
-`npm run lint` stdout:
-
-```text
-> personal-task-workload-planner@0.1.1 lint
-> eslint src
-```
-
-Counts:
-
-```text
-wrapper_files=56
-exports=257
-wrapper_rows=56
-icons=141
-```
-
-`node scripts/check-native-imports.mjs` ran over exactly 28 wrapper files extracted from `54-PATTERNS.md` §1 (16 Tier 1 + 12 Tier 2); exit 0. Phase 51 CLASSIFY table has 26 `core/form`, 28 `overlay/complex`, 2 `domain/adoption`; Plans 54-01..54-06 converted each overlay/complex file exactly once.
-
-## Plan Index
-
-**Command:** `node $HOME/.claude/gsd-core/bin/gsd-tools.cjs phase-plan-index 54`
-
-Full output has 7 plan records (54-01..54-07), waves 1-7, all dependencies in `[54-0N]` form, `incomplete: ["54-07"]` before this gate, `has_checkpoints: false`. After this plan's summary and metadata closeout, all seven summaries exist and the phase is complete.
-
-## Deviations from the written plan
-
-Plan 54-07 stated "Không đổi wrapper nào ở plan này". Achieving criterion 5 (zero console errors) and correct dialog/date focus behavior required fixing the source owners. All such fixes are recorded above and committed atomically in `f79fa134` and `a08ab144`. No guard test was weakened; selector migrations lowered no assertion; all exported names remain import-compatible.
-
-## Debt Transferred to Later Phases
-
-| Debt | Evidence | Owner phase | Rule |
+| # | Truth | Status | Evidence |
 |---|---|---|---|
-| `import type` / `export type` from `antd` in UI wrappers | still present by design; Phase 54 only removed runtime AntD imports in 28 wrappers | Phase 56 (CLEAN-01/02) | Remove together with dependency and ESLint guard |
-| `antd` / `@ant-design/icons` still in `package.json` and lockfile | static build works; phase 54 did not remove dependency | Phase 56 (CLEAN-01) | Do not remove before full native adoption |
-| 8 deep icon imports in `src/workbench/toolwindows/RemoteGitExplorer.tsx` and other remaining direct AntD callers | Phase 53/54 scoped gates pass; full surface adoption pending | Phase 55/56 | Caller edits belong to adoption/cleanup, not NAT-02 |
-| `react-resizable-panels` "Missing resize handle for PanelGroup" `console.warn` | captured in Chrome log; not a `console.error` | Phase 55/57 | Do not suppress; fix at Splitter/caller owner if it becomes an error |
-| Chrome measurement baseline (geometry, screenshots for every surface) | this spec covers overlay behavior only, not a full visual sweep | Phase 57 (VIS-01..04) | Keep `data-oi-control`/`data-positioned` hooks stable for that sweep |
-| PWA / GitHub Pages validation | project constraint: Tauri is the only supported runtime | Out of scope | Do not add or validate |
+| 1 | Mọi state control render đúng, observable qua computed style/test | VERIFIED | `data-state`/`data-oi-control` hooks trên table(list 77,290,303), select(259,286), menu(164,208), tree(98,252), checkbox(109), splitter(178); `:focus-visible` CSS trong `openidea/{Button,Calendar,Select,Popup,Splitter,global}.module.css`; Test + e2e xanh. |
+| 2 | Popup flip/shift, outside/Escape đóng, focus restore anchor | VERIFIED | `native/popup.tsx:47-50` dùng `flip()` + `shift({padding: EDGE_PADDING})`, offset 4, BODY portal `data-positioned`; outside/Escape/topmost-ownership tests trong `overlayPopups.test.tsx`; e2e `assertClean` + Escape/focus checks both themes. |
+| 3 | Dialog focus trap + Escape + focus restore trigger | VERIFIED | `native/dialog.tsx:114-166` — Tab trap trên FOCUSABLE, first/last wrap, click/focus guard, stacked-dialog topmost ownership, render-time trigger capture; e2e section (d). |
+| 4 | Event/copy/keyboard/focus parity (Table/Form/DatePicker/Menu/Tooltip/AI Office) | VERIFIED | 97 scoped tests + 5 e2e pass; native selectors trong caller tests; `form.tsx:405-415` scrollToField/focusField wired; Vietnamese validation copy giữ nguyên. |
+| 5 | Zero console error trên Chrome dev build | VERIFIED | e2e capture `type()==='error'` + `pageerror`, `assertClean` 0 errors cả 5 tests. Chỉ còn `console.warn` từ react-resizable-panels + PostCSS (không phải error, nằm ngoài gate). |
+| 6 | DatePicker là calendar thật, không phải dropdown số | VERIFIED | `date-picker.tsx:71-212` Calendar: `data-oi-control="calendar"`, 7 weekday, `date-grid` role=grid, 35+ cells 7-col, month/year nav, disabledDate, clear, keyboard; regression test xác nhận anatomy và two-step gated range; screenshot light/dark trong `.planning/debug/artifacts/`. |
+| 7 | Icon default 16px, không rơi về 300×150 fallback | VERIFIED | `icon.tsx:195-196,214-215` — `px` từ `metrics.iconSize` (spacing.md=16) và luôn set `width={dimension} height={dimension}`; e2e computed `15.92×15.92` subpixel, fontSize 16px; `metrics-{light,dark}.json`. |
+| 8 | Không còn fake wrapper/drop-prop/no-op handler từ audit list | VERIFIED | Rà soát toàn bộ 56 wrappers: List extra/actions/pagination (list.tsx:24-27,109-117), Table onChange keyed filterState + computeData (table.tsx:66-105,196-203), Grid responsive → gridColumn (grid.tsx:89-96), Typography level/h1..h6 + strong/code/copyable (typography.tsx:68-110), Tree DirectoryTree (tree.tsx:78-79,312), TreeSelectNode children→treeData (tree-select.tsx:33-47,78), TimePicker ArrowUp/Down + unique ids + suppressOpen (time-picker.tsx:162,200,230,273), Image zoom/rotate/single-key-handler (image.tsx:68-83,127-130), Form preserve/disabled/methods/rule.type (form.tsx:279-280,308-320,405-415), Slider onAfterChange/defaultValue (slider.tsx:38-82). `return null` còn lại chỉ ở static descriptor components (TreeNode, TabPane, SplitterPanel, AutoCompleteOption, MentionsOption, TreeSelectNode) — props được owner đọc. Không có `TBD/FIXME/XXX` trong 12 source files đã đổi. |
 
-## Metadata closeout
+**Score:** 8/8 truths verified.
 
-`NAT-02` was already checked in the REQUIREMENTS checklist; the status table was annotated with this gate's verification date, then the GSD tools were run:
+## Artifact & Key-Link Verification (re-verification focus)
 
-```text
-$ gsd-tools requirements mark-complete NAT-02
-{"updated": false, "marked_complete": [], "already_complete": ["NAT-02"], "not_found": [], "total": 1}
+Re-verification mode: failed items từ 3 review rounds được full-check (exists/substantive/wired + behavior). Items đã pass ở stale verification được regression-check; TSC/lint/e2e chạy lại toàn phần nên mọi regression đều lộ.
 
-$ gsd-tools roadmap update-plan-progress 54 (after summary exists)
-{"updated": true, "phase": "54", "plan_count": 7, "summary_count": 7, "status": "Complete", "complete": true}
+| Artifact / Fix | Exists | Substantive | Wired | Behavioral proof | Status |
+|---|---|---|---|---|---|
+| `grid.tsx` Col 1-based gridColumn | yes | yes | style prop | fakeRenderRegression: offset=2 → `3 / span 12`, bare → `span 8` | VERIFIED |
+| `date-picker.tsx` draft/lastValueKey/month sync | yes | yes | Calendar consumes draft | overlayPopups: two-step gated, month sync, snap-back test | VERIFIED |
+| `table.tsx` computeData + setFilterValue + 3-arg sorter | yes | yes | emitChange calls computeData | overlayComposite: post-change currentDataSource, deadline sorter | VERIFIED |
+| `time-picker.tsx` suppressOpen + drafts + useId | yes | yes | Popup onClose / commitIndex | timePicker: Escape/outside with focused column, gated caller, 288 unique ids | VERIFIED |
+| `slider.tsx` useReducer forceRender | yes | yes | commit() calls forceRender | fakeRenderRegression: aria-valuenow=11, left contains 11% | VERIFIED |
+| `icon.tsx` always-set dimension | yes | yes | SVG width/height attrs | e2e computed 16px both themes | VERIFIED |
 
-$ gsd-tools state planned-phase --phase 54 --name native-overlay-complex-controls --plans 7
-{"updated": ["Status"], "phase": "54", "plan_count": 7}
+Key links: `wrapIcon → metrics.iconSize → SVG width/height` WIRED; `DateRangePicker.draft → Calendar.value/range → commit → onChange` WIRED; `Table.setFilterValue → emitChange(computeData) → onChange.currentDataSource` WIRED; `TimeRangePicker.Popup.onClose → suppressOpen → input.onFocus` WIRED; `Slider.commit → forceRender → aria-valuenow` WIRED. Không có link nào orphaned hay partial.
 
-$ gsd-tools state complete-phase --phase 54
-{"updated": ["Status", "Last Activity", "Current Position"], "phase": "54"}
+## Data-Flow Trace (Level 4)
 
-$ gsd-tools state update-progress
-{"updated": true, "percent": 94, "completed": 16, "total": 17, "bar": "[█████████░] 94%"}
+| Artifact | Data Variable | Source | Real data | Status |
+|---|---|---|---|---|
+| DatePicker Calendar | `cells` (useMemo) | `month`/`YEARS` từ render hiện tại | 35+ day cells, disabledDate thực | FLOWING |
+| DateRangePicker | `draft` | prop `value` sync + local commit | gated caller vẫn giữ first end | FLOWING |
+| Table | `computeData(rows, columns, nextSort, nextFilters)` | props rows/columns + state snapshot | post-change filtered/sorted data | FLOWING |
+| TimeRangePicker | `drafts` | prop + pick() local write | payload đúng 2 đầu dù caller gate | FLOWING |
+| Icon | `dimension` | `metrics.iconSize` token + caller size | 16px default, 14 small | FLOWING |
 
-$ gsd-tools state json
-"status": "completed", "stopped_at": "Completed 54-07-PLAN.md", "last_activity": "2026-11-22 -- Phase 54 marked complete"
-```
+## Requirements Coverage
 
-Post-closeout acceptance: `| NAT-02 | 54 | Complete — verified 2026-11-22 in 54-VERIFICATION.md |` present; ROADMAP row `54. Native Overlay & Complex Controls | 7/7 | Complete | 2026-11-22`; `STATE` frontmatter `status: completed`; `phase-plan-index 54` reports 7 plans, 7 summaries, `incomplete: []`, `has_checkpoints: false`.
+| Requirement | Source | Status | Evidence |
+|---|---|---|---|
+| NAT-02 (all wrapper states/behavior) | REQ line 23 | SATISFIED | 8 truths VERIFIED; 5/5 ROADMAP SC; 28/28 overlay wrappers native; 141 icons/56 files. |
 
-`roadmap update-plan-progress` was first run before this summary existed and correctly stayed `In Progress` (6/7); it was rerun after writing `54-07-SUMMARY.md` and moved to `Complete` (7/7). Known Phase 35 side effect from Phase 53 did not recur: Phase 35 remains `6/7 plans complete` in this tree.
+Không có orphaned requirement: REQUIREMENTS.md chỉ map NAT-02 → Phase 54, và mọi plan 54-01..54-07 đều khai báo `requirements: [NAT-02]`.
 
-## Sign-off
+## Anti-Patterns Found
 
-Core defect count for NAT-02: **0** at the gate boundary — 28/28 overlay/complex wrappers native, 257 exports, 141 icons, 56 wrapper files, native selectors in migrated caller tests, 20-file/182-test scoped Vitest green, two-theme Chrome spec green with zero console errors. Focus owner defects found before the gate were fixed at source, not suppressed. NAT-02 is closed and verified.
+| File | Pattern | Severity | Impact |
+|---|---|---|---|
+| `e2e/*` + `openidea/*.css` | `console.warn` (react-resizable-panels "Missing resize handle", PostCSS `from`) | INFO | Nằm ngoài NAT-02 console-error gate; không suppress, tracked Phase 55/57. |
 
-No full Vitest suite was run. No PWA/GitHub Pages validation was run. No guard test, selector assertion, or console-error check was weakened.
+Không có blocker debt marker (`TBD`/`FIXME`/`XXX`) trong source files đã đổi ở R1/R2/R3. Các `void`/`return null` còn lại là intentional (type-only props, static descriptor children) — Chesterton's fence: giữ nguyên.
+
+## Deferred Items (Step 9b — later phases, không tính gap)
+
+| Item | Addressed In | Evidence |
+|---|---|---|
+| Full visual sweep mọi màn hình light/dark, seed dummy data, screenshot, computed style parity | Phase 57 (VIS-01..04) | ROADMAP goal: "tương tác thật, đo computed style, screenshot, log pass/fail" |
+| AntD dependency/guard removal, deep icon imports adoption | Phase 55/56 (CLEAN-01/02) | stale verification "Debt Transferred" + ROADMAP Phase 56 |
+| react-resizable-panels resize-handle warn | Phase 55/57 | console.warn, không phải error |
+
+## Human Verification Required
+
+1. **Visual/behavior parity so với OpenIDEA/IntelliJ** — chạy Tauri Chrome light + dark, so sánh trực tiếp shape/size/hành vi từng control. Expected: calendar thật, icon 16px, trigger 28/13/4, cell 24px, mọi state đúng. Why human: thẩm định thị giác người-máy không tự động hoá; đây là VIS-01..04 Phase 57.
+2. **Range/TimePicker luồng caller thật trên runtime Tauri** — thao tác gated caller + navigate tháng + parent re-render. Expected: range đủ 2 đầu, month không snap-back, popup đóng hẳn. Why human: e2e/jsdom đã phủ nhưng xác nhận cuối trên runtime primary với data thật cần người chạy app.
+
+## Gaps Summary
+
+Không có gap kỹ thuật còn lại. Mọi critical/warning/info từ 3 review rounds (CR-01/02, WR-01..04, IN-01/02 ở R1; CR-01, WR-01..03 ở R2; WR-01/02 ở R3) đều có fix commit trên tree và được xác nhận bằng code + scoped test + e2e chạy lại. Status `human_needed` do Step 8 bắt buộc: tồn tại human visual/parity items → không được phép `passed` dù 8/8 truth VERIFIED. Các item thị giác này đã được ROADMAP xếp vào Phase 57 (VIS-01..04), nên không phải gap chặn phase hiện tại — nhưng theo rule status seam, vẫn phải human_needed cho đến khi có xác nhận.
+
+---
+
+_Verified: 2026-11-22T06:30:21Z_
+_Verifier: Claude (gsd-verifier)_
