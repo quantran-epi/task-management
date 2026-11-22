@@ -68,7 +68,7 @@ Each of the 18 v1.6 requirements maps to exactly one phase. Status stays Pending
 | MAP-02 | 52 | Complete |
 | MAP-03 | 52 | Complete |
 | NAT-01 | 53 | Complete |
-| NAT-02 | 54 | Complete |
+| NAT-02 | 54 | Complete — verified 2026-11-22 in `54-VERIFICATION.md` |
 | NAT-03 | 55 | Pending |
 | NAT-04 | 55 | Pending |
 | CLEAN-01 | 56 | Pending |

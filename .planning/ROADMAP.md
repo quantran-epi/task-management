@@ -28,7 +28,7 @@
 - [x] **Phase 51: Control Inventory & Surface Audit** — liệt kê mọi control/import AntD, mọi UI surface, phân nhóm implementation (INV-01..03) (completed 2026-11-21)
 - [x] **Phase 52: OpenIDEA Mapping & Design Contract** — map control có tương đương, thiết kế control mới, khóa API/metric baseline (MAP-01..03) (completed 2026-11-21)
 - [x] **Phase 53: Native Core & Form Controls** — thay wrapper core/form bằng control tự build, không import AntD (NAT-01) (completed 2026-11-21)
-- [ ] **Phase 54: Native Overlay & Complex Controls** — Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form + mọi trạng thái/behavior (NAT-02)
+- [x] **Phase 54: Native Overlay & Complex Controls** — Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form + mọi trạng thái/behavior (NAT-02) (completed 2026-11-22)
 - [ ] **Phase 55: Full Surface Adoption & Theme/Offline Parity** — mọi màn hình dùng wrapper, token light/dark, Tauri offline (NAT-03, NAT-04)
 - [ ] **Phase 56: AntD Removal, Guardrails & Focused Verification** — gỡ dependency, ESLint guard, focused test, cổng tổng hợp (CLEAN-01..03)
 - [ ] **Phase 57: Chrome Visual & Behavior Sweep** — seed dummy data, quét mọi màn hình light/dark, đo computed style, screenshot, log pass/fail, tương tác thật (VIS-01..04)
@@ -163,7 +163,7 @@
 | 51. Control Inventory & Surface Audit | 3/3 | Complete    | 2026-11-21 |
 | 52. OpenIDEA Mapping & Design Contract | 2/2 | Complete    | 2026-11-21 |
 | 53. Native Core & Form Controls | 5/5 | Complete    | 2026-11-21 |
-| 54. Native Overlay & Complex Controls | 6/7 | In Progress|  |
+| 54. Native Overlay & Complex Controls | 7/7 | Complete   | 2026-11-22 |
 | 55. Full Surface Adoption & Theme/Offline Parity | 0/TBD | Not started | — |
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
 | 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
@@ -233,7 +233,7 @@
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 **Wave 1**
