@@ -291,18 +291,24 @@ export function DateRangePicker({
   const endRef = useRef<HTMLInputElement>(null);
   const pair: [DateValue, DateValue] = value ?? [null, null];
   const format = rest.format as string | undefined ?? 'YYYY-MM-DD';
-  const [texts, setTexts] = useState<[string, string]>([formatValue(pair[0], format), formatValue(pair[1], format)]);
+  // Controlled callers often gate on both ends and ignore a half-built range.
+  // Keep a local draft so the second pick still forms the pair instead of
+  // reading the untouched prop and emitting [null, second].
+  const [draft, setDraft] = useState<[DateValue, DateValue]>(pair);
+  const [texts, setTexts] = useState<[string, string]>([formatValue(draft[0], format), formatValue(draft[1], format)]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<0 | 1>(0);
   const [month, setMonth] = useState(pair[0] ?? pair[1] ?? dayjs());
   const anchorRef = active === 0 ? startRef : endRef;
 
   useEffect(() => {
+    setDraft(pair);
     setTexts([formatValue(pair[0], format), formatValue(pair[1], format)]);
   }, [pair[0], pair[1], format]);
 
   function commit(next: Dayjs) {
-    const updated: [DateValue, DateValue] = active === 0 ? [next, pair[1]] : [pair[0], next];
+    const updated: [DateValue, DateValue] = active === 0 ? [next, draft[1]] : [draft[0], next];
+    setDraft(updated);
     setTexts([formatValue(updated[0], format), formatValue(updated[1], format)]);
     setOpen(false);
     anchorRef.current?.focus();
@@ -314,6 +320,7 @@ export function DateRangePicker({
   }
 
   function clear() {
+    setDraft([null, null]);
     setTexts(['', '']);
     setOpen(false);
     anchorRef.current?.focus();
@@ -357,8 +364,8 @@ export function DateRangePicker({
       >
         <Calendar
           month={month}
-          value={pair[active]}
-          range={pair}
+          value={draft[active]}
+          range={draft}
           disabledDate={rest.disabledDate}
           onMonth={setMonth}
           onPick={commit}
