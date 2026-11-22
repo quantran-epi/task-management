@@ -158,7 +158,7 @@
 
 **UI hint**: yes
 
-### Phase 59: Control Parity Rework — per-control Chrome compare + human gate
+### Phase 59: Control Parity Rework — per-control Chrome compare + human gate (đơn giản hoá)
 
 **Goal:** Sửa tận gốc chất lượng bộ control: từng wrapper một được đối chiếu trực tiếp với control tương ứng trong OpenIDEA/IntelliJ trên Chrome, cả render lẫn behavior, light + dark. Không coi phase 54 là đạt cho tới khi xong phase này.
 **Depends on:** Phase 54 (remediation) — chặn Phase 55/56/57/58 cho tới khi pass.
