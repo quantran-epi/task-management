@@ -104,7 +104,7 @@ function Chevron({ expanded }: { expanded: boolean }) {
 }
 
 /** Native S-TR: vendored Tree.module.css rows, indent 16*depth + 12, AntD event payloads preserved. */
-export function Tree({ compact = true, style, ...rest }: TreeWrapperProps) {
+export function Tree({ compact = true, style, blockNode: _blockNode, virtual: _virtual, height: _height, ...rest }: TreeWrapperProps) {
   const idBase = useId();
   const { controlHeight, fontSize, iconSize } = getSharedControlTokens();
   void compact;

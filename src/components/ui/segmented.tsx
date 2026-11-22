@@ -20,7 +20,7 @@ function asOptions<ValueType>(options: SegmentedProps<ValueType>['options']): Op
 }
 
 /** Generic preserved so callers keep their literal union (`<Segmented<'a' | 'b'>>`). */
-export function Segmented<ValueType = SegmentedValue>({ style, options, value, defaultValue, onChange, className, 'aria-label': ariaLabel, disabled, ...rest }: SegmentedProps<ValueType>) {
+export function Segmented<ValueType = SegmentedValue>({ style, options, value, defaultValue, onChange, className, 'aria-label': ariaLabel, disabled, block, ...rest }: SegmentedProps<ValueType>) {
   const { controlHeight, fontSize, borderRadius } = getSharedControlTokens();
   const items = asOptions<ValueType>(options);
   const selected = value ?? defaultValue;
@@ -44,7 +44,7 @@ export function Segmented<ValueType = SegmentedValue>({ style, options, value, d
   }
 
   return (
-    <div className={tabStyles.strip} style={{ ...tokenStyle, ...style }} data-oi-control="segmented" {...(rest as object)}>
+    <div className={tabStyles.strip} style={block ? { width: '100%', ...tokenStyle, ...style } : { ...tokenStyle, ...style }} data-oi-control="segmented" {...(rest as object)}>
       <div ref={tabListRef} role="tablist" aria-label={ariaLabel} className={classNames(tabStyles.scroller, className)}>
         {items.map((option) => {
           const active = option.value === selected;
