@@ -61,6 +61,11 @@ interface TimeColumnProps {
 function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColumnProps) {
   const activeIndex = Math.max(0, values.indexOf(value) >= 0 ? values.indexOf(value) : lead);
   const columnRef = useRef<HTMLDivElement>(null);
+  // Open on the selected value, not at 00.
+  useEffect(() => {
+    const row = columnRef.current?.querySelector<HTMLElement>(`#${id}-${activeIndex}`);
+    row?.scrollIntoView({ block: 'center' });
+  }, [id, activeIndex]);
 
   function onColumnKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const delta = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
