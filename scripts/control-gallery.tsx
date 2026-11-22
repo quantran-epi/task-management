@@ -63,9 +63,9 @@ function RadioFixture() {
   const [value, setValue] = React.useState('plan');
   return (
     <RadioGroup value={value} onChange={(e) => setValue(e.target.value)}>
-      <Radio value="plan">Kế hoạch</Radio>
-      <Radio value="actual">Thực tế</Radio>
-      <Radio value="disabled" disabled>Không dùng</Radio>
+      <Radio value="plan">Plan</Radio>
+      <Radio value="actual">Actual</Radio>
+      <Radio value="disabled" disabled>Disabled</Radio>
     </RadioGroup>
   );
 }
