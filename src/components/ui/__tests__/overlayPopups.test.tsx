@@ -1,6 +1,7 @@
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { useState } from 'react';
 import { Dropdown, DropdownButton } from '../dropdown';
 import { Tooltip } from '../tooltip';
 import { Popover, WIDTH_SCALE } from '../popover';
@@ -419,6 +420,43 @@ describe('N-08 native DatePicker', () => {
     expect(dates[0]).toBeInstanceOf(Object);
     expect(strings).toHaveLength(2);
     expect(typeof strings[0]).toBe('string');
+    view.unmount();
+  });
+
+  it('forms a range over two picks even when a controlled caller gates on both ends', () => {
+    const onChange = vi.fn();
+    // Mirrors TaskFilterBar / FeasibilityModal: only commit once both ends exist.
+    function GatedCaller() {
+      const [value, setValue] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null] | null>(null);
+      return (
+        <DateRangePicker
+          value={value}
+          onChange={(dates, strings) => {
+            onChange(dates, strings);
+            if (dates && dates[0] && dates[1]) setValue(dates as [dayjs.Dayjs, dayjs.Dayjs]);
+          }}
+        />
+      );
+    }
+    const view = render(<GatedCaller />);
+    const inputs = view.container.querySelectorAll('[data-oi-control="date-picker"]');
+    const first = dayjs().date(5).format('YYYY-MM-DD');
+    const second = dayjs().date(12).format('YYYY-MM-DD');
+    const cell = (date: string) => document.querySelector(`[data-oi-control="calendar-cell"][data-date="${date}"]`) as HTMLElement;
+
+    fireEvent.click(inputs[0]!);
+    fireEvent.click(cell(first));
+    // First pick emitted a half range; caller ignored it, value stayed null.
+    expect(onChange.mock.calls[0]![0][0]).not.toBeNull();
+    expect(onChange.mock.calls[0]![0][1]).toBeNull();
+
+    // Second input must still see the first pick via internal draft.
+    fireEvent.click(inputs[1]!);
+    fireEvent.click(cell(second));
+    const [dates, strings] = onChange.mock.calls.at(-1)!;
+    expect(dates[0]?.format('YYYY-MM-DD')).toBe(first);
+    expect(dates[1]?.format('YYYY-MM-DD')).toBe(second);
+    expect(strings).toEqual([first, second]);
     view.unmount();
   });
 
