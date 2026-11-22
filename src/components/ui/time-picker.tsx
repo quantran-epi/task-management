@@ -7,6 +7,7 @@ import { Popup } from './native/popup';
 import inputStyles from './openidea/Input.module.css';
 import listStyles from './openidea/List.module.css';
 import selectStyles from './openidea/Select.module.css';
+import calendarStyles from './openidea/Calendar.module.css';
 import { getSharedControlTokens } from './tokens.contract';
 
 dayjs.extend(customParseFormat);
@@ -176,10 +177,10 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
     queueMicrotask(() => { suppressOpen.current = false; });
   }
 
-  function pick(h: number, m: number, s: number) {
+  function pick(h: number, m: number, s: number, part?: 0 | 1 | 2) {
     const next = dayjs().hour(h).minute(m).second(s).millisecond(0);
     commit(next, onChange as ((value: Dayjs | null) => void) | undefined);
-    close();
+    setState((prev) => ({ ...prev, open: true, lead: part === undefined ? prev.lead : prev.lead.map((v, i) => (i === part ? [h, m, s][i] : v)) as [number, number, number] }));
   }
 
   const passed = fieldProps(width, style, className, placeholder, disabled, invalid, ariaLabel);
@@ -209,10 +210,10 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
       ) : null}
       <Popup open={state.open} anchorRef={anchorRef} onClose={close} className={selectStyles.popup ?? ''} control="time-picker-popup" label={ariaLabel ?? placeholder ?? 'Chọn giờ'}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', gap: 4 }}>
-          <TimeColumn id={`${idBase}-tp-h`} values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second)} />
-          <TimeColumn id={`${idBase}-tp-m`} values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second)} />
+          <TimeColumn id={`${idBase}-tp-h`} values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second, 0)} />
+          <TimeColumn id={`${idBase}-tp-m`} values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second, 1)} />
           {active.seconds.length > 0 ? (
-            <TimeColumn id={`${idBase}-tp-s`} values={active.seconds} value={second} lead={leads[2]} label="Giây" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], prev.lead[1], index] }))} onPick={(s) => pick(hour, minute, s)} />
+            <TimeColumn id={`${idBase}-tp-s`} values={active.seconds} value={second} lead={leads[2]} label="Giây" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], prev.lead[1], index] }))} onPick={(s) => pick(hour, minute, s, 2)} />
           ) : null}
         </div>
       </Popup>
@@ -270,16 +271,13 @@ export function TimeRangePicker({
     setDrafts((prev) => active === 0 ? [next.format(format), prev[1]] : [prev[0], next.format(format)]);
     commitIndex(active, next);
     setActive(active === 0 ? 1 : 0);
-    suppressOpen.current = true;
-    setRangeOpen(false);
-    anchorRef.current?.focus();
-    queueMicrotask(() => { suppressOpen.current = false; });
+    setRangeOpen(true);
   }
 
   const rangeDisabled = Array.isArray(disabled) ? disabled[active] : disabled;
   const passed = fieldProps(width, style, className, placeholder?.[active], rangeDisabled, invalid, ariaLabel);
   return (
-    <>
+    <span className={calendarStyles.rangeInputs}>
       {([0, 1] as const).map((index) => (
         <input
           key={index}
@@ -323,6 +321,6 @@ export function TimeRangePicker({
           {grid.seconds.length > 0 ? <TimeColumn id={`${idBase}-tr-s`} values={grid.seconds} value={parsed.second()} lead={rangeLead[2]} label="Giây" onLead={(index) => setRangeLead((prev) => [prev[0], prev[1], index])} onPick={(s) => pick(parsed.hour(), parsed.minute(), s)} /> : null}
         </div>
       </Popup>
-    </>
+    </span>
   );
 }
