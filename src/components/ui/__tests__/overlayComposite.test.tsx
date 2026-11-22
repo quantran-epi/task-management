@@ -1,0 +1,233 @@
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Drawer } from '../drawer';
+import { Image, ImagePreviewGroup } from '../image';
+import { Modal, getOverlayWidth, resolveMask, useTaskMateModal } from '../modal';
+import { Table } from '../table';
+import { sharedTokens } from '../../../styles/tokens';
+
+let errorSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  expect(errorSpy).not.toHaveBeenCalled();
+  errorSpy.mockRestore();
+});
+
+const dialogs = () => document.querySelectorAll('[data-oi-control="dialog"]');
+
+describe('native Modal and Drawer', () => {
+  it('traps Tab and Shift+Tab, closes on Escape and restores trigger focus', () => {
+    const onCancel = vi.fn();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" data-testid="trigger" onClick={() => setOpen(true)}>Open</button>
+          <Modal open={open} title="Xác nhận" footerPolicy="none" onCancel={() => { onCancel(); setOpen(false); }}>
+            <button type="button" data-testid="first">First</button>
+            <button type="button" data-testid="last">Last</button>
+          </Modal>
+        </>
+      );
+    }
+    render(<Host />);
+    screen.getByTestId('trigger').focus();
+    fireEvent.click(screen.getByTestId('trigger'));
+    const first = screen.getByTestId('first');
+    const last = screen.getByTestId('last');
+    const focusables = [screen.getByLabelText('Đóng'), first, last];
+    expect(document.activeElement).toBe(focusables[0]);
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(focusables[0]);
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+    first.focus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByTestId('trigger'));
+  });
+
+  it('keeps mask boolean, silent close and no-footer policies', () => {
+    const { unmount } = render(
+      <Modal open title="No mask" mask={false} footerPolicy="none" closePolicy="silent" onCancel={() => {}}>
+        body
+      </Modal>,
+    );
+    expect(document.querySelector('[data-oi-control="dialog-backdrop"]')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-close"]')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-footer"]')).toBeNull();
+    unmount();
+    render(<Drawer open title="Drawer" mask={false} closePolicy="silent" onClose={() => {}}>panel</Drawer>);
+    expect(document.querySelector('[data-oi-control="dialog-backdrop"]')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-close"]')).toBeNull();
+    expect(document.querySelector('[data-oi-control="drawer"]')).not.toBeNull();
+  });
+
+  it('preserves token width scales and raw CSS drawer width (WR-04)', () => {
+    expect(getOverlayWidth('sm')).toBe(sharedTokens.controlHeight * 10);
+    expect(getOverlayWidth('lg')).toBe(sharedTokens.controlHeight * 28);
+    expect(resolveMask(false, true, true)).toBe(false);
+    const { unmount } = render(<Modal open title="Defaults" onCancel={() => {}}>body</Modal>);
+    expect((dialogs()[0] as HTMLElement).style.width).toBe(`${getOverlayWidth('md')}px`);
+    unmount();
+    render(<Drawer open title="Wide" width="calc(100vw - 32px)" onClose={() => {}}>panel</Drawer>);
+    expect((document.querySelector('[data-oi-control="drawer"]') as HTMLElement).style.width).toBe('calc(100vw - 32px)');
+  });
+
+  it('traps focus inside the inner drawer dialog and restores on Escape', () => {
+    const onClose = vi.fn();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" data-testid="drawer-trigger" onClick={() => setOpen(true)}>Open drawer</button>
+          <Drawer open={open} title="Panel" onClose={() => { onClose(); setOpen(false); }}>
+            <button type="button" data-testid="drawer-first">A</button>
+            <button type="button" data-testid="drawer-last">B</button>
+          </Drawer>
+        </>
+      );
+    }
+    render(<Host />);
+    screen.getByTestId('drawer-trigger').focus();
+    fireEvent.click(screen.getByTestId('drawer-trigger'));
+    const closeButton = screen.getByLabelText('Đóng');
+    expect(document.activeElement).toBe(closeButton);
+    const last = screen.getByTestId('drawer-last');
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(document.activeElement).toBe(closeButton);
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByTestId('drawer-trigger'));
+  });
+});
+
+describe('imperative confirm', () => {
+  it('renders caller copy, runs onOk and supports destroy()', async () => {
+    const onOk = vi.fn();
+    function Consumer() {
+      const { modal, contextHolder } = useTaskMateModal();
+      return (
+        <>
+          <button type="button" onClick={() => { (window as unknown as { handle: { destroy: () => void } }).handle = modal.confirm({ title: 'Xóa tác vụ', content: 'Chắc chứ?', okText: 'Xóa', cancelText: 'Hủy', onOk }); }}>
+            Confirm
+          </button>
+          {contextHolder}
+        </>
+      );
+    }
+    render(<Consumer />);
+    (window as unknown as { handle: { destroy: () => void } }).handle = { destroy: () => {} };
+    fireEvent.click(screen.getByText('Confirm'));
+    expect(screen.getByText('Xóa tác vụ')).toBeTruthy();
+    expect(screen.getByText('Chắc chứ?')).toBeTruthy();
+    expect(screen.getByText('Xóa')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getAllByText('Xóa').at(-1)!);
+      (window as unknown as { handle: { destroy: () => void } }).handle.destroy();
+    });
+    expect(onOk).toHaveBeenCalled();
+    expect(dialogs()).toHaveLength(0);
+  });
+
+  it('renders exactly two dialogs from one hook across three mounted holders', () => {
+    function Holder() {
+      const { modal, contextHolder } = useTaskMateModal();
+      return (
+        <>
+          <button type="button" data-testid="add" onClick={() => modal.confirm({ title: `Dialog ${dialogs().length + 1}` })}>Add</button>
+          {contextHolder}
+        </>
+      );
+    }
+    render(<><Holder /><Holder /><Holder /></>);
+    const buttons = screen.getAllByTestId('add');
+    fireEvent.click(buttons[0]!);
+    fireEvent.click(buttons[1]!);
+    expect(dialogs()).toHaveLength(2);
+    expect(screen.getByText('Dialog 1')).toBeTruthy();
+    expect(screen.getByText('Dialog 2')).toBeTruthy();
+    expect(screen.getAllByText('OK')).toHaveLength(2);
+  });
+});
+
+describe('native Image', () => {
+  it('keeps alt accessible name, preview keyboard navigation and focus restore', () => {
+    render(
+      <ImagePreviewGroup>
+        <Image src="/a.png" alt="First image" />
+        <Image src="/b.png" alt="Second image" />
+      </ImagePreviewGroup>,
+    );
+    const image = screen.getByAltText('First image');
+    image.focus();
+    fireEvent.click(image);
+    const preview = dialogs()[0] as HTMLElement;
+    expect(preview).toBeTruthy();
+    expect(screen.getAllByAltText('First image')).toHaveLength(2);
+    fireEvent.keyDown(document, { key: 'ArrowRight' });
+    expect(screen.getAllByAltText('Second image')).toHaveLength(2);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(dialogs()).toHaveLength(0);
+    expect(document.activeElement).toBe(image);
+  });
+});
+
+describe('native Table', () => {
+  const rows = [
+    { key: 'a', name: 'Alpha', status: 'done' },
+    { key: 'b', name: 'Beta', status: 'open' },
+  ];
+
+  it('emits AntD-shaped onChange, rowSelection and live context-menu event', () => {
+    const onChange = vi.fn();
+    const onSelection = vi.fn();
+    const onContextMenu = vi.fn();
+    render(
+      <Table
+        dataSource={rows}
+        columns={[{ title: 'Name', dataIndex: 'name', key: 'name', sorter: (a, b) => a.name.localeCompare(b.name) }]}
+        onChange={onChange}
+        rowSelection={{ selectedRowKeys: ['a'], onChange: onSelection }}
+        onRow={() => ({ onContextMenu: onContextMenu })}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /sort Name/i }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const [pagination, filters, sorter, extra] = onChange.mock.calls[0]!;
+    expect(pagination).toMatchObject({ current: 1, pageSize: 10 });
+    expect(filters).toEqual({});
+    expect(sorter).toMatchObject({ field: 'name', order: 'ascend' });
+    expect(extra.currentDataSource).toHaveLength(2);
+    expect(extra.action).toBe('sort');
+    expect(onSelection).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Chọn b'));
+    expect(onSelection).toHaveBeenCalledWith(['a', 'b'], rows, { type: 'single' });
+    const row = screen.getAllByTestId('native-table-row')[0]!;
+    fireEvent.contextMenu(row);
+    const event = onContextMenu.mock.calls[0]![0] as MouseEvent;
+    expect(typeof event.preventDefault).toBe('function');
+    expect(typeof event.stopPropagation).toBe('function');
+  });
+
+  it('renders emptyText and loading hooks and honours row density', () => {
+    const { unmount } = render(
+      <Table dataSource={[]} columns={[]} locale={{ emptyText: <span data-testid="custom-empty">Không có dữ liệu</span> }} />,
+    );
+    expect(screen.getByTestId('custom-empty')).toBeTruthy();
+    expect(document.querySelector('[data-oi-control="table"]')?.getAttribute('data-state')).toBe('empty');
+    unmount();
+    render(<Table dataSource={rows} columns={[]} loading density="small" />);
+    expect(document.querySelector('[data-oi-control="table"]')?.getAttribute('aria-busy')).toBe('true');
+    expect((screen.getAllByTestId('native-table-row')[0] as HTMLElement).style.height).toBe('22px');
+  });
+});
