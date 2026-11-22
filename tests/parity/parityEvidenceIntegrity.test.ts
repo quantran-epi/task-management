@@ -241,6 +241,12 @@ export function checkOnDiskScreenshots(dir: string): string[] {
   const proofDark = hash('proof-dark.png');
   if (light && proofLight && light === proofLight) errors.push('wrapper-light.png is a copy of proof-light.png');
   if (dark && proofDark && dark === proofDark) errors.push('wrapper-dark.png is a copy of proof-dark.png');
+  // WR-R2-01: also reject a byte copy of reference. reference-light !==
+  // reference-dark, so the differ check alone does not catch a paired copy.
+  const refLight = hash('reference-light.png');
+  const refDark = hash('reference-dark.png');
+  if (light && refLight && light === refLight) errors.push('wrapper-light.png is a copy of reference-light.png');
+  if (dark && refDark && dark === refDark) errors.push('wrapper-dark.png is a copy of reference-dark.png');
   return errors;
 }
 
@@ -396,6 +402,27 @@ if (runGateSuite) describe('Phase 59 parity evidence integrity gate', () => {
       writeFileSync(resolve(tmp, 'proof-light.png'), 'proof-bytes');
       writeFileSync(resolve(tmp, 'proof-dark.png'), 'other-proof-bytes');
       expect(checkOnDiskScreenshots(tmp)).toContain('wrapper-light.png is a copy of proof-light.png');
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('WR-R2-01: wrapper PNG copied from reference is rejected', () => {
+    const tmp = mkdtempSync(resolve(tmpdir(), 'parity-ref-copy-'));
+    try {
+      // wrapper bytes == reference bytes for each theme (the unguarded forgery):
+      // light/dark still differ and wrapper != proof, so only the reference
+      // comparison can catch it.
+      writeFileSync(resolve(tmp, 'reference-light.png'), 'ref-light-bytes');
+      writeFileSync(resolve(tmp, 'reference-dark.png'), 'ref-dark-bytes');
+      writeFileSync(resolve(tmp, 'proof-light.png'), 'proof-light-bytes');
+      writeFileSync(resolve(tmp, 'proof-dark.png'), 'proof-dark-bytes');
+      writeFileSync(resolve(tmp, 'wrapper-light.png'), 'ref-light-bytes');
+      writeFileSync(resolve(tmp, 'wrapper-dark.png'), 'ref-dark-bytes');
+      expect(checkOnDiskScreenshots(tmp)).toEqual(expect.arrayContaining([
+        'wrapper-light.png is a copy of reference-light.png',
+        'wrapper-dark.png is a copy of reference-dark.png',
+      ]));
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
