@@ -349,6 +349,35 @@ describe('native Table', () => {
     sortView.unmount();
   });
 
+  it('does not double-reverse a 3-arg order-aware sorter (WR-02 R3)', () => {
+    const onChange = vi.fn();
+    // Mirrors TaskTable deadline: nulls first on descend via the sortOrder branch.
+    const deadlineRows = [
+      { key: 'a', deadline: null as string | null },
+      { key: 'b', deadline: '2026-01-01' },
+      { key: 'c', deadline: '2026-02-01' },
+    ];
+    const deadlineSorter = (a: typeof deadlineRows[number], b: typeof deadlineRows[number], sortOrder: unknown) => {
+      if (a.deadline === null && b.deadline === null) return 0;
+      if (a.deadline === null) return sortOrder === 'descend' ? -1 : 1;
+      if (b.deadline === null) return sortOrder === 'descend' ? 1 : -1;
+      return a.deadline.localeCompare(b.deadline);
+    };
+    const columns = [{ title: 'Deadline', dataIndex: 'deadline', key: 'deadline', sorter: deadlineSorter }];
+    render(<Table dataSource={deadlineRows} columns={columns} onChange={onChange} />);
+
+    // Two clicks: ascend -> descend.
+    fireEvent.click(screen.getByRole('button', { name: /sort Deadline/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sort Deadline/i }));
+    const extra = onChange.mock.calls.at(-1)![3];
+    // sortOrder='descend' branch puts null first, non-nulls stay ascending;
+    // the old extra reverse() pushed null to the bottom ([b, c, a]).
+    expect(extra.currentDataSource.map((r: { key: string }) => r.key)).toEqual(['a', 'b', 'c']);
+    // Rendered order must match the reported data source (null deadline = empty cell).
+    const renderedDeadlines = screen.getAllByTestId('native-table-row').map((row) => row.querySelector('td')?.textContent ?? '');
+    expect(renderedDeadlines).toEqual(['', '2026-01-01', '2026-02-01']);
+  });
+
   it('renders emptyText and loading hooks and honours row density', () => {
     const { unmount } = render(
       <Table dataSource={[]} columns={[]} locale={{ emptyText: <span data-testid="custom-empty">Không có dữ liệu</span> }} />,

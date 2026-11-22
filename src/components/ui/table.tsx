@@ -75,8 +75,16 @@ function computeData<RecordType>(
       | { sorter?: unknown }
       | undefined;
     const compare = typeof column?.sorter === 'function' ? column.sorter as (a: RecordType, b: RecordType, order: 'ascend' | 'descend') => number : undefined;
-    if (compare) result.sort((a, b) => compare(a, b, sortState.order));
-    if (sortState.order === 'descend') result.reverse();
+    if (compare) {
+      // A 3-arg sorter already handles sortOrder itself (e.g. deadline keeps
+      // nulls first on descend); reversing again would invert its intent.
+      if (compare.length >= 3) {
+        result.sort((a, b) => compare(a, b, sortState.order));
+      } else {
+        result.sort((a, b) => compare(a, b, 'ascend'));
+        if (sortState.order === 'descend') result.reverse();
+      }
+    }
   }
   const entries = Object.entries(filterState).filter(([, values]) => values.length > 0);
   if (entries.length === 0) return result;
