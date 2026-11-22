@@ -33,9 +33,9 @@
     0 0 0 1px var(--focus-ring);
 }
 .framed:disabled {
-  background: transparent;
+  background: var(--bg-elev);
   color: var(--fg-faint);
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--border-button);
 }
 .bare {
   border: 0;

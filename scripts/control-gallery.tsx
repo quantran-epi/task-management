@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Button, IconButton, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Button, IconButton, Input, InputPassword, InputSearch, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -24,7 +24,20 @@ function ButtonFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture };
+function InputFixture() {
+  const [value, setValue] = React.useState('TaskMate');
+  return (
+    <div style={{ display: 'grid', gap: 12, maxWidth: 320 }}>
+      <label>Tên task<Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Nhập tên task" /></label>
+      <label>Không hợp lệ<Input defaultValue="Lỗi" aria-invalid status="error" readOnly /></label>
+      <label>Vô hiệu hoá<Input defaultValue="Không sửa" disabled /></label>
+      <label>Tìm kiếm<InputSearch placeholder="Tìm nhiệm vụ..." defaultValue="" allowClear onSearch={(v) => console.log('search', v)} /></label>
+      <label>Mật khẩu<InputPassword defaultValue="secret" readOnly /></label>
+    </div>
+  );
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);

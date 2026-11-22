@@ -135,7 +135,8 @@ function NativeField({
     className,
   );
   const mergedStyle = { ...controlStyle(), ...controlWidthStyle(width), ...style };
-  const text = value === undefined || value === null ? '' : String(value);
+  const uncontrolled = value === undefined || value === null;
+  const text = uncontrolled ? '' : String(value);
   const countText = showCount
     ? `${text.length}${typeof count?.max === 'number' ? `/${count.max}` : rest.maxLength !== undefined ? `/${rest.maxLength}` : ''}`
     : null;
@@ -160,7 +161,8 @@ function NativeField({
     <input
       {...withoutUndefined(rest)}
       ref={elementRef}
-      value={text}
+      defaultValue={uncontrolled ? (rest.defaultValue as string | number | readonly string[] | undefined) : undefined}
+      value={uncontrolled ? undefined : text}
       maxLength={rest.maxLength}
       aria-invalid={invalid || undefined}
       className={affixed ? classNames(inputStyles.searchInput) : frame}
