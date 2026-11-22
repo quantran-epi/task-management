@@ -40,6 +40,20 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// jsdom reports clientWidth/clientHeight = 0 on <html>; @floating-ui uses
+// those for viewport flip/shift. Mirror the window viewport for tests.
+if (typeof window !== 'undefined') {
+  for (const [prop, size] of [['clientWidth', 'innerWidth'], ['clientHeight', 'innerHeight']] as const) {
+    const original = Object.getOwnPropertyDescriptor(Element.prototype, prop)!;
+    Object.defineProperty(Element.prototype, prop, {
+      ...original,
+      get(this: Element) {
+        return this === document.documentElement ? window[size] : original.get!.call(this);
+      },
+    });
+  }
+}
+
 // scrollIntoView shim for Ant Design mentions / dropdowns in JSDOM
 if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};

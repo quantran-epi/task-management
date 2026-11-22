@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { Dropdown, DropdownButton } from '../dropdown';
@@ -28,25 +28,50 @@ function installedPopup(): HTMLElement | null {
   return document.body.querySelector('[data-positioned]');
 }
 
-function stubRect(rect: Partial<DOMRect>) {
-  Element.prototype.getBoundingClientRect = () => ({
-    x: 0, y: 0, width: 180, height: 28, top: 0, left: 0, right: 180, bottom: 28,
-    ...rect,
-    toJSON: () => ({}),
-  }) as DOMRect;
+/** Floating UI resolves computePosition through a promise; flush before reading styles. */
+async function positionedPopup(): Promise<HTMLElement> {
+  const popup = installedPopup() as HTMLElement;
+  await waitFor(() => expect(popup.style.left).not.toBe(''));
+  return popup;
 }
 
 const originalRect = Element.prototype.getBoundingClientRect;
+function stubRect(rect: Partial<DOMRect>) {
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    // Floating UI derives viewport origin from <html>/<body>; keep their real rect.
+    if (this === document.documentElement || this === document.body) return originalRect.call(this);
+    return {
+      x: 0, y: 0, width: 180, height: 28, top: 0, left: 0, right: 180, bottom: 28,
+      ...rect,
+      toJSON: () => ({}),
+    } as DOMRect;
+  };
+}
 afterEach(() => {
   Element.prototype.getBoundingClientRect = originalRect;
 });
 
 describe('native popup placement contract', () => {
-  it('uses BODY portal, fixed position, 4px offset and flips near viewport bottom', () => {
+  it('applies Floating UI styles and reports resolved placement', async () => {
+    stubRect({ left: 100, top: 100, bottom: 128, right: 280, height: 28 });
+    const view = render(<Popover trigger={['click']} content="Nội dung">{anchor()}</Popover>);
+    fireEvent.click(view.getByText('Mở'));
+    const popup = await positionedPopup();
+    expect(popup.getAttribute('data-floating')).toBe('');
+    expect(popup.getAttribute('data-placement')).toBe('bottom-start');
+    expect(popup.style.position).toBe('fixed');
+    expect(popup.style.left).not.toBe('');
+    expect(popup.style.top).toBe('132px'); // anchor.bottom + offset(4)
+    expect(popup.style.width).toBe('180px'); // anchor width
+    expect(popup.style.transform).toBe(''); // transform:false → left/top, not translate()
+    view.unmount();
+  });
+
+  it('uses BODY portal, fixed position, 4px offset and flips near viewport bottom', async () => {
     stubRect({ left: 100, top: window.innerHeight - 60, bottom: window.innerHeight - 32, right: 280 });
     const view = render(<Popover trigger={['click']} title="Tiêu đề" content="Nội dung">{anchor()}</Popover>);
     fireEvent.click(view.getByText('Mở'));
-    const popup = installedPopup() as HTMLElement;
+    const popup = await positionedPopup();
     expect(popup.parentElement).toBe(document.body);
     expect(popup.style.position).toBe('fixed');
     // popup offset 4 from the anchor rect, clamped so the whole popup stays in
@@ -58,20 +83,21 @@ describe('native popup placement contract', () => {
     view.unmount();
   });
 
-  it('shifts a popup anchored past the right viewport edge', () => {
+  it('shifts a popup anchored past the right viewport edge', async () => {
     stubRect({ left: window.innerWidth - 40, right: window.innerWidth + 140 });
     const view = render(<Popover trigger={['click']} content="Nội dung">{anchor()}</Popover>);
     fireEvent.click(view.getByText('Mở'));
-    const popup = installedPopup() as HTMLElement;
-    expect(Number.parseFloat(popup.style.left)).toBeLessThanOrEqual(window.innerWidth - 6);
+    const popup = await positionedPopup();
+    expect(Number.parseFloat(popup.style.left) + popup.offsetWidth).toBeLessThanOrEqual(window.innerWidth - 6);
     view.unmount();
   });
 
-  it('honors placement="top" and placement="left" before flip/shift', () => {
+  it('honors placement="top" and placement="left" before flip/shift', async () => {
     stubRect({ left: 100, top: 300, bottom: 328, right: 280, height: 28 });
     const top = render(<Popover trigger={['click']} placement="top" content="Trên">{anchor()}</Popover>);
     fireEvent.click(top.getByText('Mở'));
-    const topPopup = installedPopup() as HTMLElement;
+    const topPopup = await positionedPopup();
+    expect(topPopup.getAttribute('data-placement')).toBe('top-start');
     expect(Number.parseFloat(topPopup.style.top) + topPopup.offsetHeight).toBeLessThanOrEqual(300 - 4);
     top.unmount();
 
@@ -79,7 +105,8 @@ describe('native popup placement contract', () => {
     stubRect({ left: 400, top: 300, bottom: 328, right: 580, height: 28 });
     const left = render(<Popover trigger={['click']} placement="left" content="Trái">{anchor()}</Popover>);
     fireEvent.click(left.getByText('Mở'));
-    const leftPopup = installedPopup() as HTMLElement;
+    const leftPopup = await positionedPopup();
+    expect(leftPopup.getAttribute('data-placement')).toBe('left-start');
     expect(Number.parseFloat(leftPopup.style.left) + leftPopup.offsetWidth).toBeLessThanOrEqual(400 - 4);
     left.unmount();
   });

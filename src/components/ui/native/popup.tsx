@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react-dom';
 import { classNames } from './classNames';
 import popupStyles from '../openidea/Popup.module.css';
 
@@ -18,52 +19,7 @@ export interface PopupProps {
   preferredPlacement?: 'top' | 'bottom' | 'left' | 'right' | undefined;
 }
 
-interface Position {
-  left: number;
-  top: number;
-  width: number;
-}
-
-const OFFSET = 4; // 52-UI-SPEC §8 --popup-offset; mirror of sharedTokens.popupOffset.
-const EDGE_PADDING = 6; // OpenIDEA middleware flip/shift padding.
-
-function place(anchor: DOMRect, element: HTMLElement, preferred?: PopupProps['preferredPlacement']): Position {
-  const width = Math.max(anchor.width, Math.min(element.offsetWidth, window.innerWidth - 2 * EDGE_PADDING));
-  const height = element.offsetHeight;
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const clampLeft = (value: number) => Math.min(
-    Math.max(EDGE_PADDING, value),
-    Math.max(EDGE_PADDING, viewportWidth - width - EDGE_PADDING),
-  );
-  const clampTop = (value: number) => Math.max(EDGE_PADDING, Math.min(value, viewportHeight - height - EDGE_PADDING));
-  const below = anchor.bottom + OFFSET;
-  const above = anchor.top - height - OFFSET;
-  const right = anchor.right + OFFSET;
-  const leftSide = anchor.left - width - OFFSET;
-
-  // Preferred side wins when it fits; otherwise keep the legacy below→above→shift
-  // fallback so existing flip/shift behavior is unchanged.
-  const candidates: Array<() => Position> = [];
-  if (preferred === 'top') {
-    candidates.push(() => ({ left: clampLeft(anchor.left), top: above, width }));
-  } else if (preferred === 'left') {
-    candidates.push(() => ({ left: leftSide, top: clampTop(anchor.top), width }));
-  } else if (preferred === 'right') {
-    candidates.push(() => ({ left: right, top: clampTop(anchor.top), width }));
-  }
-  candidates.push(() => ({ left: clampLeft(anchor.left), top: below, width }));
-  if (preferred === 'top') candidates.push(() => ({ left: clampLeft(anchor.left), top: above, width }));
-  candidates.push(() => ({ left: clampLeft(anchor.left), top: Math.max(EDGE_PADDING, Math.min(below, viewportHeight - height - EDGE_PADDING)), width }));
-
-  for (const candidate of candidates) {
-    const next = candidate();
-    const fitsVertical = next.top >= EDGE_PADDING && next.top + height <= viewportHeight - EDGE_PADDING;
-    const fitsHorizontal = next.left >= EDGE_PADDING && next.left + width <= viewportWidth - EDGE_PADDING;
-    if (fitsVertical && fitsHorizontal) return next;
-  }
-  return candidates[candidates.length - 1]!();
-}
+const EDGE_PADDING = 6; // OpenIDEA middleware flip/shift padding; offset is 4px per 52-UI-SPEC §8.
 
 /** AntD placement values carry alignment suffixes; Popup only needs the side. */
 export function preferredSide(placement?: string): PopupProps['preferredPlacement'] {
@@ -76,29 +32,26 @@ export function preferredSide(placement?: string): PopupProps['preferredPlacemen
 }
 
 export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup', preferredPlacement }: PopupProps) {
-  const popupRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
-  const [position, setPosition] = useState<Position | null>(null);
+  const requestedPlacement = `${preferredPlacement ?? 'bottom'}-start` as const;
+  const { refs, floatingStyles, placement } = useFloating({
+    open,
+    placement: requestedPlacement,
+    strategy: 'fixed',
+    transform: false,
+    elements: { reference: anchorRef.current },
+    middleware: [
+      offset(4),
+      // Only flip across the main axis so the caller's side is kept; shift()
+      // still clamps cross-axis overflow without choosing the opposite side.
+      flip({ padding: EDGE_PADDING, fallbackPlacements: [`${preferredPlacement === 'top' ? 'bottom' : preferredPlacement === 'left' ? 'right' : preferredPlacement === 'right' ? 'left' : 'top'}-start`] }),
+      shift({ padding: EDGE_PADDING }),
+    ],
+    whileElementsMounted: autoUpdate,
+  });
   // Inline onClose arrows are unstable; effect identity must not follow them
   // or every parent rerender re-registers listeners and steals field focus (WR-05).
   onCloseRef.current = onClose;
-
-  const updatePosition = useCallback(() => {
-    const anchor = anchorRef.current?.getBoundingClientRect();
-    const element = popupRef.current;
-    if (anchor && element) setPosition(place(anchor, element, preferredPlacement));
-  }, [anchorRef, preferredPlacement]);
-
-  useLayoutEffect(() => {
-    if (!open || typeof document === 'undefined') return;
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open || typeof document === 'undefined') return;
@@ -106,7 +59,7 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       // Only the innermost open popup handles Escape (nested popup guard).
       const popups = document.querySelectorAll('[role="dialog"][data-positioned]');
-      if (popups.length > 0 && popups[popups.length - 1] !== popupRef.current) return;
+      if (popups.length > 0 && popups[popups.length - 1] !== refs.floating.current) return;
       event.preventDefault();
       event.stopPropagation();
       onCloseRef.current('escape');
@@ -115,7 +68,7 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) return;
-      if (popupRef.current?.contains(target) || anchorRef.current?.contains(target)) return;
+      if (refs.floating.current?.contains(target) || anchorRef.current?.contains(target)) return;
       onCloseRef.current('outside');
       anchorRef.current?.focus();
     };
@@ -125,24 +78,21 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('pointerdown', onPointerDown, true);
     };
-  }, [open, anchorRef]);
+  }, [open, anchorRef, refs.floating]);
 
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal(
     <div
-      ref={popupRef}
+      ref={refs.setFloating}
       role="dialog"
       aria-label={label}
       data-oi-control={control}
       data-positioned=""
+      data-floating=""
+      data-placement={placement}
       className={classNames(popupStyles.popup, popupStyles.surface, className)}
-      style={{
-        position: 'fixed',
-        left: position?.left ?? 0,
-        top: position?.top ?? 0,
-        width: position?.width ?? anchorRef.current?.getBoundingClientRect().width,
-      }}
+      style={{ ...floatingStyles, width: anchorRef.current?.getBoundingClientRect().width }}
     >
       {children}
     </div>,

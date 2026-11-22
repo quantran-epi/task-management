@@ -136,3 +136,48 @@ test.describe('Phase 54 native overlay behavior (Chrome)', () => {
     });
   }
 });
+
+/** Floating UI positioning smoke: portal styles + resolved placement in both themes. */
+test('Floating UI popup styles in light and dark', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(String(error)));
+  await page.goto('/task-management/');
+  await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+  const theme = page.locator('.taskmate-workbench-theme').first();
+  for (const mode of ['light', 'dark'] as const) {
+    if ((await theme.getAttribute('data-theme')) !== mode) {
+      await page.getByRole('button', { name: 'Chuyển đổi giao diện sáng/tối' }).click();
+    }
+    await expect.poll(() => theme.getAttribute('data-theme')).toBe(mode);
+    await page.getByRole('button', { name: 'Open Tasks' }).first().click();
+    await expect(page.locator('[data-testid="task-table-container"]')).toBeVisible();
+    const trigger = page.locator('[data-oi-control="tooltip-trigger"] button').first();
+    await trigger.focus();
+    await expect.poll(async () => page.locator('[data-oi-control="tooltip"]').first().getAttribute('data-placement')).toMatch(/^(bottom|top|left|right)/);
+    const popup = page.locator('body > [data-floating][data-positioned]').first();
+    await expect(popup).toBeVisible();
+    const styles = await popup.evaluate((node) => {
+      const el = node as HTMLElement;
+      return { position: getComputedStyle(el).position, left: el.style.left, top: el.style.top, placement: el.dataset.placement };
+    });
+    expect(styles.position).toBe('fixed');
+    expect(styles.left).not.toBe('');
+    expect(styles.top).not.toBe('');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('body > [data-floating][data-positioned]')).toHaveCount(0);
+
+    // Select popup uses the same Floating UI portal contract (Dropdown and
+    // DatePicker are covered by the theme-parity test above).
+    const selectTrigger = page.locator('[data-oi-control="select"]').first();
+    await selectTrigger.scrollIntoViewIfNeeded();
+    await selectTrigger.click();
+    const selectPopup = page.locator('body > [data-floating][data-positioned][data-oi-control="select-popup"]');
+    await expect(selectPopup).toBeVisible();
+    expect(await selectPopup.evaluate((node) => getComputedStyle(node as HTMLElement).position)).toBe('fixed');
+    expect(await selectPopup.evaluate((node) => (node as HTMLElement).dataset.placement)).toMatch(/^(bottom|top|left|right)/);
+    await page.keyboard.press('Escape');
+    await expect(selectPopup).toHaveCount(0);
+  }
+  expect(errors, `console/page errors: ${errors.join('\n')}`).toEqual([]);
+});
