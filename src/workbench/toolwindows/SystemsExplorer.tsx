@@ -23,6 +23,7 @@ import { SystemModal } from '../../components/systems/SystemModal';
 import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import type { DataNode } from 'antd/es/tree';
 import type { System } from '../../types/models';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface SystemsExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -202,14 +203,14 @@ export function SystemsExplorer({ db = defaultDb }: SystemsExplorerProps) {
   };
 
   const treeData = useMemo<DataNode[]>(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = foldForSearch(searchQuery);
 
     // D-24: parents are identified by their type alone, never by a missing parent link.
     const parents = systems.filter(isLogicalParent);
     const subsystems = systems.filter(isSubsystem);
 
     const matches = (s: System) =>
-      !q || s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
+      !q || searchIncludes(s.name, q) || searchIncludes(s.code, q);
 
     const parentNodes = parents
       .map((p) => {

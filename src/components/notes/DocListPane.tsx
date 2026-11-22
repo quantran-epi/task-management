@@ -7,6 +7,7 @@ import type { Note } from '../../types/models';
 import type { DocumentPublishStatus } from '../../db/repositories/documentSetRepo';
 import { matchesDocSearch } from '../../utils/docSearch';
 import { DocPublishBadge } from '../knowledge/DocPublishBadge';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -68,15 +69,15 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
 
     // Filter by search term
     if (searchTerm.trim()) {
-      const lower = searchTerm.toLowerCase();
+      const lower = foldForSearch(searchTerm);
       if (matchIds !== null) {
         const idSet = new Set(matchIds);
         result = result.filter((n) => {
           if (idSet.has(n.id)) return true;
           // also search entity name if available
           if (n.entityType && n.entityId && entityNames) {
-            const entName = entityNames.get(`${n.entityType}:${n.entityId}`)?.toLowerCase();
-            if (entName?.includes(lower)) return true;
+            const entName = entityNames.get(`${n.entityType}:${n.entityId}`) ?? '';
+            if (searchIncludes(entName, lower)) return true;
           }
           return false;
         });
@@ -84,8 +85,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
         result = result.filter((n) => {
           if (matchesDocSearch(searchTerm, n)) return true;
           if (n.entityType && n.entityId && entityNames) {
-            const entName = entityNames.get(`${n.entityType}:${n.entityId}`)?.toLowerCase();
-            if (entName?.includes(lower)) return true;
+            const entName = entityNames.get(`${n.entityType}:${n.entityId}`) ?? '';
+            if (searchIncludes(entName, lower)) return true;
           }
           return false;
         });

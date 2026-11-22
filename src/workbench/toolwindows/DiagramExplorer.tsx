@@ -14,6 +14,7 @@ import {
   bulkPermanentDeleteNotes,
 } from '../../db/repositories/noteRepo';
 import { useLayoutStore } from '../store/layoutStore';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -407,11 +408,11 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
   const isSearching = Boolean(searchQuery.trim());
   const searchResults = useMemo(() => {
     if (!isSearching) return [];
-    const q = searchQuery.toLowerCase().trim();
+    const q = foldForSearch(searchQuery);
     return activeDiagrams.filter(
       (d) =>
-        d.title?.toLowerCase().includes(q) ||
-        d.body?.toLowerCase().includes(q)
+        searchIncludes(d.title ?? '', q) ||
+        searchIncludes(d.body ?? '', q)
     );
   }, [activeDiagrams, searchQuery, isSearching]);
 
@@ -1217,7 +1218,7 @@ export function DiagramExplorer({ db = defaultDb }: DiagramExplorerProps) {
                 onChange={(val) => setSelectedEntityId(val)}
                 style={{ width: '100%' }}
                 filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  searchIncludes(option?.label ?? '', input)
                 }
                 options={
                   selectedEntityType === 'task'

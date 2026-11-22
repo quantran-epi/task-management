@@ -8,6 +8,7 @@ import { DocumentSetForm, type DocumentSetFormValue } from '../components/knowle
 import { useLayoutStore } from './store/layoutStore';
 import { DocumentSetDetail } from './DocumentSetDetail';
 import type { Note } from '../types/models';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 const { Text } = Typography;
 
@@ -54,9 +55,9 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
   );
 
   const filteredSets = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = foldForSearch(search);
     if (!query) return sets;
-    return sets.filter((set) => set.name.toLowerCase().includes(query));
+    return sets.filter((set) => searchIncludes(set.name, query));
   }, [search, sets]);
 
   const selectSet = (setId: string, name: string) => {

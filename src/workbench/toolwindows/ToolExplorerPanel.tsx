@@ -2,16 +2,17 @@ import { useMemo, useState } from 'react';
 import { Tooltip, InputSearch } from '../../components/ui';
 import { useLayoutStore } from '../store/layoutStore';
 import { UTILITY_TOOLS } from './utilityTools';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export function ToolExplorerPanel() {
   const [query, setQuery] = useState('');
   const openTab = useLayoutStore((s) => s.openTab);
 
   const tools = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldForSearch(query);
     if (!q) return UTILITY_TOOLS;
     return UTILITY_TOOLS.filter((tool) =>
-      `${tool.title} ${tool.description}`.toLowerCase().includes(q)
+      searchIncludes(`${tool.title} ${tool.description}`, q)
     );
   }, [query]);
 

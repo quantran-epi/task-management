@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import type { DiffFile } from '../../types/agent';
 import type { WorktreeDescriptor } from '../../types/codingZone';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 /** Phase 48 D-03: compact SSH worktree tree. All paths/hunks render as escaped text. */
 export interface CodingZoneTreeProps {
@@ -90,11 +91,11 @@ export const CodingZoneTree: React.FC<CodingZoneTreeProps> = ({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const diffByPath = useMemo(() => new Map(diffFiles.map((file) => [file.newPath, file])), [diffFiles]);
   const changedPaths = useMemo(() => new Set(diffFiles.map((file) => file.newPath)), [diffFiles]);
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = foldForSearch(query);
   const visibleFiles = useMemo(
     () => files.filter((filePath) =>
       (scope === 'all' || changedPaths.has(filePath)) &&
-      (!normalizedQuery || filePath.toLowerCase().includes(normalizedQuery))
+      (!normalizedQuery || searchIncludes(filePath, normalizedQuery))
     ),
     [files, scope, changedPaths, normalizedQuery]
   );

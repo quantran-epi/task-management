@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import type { Note } from '../../types/models';
 import { renderSafeMarkdown } from '../../utils/markdown';
 import { extractMarkdownMetadata } from '../../utils/smartIngestion';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -234,12 +235,12 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
   // Filtered docs for preview table
   const filteredDocs = useMemo(() => {
     if (!searchFilter.trim()) return extractedDocs;
-    const q = searchFilter.trim().toLowerCase();
+    const q = foldForSearch(searchFilter);
     return extractedDocs.filter(
       (d) =>
-        d.detectedTitle.toLowerCase().includes(q) ||
-        d.relativePath.toLowerCase().includes(q) ||
-        d.fileName.toLowerCase().includes(q)
+        searchIncludes(d.detectedTitle, q) ||
+        searchIncludes(d.relativePath, q) ||
+        searchIncludes(d.fileName, q)
     );
   }, [extractedDocs, searchFilter]);
 

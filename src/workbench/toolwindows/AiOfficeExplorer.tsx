@@ -11,6 +11,7 @@ import { disposeRun } from '../../services/ai/office/teamRunManager';
 import { useLayoutStore } from '../store/layoutStore';
 import { TeamEditorDrawer } from '../../components/ai/office/TeamEditorDrawer';
 import type { AiTeam } from '../../types/aiOffice';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface AiOfficeExplorerProps {
   db?: TaskPlannerDatabase | undefined;
@@ -85,14 +86,14 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
     return map;
   }, [db, teams]) ?? new Map<string, { folderCount: number; documentCount: number }>();
 
-  const query = search.trim().toLowerCase();
+  const query = foldForSearch(search);
   const filteredTeams = useMemo(() => {
     if (!query) return teams;
     return teams.filter((team) => {
       const leadName = (team.leadId ? leadMap.get(team.leadId) : undefined) ?? '';
       return (
-        team.name.toLowerCase().includes(query) ||
-        leadName.toLowerCase().includes(query)
+        searchIncludes(team.name, query) ||
+        searchIncludes(leadName, query)
       );
     });
   }, [teams, query, leadMap]);

@@ -26,6 +26,7 @@ import {
 import { testNineRouterConnection } from '../../services/ai/nineRouterClient';
 import { testImageGenerationConnection } from '../../services/ai/imageGenerationClient';
 import { isTauriApp } from '../../utils/timerPopout';
+import { searchIncludes } from '../../utils/searchText';
 import { announceToScreenReader } from '../common/AriaLiveRegion';
 
 
@@ -396,7 +397,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
             onChange={(val) => setDefaultModel(val)}
             showSearch
             filterOption={(input, option) =>
-              ((option?.label as string) ?? '').toLowerCase().includes(input.toLowerCase())
+              searchIncludes(option?.label as string ?? '', input)
             }
             options={
               availableModels.length > 0
@@ -594,7 +595,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
                 .map((m) => ({ label: m, value: m }))}
               placeholder="Chọn hoặc nhập tên mô hình tạo ảnh (VD: dall-e-3, flux-dev...)"
               filterOption={(inputValue, option) =>
-                ((option?.value as string) ?? '').toLowerCase().includes(inputValue.toLowerCase())
+                searchIncludes(option?.value as string ?? '', inputValue)
               }
             />
           </FormItem>

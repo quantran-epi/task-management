@@ -18,6 +18,7 @@ import { exportContentAsFile } from '../../utils/fileExport';
 import { NormalizeDocModal } from './NormalizeDocModal';
 import { DocPublishBadge } from '../knowledge/DocPublishBadge';
 import { ResizeSplitter } from '../common/ResizeSplitter';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text, Title } = Typography;
 
@@ -213,7 +214,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
   // Query candidates from IndexedDB matching query text
   const fetchWikiCandidates = useCallback(
     async (query: string) => {
-      const q = query.trim().toLowerCase();
+      const q = foldForSearch(query);
       try {
         const [rawNotes, rawTasks, rawChangeRequests] = await Promise.all([
           db.notes.toArray(),
@@ -222,7 +223,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
         ]);
 
         const noteCandidates: CandidateItem[] = rawNotes
-          .filter((n) => !n.deletedAt && n.id !== doc?.id && (n.title || 'Không có tiêu đề').toLowerCase().includes(q))
+          .filter((n) => !n.deletedAt && n.id !== doc?.id && searchIncludes(n.title || 'Không có tiêu đề', q))
           .map((n) => ({
             id: n.id,
             title: n.title || 'Không có tiêu đề',
@@ -230,7 +231,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           }));
 
         const taskCandidates: CandidateItem[] = rawTasks
-          .filter((t) => (t.name || '').toLowerCase().includes(q))
+          .filter((t) => searchIncludes(t.name || '', q))
           .map((t) => ({
             id: t.id,
             title: t.name || 'Không có tiêu đề',
@@ -238,7 +239,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           }));
 
         const crCandidates: CandidateItem[] = rawChangeRequests
-          .filter((cr) => (cr.name || '').toLowerCase().includes(q) || (cr.code || '').toLowerCase().includes(q))
+          .filter((cr) => searchIncludes(cr.name || '', q) || searchIncludes(cr.code || '', q))
           .map((cr) => ({
             id: cr.id,
             title: cr.code || cr.name || 'Không có tiêu đề',

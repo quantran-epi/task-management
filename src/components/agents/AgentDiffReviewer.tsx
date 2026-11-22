@@ -15,6 +15,7 @@ import {
   type FileTreeNode,
 } from '../../utils/fileTreeBuilder';
 import '../../styles/workbench-tokens.css';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -263,9 +264,9 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
     const rawTree = buildWorktreeFileTree(filesToBuild, diffFiles, customExcludes);
     if (!debouncedSearch) return rawTree;
 
-    const lower = debouncedSearch.toLowerCase();
+    const lower = foldForSearch(debouncedSearch);
     function filterNode(node: FileTreeNode): FileTreeNode | null {
-      if (node.path.toLowerCase().includes(lower)) {
+      if (searchIncludes(node.path, lower)) {
         return node;
       }
       if (node.children) {
@@ -286,6 +287,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
 
   // Extract folder keys containing changed files (diffFiles) or selected file to avoid lag on huge repos
   const diffFolderKeys = useMemo(() => {
+    const lower = foldForSearch(debouncedSearch);
     const keys = new Set<string>();
     for (const df of diffFiles) {
       const p = (df.newPath || df.oldPath || '').replace(/\\/g, '/');
@@ -312,7 +314,7 @@ export const AgentDiffReviewer: React.FC<AgentDiffReviewerProps> = ({
         for (const n of nodes) {
           if (keys.size >= 250) return;
           const nextAncestors = n.isDir ? [...ancestors, n.key] : ancestors;
-          if (n.path.toLowerCase().includes(debouncedSearch.toLowerCase())) {
+          if (searchIncludes(n.path, lower)) {
             for (const anc of ancestors) {
               keys.add(anc);
             }

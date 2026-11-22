@@ -21,6 +21,7 @@ import { DEFAULT_TASK_FILTER_STATE } from '../utils/filter';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, ChangeRequest, System } from '../types/models';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 const { Text } = Typography;
 
@@ -420,12 +421,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
               onChange={setSelectedTaskIdForFeasibility}
               placeholder="Chọn một tác vụ"
               filterOption={(input, option) => {
-                const search = input.toLowerCase();
+                const search = foldForSearch(input);
                 const task = tasks.find((t) => t.id === option?.value);
                 if (!task) return false;
-                const taskMatch = task.name.toLowerCase().includes(search);
+                const taskMatch = searchIncludes(task.name, search);
                 const cr = task.crId ? crMap.get(task.crId) : undefined;
-                const crMatch = cr ? cr.name.toLowerCase().includes(search) : false;
+                const crMatch = cr ? searchIncludes(cr.name, search) : false;
                 return taskMatch || crMatch;
               }}
               options={filteredTasksForFeasibility.map((t) => {

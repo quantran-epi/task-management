@@ -8,6 +8,7 @@ import { createNote, updateNote } from '../db/repositories/noteRepo';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { fixMermaidWithAi } from '../services/ai/mermaidFixerService';
 import { downloadMermaidSvg, downloadMermaidPng } from '../utils/mermaidExport';
+import { searchIncludes } from '../utils/searchText';
 
 const { Text } = Typography;
 
@@ -550,7 +551,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
                 onChange={(val) => setEntityId(val)}
                 style={{ width: 180 }}
                 filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  searchIncludes(option?.label ?? '', input)
                 }
                 options={
                   entityType === 'task'

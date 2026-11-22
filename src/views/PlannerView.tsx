@@ -18,6 +18,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { PageHeader } from '../components/common/PageHeader';
 import { getTodayDateString } from '../utils/date';
 import type { Task, ChangeRequest } from '../types/models';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 dayjs.extend(isoWeek);
 
@@ -343,7 +344,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
                 }
               }}
               filterOption={(input, option) =>
-                (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                searchIncludes(option?.label as string ?? '', input)
               }
               options={(changeRequests ?? []).map((cr) => ({
                 value: cr.id,
@@ -364,12 +365,12 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
               onChange={setSelectedTaskIdForFeasibility}
               placeholder="Chọn một tác vụ"
               filterOption={(input, option) => {
-                const search = input.toLowerCase();
+                const search = foldForSearch(input);
                 const task = (activeTasks ?? []).find((t) => t.id === option?.value);
                 if (!task) return false;
-                const taskMatch = task.name.toLowerCase().includes(search);
+                const taskMatch = searchIncludes(task.name, search);
                 const cr = task.crId ? crMap.get(task.crId) : undefined;
-                const crMatch = cr ? (cr.code || cr.name).toLowerCase().includes(search) : false;
+                const crMatch = cr ? searchIncludes(cr.code || cr.name, search) : false;
                 return taskMatch || crMatch;
               }}
               options={filteredSelectableTasks.map((t) => {

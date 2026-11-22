@@ -1177,7 +1177,7 @@ export const TelegramMonitorView: React.FC = () => {
                     }
                   }}
                   filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                    searchIncludes(option?.label ?? '', input)
                   }
                 />
               </FormItem>

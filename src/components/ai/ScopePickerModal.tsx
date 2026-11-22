@@ -7,6 +7,7 @@ import type { Task, ChangeRequest, System } from '../../types/models';
 import type { ActiveScope } from '../../context/AIChatContext';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
 import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
+import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
@@ -74,12 +75,12 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
 
   // Build items list
   const filteredItems = useMemo<ScopeListItem[]>(() => {
-    const q = query.trim().toLowerCase();
+    const q = foldForSearch(query);
     const items: ScopeListItem[] = [];
 
     // Global option
     if (activeTab === 'all' && !selectedCrId) {
-      if (!q || 'toàn cục không gắn global'.includes(q)) {
+      if (!q || searchIncludes('toàn cục không gắn global', q)) {
         items.push({
           id: 'global',
           type: 'global',
@@ -94,7 +95,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
       if (!selectedCrId) {
         for (const c of changeRequests) {
           if (c.status === 'Done' || c.status === 'Cancelled') continue;
-          if (q && !c.name.toLowerCase().includes(q) && !c.code.toLowerCase().includes(q)) continue;
+          if (q && !searchIncludes(c.name, q) && !searchIncludes(c.code, q)) continue;
           items.push({
             id: c.id,
             type: 'cr',
@@ -113,7 +114,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
           const cr = crMap.get(selectedCrId);
           if (!cr || !cr.targets.some((t) => t.systemId === s.id)) continue;
         }
-        if (q && !s.name.toLowerCase().includes(q) && !s.code.toLowerCase().includes(q)) continue;
+        if (q && !searchIncludes(s.name, q) && !searchIncludes(s.code, q)) continue;
         const parentCr = selectedCrId ? crMap.get(selectedCrId) : undefined;
         items.push({
           id: s.id,
@@ -134,7 +135,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         activeRemoteBranch
       );
       const title = `${activeRemoteConfigId} · ${activeRemoteRepoPath || '/'} · ${activeRemoteBranch || '-'}`;
-      if (!q || title.toLowerCase().includes(q)) {
+      if (!q || searchIncludes(title, q)) {
         items.push({
           id: targetUuid,
           type: 'remote',
@@ -150,7 +151,7 @@ export const ScopePickerModal: React.FC<ScopePickerModalProps> = ({
         if (t.status === 'Done' || t.status === 'Cancelled') continue;
         if (selectedCrId && t.crId !== selectedCrId) continue;
         const parentCr = t.crId ? crMap.get(t.crId) : undefined;
-        if (q && !t.name.toLowerCase().includes(q) && !(parentCr && parentCr.name.toLowerCase().includes(q))) {
+        if (q && !searchIncludes(t.name, q) && !(parentCr && searchIncludes(parentCr.name, q))) {
           continue;
         }
         items.push({
