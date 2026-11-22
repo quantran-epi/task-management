@@ -234,12 +234,14 @@ enum Chunk {
     /// The reader discovered the remote PGID. The command thread owns the registry reference
     /// and handles kill-on-cancel here; no borrowed registry is ever moved into a thread.
     Pgid(u32),
-    /// Reader exited. The command thread resolves ONLY after this message arrives.
+    /// Stdout reader exited. The command thread resolves ONLY after both readers exit.
     ReaderExited {
         exit_status: i32,
         cancelled: bool,
         error: Option<String>,
     },
+    /// Stderr reader exited. Kept separate so stdout EOF cannot leave stderr unread.
+    StderrExited { error: Option<String> },
 }
 
 /// Emits at most one event per `EMIT_COALESCE_INTERVAL`, or immediately when the pending
@@ -394,21 +396,65 @@ pub fn run_cancellable_remote_command(
 
     let (tx, rx) = mpsc::channel::<Chunk>();
 
-    let reader_cancelled = Arc::clone(&cancelled);
+    let stdout_cancelled = Arc::clone(&cancelled);
+    // ssh2 Channel/Stream are Send + Sync over a shared locked session; each reader owns a
+    // clone so a full stderr pipe cannot block while stdout is drained to EOF.
+    let stderr_channel = channel.clone();
+    let stderr_tx = tx.clone();
+    let stderr_cancelled = Arc::clone(&cancelled);
+    let _stderr_thread = thread::Builder::new()
+        .name(format!("tool-stderr-{}", call_id))
+        .spawn(move || {
+            let mut buf = [0u8; READ_CHUNK_BYTES];
+            let mut stderr_len = 0usize;
+            let mut error = None;
+            let mut stream = stderr_channel.stderr();
+            loop {
+                if stderr_cancelled.load(Ordering::SeqCst) {
+                    break;
+                }
+                match stream.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        if stderr_len < MAX_OUTPUT_BYTES {
+                            let take = n.min(MAX_OUTPUT_BYTES - stderr_len);
+                            stderr_len += take;
+                            let _ = stderr_tx.send(Chunk::Err(buf[..take].to_vec()));
+                        }
+                    }
+                    Err(e) => {
+                        if stderr_cancelled.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        if is_wakeup_timeout(&e) {
+                            continue; // Wake-up only: no error result from a timeout.
+                        }
+                        error = Some(format!("Lỗi đọc stderr: {}", e));
+                        break;
+                    }
+                }
+            }
+            let _ = stderr_tx.send(Chunk::StderrExited { error });
+        });
+    let _stderr_thread = match _stderr_thread {
+        Ok(handle) => Some(handle),
+        Err(e) => {
+            registry.remove(&call_id);
+            return Err(format!("Không thể tạo thread đọc stderr: {}", e));
+        }
+    };
+
     thread::Builder::new()
         .name(format!("tool-reader-{}", call_id))
         .spawn(move || {
             let mut buf = [0u8; READ_CHUNK_BYTES];
             let mut stdout_len = 0usize;
-            let mut stderr_len = 0usize;
             let mut pgid_scanned = false;
             let mut prefix = String::new(); // bytes before the first newline while scanning PGID
             let mut read_error: Option<String> = None;
 
-            // Single reader thread: read stdout fully, then stderr. A single channel cannot
-            // be read by two threads concurrently without corrupting the stream.
             loop {
-                if reader_cancelled.load(Ordering::SeqCst) {
+                if stdout_cancelled.load(Ordering::SeqCst) {
                     break;
                 }
                 match channel.read(&mut buf) {
@@ -441,7 +487,7 @@ pub fn run_cancellable_remote_command(
                         }
                     }
                     Err(e) => {
-                        if reader_cancelled.load(Ordering::SeqCst) {
+                        if stdout_cancelled.load(Ordering::SeqCst) {
                             break; // Cancelled: the kill closed the channel, expected.
                         }
                         if is_wakeup_timeout(&e) {
@@ -453,37 +499,7 @@ pub fn run_cancellable_remote_command(
                 }
             }
 
-            // SQLcl prompts/errors arrive on stderr; read it on the same reader thread.
-            if read_error.is_none() {
-                let mut stderr_stream = channel.stderr();
-                loop {
-                    if reader_cancelled.load(Ordering::SeqCst) {
-                        break;
-                    }
-                    match stderr_stream.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            if stderr_len < MAX_OUTPUT_BYTES {
-                                let take = n.min(MAX_OUTPUT_BYTES - stderr_len);
-                                stderr_len += take;
-                                let _ = tx.send(Chunk::Err(buf[..take].to_vec()));
-                            }
-                        }
-                        Err(e) => {
-                            if reader_cancelled.load(Ordering::SeqCst) {
-                                break;
-                            }
-                            if is_wakeup_timeout(&e) {
-                                continue; // Wake-up only: no error result from a timeout.
-                            }
-                            read_error = Some(format!("Lỗi đọc stderr: {}", e));
-                            break;
-                        }
-                    }
-                }
-            }
-
-            let was_cancelled = reader_cancelled.load(Ordering::SeqCst);
+            let was_cancelled = stdout_cancelled.load(Ordering::SeqCst);
             let exit_status = if was_cancelled { -1 } else { channel.exit_status().unwrap_or(0) };
             let _ = tx.send(Chunk::ReaderExited {
                 exit_status,
@@ -509,6 +525,8 @@ pub fn run_cancellable_remote_command(
     let mut stderr = Vec::new();
     let mut stdout_coalescer = OutputCoalescer::new(app.clone(), call_id.clone(), "stdout");
     let mut stderr_coalescer = OutputCoalescer::new(app.clone(), call_id.clone(), "stderr");
+    let mut stdout_exit: Option<(i32, bool, Option<String>)> = None;
+    let mut stderr_error: Option<Option<String>> = None;
 
     let result = loop {
         match rx.recv_timeout(CANCEL_POLL_INTERVAL) {
@@ -530,28 +548,13 @@ pub fn run_cancellable_remote_command(
                     }
                 }
             }
-            // ONLY exit path: the reader thread has actually exited, so the invoke never
-            // resolves while a read is still pending. A cancel flips the token, the kill
-            // unblocks the reader, and this message follows.
+            // Resolve only after BOTH readers have exited: a full stderr pipe can no longer
+            // be left unread while stdout is drained to EOF.
             Ok(Chunk::ReaderExited { exit_status, cancelled: was_cancelled, error }) => {
-                stdout_coalescer.flush();
-                stderr_coalescer.flush();
-                let finish_reason = if was_cancelled || cancelled.load(Ordering::SeqCst) {
-                    "cancelled"
-                } else if error.is_some() {
-                    "error"
-                } else {
-                    "complete"
-                };
-                break ToolExecOutput {
-                    stdout: String::from_utf8_lossy(&stdout).to_string(),
-                    stderr: match error {
-                        Some(e) => format!("{}\n{}", String::from_utf8_lossy(&stderr), e),
-                        None => String::from_utf8_lossy(&stderr).to_string(),
-                    },
-                    exit_status,
-                    finish_reason: finish_reason.to_string(),
-                };
+                stdout_exit = Some((exit_status, was_cancelled, error));
+            }
+            Ok(Chunk::StderrExited { error }) => {
+                stderr_error = Some(error);
             }
             // Wake-up only: observe explicit cancel token, then keep waiting for the reader.
             // If PGID is already known, re-send SIGTERM to guarantee the process dies even
@@ -580,6 +583,31 @@ pub fn run_cancellable_remote_command(
                     finish_reason: if cancelled.load(Ordering::SeqCst) { "cancelled" } else { "error" }.to_string(),
                 };
             }
+        }
+
+        if let (Some((exit_status, was_cancelled, stdout_error)), Some(stderr_error)) =
+            (stdout_exit.take(), stderr_error.take())
+        {
+            stdout_coalescer.flush();
+            stderr_coalescer.flush();
+            let errors: Vec<String> = [stdout_error, stderr_error].into_iter().flatten().collect();
+            let finish_reason = if was_cancelled || cancelled.load(Ordering::SeqCst) {
+                "cancelled"
+            } else if !errors.is_empty() {
+                "error"
+            } else {
+                "complete"
+            };
+            break ToolExecOutput {
+                stdout: String::from_utf8_lossy(&stdout).to_string(),
+                stderr: if errors.is_empty() {
+                    String::from_utf8_lossy(&stderr).to_string()
+                } else {
+                    format!("{}\n{}", String::from_utf8_lossy(&stderr), errors.join("\n"))
+                },
+                exit_status,
+                finish_reason: finish_reason.to_string(),
+            };
         }
     };
 
@@ -793,6 +821,19 @@ mod tests {
         // The remote wrapper actually emits the sentinel-prefixed line.
         let wrapper = build_remote_command("sqlcl -S");
         assert!(wrapper.contains(&format!("echo {marker}$$")));
+    }
+
+    #[test]
+    fn stdout_and_stderr_are_drained_on_separate_threads() {
+        let source = include_str!("tool_cancel.rs");
+        let body = command_body(source, "pub fn run_cancellable_remote_command(");
+        assert!(body.contains("tool-stderr-"), "stderr needs its own reader thread");
+        assert!(body.contains("stderr_channel.stderr()"), "stderr thread must own the stderr stream");
+        assert!(body.contains("Chunk::StderrExited"), "result must wait for stderr completion");
+        assert!(
+            body.contains("stdout_exit.take()") && body.contains("stderr_error.take()"),
+            "invoke must resolve only after both readers exit"
+        );
     }
 
     #[test]
