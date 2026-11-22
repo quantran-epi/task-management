@@ -203,3 +203,11 @@
   gap: 8px;
 }
 .rangeInputs input { flex: 1 1 0; min-width: 0; }
+
+.timeColumn {
+  display: block;
+  width: 64px;
+  max-height: 216px;
+  overflow: auto;
+  flex: 0 0 64px;
+}

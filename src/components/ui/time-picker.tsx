@@ -83,7 +83,7 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
   return (
     <div
       ref={columnRef}
-      className={classNames(selectStyles.list, listStyles.list)}
+      className={classNames(selectStyles.list, calendarStyles.timeColumn)}
       role="listbox"
       aria-label={label}
       aria-activedescendant={`${id}-${activeIndex}`}
@@ -270,7 +270,6 @@ export function TimeRangePicker({
     const next = dayjs().hour(h).minute(m).second(s).millisecond(0);
     setDrafts((prev) => active === 0 ? [next.format(format), prev[1]] : [prev[0], next.format(format)]);
     commitIndex(active, next);
-    setActive(active === 0 ? 1 : 0);
     setRangeOpen(true);
   }
 
