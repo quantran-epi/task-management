@@ -83,7 +83,7 @@ Each task was committed atomically:
 1. **Tasks 1-2: Modal/Drawer/Image/Table native conversion** - `49c00eb9` (feat)
 2. **Task 3: Composite focused suite** - `c526b6ba` (test)
 
-**Plan metadata:** pending docs commit
+**Plan metadata:** `476fdc06` (docs: complete plan)
 
 ## Files Created/Modified
 
