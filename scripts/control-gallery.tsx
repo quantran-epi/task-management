@@ -87,7 +87,7 @@ function SwitchFixture() {
 function TagFixture() {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <Tag>Đúng hạn</Tag><Tag color="blue">Đang chạy</Tag><Tag color="red">Trễ</Tag><CheckableTag checked onChange={() => {}}>Checkable</CheckableTag><Tag closable onClose={() => {}}>Closable</Tag>
+      <Tag>Plain</Tag><Tag color="#3871e1">Blue text</Tag><Tag color="#c54e58">Red text</Tag><Tag status="success">Success</Tag><Tag status="error">Error</Tag><CheckableTag checked onChange={() => {}}>Checkable</CheckableTag><Tag closable onClose={() => {}}>Closable</Tag>
     </div>
   );
 }

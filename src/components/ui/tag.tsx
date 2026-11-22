@@ -26,15 +26,15 @@ function tagStyle(statusColor: string | undefined, callerStyle?: CSSProperties):
 }
 
 /** Single swap point for AntD Tag. `status` resolves the exact token-map hex for light/dark. */
-export function Tag({ status, style, className, children, icon, closable, onClose, ...rest }: TagProps) {
+export function Tag({ status, color, style, className, children, icon, closable, onClose, ...rest }: TagProps) {
   const { mode } = useThemeMode();
-  const statusColor = status ? getStatusTokens(status, mode) : undefined;
+  const statusColor = status ? getStatusTokens(status, mode) : color;
   return (
     <span
       {...(rest as object)}
       className={classNames(chipStyles.surface, chipStyles.chip, className)}
       data-oi-control="chip"
-      data-state={status ?? 'default'}
+      data-state={status ?? color ?? 'default'}
       style={tagStyle(statusColor, style)}
     >
       {icon !== undefined && <span className={chipStyles.icon}>{icon}</span>}
