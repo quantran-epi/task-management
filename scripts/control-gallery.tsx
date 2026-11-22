@@ -161,22 +161,27 @@ function NavFixture() {
   );
 }
 
-function NumberPickersFixture() {
+function InputNumberFixture() {
   const [n, setN] = React.useState(42);
-  const [mention, setMention] = React.useState('');
-  const [auto, setAuto] = React.useState('');
-  const [tree, setTree] = React.useState<unknown>(undefined);
-  return (
-    <div style={{ display: 'grid', gap: 16, maxWidth: 320 }}>
-      <label>Số<InputNumber value={n} onChange={(v) => setN(Number(v ?? 0))} min={0} max={100} /></label>
-      <label>Nhắc tên<Mentions value={mention} onChange={setMention} placeholder="@agent" options={[{ value: 'leader', label: 'leader' }, { value: 'researcher', label: 'researcher' }]} /></label>
-      <label>Gợi ý<AutoComplete value={auto} onChange={setAuto} options={['TaskMate', 'Task', 'Timeline'].map((v) => ({ value: v }))} /></label>
-      <label>Cây chọn<TreeSelect value={tree as never} onChange={(v) => setTree(v)} treeData={[{ title: 'Projects', value: 'projects', children: [{ title: 'TaskMate', value: 'taskmate' }] }]} placeholder="Chọn" /></label>
-    </div>
-  );
+  return <div style={{ maxWidth: 220 }}><InputNumber value={n} onChange={(v) => setN(Number(v ?? 0))} min={0} max={100} /></div>;
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, 'date-picker': DatePickerFixture, 'time-picker': TimePickerFixture, 'input-number': NumberPickersFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
+function MentionsFixture() {
+  const [mention, setMention] = React.useState('');
+  return <div style={{ maxWidth: 320 }}><Mentions value={mention} onChange={setMention} placeholder="@agent" options={[{ value: 'leader', label: 'leader' }, { value: 'researcher', label: 'researcher' }]} /></div>;
+}
+
+function AutoCompleteFixture() {
+  const [auto, setAuto] = React.useState('');
+  return <div style={{ maxWidth: 320 }}><AutoComplete value={auto} onChange={setAuto} options={['TaskMate', 'Task', 'Timeline'].map((v) => ({ value: v }))} /></div>;
+}
+
+function TreeSelectFixture() {
+  const [tree, setTree] = React.useState<unknown>(undefined);
+  return <div style={{ maxWidth: 320 }}><TreeSelect value={tree as never} onChange={(v) => setTree(v)} treeData={[{ title: 'Projects', value: 'projects', children: [{ title: 'TaskMate', value: 'taskmate' }] }]} placeholder="Chọn" /></div>;
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, 'date-picker': DatePickerFixture, 'time-picker': TimePickerFixture, 'input-number': InputNumberFixture, mentions: MentionsFixture, 'auto-complete': AutoCompleteFixture, 'tree-select': TreeSelectFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
