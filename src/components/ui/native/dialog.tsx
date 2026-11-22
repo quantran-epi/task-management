@@ -87,9 +87,15 @@ function DialogSurface({
   }
   previouslyOpenRef.current = open;
 
+  const focusGuardRef = useRef(false);
   const close = useCallback((reason: DialogCloseReason) => {
-    onCloseRef.current?.(reason);
-    triggerRef.current?.focus();
+    focusGuardRef.current = true;
+    try {
+      onCloseRef.current?.(reason);
+      triggerRef.current?.focus();
+    } finally {
+      focusGuardRef.current = false;
+    }
   }, []);
 
   useEffect(() => {
@@ -138,9 +144,25 @@ function DialogSurface({
       }
     };
 
+    // Focus must not escape to the shell by click or focus(), not just by Tab.
+    // BODY-portal popups opened from inside the dialog own their own focus.
+    // Ignore the programmatic focus used to restore the opener on close.
+    const onFocusIn = (event: FocusEvent) => {
+      if (focusGuardRef.current) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (dialog.contains(target) || document.querySelector('[role="dialog"][data-positioned]')) return;
+      focusGuardRef.current = true;
+      const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE);
+      (firstFocusable ?? dialog).focus();
+      focusGuardRef.current = false;
+    };
+
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('focusin', onFocusIn);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('focusin', onFocusIn);
       // Focus is restored by `close` on dismissal. Cleanup must not steal focus
       // when the whole dialog unmounts with its caller.
       wasOpenRef.current = false;

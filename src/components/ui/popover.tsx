@@ -6,7 +6,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { classNames } from './native/classNames';
-import { Popup } from './native/popup';
+import { Popup, preferredSide } from './native/popup';
 import popupStyles from './openidea/Popup.module.css';
 import { getSharedControlTokens } from './tokens.contract';
 
@@ -85,6 +85,7 @@ export function Popover({ widthScale = 'md', overlayStyle, ...rest }: PopoverWra
         onClose={close}
         className={classNames(popupStyles.surface)}
         control="popover-popup"
+        preferredPlacement={preferredSide(rest.placement)}
         label={typeof title === 'string' ? title : 'Popover'}
       >
         <div style={style}>

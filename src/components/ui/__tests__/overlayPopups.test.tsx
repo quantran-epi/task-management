@@ -67,6 +67,23 @@ describe('native popup placement contract', () => {
     view.unmount();
   });
 
+  it('honors placement="top" and placement="left" before flip/shift', () => {
+    stubRect({ left: 100, top: 300, bottom: 328, right: 280, height: 28 });
+    const top = render(<Popover trigger={['click']} placement="top" content="Trên">{anchor()}</Popover>);
+    fireEvent.click(top.getByText('Mở'));
+    const topPopup = installedPopup() as HTMLElement;
+    expect(Number.parseFloat(topPopup.style.top) + topPopup.offsetHeight).toBeLessThanOrEqual(300 - 4);
+    top.unmount();
+
+    // Anchor at x=400 with a 180px popup: a left-side popup fits at 400-180-4=216.
+    stubRect({ left: 400, top: 300, bottom: 328, right: 580, height: 28 });
+    const left = render(<Popover trigger={['click']} placement="left" content="Trái">{anchor()}</Popover>);
+    fireEvent.click(left.getByText('Mở'));
+    const leftPopup = installedPopup() as HTMLElement;
+    expect(Number.parseFloat(leftPopup.style.left) + leftPopup.offsetWidth).toBeLessThanOrEqual(400 - 4);
+    left.unmount();
+  });
+
   it('closes on outside pointer and Escape and restores anchor focus', () => {
     const view = render(<Popover trigger={['click']} content="Nội dung">{anchor()}</Popover>);
     const trigger = view.getByText('Mở');
@@ -205,6 +222,40 @@ describe('Popconfirm native confirm bubble', () => {
     fireEvent.click(cancel);
     expect(onCancel).toHaveBeenCalledTimes(1);
     view.unmount();
+  });
+
+  it('keeps a controlled open + description as a 4px popconfirm popup with stable hook', () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <Popconfirm
+        open
+        title="Xóa phiên bản?"
+        description="Một mô tả dài giải thích hậu quả của hành động này trước khi xác nhận."
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+        onOpenChange={onOpenChange}
+      >
+        {anchor('Xóa')}
+      </Popconfirm>,
+    );
+    const popup = document.body.querySelector('[data-positioned][data-oi-control="popconfirm"]') as HTMLElement;
+    expect(popup).not.toBeNull();
+    expect(popup.parentElement).toBe(document.body);
+    expect(popup.style.position).toBe('fixed');
+    expect(document.querySelector('[data-oi-control="dialog"]')).toBeNull();
+    expect(popup.textContent).toContain('Một mô tả dài');
+
+    const ok = Array.from(popup.querySelectorAll('button')).find((button) => button.textContent === 'Xác nhận')!;
+    fireEvent.click(ok);
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onCancel).toHaveBeenCalled();
+    // Controlled open stays rendered; the caller owns dismissal.
+    expect(document.body.querySelector('[data-positioned][data-oi-control="popconfirm"]')).not.toBeNull();
   });
 
   it('calls onCancel on Escape and restores the trigger anchor', () => {

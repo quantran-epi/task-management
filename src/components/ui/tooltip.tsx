@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import { classNames } from './native/classNames';
-import { Popup } from './native/popup';
+import { Popup, preferredSide } from './native/popup';
 import tooltipStyles from './openidea/Tooltip.module.css';
 import { getSharedControlTokens } from './tokens.contract';
 
@@ -84,6 +84,7 @@ export function Tooltip({ widthScale = 'md', overlayStyle, ...rest }: TooltipWra
         onClose={hide}
         className={classNames(tooltipStyles.tooltip, 'tooltip')}
         control="tooltip"
+        preferredPlacement={preferredSide(rest.placement)}
         label={typeof text === 'string' ? text : 'Tooltip'}
       >
         <div className={tooltipStyles.text} style={style} data-placed="" data-oi-control="tooltip">

@@ -9,8 +9,7 @@ import {
 } from 'react';
 import { useThemeMode } from '../../hooks/useThemeMode';
 import { classNames } from './native/classNames';
-import { Popup } from './native/popup';
-import { DialogSurface } from './native/dialog';
+import { Popup, preferredSide } from './native/popup';
 import buttonStyles from './openidea/Button.module.css';
 import dialogStyles from './openidea/Dialog.module.css';
 import { getStatusTokens, type StatusKind } from './tokens.contract';
@@ -50,6 +49,7 @@ export function Popconfirm({
   onCancel,
   onOpenChange,
   open: controlledOpen,
+  placement,
   children,
   icon: _icon,
 }: PopconfirmProps) {
@@ -110,9 +110,8 @@ export function Popconfirm({
     </div>
   );
 
-  // A long confirmation with an explicit controlled open behaves like a small dialog;
-  // the common inline case stays a 4px anchored bubble.
-  const modalLike = controlledOpen !== undefined && descriptionNode !== undefined;
+  // Every open state keeps the same 4px anchored bubble and measurement hook;
+  // controlled open / long descriptions must never swap the surface type (W-04).
   const content = (
     <div data-oi-control="popconfirm" data-state={current ? 'expanded' : 'collapsed'}>
       {message}
@@ -130,36 +129,20 @@ export function Popconfirm({
       >
         {children}
       </span>
-      {modalLike ? (
-        <DialogSurface
-          open={current}
-          title={titleNode}
-          footer={actions}
-          onClose={(reason) => {
-            if (reason === 'escape' || reason === 'outside' || reason === 'close') {
-              onCancel?.(withConfirmInfo() as never);
-              close(reason);
-            }
-          }}
-          label={typeof titleNode === 'string' ? titleNode : 'Xác nhận'}
-        >
-          {descriptionNode}
-        </DialogSurface>
-      ) : (
-        <Popup
-          open={current}
-          anchorRef={anchorRef}
-          onClose={(reason) => {
-            onCancel?.(undefined as never);
-            close(reason ?? 'outside');
-          }}
-          className={dialogStyles.popup ?? ''}
-          control="popconfirm"
-          label={typeof titleNode === 'string' ? titleNode : 'Xác nhận'}
-        >
-          {content}
-        </Popup>
-      )}
+      <Popup
+        open={current}
+        anchorRef={anchorRef}
+        onClose={(reason) => {
+          onCancel?.(withConfirmInfo() as never);
+          close(reason ?? 'outside');
+        }}
+        className={dialogStyles.popup ?? ''}
+        control="popconfirm"
+        preferredPlacement={preferredSide(placement)}
+        label={typeof titleNode === 'string' ? titleNode : 'Xác nhận'}
+      >
+        {content}
+      </Popup>
     </>
   );
 }

@@ -14,6 +14,8 @@ export interface PopupProps {
   label?: string;
   /** Measurement hook for the owning control; defaults to the generic popup hook. */
   control?: string;
+  /** Preferred side from the caller's AntD `placement` prop; flip/shift still applies. */
+  preferredPlacement?: 'top' | 'bottom' | 'left' | 'right' | undefined;
 }
 
 interface Position {
@@ -25,28 +27,55 @@ interface Position {
 const OFFSET = 4; // 52-UI-SPEC §8 --popup-offset; mirror of sharedTokens.popupOffset.
 const EDGE_PADDING = 6; // OpenIDEA middleware flip/shift padding.
 
-function place(anchor: DOMRect, element: HTMLElement): Position {
+function place(anchor: DOMRect, element: HTMLElement, preferred?: PopupProps['preferredPlacement']): Position {
   const width = Math.max(anchor.width, Math.min(element.offsetWidth, window.innerWidth - 2 * EDGE_PADDING));
   const height = element.offsetHeight;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-
-  const left = Math.min(
-    Math.max(EDGE_PADDING, anchor.left),
+  const clampLeft = (value: number) => Math.min(
+    Math.max(EDGE_PADDING, value),
     Math.max(EDGE_PADDING, viewportWidth - width - EDGE_PADDING),
   );
+  const clampTop = (value: number) => Math.max(EDGE_PADDING, Math.min(value, viewportHeight - height - EDGE_PADDING));
   const below = anchor.bottom + OFFSET;
   const above = anchor.top - height - OFFSET;
-  const top = below + height <= viewportHeight - EDGE_PADDING
-    ? below
-    : above >= EDGE_PADDING
-      ? above
-      : Math.max(EDGE_PADDING, Math.min(below, viewportHeight - height - EDGE_PADDING));
+  const right = anchor.right + OFFSET;
+  const leftSide = anchor.left - width - OFFSET;
 
-  return { left, top, width };
+  // Preferred side wins when it fits; otherwise keep the legacy below→above→shift
+  // fallback so existing flip/shift behavior is unchanged.
+  const candidates: Array<() => Position> = [];
+  if (preferred === 'top') {
+    candidates.push(() => ({ left: clampLeft(anchor.left), top: above, width }));
+  } else if (preferred === 'left') {
+    candidates.push(() => ({ left: leftSide, top: clampTop(anchor.top), width }));
+  } else if (preferred === 'right') {
+    candidates.push(() => ({ left: right, top: clampTop(anchor.top), width }));
+  }
+  candidates.push(() => ({ left: clampLeft(anchor.left), top: below, width }));
+  if (preferred === 'top') candidates.push(() => ({ left: clampLeft(anchor.left), top: above, width }));
+  candidates.push(() => ({ left: clampLeft(anchor.left), top: Math.max(EDGE_PADDING, Math.min(below, viewportHeight - height - EDGE_PADDING)), width }));
+
+  for (const candidate of candidates) {
+    const next = candidate();
+    const fitsVertical = next.top >= EDGE_PADDING && next.top + height <= viewportHeight - EDGE_PADDING;
+    const fitsHorizontal = next.left >= EDGE_PADDING && next.left + width <= viewportWidth - EDGE_PADDING;
+    if (fitsVertical && fitsHorizontal) return next;
+  }
+  return candidates[candidates.length - 1]!();
 }
 
-export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup' }: PopupProps) {
+/** AntD placement values carry alignment suffixes; Popup only needs the side. */
+export function preferredSide(placement?: string): PopupProps['preferredPlacement'] {
+  if (!placement) return undefined;
+  if (placement.startsWith('top')) return 'top';
+  if (placement.startsWith('left')) return 'left';
+  if (placement.startsWith('right')) return 'right';
+  if (placement.startsWith('bottom')) return 'bottom';
+  return undefined;
+}
+
+export function Popup({ open, anchorRef, onClose, className, children, label, control = 'popup', preferredPlacement }: PopupProps) {
   const popupRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   const [position, setPosition] = useState<Position | null>(null);
@@ -57,8 +86,8 @@ export function Popup({ open, anchorRef, onClose, className, children, label, co
   const updatePosition = useCallback(() => {
     const anchor = anchorRef.current?.getBoundingClientRect();
     const element = popupRef.current;
-    if (anchor && element) setPosition(place(anchor, element));
-  }, [anchorRef]);
+    if (anchor && element) setPosition(place(anchor, element, preferredPlacement));
+  }, [anchorRef, preferredPlacement]);
 
   useLayoutEffect(() => {
     if (!open || typeof document === 'undefined') return;

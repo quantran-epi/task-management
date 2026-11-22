@@ -56,6 +56,22 @@ describe('DialogSurface focus contract', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('keeps focus inside the dialog when an outside element is focused', () => {
+    const background = document.createElement('button');
+    document.body.append(background);
+    cleanup.push(() => background.remove());
+
+    render(
+      <DialogSurface open title="Hộp thoại">
+        <button type="button">First</button>
+        <button type="button">Last</button>
+      </DialogSurface>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Hộp thoại' });
+    background.focus();
+    expect(document.activeElement?.closest('[data-oi-control="dialog"]')).toBe(dialog);
+  });
+
   it('renders no backdrop when masked=false and no close button when closable=false', () => {
     const { container } = render(
       <DialogSurface open masked={false} closable={false}>

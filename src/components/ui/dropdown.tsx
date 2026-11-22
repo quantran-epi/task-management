@@ -8,7 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import { Popup } from './native/popup';
+import { Popup, preferredSide } from './native/popup';
 import { Menu, type MenuClickInfo } from './menu';
 import menuStyles from './openidea/Menu.module.css';
 import selectStyles from './openidea/Select.module.css';
@@ -125,6 +125,7 @@ export function Dropdown({ styles, ...rest }: DropdownProps) {
         onClose={close}
         className={menuStyles.popup ?? ''}
         control="dropdown-popup"
+        preferredPlacement={preferredSide(rest.placement)}
         label="Menu"
       >
         <div style={menuMetrics} className={menuStyles.popup}>
