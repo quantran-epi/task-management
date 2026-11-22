@@ -297,6 +297,25 @@ describe('native Table', () => {
     expect(typeof event.stopPropagation).toBe('function');
   });
 
+  it('single-select filter replaces its value instead of accumulating stale values', () => {
+    const onChange = vi.fn();
+    const columns = [{
+      title: 'Status', dataIndex: 'status', key: 'status',
+      filters: [{ text: 'Done', value: 'done' }, { text: 'Open', value: 'open' }],
+    }];
+    render(<Table dataSource={rows} columns={columns} onChange={onChange} />);
+    const filter = screen.getByLabelText('lọc Status') as HTMLSelectElement;
+
+    fireEvent.change(filter, { target: { value: 'done' } });
+    expect(onChange.mock.calls[0]![1]).toEqual({ status: ['done'] });
+
+    // Changing the choice must replace, not append to, the previous value.
+    fireEvent.change(filter, { target: { value: 'open' } });
+    const [, filters] = onChange.mock.calls.at(-1)!;
+    expect(filters).toEqual({ status: ['open'] });
+    expect(onChange).toHaveBeenCalledTimes(2);
+  });
+
   it('renders emptyText and loading hooks and honours row density', () => {
     const { unmount } = render(
       <Table dataSource={[]} columns={[]} locale={{ emptyText: <span data-testid="custom-empty">Không có dữ liệu</span> }} />,

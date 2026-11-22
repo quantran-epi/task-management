@@ -133,6 +133,7 @@ export function Table<RecordType = unknown>({
     nextPage = currentPage,
     nextSize = pageSize,
     nextSort = sortState,
+    nextFilters = filterState,
   ) {
     const sorter = nextSort
       ? { field: nextSort.key, order: nextSort.order, columnKey: nextSort.key }
@@ -143,7 +144,7 @@ export function Table<RecordType = unknown>({
     for (const column of columns ?? []) {
       const col = column as { key?: unknown; dataIndex?: unknown };
       const key = col.key === undefined ? String(col.dataIndex ?? '') : String(col.key);
-      const values = filterState[key];
+      const values = nextFilters[key];
       if (values && values.length > 0) filters[key] = values;
     }
     onChange?.(
@@ -171,16 +172,13 @@ export function Table<RecordType = unknown>({
     rowSelection.onChange?.(keys, selected as RecordType[], { type: 'single' });
   }
 
-  function toggleFilter(key: string, value: string | number | boolean, checked: boolean) {
-    const current = filterState[key] ?? [];
-    const next = { ...filterState, [key]: checked ? [...current, value] : current.filter((entry) => entry !== value) };
+  function setFilterValue(key: string, value: string) {
+    // Single-select filter: set exactly one value per column. Building the
+    // next state from a stale closure (remove-then-add) left the old value in
+    // the payload and filtered on the wrong data set.
+    const next = { ...filterState, [key]: value ? [value] : [] };
     setFilterState(next);
-    onChange?.(
-      { ...pageConfig, current: currentPage, pageSize } as TablePaginationConfig,
-      next as never,
-      {} as never,
-      { currentDataSource: [...filtered], action: 'filter' },
-    );
+    emitChange('filter', currentPage, pageSize, sortState, next);
   }
 
   function changePage(next: number, nextSize: number) {
@@ -251,12 +249,7 @@ export function Table<RecordType = unknown>({
                       className={chipStyles.chip}
                       data-oi-control="table-filter"
                       value={String(filterState[key]?.[0] ?? '')}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        const previous = filterState[key]?.[0];
-                        if (previous !== undefined && String(previous) !== nextValue) toggleFilter(key, previous, false);
-                        if (nextValue !== '') toggleFilter(key, nextValue, true);
-                      }}
+                      onChange={(event) => setFilterValue(key, event.target.value)}
                     >
                       <option value="">Tất cả</option>
                       {col.filters.map((filter) => (
