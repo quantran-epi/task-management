@@ -1,115 +1,189 @@
 ---
 phase: 54-native-overlay-complex-controls
-reviewed: 2026-11-22
+reviewed: 2026-11-22T05:32:53Z
 depth: deep
-diff_base: c5a8cdd2
-files_reviewed: 61
-critical: 0
-warning: 0
-info: 2
-status: clean
+diff_base: 555c6a9a
+files_reviewed: 18
+files_reviewed_list:
+  - src/components/ui/date-picker.tsx
+  - src/components/ui/form.tsx
+  - src/components/ui/grid.tsx
+  - src/components/ui/icon.tsx
+  - src/components/ui/image.tsx
+  - src/components/ui/list.tsx
+  - src/components/ui/native/popup.tsx
+  - src/components/ui/openidea/Calendar.module.css
+  - src/components/ui/openidea/List.module.css
+  - src/components/ui/slider.tsx
+  - src/components/ui/table.tsx
+  - src/components/ui/time-picker.tsx
+  - src/components/ui/tree-select.tsx
+  - src/components/ui/tree.tsx
+  - src/components/ui/typography.tsx
+  - src/components/ui/__tests__/fakeRenderRegression.test.tsx
+  - src/components/ui/__tests__/overlayPopups.test.tsx
+  - e2e/native-controls-parity.spec.ts
+findings:
+  critical: 2
+  warning: 4
+  info: 2
+  total: 8
+status: issues_found
 ---
 
-# Phase 54: Deep Code Review — NAT-02 Native Overlay & Complex Controls (post-fix, post-migration)
+# Phase 54: Code Review Report — fake-control remediation (deep)
 
-**Phạm vi:** chỉ review source HIỆN TẠI sau các commit fix `e61e0bad`, `cbe2f79a`, `ab9f5073`, `629d1179` và migration `d28718a6` (+ docs `6a756bc0`, `9cf02f12`). Không review lại hand-rolled popup cũ. Đối chiếu `52-UI-SPEC.md` §7/§8/§9, `54-PATTERNS.md`, `54-REVIEW-FIX.md`.
+**Reviewed:** 2026-11-22T05:32:53Z
+**Depth:** deep
+**Files Reviewed:** 18
+**Status:** issues_found
 
-**Kết luận:** W-01..W-05 đã được sửa đúng và Floating UI migration đúng hợp đồng. Tuy nhiên fix W-05 sinh ra **1 regression mới (W-06)**: `focusin` guard của `DialogSurface` kéo focus về dialog ngoài khi có dialog lồng nhau, làm keyboard user không thể tới nút của confirm mở từ trong Modal/Drawer. W-06 đã được sửa tại commit `1d1a276a` (topmost guard trong `onFocusIn` + test stacked-dialog 11/11 pass); sign-off `clean`.
+## Summary
 
-## Kiểm chứng độc lập đã chạy lại
+Review cái nhìn thù địch đối với 18 source files của remediation sau fake-control audit. Xác nhận các mục tiêu chính đạt được: DatePicker là calendar thật (7 cột, month/year header, keyboard, disabledDate, range tint, allowClear), icon mặc định 16×16 (`metrics.iconSize = spacing.md = 16px`, test xác nhận), Popup BODY-portal giữ API. Tuy nhiên tìm thấy **2 regression/critical làm sai hành vi ởcaller thật** (Col layout, DateRangePicker mất ngày đầu) và **4 warning** (filter Table cộng dồn, TimePicker mở lại sau pick, Slider uncontrolled không cập nhật, test range chỉ certificate shape). Các probe jsdom tạm đã chạy để chứng minh và đã xoá; `tsc --noEmit` exit 0; 31 test scoped pass. Không Commit.
 
-| Gate | Kết quả |
-|---|---|
-| `npx tsc --noEmit` | exit 0 |
-| `node scripts/check-native-imports.mjs $(28 wrapper từ 54-PATTERNS.md §1)` | exit 0 |
-| runtime `antd` / `@ant-design/icons` import trong 28 overlay wrapper | 0 |
-| `scanWrappers()` / `findMissingWrappers()` | `257` / `[]` |
-| `grep -c '^export const .* = wrapIcon(' src/components/ui/icon.tsx` | `141` |
-| `find src/components/ui -maxdepth 1 -name '*.tsx' \| wc -l` | `56` |
-| 6 overlay suite + `controls.test.tsx` + 4 migrated caller suite (11 file) | 140 test pass (stderr chỉ có `act(...)` warning cũ của `RemoteGitExplorer`, không phải lỗi Phase 54) |
-| `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium` | `3 passed (20.1s)` — light + dark + Floating UI smoke; `assertClean(errors)` = `[]` (chỉ có `console.warn` PanelGroup từ Vite webserver, không phải console.error/pageerror) |
-| Full Vitest | không chạy theo memory rule |
-| Working tree | chỉ có `54-REVIEW-FIX.md` untracked; không file probe còn sót lại |
+## Critical Issues
+
+### CR-01: `Col` sinh `gridColumn: "0 / span N"` — CSS không hợp lệ, span bị bỏ qua ở mọi caller không có `offset`
+
+**File:** `src/components/ui/grid.tsx:89-91`
+
+**Issue:** `activeOffset ?? 0` cho ra chuỗi `"0 / span 8"` khi caller không truyền `offset`. Line number của CSS Grid là **1-based**; line `0` không hợp lệ nên browser/jsdom từ chối toàn bộ giá trị → `gridColumn` rỗng → `span` vô hiệu, `Col` co về `auto`. Đây là **regression trực tiếp** từ diff này: code cũ phát `span 8` (hợp lệ). Probe jsdom xác nhận:
+
+```
+<Col span={8}>            → style.gridColumn = ""   (computed auto)
+<Col xs={24} sm={12}>     → cùng kết quả
+assign "0 / span 8"       → ""        (bị từ chối)
+assign "1 / span 8"       → "1 / span 8"
+```
+
+Blast radius lớn: `DailyReviewModal` (`span={6}`, `span={8}`), `GitHubConfigCard`, `JiraConfigCard`, `NotificationSettingsCard`, `WeeklyCapacityForm`, toàn bộ 8 `<Col xs={24} sm={12} lg={6}>` trong `TaskFilterBar` — tất cả dùng responsive value **không có `offset`** nên layout vỡ. Ngoài ra nhánh có `offset` cũng **off-by-one**: test `fakeRenderRegression.test.tsx:86-88` kỳ vọng `"2 / span 12"` cho `offset={2}`, nhưng CSS line 2 chỉ bỏ qua 1 cột; AntD `offset={2}` phải là line 3 → test đang certificate giá trị sai.
+
+**Fix:**
+```tsx
+const gridColumn = resolvedSpan !== undefined
+  ? activeOffset !== undefined
+    ? `${activeOffset + 1} / span ${resolvedSpan}`   // CSS grid lines are 1-based
+    : `span ${resolvedSpan}`
+  : activeOffset !== undefined
+    ? `${activeOffset + 1} / auto`
+    : undefined;
+```
+Cập nhật test: kỳ vọng `"3 / span 12"` cho `offset={2}` và thêm assert `<Col span={8}>` → `"span 8"` (không có offset).
+
+### CR-02: `DateRangePicker` không có state nội bộ — mất ngày đầu, không chọn được range ở caller controlled
+
+**File:** `src/components/ui/date-picker.tsx:292-314` (`pair`, `commit`), `358-365` (`Calendar`)
+
+**Issue:** `commit()` luôn đọc `pair = value ?? [null,null]` (thuần prop), không lưu lựa chọn trung gian. Caller chính đều **gate trên cả hai ngày**: `TaskFilterBar.tsx:263-345` (3 range) và `FeasibilityModal.tsx:380-388` chỉ ghi lại khi `dates[0] && dates[1]`. Chuỗi tương tác thực tế:
+
+1. Click input đầu, pick ngày 05 → `onChange([05, null])` → caller bỏ qua (chưa đủ 2) → `value` vẫn `null`.
+2. Click input cuối, pick ngày 12 → `pair` vẫn `[null,null]` → `onChange([null, 12])` → caller lại bỏ qua.
+
+Probe với đúng pattern gate của FeasibilityModal cho kết quả `["", "2026-11-12"]` — range **không bao giờ hình thành** bằng click, dù component được quảng cáo là range picker. `active` đổi sang 1 sau pick đầu, nhưng không có local echo nên dữ liệu bay. Đây là lỗi hành vi, không phải shape.
+
+**Fix:** giữ một draft pair nội bộ, sync từ prop khi prop đổi, và commit vào draft ngay cả khi controlled:
+```tsx
+const [draft, setDraft] = useState<[DateValue, DateValue]>(pair);
+useEffect(() => setDraft(pair), [pair[0], pair[1]]);
+
+function commit(next: Dayjs) {
+  const updated: [DateValue, DateValue] =
+    active === 0 ? [next, draft[1]] : [draft[0], next];
+  setDraft(updated);
+  setTexts([formatValue(updated[0], format), formatValue(updated[1], format)]);
+  setOpen(false);
+  anchorRef.current?.focus();
+  onChange?.(updated, [updated[0]?.format(format) ?? '', updated[1]?.format(format) ?? '']);
+  if (active === 0) setActive(1);
+}
+```
+
+## Warnings
+
+### WR-01: Bộ lọc `Table` cộng dồn giá trị khi đổi lựa chọn trong `<select>`
+
+**File:** `src/components/ui/table.tsx:248-259` (handler), `174-184` (`toggleFilter`)
+
+**Issue:** Handler gọi `toggleFilter(key, previous, false)` rồi `toggleFilter(key, nextValue, true)`, nhưng cả hai đều đọc `filterState` từ closure render cũ. Lần hai thấy `current = [A]` (stale) nên tạo `['A','B']`. Probe xác nhận:
+
+```
+chọn A    → { status: ["A"] }
+đổi sang B → { status: ["A","B"] }   // sai
+```
+
+`<select value={String(filterState[key]?.[0] ?? '')}>` sau đó vẫn hiện `A`. Filter single-select nhưng phát payload multi-value, `filtered` lọc OR → sai tập dữ liệu.
+
+**Fix:** thay bằng một functional update thiết lập đúng một giá trị cho cột (single-select) và emit một lần:
+```tsx
+function setFilterValue(key: string, value: string) {
+  const next = { ...filterState, [key]: value ? [value] : [] };
+  setFilterState(next);
+  onChange?.({ ...pageConfig, current: currentPage, pageSize } as TablePaginationConfig,
+    next as never, {} as never, { currentDataSource: [...filtered], action: 'filter' });
+}
+```
+
+### WR-02: `TimePicker` mở lại popup ngay sau khi pick time
+
+**File:** `src/components/ui/time-picker.tsx:193` (`onFocus`), `167-176` (`close`/`pick`)
+
+**Issue:** `close()` đặt `open:false` rồi gọi `anchorRef.current?.focus()`. Input có `onFocus={() => setOpen(true)}` nên focus restore kích hoạt mở lại. Probe: sau khi click 1 option, `onChange` gọi 1 lần nhưng popup vẫn còn trong DOM (`STILL OPEN`), `activeElement` là input. Người dùng không thể đóng picker bằng cách chọn giờ. (Bug có sẵn trong base nhưng nằm trong file được "repair" ở wave này — keyboard nav mới thêm ở `TimeColumn` — và chưa được test bắt.)
+
+**Fix:** chặn mở trong lần focus restore:
+```tsx
+const suppressOpen = useRef(false);
+function close() {
+  suppressOpen.current = true;
+  setState((p) => ({ ...p, open: false }));
+  anchorRef.current?.focus();
+  queueMicrotask(() => { suppressOpen.current = false; });
+}
+// onFocus:
+onFocus={() => { if (!suppressOpen.current) setState((p) => ({ ...p, open: true })); }}
+```
+
+### WR-03: `Slider` uncontrolled không cập nhật vị trí handle sau commit
+
+**File:** `src/components/ui/slider.tsx:72-76`, `46-55`
+
+**Issue:** `commit()` ghi `uncontrolledRef.current = output` nhưng không có state update → không re-render → `current`/`values` vẫn là giá trị cũ. Probe `<Slider defaultValue={10}>` + ArrowRight: `onChange(11)` nhưng `aria-valuenow` vẫn `10`, `left` vẫn `calc(10% + 6.4px)`. Vi phạm hợp đồng uncontrolled mode của AntD. Hiện tại mọi caller (`InlineProgress`, `TaskDrawer`) đều truyền `value` qua `FormItem`, nên chưa lộ ra — nhưng API vẫn sai và test `fakeRenderRegression.test.tsx:95-102` chỉ kiểm tra `onAfterChange`, không bắt trường hợp này.
+
+**Fix:** force re-render khi uncontrolled commit:
+```tsx
+const [, force] = useReducer((n: number) => n + 1, 0);
+// trong commit:
+if (controlled === undefined) { uncontrolledRef.current = output; force(); }
+```
+
+### WR-04: Test range DatePicker certificate shape, không certificate hành vi chọn 2 bước
+
+**File:** `src/components/ui/__tests__/overlayPopups.test.tsx:381-423`
+
+**Issue:** Test truyền `value={[dayjs('2026-01-05'), dayjs('2026-01-07')]}` (đã đầy đủ 2 đầu) rồi click 1 cell và assert `Array.isArray(dates)` + `strings.length === 2`. Nó **không** mô phỏng luồng thực tế (bắt đầu từ `value = null`, pick đầu rồi pick cuối) nên hoàn toàn không phát hiện CR-02. Đây chính là dạng "test certify fake behavior" mà remediation muốn triệt tiêu.
+
+**Fix:** thêm test với caller gate giống `FeasibilityModal`, render `value={null}`, pick ngày đầu rồi ngày cuối, assert `onChange` cuối cùng nhận `[Dayjs, Dayjs]` đủ 2 đầu và string tương ứng — test này sẽ đỏ cho đến khi CR-02 được sửa.
+
+## Info
+
+### IN-01: `TimeColumn` dùng id cố định toàn cục
+
+**File:** `src/components/ui/time-picker.tsx:71,97` (`id="tp-h"/"tp-m"/"tp-s"`, `"tr-*"`)
+
+**Issue:** Hai `TimePicker`/`TimeRangePicker` trên cùng trang tạo trùng DOM id (`tp-h-0`, …), làm `aria-activedescendant` mơ hồ và HTML không hợp lệ. `querySelector` trong `onColumnKeyDown` đã scoped theo `columnRef` nên scroll đúng, nhưng id vẫn trùng.
+
+**Fix:** tiền tố hoá bằng `useId()` giống `Tree.tsx:108`.
+
+### IN-02: `WEEKDAYS`/`YEARS` đóng băng theo thời điểm import module
+
+**File:** `src/components/ui/date-picker.tsx:37-38`
+
+**Issue:** `CURRENT_YEAR = dayjs().year()` và `YEARS` được tính lúc module load. App chạy qua ranh giới năm sẽ giữ danh sách năm cũ. Không ảnh hưởng UAT hiện tại; có thể tính trong render nếu cần.
+
+**Fix:** chuyển vào `useMemo` trong `Calendar` nếu muốn đúng sau midnight 31/12.
 
 ---
 
-## W-01..W-05 — xác nhận đã fix trong source hiện tại
-
-| ID | Trạng thái | Bằng chứng trong source |
-|---|---|---|
-| W-01 | **FIXED** | `src/components/ui/modal.tsx:64-108` — `defaultFooter()` đọc `okButtonProps`/`cancelButtonProps` (`className`, `style`, `disabled`, `loading`, `danger`); `okLoading` khoá cả Cancel; `aria-busy` đúng. Test `overlayComposite.test.tsx:142-171` assert disabled/className/style và click không gọi handler. |
-| W-02 | **FIXED** | `src/components/ui/modal.tsx:93-97` — `void Promise.resolve().then(() => config.onOk?.(...)).then(dismiss, () => {})`. Test `overlayComposite.test.tsx:173-218` có listener `unhandledrejection`, reject giữ dialog mở, resolve đóng dialog. |
-| W-03 | **FIXED** | `src/components/ui/native/popup.tsx:18-32,36-49` — `preferredPlacement` + `preferredSide()` ánh xạ suffix AntD; 4 wrapper (`tooltip.tsx:87`, `popover.tsx:88`, `dropdown.tsx:128`, `popconfirm.tsx:141`) đều truyền `preferredSide(rest.placement)`. Test `overlayPopups.test.tsx:95-112` assert side `top`/`left` trước flip/shift. |
-| W-04 | **FIXED** | `src/components/ui/popconfirm.tsx:113-147` — nhánh `DialogSurface`/`modalLike` đã xoá; mọi trạng thái `open` render chung một `Popup` với `control="popconfirm"`. Test `overlayPopups.test.tsx:254-286` assert hook, `position:fixed`, 4px bubble, `onConfirm`/`onCancel` trên controlled + description dài. |
-| W-05 | **FIXED nhưng có side-effect — xem W-06** | `src/components/ui/native/dialog.tsx:147-159` có listener `focusin` + `focusGuardRef` + ngoại lệ popup BODY; test `overlayFoundation.test.tsx:59-73` assert focus không thoát ra shell. Cơ chế đúng cho 1 dialog, nhưng sai khi có ≥2 dialog mở (W-06). |
-
-INFO-01 (prop leak `blockNode`/`block`) đã fix ở `ab9f5073`; stderr scoped test sạch lỗi prop leak. INFO-03..INFO-05 giữ nguyên theo `54-REVIEW-FIX.md`.
-
-## Floating UI migration — đúng hợp đồng
-
-`src/components/ui/native/popup.tsx` dùng `useFloating` với `placement`, `strategy:'fixed'`, `transform:false`, `elements.reference=anchorRef.current`, middleware `offset(4)` → `flip({padding:6, fallbackPlacements:[side đối diện]})` → `shift({padding:6})`, `whileElementsMounted: autoUpdate`, render `createPortal(..., document.body)`. Không còn `place()` hand-rolled hay hardcode `top/left`. API public (`open`, `anchorRef`, `onClose`, `className`, `children`, `label`, `control`) nguyên vẹn; `onCloseRef` giữ listener ổn định; Escape chỉ popup trong cùng (nested guard `popups[popups.length-1]`), outside `pointerdown` capture, focus restore về anchor. `data-floating`, `data-positioned`, `data-placement`, width theo anchor — đủ cho measurement hook Phase 57. E2E assert `position:fixed`, `left/top` có giá trị, `data-placement` match `^(bottom|top|left|right)`.
-
-Dependency: `@floating-ui/react-dom@2.1.9` trong `package.json:32` — lib nhẹ đúng policy mới (chỉ cấm UI kit nặng), không có runtime AntD/@ant-design/icons mới. Không có issue từ dependency policy.
-
-## Token contract §8 — KHÔNG regression
-
-Câu hỏi: removal `getSharedControlTokens()` khỏi `select.tsx` có làm hỏng §8 không? **Không.**
-
-- `src/components/ui/select.tsx:74` trước đây là `void getSharedControlTokens()` — no-op guard, không có side-effect.
-- Source hiện tại vẫn áp token qua `controlStyle()` ở `select.tsx:239`: `renderedStyle = {...controlStyle(), ...controlWidthStyle(width), ...style}`, truyền vào `sharedTrigger.style` (`:248`). `controlStyle()` (`src/components/ui/input.tsx:26-34`) gọi `getSharedControlTokens()` và xuất đủ `--ui-control-height`, `--ui-control-radius`, `--ui-control-font-size`, `--ui-control-padding-inline`.
-- `src/components/ui/date-picker.tsx:35` vẫn gọi trực tiếp `getSharedControlTokens()` cho 3 CSS var. `tokens.contract.ts:27-36` và `applyCssVariables()` (`src/styles/tokens.ts:364-375`) nguyên vẹn; portal BODY vẫn kế thừa token qua `document.documentElement`.
-- `tests/helpers/antdInventory.ts:99` vẫn dùng token-helper detection để classify pass-through wrapper — không bị ảnh hưởng.
-
----
-
-## W-06 (MỚI) — `focusin` guard kéo focus về dialog ngoài khi có dialog lồng nhau
-
-**Severity:** warning (keyboard/accessibility regression; mouse + Escape vẫn chạy, không mất dữ liệu).
-**Vị trí:** `src/components/ui/native/dialog.tsx:150-159` (`onFocusIn` trong effect của `DialogSurface`).
-
-**Vấn đề:** mọi `DialogSurface` đang mở đều đăng ký một `focusin` listener riêng trên `document`. Khi dialog thứ hai mount và focus phần tử đầu của nó, listener của dialog thứ nhất cũng chạy: target không nằm trong dialog ngoài → guard ép focus ngược về dialog ngoài. Khác với nhánh Escape (`dialog.tsx:118-119`) đã có topmost guard `dialogs[dialogs.length-1] !== dialog`, `onFocusIn` **không có guard đó**, nên luôn có dialog ngoài "thắng".
-
-**Reproduce (probe jsdom, so sánh với baseline `cbe2f79a^`):**
-
-```
-2 modal.confirm stacked cùng hook:
-  baseline (trước W-05): activeElement nằm trong dialog trong  → title "Two"
-  source hiện tại       : activeElement nằm trong dialog ngoài → title "One"
- fireEvent.keyDown(document, Tab) × 8 → focus luôn quay về "Đóng" của dialog ngoài,
-   không bao giờ chạm "Hủy"/"OK2" của dialog trong (inner.contains(active) === false).
-```
-
-Mouse click trực tiếp vào OK của dialog trong vẫn gọi `onOk` (handler chạy độc lập focus), nhưng keyboard user bị kẹt trong dialog ngoài — vi phạm §9 "focus trap first↔last, không thoát ra shell" theo nghĩa focus không bao giờ vào surface đang mở trên cùng.
-
-**Đường đi production thật:** `src/utils/documentLinks.tsx:195-216` → `promptLocalPathAction()` gọi `options.confirm` (`modal.confirm`) từ trong một Modal đã mở — cụ thể `src/components/changeRequests/ChangeRequestModal.tsx:391`, `src/components/tasks/TaskDrawer.tsx:829`, `src/components/tasks/TaskTable.tsx:481,483`. Ngoài ra `src/components/ai/AIChatDrawer.tsx` có nhiều `modal.confirm` có thể stacked. Đây không phải case giả tạo.
-
-**Required fix:** thêm cùng topmost guard đã dùng ở Escape vào đầu `onFocusIn`:
-
-```ts
-const dialogs = document.querySelectorAll('[role="dialog"][data-oi-control][data-state="open"]');
-if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== dialog) return;
-```
-
-đặt trước logic `dialog.contains(target)`. Như vậy chỉ surface trên cùng giữ focus; dialog ngoài không còn giật focus về. Nên cân nhắc áp chung guard này cho cả nhánh `Tab` trong `onKeyDown` (`dialog.tsx:125-145`) để hai dialog cùng xử lý Tab không đẩy nhau —但目前 triệu chứng chính nằm ở `focusin`.
-
-**Test bắt buộc:** trong `src/components/ui/__tests__/overlayFoundation.test.tsx`, render 2 `DialogSurface open` (hoặc 2 `modal.confirm` stacked), assert `document.activeElement.closest('[data-oi-control="dialog"]')` là dialog trong, và sau vài lần `fireEvent.keyDown(document, {key:'Tab'})` focus vẫn nằm trong dialog trong. Giữ nguyên test background-focus hiện tại để đảm bảo W-05 không tái phát.
-
-## INFO-06 — `54-REVIEW-FIX.md` ghi nhận không khớp source
-
-`54-REVIEW-FIX.md:23` nói đã xoá `void config` trong `config-provider.tsx`, nhưng source hiện tại `src/components/ui/config-provider.tsx:30-33` vẫn có `const config = withoutUndefined({ theme });` và `void config;`. Không ảnh hưởng runtime (`applyCssVariables()` ở `:34` vẫn chạy, token vào `documentElement`), nhưng báo cáo fix cần đính chính. Thêm vào đó §7 dòng 299 ghi `config-provider` "gọi token helper" — no-op `void getSharedControlTokens()` đã bị xoá ở `629d1179`; đây là literal contract detail, không phải lỗi vì `applyCssVariables()` đã đẩy token thật. Không bắt buộc sửa code.
-
-## INFO-07 — placement suffix bị rút gọn về `-start`
-
-`preferredSide()` (`popup.tsx:25-32`) ánh xạ `topLeft`/`topRight` → `top`, rồi `requestedPlacement = "<side>-start"`. Side đúng theo yêu cầu W-03, nhưng alignment `Right` của AntD (`bottomRight` ở `TaskTable.tsx:963`, `DocFolderTree.tsx:494,651,905`, …) không được giữ — popup luôn căn trái anchor. Không nằm trong W-03 (chỉ yêu cầu side), nhưng nếu Phase 57 đo alignment thì cần map suffix sang `bottom-end` tương ứng. Không blocking Phase 54.
-
-## Required Fix Order
-
-1. **W-06** — `src/components/ui/native/dialog.tsx`: topmost guard trong `onFocusIn` (+ cân nhắc nhánh Tab). Test trong `overlayFoundation.test.tsx`. Đây là regression trực tiếp từ fix W-05, ưu tiên trước khi sign-off.
-2. **INFO-06** — đính chính `54-REVIEW-FIX.md` cho đúng source (không bắt buộc đổi code).
-3. **INFO-07** — để Phase 57 xử lý cùng lúc đo alignment; không đổi ở Phase 54.
-
-Sau wave sửa, chạy lại: `npx tsc --noEmit`, 11 file scoped Vitest ở bảng trên, guard 28 wrapper, `scanWrappers()=257`/`ICONS=141`/`wrapper_files=56`, và `npx playwright test e2e/phase54-overlay.spec.ts --project=chromium`. Không chạy full Vitest. Không commit trong review này.
-
-## Sign-off
-
-Đã `clean`: W-06 từng là regression keyboard-focus có đường đi production thật, sinh ra bởi cố gắng sửa W-05. W-01..W-05, Floating UI migration, token contract §8, counter 257/141/56, import guard và 3 e2e Chrome test đều đã xanh. W-06 đã fix + test từ `overlayFoundation.test.tsx` (11/11), lint/tsc xanh; NAT-02 hoàn tất.
+_Reviewed: 2026-11-22T05:32:53Z_
+_Reviewer: Claude (gsd-code-reviewer)_
+_Depth: deep_
