@@ -21,7 +21,7 @@ Shipped **v1.0 MVP** on 2026-09-27 with all 8 foundational phases complete. Ship
 **Target features:**
 - **Inventory control (Phase 51)**: quét mọi control/UI surface TaskMate đang dùng từ `src/components/ui/` và mọi import AntD còn sót; lập danh mục props/behavior/a11y, phân loại theo nhóm.
 - **Mapping & design**: với mỗi control, map sang control tương đương trong OpenIDEA; control không có thì thiết kế mới theo ngôn ngữ OpenIDEA (token, metric, radius, focus ring, popup portal, DOM/class pattern), kể cả Table/Modal/Drawer/Menu/Tooltip/DatePicker/Form.
-- **Native implementation**: thay wrapper bằng control tự build (React + CSS module/CSS vars + Web API), không runtime AntD, không thư viện UI khác; giữ nguyên API wrapper để app không sửa từng màn hình.
+- **Native implementation**: thay wrapper bằng control tự build (React + CSS module/CSS vars + Web API), không runtime AntD. Được dùng dependency nhẹ/best cùng stack OpenIDEA (`@floating-ui/react-dom`, `@tanstack/react-virtual`, `zustand`) hoặc lib nhẹ tương tự; chỉ cấm UI kit nặng như AntD. Giữ nguyên API wrapper để app không sửa từng màn hình.
 - **Removal & guardrails**: xóa import AntD trong wrapper, ESLint guard chặn import trực tiếp, gỡ `antd`/`@ant-design/icons` khỏi `package.json`; lint + build + focused test + UAT Chrome light/dark xanh.
 
 **Previous milestone (v1.5) features:** shell IntelliJ đơn nhất, token tập trung light/dark, wrapper toàn diện mọi control AntD, ESLint guard, adoption toàn app.

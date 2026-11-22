@@ -19,7 +19,7 @@
 
 ### Native Implementation (NAT)
 
-- [x] **NAT-01**: Mọi wrapper trong `src/components/ui/` được thay bằng control tự build bằng React/CSS variables/CSS module/Web API; không import `antd` hay `@ant-design/icons`, không thêm thư viện UI runtime khác.
+- [x] **NAT-01**: Mọi wrapper trong `src/components/ui/` được thay bằng control tự build bằng React/CSS variables/CSS module/Web API; không import `antd` hay `@ant-design/icons`. Được dùng dependency nhẹ/best theo stack OpenIDEA; chỉ cấm UI kit nặng như AntD.
 - [x] **NAT-02**: Mọi trạng thái control được giữ behavior: default, hover, focus-visible, disabled, invalid/error, loading, selected, expanded, empty; popup flip/shift, ngoài-click đóng, Escape đóng, focus trap cho dialog.
 - [ ] **NAT-03**: Toàn bộ UI surface dùng wrapper TaskMate; caller không phải sửa từng màn hình để thích nghi; không còn import AntD trực tiếp trong `src` và không còn code control chết.
 - [ ] **NAT-04**: Token light/dark vẫn tập trung tại `src/styles/tokens.ts` và CSS variables; đổi theme cập nhật ngay mọi control; app vẫn chạy local/offline trên Tauri, không thêm runtime server.
@@ -49,7 +49,7 @@
 |---------|--------|
 | Validation PWA/GitHub Pages | Milestone hiện tại chỉ nhắm Tauri desktop theo CLAUDE.md. |
 | Thay đổi feature/product behavior | Milestone này chỉ đổi hệ thống UI/control. |
-| Thêm thư viện UI khác | Mục tiêu là control native tự build, lightweight. |
+| Thêm UI kit nặng kiểu AntD/MUI/Chakra | Chỉ cấm UI kit nặng; dependency nhẹ/best như OpenIDEA được phép. |
 | Giữ tương thích runtime AntD | AntD bị gỡ hoàn toàn sau milestone. |
 | Thay đổi data model, ID, backup, sync | Không liên quan đến UI refactor; ID phải giữ ổn định. |
 | Hệ thống cộng tác/backend | App vẫn là personal offline-first. |

@@ -21,7 +21,7 @@
 
 > **Blocking (VIS-01..VIS-05):** Tôi tự chạy app trên Chrome, seed dummy data, quét từng route/màn hình/feature nhỏ ở light và dark, đo computed style, chụp screenshot, log pass/fail, sửa mọi defect. Sếp không tự duyệt từng màn hình.
 
-**Cross-cutting constraints:** Tauri là runtime duy nhất được hỗ trợ; PWA/GitHub Pages out of scope; không thêm UI runtime library; không đổi data model/ID/backup/sync; hành vi local/offline không đổi; không chạy full Vitest suite — chỉ focused test; mọi thay đổi UI đi qua wrapper TaskMate.
+**Cross-cutting constraints:** Tauri là runtime duy nhất được hỗ trợ; PWA/GitHub Pages out of scope; cấm UI kit nặng kiểu AntD nhưng được dùng dependency nhẹ/best cùng stack OpenIDEA (`@floating-ui/react-dom`, `@tanstack/react-virtual`, `zustand`); không đổi data model/ID/backup/sync; hành vi local/offline không đổi; không chạy full Vitest suite — chỉ focused test; mọi thay đổi UI đi qua wrapper TaskMate.
 
 ## Phases
 
@@ -74,7 +74,7 @@
 **Requirements**: NAT-01
 **Success Criteria** (what must be TRUE):
 
-  1. Mọi wrapper core/form trong `src/components/ui/` render từ React + CSS variables/CSS module/Web API tự build; không import `antd` hay `@ant-design/icons`, không thêm thư viện UI runtime.
+  1. Mọi wrapper core/form trong `src/components/ui/` render từ React + CSS variables/CSS module/Web API tự build; không import `antd` hay `@ant-design/icons`; dependency nhẹ/best cùng stack OpenIDEA được phép, chỉ cấm UI kit nặng.
   2. Icon tự build thay `@ant-design/icons`; mỗi icon button có accessible name (`aria-label`) quan sát được trong DOM.
   3. Props/API wrapper core giữ nguyên — caller hiện tại không phải sửa khi chạy focused test.
   4. Mọi wrapper core gọi helper token contract chung; không có re-export rỗng hay implementation trỏ lại AntD.
