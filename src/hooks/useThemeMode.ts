@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ThemeMode } from '../styles/tokens';
 import {
   broadcastThemeMode,
@@ -42,15 +42,17 @@ function initialMode(): ThemeMode {
 export function useThemeMode(): ThemeModeState {
   const [mode, setModeState] = useState<ThemeMode>(initialMode);
 
+  // ponytail: read storage once. Checking it on every mode change detached/reattached
+  // the OS listener in every mounted consumer — hundreds of wrappers made toggles lag.
   useEffect(() => {
-    // An explicit override wins — the OS listener must not accumulate while one exists.
-    if (readStoredMode()) return;
     if (typeof window === 'undefined' || !('matchMedia' in window)) return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (event: MediaQueryListEvent) => setModeState(event.matches ? 'dark' : 'light');
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (!readStoredMode()) setModeState(event.matches ? 'dark' : 'light');
+    };
     media.addEventListener('change', handleChange);
     return () => media.removeEventListener('change', handleChange);
-  }, [mode]);
+  }, []);
 
   useEffect(() => {
     // Received mode goes straight to React state: no re-broadcast, no localStorage write.
@@ -58,15 +60,15 @@ export function useThemeMode(): ThemeModeState {
     return subscribeToThemeBroadcast((received) => setModeState(received));
   }, []);
 
-  const setMode = (next: ThemeMode) => {
+  const setMode = useCallback((next: ThemeMode) => {
     if (!isValidThemeMode(next)) return;
     setModeState(next);
     broadcastThemeMode(next);
-  };
+  }, []);
 
-  return {
-    mode,
-    setMode,
-    toggle: () => setMode(mode === 'dark' ? 'light' : 'dark'),
-  };
+  const toggle = useCallback(() => {
+    setMode(mode === 'dark' ? 'light' : 'dark');
+  }, [mode, setMode]);
+
+  return { mode, setMode, toggle };
 }

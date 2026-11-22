@@ -46,6 +46,17 @@ describe('IconButton wrapper', () => {
     expect(button.getAttribute('style')).not.toMatch(/(^|;\s*)font-size:/);
   });
 
+  it('uses utility-tool button metrics and keeps icon-only glyphs centred', () => {
+    render(<IconButton aria-label="Tìm kiếm" icon={<SearchOutlined />} />);
+    const button = screen.getByRole('button', { name: 'Tìm kiếm' });
+    expect(button).toHaveClass('ui-tool-btn', 'ui-tool-btn-icon');
+    expect(button.style.height).toBe('28px');
+    expect(button.style.paddingInline).toBe('10px');
+    expect(button.style.display).toBe('inline-flex');
+    expect(button.style.alignItems).toBe('center');
+    expect(button.style.justifyContent).toBe('center');
+  });
+
   it('requires aria-label at compile time', () => {
     // @ts-expect-error aria-label is mandatory on IconButton
     const missing: IconButtonProps = { icon: <SearchOutlined /> };

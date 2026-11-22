@@ -13,7 +13,24 @@ export interface IconButtonProps extends ButtonProps {
   'aria-label': string;
   size?: ControlSize;
   children?: never;
+  style?: CSSProperties;
 }
+
+/**
+ * ponytail: benchmark is .utility-tool-btn in UtilityToolPanel — same 28px height,
+ * 10px inline padding, 4px radius and accent press feedback. Remove these literals
+ * if a shared token for compact toolbar buttons is added to styles/tokens.ts.
+ */
+const TOOL_BUTTON_CLASS = 'ui-tool-btn';
+const TOOL_BUTTON_STYLE: CSSProperties = {
+  height: '28px',
+  paddingInline: 10,
+  borderRadius: 'var(--radius-control, 4px)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 'var(--gap-6, 6px)',
+};
 
 const VARIANT_PROPS: Record<ButtonVariant, Pick<AntButtonProps, 'type' | 'danger'>> = {
   primary: { type: 'primary' },
@@ -32,13 +49,22 @@ function controlStyle(): CSSProperties {
 }
 
 /** Single swap point for every AntD Button. Caller props win; metrics come from the contract. */
-export function Button({ variant = 'default', style, type, danger, ...rest }: ButtonProps) {
+export function Button({ variant = 'default', style, type, danger, className, ...rest }: ButtonProps) {
   const variantProps = VARIANT_PROPS[variant];
+  const isTextButton = type === 'text' || type === 'link';
   const merged = withoutUndefined({
     ...rest,
     type: type ?? variantProps.type,
     danger: danger ?? variantProps.danger,
-    style: { ...controlStyle(), ...style },
+    className: [
+      TOOL_BUTTON_CLASS,
+      isTextButton ? `${TOOL_BUTTON_CLASS}-text` : '',
+      !isTextButton && (variant === 'primary' || variant === 'danger') ? `${TOOL_BUTTON_CLASS}-primary` : '',
+      className,
+    ].filter(Boolean).join(' '),
+    style: isTextButton
+      ? { ...controlStyle(), height: 28, paddingInline: 10, borderRadius: 'var(--radius-control, 4px)', ...style }
+      : { ...controlStyle(), ...TOOL_BUTTON_STYLE, ...style },
   });
   return <AntButton {...merged} />;
 }
@@ -47,12 +73,13 @@ export function Button({ variant = 'default', style, type, danger, ...rest }: Bu
  * Icon-only Button. `aria-label` is required by the type; no children-only name.
  * Default size is `middle`, taken from the same ControlSize union as AntD.
  */
-export function IconButton({ 'aria-label': label, size = 'middle', icon, ...rest }: IconButtonProps) {
+export function IconButton({ 'aria-label': label, icon, style, ...rest }: IconButtonProps) {
   return (
     <Button
-      size={size}
       icon={icon}
       aria-label={label}
+      className="ui-tool-btn-icon"
+      style={{ height: '28px', ...style }}
       {...withoutUndefined(rest)}
     />
   );

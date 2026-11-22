@@ -22,10 +22,7 @@ export type ThemeMode = 'light' | 'dark';
 export function getAntdAlgorithms(mode: ThemeMode) {
   const controlTokens = getSharedControlTokens();
   return {
-    algorithm: [
-      mode === 'dark' ? AntTheme.darkAlgorithm : AntTheme.defaultAlgorithm,
-      AntTheme.compactAlgorithm,
-    ],
+    algorithm: mode === 'dark' ? AntTheme.darkAlgorithm : AntTheme.defaultAlgorithm,
     controlHeight: controlTokens.controlHeight,
   };
 }

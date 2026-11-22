@@ -1,4 +1,5 @@
 import { Input as AntInput, type InputProps as AntInputProps } from 'antd';
+import type { SearchProps as AntSearchProps } from 'antd/es/input/Search';
 import { forwardRef, type CSSProperties } from 'react';
 import { getSharedControlTokens, withoutUndefined } from './tokens.contract';
 
@@ -38,8 +39,21 @@ export const Input = forwardRef<import('antd').InputRef, InputProps>(function In
   return <AntInput {...merged} ref={ref} />;
 });
 
-/** AntD Input.Search mirrored as a named export (compound slot policy, D-03). */
-export const InputSearch = AntInput.Search;
+/** Search input with the same token-derived metrics as Input (compound slot policy, D-03). */
+export const InputSearch = forwardRef<import('antd').InputRef, AntSearchProps>(function InputSearch(
+  { style, classNames, ...rest },
+  ref,
+) {
+  const rootStyle = { ...controlStyle(), ...controlWidthStyle('full'), ...style };
+  return (
+    <AntInput.Search
+      {...rest}
+      ref={ref}
+      style={rootStyle}
+      classNames={{ root: 'ui-search-root', ...classNames }}
+    />
+  );
+});
 
 /** AntD Input.Password mirrored as a named export (compound slot policy, D-03). */
 export const InputPassword = AntInput.Password;

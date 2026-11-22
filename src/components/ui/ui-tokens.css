@@ -72,3 +72,129 @@
 
 .taskmate-workbench-theme :where([style*="--ui-progress-tone"]) { text-decoration-color: var(--ui-progress-tone, currentColor); }
 .taskmate-workbench-theme :where([style*="--ui-spin-accent"]) { text-decoration-color: var(--ui-spin-accent, currentColor); }
+
+/* Unified control typography and metrics: one locked UI role (13px) and one
+   control height (28px) across inputs, selects and buttons. Caller size props
+   (sm/lg) narrower than the standard are overridden here by design. */
+.taskmate-workbench-theme :where(.ant-input, .ant-input-affix-wrapper, .ant-select, .ant-select-selection-item) {
+  font-size: var(--font-size-ui, 13px) !important;
+  height: 28px !important;
+  min-height: 28px;
+  box-sizing: border-box;
+}
+.taskmate-workbench-theme :where(.ant-btn) {
+  font-size: var(--font-size-ui, 13px) !important;
+  height: 28px !important;
+  min-height: 28px;
+  box-sizing: border-box;
+}
+
+/* Unified button feel: matches the utility tool editor buttons (.utility-tool-btn)
+   for hover, focus and press feedback. Applies to every wrapped AntD Button. */
+/* One hover/press palette for all bordered buttons; text/link buttons keep
+   their borderless AntD look and only share the accent text color on hover. */
+.taskmate-workbench-theme .ui-tool-btn {
+  font-size: var(--font-size-ui, 13px) !important;
+  color: var(--fg-strong, #000);
+  background: var(--bg-island, #fff);
+  border-color: var(--border-strong, #d1d3d9);
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, transform 0.08s ease;
+}
+.taskmate-workbench-theme .ui-tool-btn:disabled {
+  background: var(--bg-elev, #f7f8fa);
+  border-color: var(--border, #e9eaee);
+  color: var(--fg-muted, #6c707e);
+  opacity: 1;
+  cursor: not-allowed;
+  transform: none;
+}
+.taskmate-workbench-theme .ui-tool-btn-primary:disabled {
+  background: var(--accent-soft, #e4ecff);
+  border-color: var(--accent-soft, #e4ecff);
+  color: var(--fg-muted, #6c707e);
+}
+.taskmate-workbench-theme .ui-tool-btn-text:disabled {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-faint, #94a3b8);
+}
+.taskmate-workbench-theme .ui-tool-btn:hover:not(:disabled) {
+  background: var(--bg-hover, #ededed) !important;
+  border-color: var(--accent, #2f62d8) !important;
+  color: var(--fg-strong, #000) !important;
+}
+.taskmate-workbench-theme .ui-tool-btn:active:not(:disabled) {
+  background: var(--accent-soft, #e4ecff) !important;
+  border-color: var(--accent, #2f62d8) !important;
+  color: var(--fg-strong, #000) !important;
+  transform: translateY(1px);
+}
+.taskmate-workbench-theme .ui-tool-btn-text {
+  background: transparent;
+  border-color: transparent;
+  color: var(--fg-muted, #5f6269) !important;
+}
+.taskmate-workbench-theme .ui-tool-btn-text:hover:not(:disabled) {
+  background: var(--bg-hover, #ededed) !important;
+  border-color: transparent !important;
+  color: var(--accent, #2f62d8) !important;
+}
+.taskmate-workbench-theme .ui-tool-btn-text:active:not(:disabled) {
+  background: var(--accent-soft, #e4ecff) !important;
+  border-color: transparent !important;
+  color: var(--accent, #2f62d8) !important;
+}
+.taskmate-workbench-theme .ui-tool-btn:focus {
+  border-color: var(--accent, #2f62d8);
+  box-shadow: 0 0 0 2px var(--accent-soft, #e4ecff);
+}
+.taskmate-workbench-theme .ui-tool-btn:focus-visible {
+  outline: 2px solid var(--accent, #2f62d8);
+  outline-offset: 1px;
+}
+.taskmate-workbench-theme .ui-tool-btn-primary:not(:disabled) {
+  background: var(--accent, #2f62d8);
+  border-color: var(--accent, #2f62d8);
+  color: var(--accent-fg, #fff);
+}
+.taskmate-workbench-theme .ui-tool-btn-primary:hover:not(:disabled),
+.taskmate-workbench-theme .ui-tool-btn-primary:active:not(:disabled) {
+  background: var(--link-hover, #1e4bb8);
+  border-color: var(--link-hover, #1e4bb8);
+  color: var(--accent-fg, #fff);
+}
+
+/* Icon-only buttons and input affixes: icon glyph stays at its own size and centred,
+   never stretched by the button's flex box or by an affix wrapper. */
+.taskmate-workbench-theme .ui-tool-btn-icon,
+.taskmate-workbench-theme .ant-input-affix-wrapper,
+.taskmate-workbench-theme .ant-input-prefix,
+.taskmate-workbench-theme .ant-input-suffix {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.taskmate-workbench-theme .ui-tool-btn-icon > .ant-btn-icon,
+.taskmate-workbench-theme .ui-tool-btn > .ant-btn-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-inline-start: 0;
+}
+.taskmate-workbench-theme .ui-tool-btn .anticon::before {
+  display: none;
+}
+.taskmate-workbench-theme .ui-tool-btn .anticon,
+.taskmate-workbench-theme .ant-input-affix-wrapper .anticon,
+.taskmate-workbench-theme .ant-input-prefix .anticon,
+.taskmate-workbench-theme .ant-input-suffix .anticon {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 1em;
+  width: 1em;
+  height: 1em;
+  font-size: var(--font-size-ui, 13px) !important;
+  line-height: 1;
+  vertical-align: 0;
+}

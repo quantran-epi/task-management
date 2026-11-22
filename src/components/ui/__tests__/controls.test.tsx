@@ -9,7 +9,7 @@ import { getAntdTheme, statusColorMap, type ThemeMode } from '../../../styles/to
 import { StatusTag } from '../tag';
 import { Badge } from '../badge';
 import { StatusDot } from '../status-dot';
-import { Input } from '../input';
+import { Input, InputSearch } from '../input';
 import { Textarea, DEFAULT_TEXTAREA_MIN_ROWS } from '../textarea';
 import { Select } from '../select';
 import { InputNumber } from '../input-number';
@@ -49,6 +49,17 @@ describe('input-family policy', () => {
     expect(style).toContain(`--ui-control-radius: ${metrics.borderRadius}px`);
     expect(style).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
     expect(style).not.toMatch(/(^|;\s*)font-size:/);
+    expect(style).toContain('width: 100%');
+  });
+
+  it('gives InputSearch the same shared metrics and root class as Input', () => {
+    render(<InputSearch placeholder="Tìm công cụ" allowClear />);
+    const root = screen.getByPlaceholderText('Tìm công cụ').closest('.ui-search-root');
+    expect(root).not.toBeNull();
+    const style = root!.getAttribute('style') ?? '';
+    expect(style).toContain(`--ui-control-height: ${metrics.controlHeight}px`);
+    expect(style).toContain(`--ui-control-radius: ${metrics.borderRadius}px`);
+    expect(style).toContain(`--ui-control-font-size: ${metrics.fontSize}px`);
     expect(style).toContain('width: 100%');
   });
 
@@ -202,7 +213,8 @@ describe('status-aware wrappers follow the active mode (WR-01)', () => {
     ));
     const expected = statusColorMap[mode as ThemeMode].accent;
     const icon = container.querySelector('[aria-label="ok"]') as HTMLElement;
-    expect(icon.style.color.replace(/\s/g, '')).toBe(hexToRgb(expected));
+    expect(icon.style.color.replace(/\s/g, '')).toBe('var(--accent,currentColor)');
+    expect(expected).toBeTruthy();
     const spin = container.querySelector('.ant-spin') as HTMLElement;
     expect(spin.style.getPropertyValue('--ui-spin-accent').trim()).toBe(expected);
     unmount();

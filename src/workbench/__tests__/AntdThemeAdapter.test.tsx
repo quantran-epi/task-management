@@ -55,7 +55,7 @@ describe('AntdThemeAdapter', () => {
     expect(source).not.toMatch(/from ['"]antd['"]/);
   });
 
-  it('renders children with compact light tokens', () => {
+  it('renders children with locked light control tokens', () => {
     render(
       <AntdThemeAdapter>
         <TokenConsumer />
@@ -65,10 +65,9 @@ describe('AntdThemeAdapter', () => {
 
     expect(screen.getByTestId('color-primary').textContent).toBe('#2f62d8');
     expect(screen.getByTestId('border-radius').textContent).toBe('4');
-    // compactAlgorithm resolves the 13px/30px seeds down to 10px/26px (measured
-    // from getDesignToken with defaultAlgorithm + compactAlgorithm).
-    expect(screen.getByTestId('font-size').textContent).toBe('10');
-    expect(screen.getByTestId('control-height').textContent).toBe('26');
+    // The default algorithm keeps the locked 13px/30px seed tokens intact.
+    expect(screen.getByTestId('font-size').textContent).toBe('13');
+    expect(screen.getByTestId('control-height').textContent).toBe('30');
     expect(screen.getByText('Test Button')).toBeInTheDocument();
   });
 
