@@ -1,7 +1,7 @@
 import React from 'react';
 import dayjs from 'dayjs';
 import { createRoot } from 'react-dom/client';
-import { Alert, Avatar, AvatarGroup, Badge, Breadcrumb, Button, Checkbox, Divider, IconButton, Input, InputPassword, InputSearch, DatePicker, DateRangePicker, TimePicker, TimeRangePicker, Pagination, Progress, Select, Radio, RadioGroup, Result, Segmented, Skeleton, Spin, Statistic, Switch, Tag, CheckableTag, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
+import { Alert, Avatar, AvatarGroup, Badge, Breadcrumb, Button, Checkbox, Divider, IconButton, Input, InputPassword, InputSearch, DatePicker, DateRangePicker, TimePicker, TimeRangePicker, InputNumber, Mentions, AutoComplete, TreeSelect, Pagination, Progress, Select, Radio, RadioGroup, Result, Segmented, Skeleton, Spin, Statistic, Switch, Tag, CheckableTag, Textarea, SettingOutlined, SyncOutlined } from '../src/components/ui';
 import '../src/components/ui/openidea/tokens.css';
 import './control-gallery.css';
 import '../src/components/ui/openidea/global.css';
@@ -161,7 +161,22 @@ function NavFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, 'date-picker': DatePickerFixture, 'time-picker': TimePickerFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
+function NumberPickersFixture() {
+  const [n, setN] = React.useState(42);
+  const [mention, setMention] = React.useState('');
+  const [auto, setAuto] = React.useState('');
+  const [tree, setTree] = React.useState<unknown>(undefined);
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 320 }}>
+      <label>Số<InputNumber value={n} onChange={(v) => setN(Number(v ?? 0))} min={0} max={100} /></label>
+      <label>Nhắc tên<Mentions value={mention} onChange={setMention} placeholder="@agent" options={[{ value: 'leader', label: 'leader' }, { value: 'researcher', label: 'researcher' }]} /></label>
+      <label>Gợi ý<AutoComplete value={auto} onChange={setAuto} options={['TaskMate', 'Task', 'Timeline'].map((v) => ({ value: v }))} /></label>
+      <label>Cây chọn<TreeSelect value={tree} onChange={setTree} treeData={[{ title: 'Projects', value: 'projects', children: [{ title: 'TaskMate', value: 'taskmate' }] }]} placeholder="Chọn" /></label>
+    </div>
+  );
+}
+
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, select: SelectFixture, 'date-picker': DatePickerFixture, 'time-picker': TimePickerFixture, 'input-number': NumberPickersFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
