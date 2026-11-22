@@ -8,8 +8,6 @@ import {
   executeOracleQuery,
   getOracleConnectionProfiles,
   listOracleConnectionSummaries,
-  redactOracleText,
-  DEFAULT_ORACLE_CONFIG,
 } from '../../services/ai/oracleSqlclService';
 import type { OracleConnectionSummary } from '../../types/oracleSqlcl';
 import { cancelToolCall } from '../../services/sshService';
@@ -76,7 +74,7 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
       const single = assertSqlclSingleStatement(sql);
       assertReadOnlyQuery(single);
     } catch (err: any) {
-      setError(redactOracleText(err?.message || 'Câu lệnh không hợp lệ.', DEFAULT_ORACLE_CONFIG));
+      setError(String(err?.message || 'Câu lệnh không hợp lệ.'));
       return;
     }
 
@@ -106,7 +104,7 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
       if (!payload.success) {
         // User cancellation is not a query failure; do not paint a red error after Cancel.
         if (!payload.cancelled) {
-          setError(redactOracleText(payload.error || 'Truy vấn thất bại.', DEFAULT_ORACLE_CONFIG));
+          setError(String(payload.error || 'Truy vấn thất bại.'));
         }
         return;
       }
@@ -118,7 +116,7 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
         executionTimeMs: payload.executionTimeMs ?? 0,
       });
     } catch (err: any) {
-      setError(redactOracleText(err?.message || 'Lỗi thực thi truy vấn.', DEFAULT_ORACLE_CONFIG));
+      setError(String(err?.message || 'Lỗi thực thi truy vấn.'));
     } finally {
       callIdRef.current = '';
       setBusy(false);
@@ -144,7 +142,7 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
       const saved = await saveFileWithPicker(filename, blob);
       if (saved.saved) message.success('Đã xuất kết quả ra Excel.');
     } catch (err: any) {
-      setError(redactOracleText(err?.message || 'Không xuất được Excel.', DEFAULT_ORACLE_CONFIG));
+      setError(String(err?.message || 'Không xuất được Excel.'));
     }
   }, [message, profiles, result, selected]);
 

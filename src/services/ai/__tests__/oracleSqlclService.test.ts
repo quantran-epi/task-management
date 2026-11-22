@@ -147,6 +147,10 @@ Disconnected from Oracle Database.
 
   it('assertSqlclSingleStatement blocks multi-statements and directives', () => {
     expect(assertSqlclSingleStatement('SELECT 1 FROM DUAL;')).toBe('SELECT 1 FROM DUAL');
+    expect(assertSqlclSingleStatement('SELECT 1 FROM DUAL; -- note')).toBe('SELECT 1 FROM DUAL');
+    expect(applyQueryLimit('SELECT * FROM orders; -- note', 10)).toBe(
+      'SELECT * FROM (\nSELECT * FROM orders\n) WHERE ROWNUM <= 10'
+    );
     expect(() => assertSqlclSingleStatement('SELECT 1; DELETE FROM employees')).toThrow(/một câu lệnh/);
     expect(() => assertSqlclSingleStatement("SELECT 1; DELETE FROM employees WHERE x = 'a;b'")).toThrow(/một câu lệnh/);
     for (const directive of ['SET SQLFORMAT JSON', 'HOST whoami', 'SPOOL /tmp/x', '@script.sql', '/', '!rm -rf /tmp/x', 'EXIT']) {
@@ -163,6 +167,9 @@ Disconnected from Oracle Database.
   it('allows SELECTs whose column names look like DDL keywords', () => {
     expect(() => assertReadOnlyQuery('SELECT comment, lock_version, flashback_date FROM posts')).not.toThrow();
     expect(() => assertReadOnlyQuery('SELECT * FROM posts FOR UPDATE')).toThrow(/Bị từ chối/);
+    expect(() => assertReadOnlyQuery(
+      "WITH FUNCTION f RETURN NUMBER IS BEGIN EXECUTE IMMEDIATE 'DROP TABLE t'; RETURN 1; END; SELECT f FROM dual"
+    )).toThrow(/Bị từ chối/);
   });
 
   it('safeOracleObjectIdentifier accepts quoted mixed case and rejects injection', () => {

@@ -7,9 +7,7 @@ import {
   getOracleConnectionProfiles,
   listOracleConnectionSummaries,
   executeOracleDescribe,
-  redactOracleText,
   ORACLE_OBJECT_TYPES,
-  DEFAULT_ORACLE_CONFIG,
 } from '../../services/ai/oracleSqlclService';
 import { extractGridRows, isOracleSourceObjectType, assertOracleObjectType } from '../../services/ai/oracleSqlclService';
 import { useLayoutStore } from '../store/layoutStore';
@@ -104,7 +102,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
       };
       if (!payload.success) {
         // The service redacts; redact again at the UI boundary in case of a stale payload.
-        throw new Error(redactOracleText(payload.error || 'Lỗi truy vấn metadata Oracle.', DEFAULT_ORACLE_CONFIG));
+        throw new Error(String(payload.error || 'Lỗi truy vấn metadata Oracle.'));
       }
       return payload;
     },
@@ -243,8 +241,8 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
         if (!mounted.current || requestGeneration !== generation.current) return;
         setTree((prev) => patchChildren(prev, key, children));
       } catch (err: any) {
-        if (!mounted.current) return;
-        setError(redactOracleText(err?.message || 'Không tải được cây schema.', DEFAULT_ORACLE_CONFIG));
+        if (!mounted.current || requestGeneration !== generation.current) return;
+        setError(String(err?.message || 'Không tải được cây schema.'));
       } finally {
         if (mounted.current) setLoading(false);
       }
@@ -273,9 +271,15 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
   // Global object search should show results immediately without a manual expand click.
   useEffect(() => {
     if (debouncedObjectFilter && rootNodes.length) {
-      setExpandedKeys(rootNodes.map((node) => node.key));
+      // Global search is expensive (ALL_OBJECTS scan). Expand only the active connection by
+      // default; the user can open another connection explicitly if needed.
+      const active = profiles.find((p) => p.isActive) ?? profiles[0];
+      const activeNode = rootNodes.find((node) =>
+        decodeParts(node.key)[1] === active?.id
+      );
+      setExpandedKeys(activeNode ? [activeNode.key] : [rootNodes[0]!.key]);
     }
-  }, [debouncedObjectFilter, rootNodes]);
+  }, [debouncedObjectFilter, rootNodes, profiles]);
 
   const openObject = useCallback(
     (objectNodeKey: string) => {

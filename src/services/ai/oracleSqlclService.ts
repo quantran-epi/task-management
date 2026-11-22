@@ -268,7 +268,9 @@ export function assertSqlclSingleStatement(sql: string): string {
   if (strippedSingle.includes(';')) {
     throw new Error('Bị từ chối: chỉ cho phép một câu lệnh SQL duy nhất.');
   }
-  return sql.trim().replace(/;\s*$/, '').trim();
+  // Remove the trailing semicolon even when a trailing comment follows it. Counting via
+  // `stripped` above already proved there is no second statement beyond this one.
+  return sql.trim().replace(/;\s*(?:(?:--[^\n\r]*|\/\*[\s\S]*?\*\/)\s*)*$/, '').trim();
 }
 
 /**
@@ -327,11 +329,11 @@ export function assertReadOnlyQuery(sql: string): void {
     );
   }
 
-  // Guard against mutating phrases inside a SELECT, without rejecting legitimate column names
-  // such as `comment`, `lock_version` or `flashback_date`. Bare DDL/DML at statement start is
-  // already rejected by the first-word check above.
+  // Keep a strong defense-in-depth token denylist (PL/SQL blocks and DDL/DML keywords),
+  // but drop the four words that are common column names (`COMMENT`, `LOCK`, `PURGE`,
+  // `FLASHBACK`). First-word rules above still reject statements that start with them.
   const FORBIDDEN_PATTERN =
-    /\b(?:FOR\s+UPDATE|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+[A-Z_$#][\w$#]*\s+SET|MERGE\s+INTO|DROP\s+(?:TABLE|VIEW|INDEX|SEQUENCE|PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE|SYNONYM)|ALTER\s+(?:TABLE|VIEW|INDEX|SESSION|SYSTEM|USER|DATABASE)|TRUNCATE\s+(?:TABLE|CLUSTER)|GRANT\s+\w+|REVOKE\s+\w+|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|INDEX|SEQUENCE|PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE|SYNONYM)|FLASHBACK\s+TABLE)\b/i;
+    /\b(?:BEGIN|DECLARE|EXEC|EXECUTE|CALL|INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|MERGE|GRANT|REVOKE|CREATE|REPLACE|FOR\s+UPDATE)\b/i;
 
   const match = stripped.match(FORBIDDEN_PATTERN);
   if (match) {
@@ -372,6 +374,8 @@ export function escapeOracleLikeFilter(value: string): string {
 /**
  * Build a LIKE predicate for a free-text search plus its Vietnamese-folded variant.
  * Both terms pass the same escaping/control-character boundary before interpolation.
+ * Oracle catalog names are normally ASCII; a DB-side name stored with diacritics cannot be
+ * matched by a client-folded term unless the catalog itself exposes a folded column.
  */
 function oracleLikePredicate(column: string, args: OracleDescribeArgs): string {
   const terms = [args.search, args.searchAlt]
@@ -388,7 +392,7 @@ function oracleLikePredicate(column: string, args: OracleDescribeArgs): string {
  */
 export function applyQueryLimit(sql: string, maxRows: number): string {
   const stripped = stripCommentsAndLiterals(sql);
-  const cleanSql = sql.trim().replace(/;+\s*$/, '');
+  const cleanSql = sql.trim().replace(/;+\s*(?:(?:--[^\n\r]*|\/\*[\s\S]*?\*\/)\s*)*$/, '');
 
   // If already has ROWNUM, FETCH FIRST, or OFFSET, do not wrap
   if (/\b(ROWNUM|FETCH\s+FIRST|OFFSET)\b/i.test(stripped)) {

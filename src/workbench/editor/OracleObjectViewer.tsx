@@ -4,11 +4,7 @@ import { Alert, Button, InputSearch, Spin } from '../../components/ui';
 import { CopyOutlined } from '../../components/ui/icon';
 import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighlighter';
 import { LineNumberedPane } from '../toolwindows/LineNumberedPane';
-import {
-  executeOracleDescribe,
-  redactOracleText,
-  DEFAULT_ORACLE_CONFIG,
-} from '../../services/ai/oracleSqlclService';
+import { executeOracleDescribe } from '../../services/ai/oracleSqlclService';
 import { cancelToolCall } from '../../services/sshService';
 import { useThemeMode } from '../../hooks/useThemeMode';
 
@@ -94,7 +90,7 @@ export function OracleObjectViewer({
         truncated?: boolean;
       };
       if (!payload.success) {
-        throw new Error(redactOracleText(payload.error || 'Không đọc được đối tượng Oracle.', DEFAULT_ORACLE_CONFIG));
+        throw new Error(String(payload.error || 'Không đọc được đối tượng Oracle.'));
       }
       const rawText =
         mode === 'source'
@@ -102,12 +98,12 @@ export function OracleObjectViewer({
           : mode === 'columns'
             ? columnsToText(payload.columns)
             : payload.ddl ?? '';
-      const redacted = redactOracleText(rawText, DEFAULT_ORACLE_CONFIG);
+      const redacted = String(rawText);
       const capped = redacted.slice(0, MAX_CHARS);
       setTruncated(Boolean(payload.truncated) || redacted.length > MAX_CHARS);
       setText(mode === 'columns' ? capped : formatSql(capped));
     } catch (err: any) {
-      setError(redactOracleText(err?.message || 'Lỗi khi đọc đối tượng Oracle.', DEFAULT_ORACLE_CONFIG));
+      setError(String(err?.message || 'Lỗi khi đọc đối tượng Oracle.'));
     } finally {
       setLoading(false);
     }
