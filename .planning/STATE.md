@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.6
 milestone_name: Native UI Controls
-status: completed
+status: executing
 stopped_at: Completed 54-07-PLAN.md
-last_updated: "2026-11-22T03:08:17.983Z"
-last_activity: 2026-11-22 -- Phase 54 marked complete
+last_updated: "2026-11-22T07:48:22.702Z"
+last_activity: 2026-11-22 -- Phase 59 execution started
 progress:
-  total_phases: 8
-  completed_phases: 3
-  total_plans: 17
-  completed_plans: 16
-  percent: 38
+  total_phases: 9
+  completed_phases: 4
+  total_plans: 38
+  completed_plans: 18
+  percent: 44
 ---
 
 # Project State: TaskMate — Milestone v1.6
@@ -19,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Thay toàn bộ AntD bằng bộ control tự build theo OpenIDEA (PyCharm Islands), light+dark, API/behavior/a11y giữ nguyên; gỡ hoàn toàn `antd` + `@ant-design/icons`.
-**Current focus:** Phase 54 — native-overlay-complex-controls
+**Current focus:** Phase 59 — control-parity-rework-per-control-chrome-compare
 
 ## Current Position
 
-Phase: 54 — COMPLETE
-Plan: 7 of 7
-Status: Phase 54 complete
-Last activity: 2026-11-22 -- Phase 54 marked complete
+Phase: 59 (control-parity-rework-per-control-chrome-compare) — EXECUTING
+Plan: 2 of 21
+Status: Ready to execute
+Last activity: 2026-11-22 -- Phase 59 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -55,7 +55,7 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-22T03:08:17.920Z
+Last session: 2026-11-22T07:48:06.202Z
 Stopped at: Completed 54-07-PLAN.md
 Resume file: None
 
@@ -314,6 +314,9 @@ Progress: [█████░░░░░] 50%
 - [Phase 54]: Menu items are plain AntD ItemType objects; statics are React elements — collectItems must read props from either shape — Focused test caught divider/danger items missing from native Menu render
 - [Phase 54-native-overlay-complex-controls]: Popup wrappers share the native BODY-portal helper with wrapper-specific control hooks; DatePicker uses select-popup for the Phase 57 Chrome measurement hook. — Keeps Phase 57 selectors stable and avoids reimplementing floating-ui positioning
 - [Phase 54]: Keyed imperative holder update with separate message/notification channels — Realtime notification must update in place without reload; separate channels keep holder stacks isolated
+- [Phase 59]: Reference dark theme uses root data-theme=dark; data-contrast=high renders dark-hc palette
+- [Phase 59]: PASS.json stays pending-human/null; only owner sets pass
+- [Phase 59]: Preflight accepts localhost alias for IPv6-only dev server but still fails hard when unreachable
 
 ## Performance Metrics
 
@@ -382,6 +385,7 @@ Progress: [█████░░░░░] 50%
 | Phase 54 P05 | 36 min | 3 tasks | 7 files |
 | Phase 54 P06 | 22min | 3 tasks | 9 files |
 | Phase 54 P07 | ~25m | 3 tasks | 13 files |
+| Phase 59 P01 | 35min | 3 tasks | 11 files |
 
 ### Blockers
 

@@ -185,7 +185,7 @@
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
 | 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
 | 58. Defect Closure & Milestone Sign-off | 0/TBD | Blocked by 59 | — |
-| 59. Control Parity Rework | 0/TBD | Not started | — |
+| 59. Control Parity Rework | 1/21 | In Progress|  |
 
 ## Previous Milestone: v1.5 Design System & UI Consistency
 
@@ -251,7 +251,7 @@
 5. `restoreBackup` no longer creates SDLC tabs; `validateBackup` no longer enforces SDLC invariants.
 
 **Status:** Complete — 2026-11-10; accepted fresh-data-only scope, verification debt recorded in 35-VERIFICATION.md.
-**Plans:** 7/7 plans complete
+**Plans:** 1/21 plans executed
 
 Plans:
 **Wave 1**
