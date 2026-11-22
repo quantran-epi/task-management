@@ -497,4 +497,20 @@ describe('controlled value regressions', () => {
     expect(input.value).toBe('2026-02-09');
     view.unmount();
   });
+
+  it('syncs DateRangePicker calendar month with an external value change (WR-01)', () => {
+    const view = render(
+      <DateRangePicker value={[dayjs('2026-01-05'), dayjs('2026-01-07')]} />,
+    );
+    view.rerender(
+      <DateRangePicker value={[dayjs('2026-03-10'), dayjs('2026-03-20')]} />,
+    );
+    const inputs = view.container.querySelectorAll('[data-oi-control="date-picker"]');
+    expect((inputs[0] as HTMLInputElement).value).toBe('2026-03-10');
+
+    fireEvent.click(inputs[0]!);
+    const month = document.querySelector('[data-oi-control="calendar-month"]') as HTMLSelectElement;
+    expect(month.value).toBe('2'); // March (0-based)
+    view.unmount();
+  });
 });

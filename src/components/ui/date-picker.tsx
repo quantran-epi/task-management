@@ -309,6 +309,9 @@ export function DateRangePicker({
   useEffect(() => {
     setDraft(pair);
     setTexts([formatValue(pair[0], format), formatValue(pair[1], format)]);
+    // External value change (reset/preset) must move the visible calendar
+    // month too, else input text and opened calendar disagree (WR-01).
+    if (pair[0] || pair[1]) setMonth(pair[0] ?? pair[1]!);
   }, [pair[0], pair[1], format]);
 
   function commit(next: Dayjs) {
