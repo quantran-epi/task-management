@@ -160,7 +160,7 @@ function NotificationItem({ record, onDismiss }: {
 }
 
 /** Notification stack subscribing with useSyncExternalStore; updates render in place. */
-export function NotificationHolder() {
+export function useNotificationHolder() {
   const records = useImperativeChannel(notificationChannel);
   const style = {
     position: 'fixed',

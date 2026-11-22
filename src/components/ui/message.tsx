@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useThemeMode } from '../../hooks/useThemeMode';
-import { NotificationHolder } from './notification';
+import { useNotificationHolder } from './notification';
 import {
   createImperativeChannel,
   useImperativeChannel,
@@ -190,7 +190,7 @@ function MessageItem({ record, onDismiss }: {
 }
 
 /** Message stack subscribing with useSyncExternalStore; keyed updates render in place. */
-export function MessageHolder() {
+export function useMessageHolder() {
   const records = useImperativeChannel(messageChannel);
   const style = {
     position: 'fixed',
@@ -219,8 +219,8 @@ export function ThemeAppHolder({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      <MessageHolder />
-      <NotificationHolder />
+      {useMessageHolder()}
+      {useNotificationHolder()}
     </>
   );
 }

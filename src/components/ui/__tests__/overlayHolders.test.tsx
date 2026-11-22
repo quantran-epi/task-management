@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, useApp } from '../app';
 import { ThemeConfigProvider } from '../config-provider';
 import { Layout, LayoutContent, LayoutFooter, LayoutHeader, LayoutSider } from '../layout';
+import { UPLOAD_LIST_IGNORE, Upload, UploadDragger } from '../upload';
 import { ThemeAppHolder, messageChannel, useMessage } from '../message';
 import {
   notificationChannel,
@@ -103,6 +104,54 @@ describe('native App, ConfigProvider and Layout', () => {
     fireEvent.click(screen.getByLabelText('Thu gọn thanh bên'));
     expect(onCollapse).toHaveBeenCalledWith(true, 'clickTrigger');
     expect(sider).toHaveAttribute('data-state', 'collapsed');
+  });
+});
+
+describe('native Upload', () => {
+  function chooseFile(container: HTMLElement, file: File) {
+    const input = container.querySelector('[data-oi-control="upload-input"]') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input, { target: { files: [file] } });
+  }
+
+  it('blocks on beforeUpload=false, honours LIST_IGNORE and emits the AntD-shaped payload', () => {
+    const beforeUpload = vi.fn((file: File) => file.name === 'ok.txt' || UPLOAD_LIST_IGNORE);
+    const onChange = vi.fn();
+    const customRequest = vi.fn(({ onSuccess }: { onSuccess: (value?: unknown) => void }) => onSuccess());
+    const { container } = render(
+      <Upload beforeUpload={beforeUpload as never} onChange={onChange} customRequest={customRequest as never} />,
+    );
+    expect(container.querySelector('[data-oi-control="upload"]')).toHaveAttribute('data-state', 'empty');
+    chooseFile(container, new File(['x'], 'blocked.txt', { type: 'text/plain' }));
+    expect(beforeUpload).toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(container.querySelectorAll('[data-oi-control="upload-row"]')).toHaveLength(0);
+
+    chooseFile(container, new File(['x'], 'ok.txt', { type: 'text/plain' }));
+    expect(customRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ file: expect.any(File), onSuccess: expect.any(Function), onError: expect.any(Function), onProgress: expect.any(Function) }),
+      expect.anything(),
+    );
+    const info = onChange.mock.calls.at(-1)?.[0] as { file: { name: string }; fileList: unknown[]; event?: unknown };
+    expect(info.file.name).toBe('ok.txt');
+    expect(info.fileList).toHaveLength(1);
+    expect(info.event).toBeUndefined();
+    expect(container.querySelectorAll('[data-oi-control="upload-row"]')).toHaveLength(1);
+    expect(container.querySelector('[data-oi-control="upload-row"]')).toHaveAttribute('data-state', 'success');
+  });
+
+  it('exposes dragover/disabled states and renders dragger children', () => {
+    const { container } = render(
+      <UploadDragger disabled><span>Kéo thả</span></UploadDragger>,
+    );
+    expect(screen.getByText('Kéo thả')).toBeInTheDocument();
+    expect(container.querySelector('[data-oi-control="upload-dragger"]')).toHaveAttribute('data-state', 'disabled');
+    const { container: active } = render(<UploadDragger><span>Kéo thả 2</span></UploadDragger>);
+    const dragger = active.querySelector('[data-oi-control="upload-dragger"]') as HTMLElement;
+    fireEvent.dragOver(dragger);
+    expect(dragger).toHaveAttribute('data-state', 'dragover');
+    fireEvent.dragLeave(dragger);
+    expect(dragger).toHaveAttribute('data-state', 'empty');
   });
 });
 
