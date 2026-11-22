@@ -90,7 +90,7 @@ function TimeColumn({ id, values, value, lead, onLead, onPick, label }: TimeColu
         aria-label={label}
         aria-activedescendant={`${id}-${activeIndex}`}
         tabIndex={0}
-        style={{ width: 72, maxHeight: 480 }}
+        style={{ width: 72, height: 240 }}
         onKeyDown={onColumnKeyDown}
       >
         <div className={listStyles.sizer} style={{ height: values.length * 24 }}>
@@ -211,7 +211,7 @@ export function TimePicker({ width = 'full', style, className, value, defaultVal
       {allowClear && current && !disabled ? (
         <button type="button" aria-label="Xóa giờ" onClick={() => { commit(null, onChange as ((value: Dayjs | null) => void) | undefined); close(); }}>×</button>
       ) : null}
-      <Popup open={state.open} anchorRef={anchorRef} onClose={close} className={selectStyles.popup ?? ''} control="time-picker-popup" label={ariaLabel ?? placeholder ?? 'Chọn giờ'}>
+      <Popup open={state.open} anchorRef={anchorRef} onClose={close} className={selectStyles.popup ?? ''} control="time-picker-popup" label={ariaLabel ?? placeholder ?? 'Chọn giờ'} width={active.seconds.length > 0 ? 248 : 176}>
         <div className={selectStyles.popupInner} style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
           <TimeColumn id={`${idBase}-tp-h`} values={active.hours} value={hour} lead={leads[0]} label="Giờ" onLead={(index) => setState((prev) => ({ ...prev, lead: [index, prev.lead[1], prev.lead[2]] }))} onPick={(h) => pick(h, minute, second, 0)} />
           <TimeColumn id={`${idBase}-tp-m`} values={active.minutes} value={minute} lead={leads[1]} label="Phút" onLead={(index) => setState((prev) => ({ ...prev, lead: [prev.lead[0], index, prev.lead[2]] }))} onPick={(m) => pick(hour, m, second, 1)} />
@@ -316,6 +316,7 @@ export function TimeRangePicker({
         className={selectStyles.popup ?? ''}
         control="time-picker-range-popup"
         label={ariaLabel ?? 'Chọn khoảng thời gian'}
+        width={grid.seconds.length > 0 ? 248 : 176}
       >
         <div className={selectStyles.popupInner} style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
           <TimeColumn id={`${idBase}-tr-h`} values={grid.hours} value={parsed.hour()} lead={rangeLead[0]} label="Giờ" onLead={(index) => setRangeLead((prev) => [index, prev[1], prev[2]])} onPick={(h) => pick(h, parsed.minute(), parsed.second())} />
