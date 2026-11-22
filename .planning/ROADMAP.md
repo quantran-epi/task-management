@@ -158,18 +158,13 @@
 
 **UI hint**: yes
 
-### Phase 59: Control Parity Rework — per-control Chrome compare + human gate (đơn giản hoá)
+### Phase 59: Control Parity Rework — gallery + per-control human gate (đơn giản hoá)
 
-**Goal:** Sửa tận gốc chất lượng bộ control: từng wrapper một được đối chiếu trực tiếp với control tương ứng trong OpenIDEA/IntelliJ trên Chrome, cả render lẫn behavior, light + dark. Không coi phase 54 là đạt cho tới khi xong phase này.
-**Depends on:** Phase 54 (remediation) — chặn Phase 55/56/57/58 cho tới khi pass.
-**Requirements**: NAT-02 (reopened), mới: PAR-01..PAR-04 (sẽ thêm vào REQUIREMENTS.md khi lập kế hoạch).
-**Success Criteria** (what must be TRUE):
-
-  1. Với mỗi control trong 56 wrapper, có evidence Chrome cặp: OpenIDEA reference và TaskMate wrapper cùng viewport/theme, screenshot + DOM + computed geometry (width/height/font/padding/margin/radius/border/shadow/icon/alignment/overflow), light và dark.
-  2. Với mỗi control, có evidence tương tác thật: click, typing, Tab/Arrow/Enter/Escape, focus/hover/disabled/loading/selected/expanded/empty, mở/đóng popup — so sánh behavior với reference, không có shape tự chế.
-  3. Mọi diff được sửa trong wrapper/CSS module tương ứng. Sau mỗi control tôi self-verify rồi TỰ MỞ Chrome cho sếp xem/thao tác (sếp không tự mở, không tự setup): tab đúng control, data dummy, light/dark, hướng dẫn ngắn. CHỈ khi sếp trả lời "pass" mới được chuyển control kế. Không pass thì sửa lại cùng control. Log pass/fail từng control lưu artifact.
-  4. Không có console error trong lúc thao tác; focused test được cập nhật để assert behavior thật thay vì shape giả; không chạy full Vitest suite.
-  5. Code review + verifier độc lập xác nhận từng control trước khi handoff; phase 55 chỉ được lập/execute sau khi sếp pass TẤT CẢ control.
+**Goal:** Sửa chất lượng bộ control bằng cách cho sếp thấy/thao tác trực tiếp từng wrapper trên Chrome, không xây harness phức tạp.
+**Depends on:** Phase 54 (remediation). Chặn Phase 55/56/57/58 cho tới khi sếp pass các control trọng yếu.
+**Requirements**: NAT-02 (reopened), PAR-01..PAR-04.
+**Approach:** Dùng 1 trang gallery dùng lại được: `control-gallery.html?control=<id>&theme=<light|dark>`. Mỗi control chỉ thêm 1 fixture nhỏ. Tôi tự mở 3 tab: TaskMate light, TaskMate dark, OpenIDEA/proof. Sếp thao tác; chỉ khi sếp trả "pass" mới sang control kế. Không plan 21 bước, không harness/gate 56 control, không screenshot bắt buộc, không full Vitest.
+**Status:** In progress — đã pass Button, Input, Textarea. Tiếp tục theo thứ tự control cần review, dùng lại gallery.
 
 **UI hint**: yes
 
@@ -185,7 +180,7 @@
 | 56. AntD Removal, Guardrails & Focused Verification | 0/TBD | Not started | — |
 | 57. Chrome Visual & Behavior Sweep | 0/TBD | Not started | — |
 | 58. Defect Closure & Milestone Sign-off | 0/TBD | Blocked by 59 | — |
-| 59. Control Parity Rework | 1/21 | In Progress|  |
+| 59. Control Parity Rework (gallery) | — | In Progress | Button/Input/Textarea pass |
 
 ## Previous Milestone: v1.5 Design System & UI Consistency
 
