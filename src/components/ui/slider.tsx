@@ -2,7 +2,7 @@ import {
   type SliderRangeProps,
   type SliderSingleProps,
 } from 'antd';
-import { useCallback, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useReducer, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { classNames } from './native/classNames';
 import checkboxStyles from './openidea/Checkbox.module.css';
 import splitterStyles from './openidea/Splitter.module.css';
@@ -35,6 +35,9 @@ export function Slider({ style, className, ...rest }: SliderProps) {
   const onAfterChange = rest.onAfterChange;
   const railRef = useRef<HTMLDivElement>(null);
   const dragIndex = useRef<number | null>(null);
+  // Uncontrolled commits live in a ref; force a re-render so the handle
+  // position and aria-valuenow reflect the freshly committed value.
+  const [, forceRender] = useReducer((n: number) => n + 1, 0);
   // `current` is a render snapshot; onAfterChange must report the value just
   // committed, not the stale value from the render that started the drag/key press.
   const lastCommitted = useRef<SliderValue | undefined>(undefined);
@@ -69,11 +72,14 @@ export function Slider({ style, className, ...rest }: SliderProps) {
     } else {
       output = resolved;
     }
-    if (controlled === undefined) uncontrolledRef.current = output;
+    if (controlled === undefined) {
+      uncontrolledRef.current = output;
+      forceRender();
+    }
     lastCommitted.current = output;
     if (isRange) rangeProps.onChange?.(output as [number, number]);
     else singleProps.onChange?.(output as number);
-  }, [current, controlled, isRange, max, min, rangeProps, singleProps, step]);
+  }, [current, controlled, forceRender, isRange, max, min, rangeProps, singleProps, step]);
 
   function valueFromPointer(event: PointerEvent<HTMLDivElement>): number {
     const rect = railRef.current?.getBoundingClientRect();

@@ -110,6 +110,19 @@ describe('fake-render regression: real behavior + metrics (N-08)', () => {
     view.unmount();
   });
 
+  it('uncontrolled Slider moves its handle after a keyboard commit', () => {
+    const onChange = vi.fn();
+    const view = render(<Slider defaultValue={10} min={0} max={100} onChange={onChange} />);
+    const handle = view.container.querySelector('[role="slider"]') as HTMLElement;
+    expect(handle.getAttribute('aria-valuenow')).toBe('10');
+    fireEvent.keyDown(handle, { key: 'ArrowRight' });
+    expect(onChange).toHaveBeenCalledWith(11);
+    const moved = view.container.querySelector('[role="slider"]') as HTMLElement;
+    expect(moved.getAttribute('aria-valuenow')).toBe('11');
+    expect((moved as HTMLElement).style.left).toContain('11%');
+    view.unmount();
+  });
+
   it('List.Item renders extra and actions instead of dropping them', () => {
     const view = render(
       <List
