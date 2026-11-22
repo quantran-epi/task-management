@@ -62,11 +62,15 @@ function CheckboxFixture() {
 function RadioFixture() {
   const [value, setValue] = React.useState('plan');
   return (
-    <RadioGroup value={value} onChange={(e) => setValue(e.target.value)}>
-      <Radio value="plan">Plan</Radio>
-      <Radio value="actual">Actual</Radio>
-      <Radio value="disabled" disabled>Disabled</Radio>
-    </RadioGroup>
+    <div style={{ display: 'grid', gap: 12 }}>
+      <RadioGroup value={value} onChange={(e) => setValue(e.target.value)}>
+        <Radio value="plan">Plan</Radio>
+        <Radio value="actual">Actual</Radio>
+      </RadioGroup>
+      <RadioGroup value="off" disabled>
+        <Radio value="off">Disabled</Radio>
+      </RadioGroup>
+    </div>
   );
 }
 

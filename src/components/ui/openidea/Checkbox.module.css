@@ -52,8 +52,8 @@
   --icon-color: currentColor;
 }
 .disabled .box {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--bg-elev);
+  box-shadow: inset 0 0 0 1px var(--control-off);
   color: var(--fg-faint);
 }
 .disabled .on {
@@ -61,6 +61,8 @@
 }
 .radio {
   border-radius: 50%;
+  box-sizing: border-box;
+  flex: none;
 }
 .radio.on::after {
   content: "";
