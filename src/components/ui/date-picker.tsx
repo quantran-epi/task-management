@@ -280,7 +280,7 @@ export function DatePicker({ width = 'full', style, onChange, value, ...rest }: 
           onClear={allowClear ? () => commit(null) : undefined}
         />
       </Popup>
-    </>
+    </span>
   );
 }
 
@@ -361,7 +361,7 @@ export function DateRangePicker({
   const passed = pickerStyle(width, style);
   const allowClear = rest.allowClear !== false;
   return (
-    <>
+    <span className={calendarStyles.rangeInputs}>
       {([0, 1] as const).map((index) => (
         <input
           key={index}
