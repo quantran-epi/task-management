@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Alert, Button, InputSearch, Spin } from '../../components/ui';
+import { Alert, Button, SearchInput, Spin } from '../../components/ui';
 import { CopyOutlined } from '../../components/ui/icon';
 import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighlighter';
 import { LineNumberedPane } from '../toolwindows/LineNumberedPane';
@@ -156,9 +156,7 @@ export function OracleObjectViewer({
         <strong style={{ fontSize: 'var(--font-size-ui, 13px)', color: 'var(--fg-strong)' }}>
           {schema ? `${schema}.` : ''}{objectName ?? ''} <span style={{ color: 'var(--fg-muted)' }}>({mode})</span>
         </strong>
-        <InputSearch
-          allowClear
-          size="small"
+        <SearchInput
           placeholder="Tìm trong nội dung..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}

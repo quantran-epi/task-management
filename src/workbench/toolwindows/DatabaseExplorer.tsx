@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Empty, InputSearch, Spin, Tree, Typography } from '../../components/ui';
+import { Alert, Button, Empty, SearchInput, Spin, Tree, Typography } from '../../components/ui';
 import type { TreeDataNode } from '../../components/ui';
 import { CodeOutlined, DatabaseOutlined } from '../../components/ui/icon';
 import type { TaskPlannerDatabase } from '../../db';
@@ -323,17 +323,13 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
         {loading ? <Spin size="small" /> : null}
       </div>
 
-      <InputSearch
-        allowClear
-        size="small"
+      <SearchInput
         placeholder="Tìm schema..."
         value={schemaFilter}
         onChange={(e) => setSchemaFilter(e.target.value)}
         aria-label="Tìm schema Oracle"
       />
-      <InputSearch
-        allowClear
-        size="small"
+      <SearchInput
         placeholder="Tìm object mọi schema..."
         value={objectFilter}
         onChange={(e) => {
