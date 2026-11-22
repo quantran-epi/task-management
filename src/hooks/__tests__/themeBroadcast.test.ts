@@ -132,6 +132,16 @@ describe('theme broadcast + useThemeMode', () => {
     expect(result.current.mode).toBe('dark');
   });
 
+  it('uses one Tauri listener for every mounted consumer (renderer lag regression)', async () => {
+    setTauri(true);
+    const consumers = Array.from({ length: 20 }, () => renderHook(() => useThemeMode()));
+    await waitFor(() => expect(tauri.listen).toHaveBeenCalledTimes(1));
+
+    const handler = tauri.handler()!;
+    act(() => { handler({ payload: { mode: 'dark' } }); });
+    for (const { result } of consumers) expect(result.current.mode).toBe('dark');
+  });
+
   it('re-renders a mounted consumer on a received valid mode without re-broadcasting', async () => {
     setTauri(true);
     const { result, unmount } = renderHook(() => useThemeMode());
