@@ -71,7 +71,9 @@ completed: 2026-11-22
 2. **Task 2: Gate integrity + CONTROL_REGISTRY 56 id + chế độ SMOKE/full** — `33026488` (test)
 3. **Task 3: Smoke harness trên Button + focused test thật + lock contract** — `a4338685` (test)
 
-**Plan metadata:** pending final docs commit.
+**Plan metadata:** `a5c2818c` (docs: complete plan).
+
+Requirements NAT-02/PAR-01/PAR-03 are intentionally left unchecked in REQUIREMENTS.md: plan 01 delivers the shared harness and gate only; per-control parity (PAR-01/PAR-03) is satisfied by plans 02+ with owner pass per control (HGC-01/02).
 
 ## Files Created/Modified
 
