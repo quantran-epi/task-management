@@ -48,13 +48,17 @@ export function decodeText(input: string, kind: EncodeKind): string {
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+        .replace(/&nbsp;/g, ' ')
         .replace(/&amp;/g, '&');
   }
 }
 
 export const REGEX_MAX_INPUT = 100000;
 export const REGEX_MAX_MATCHES = 200;
+export const REGEX_TIMEOUT_MS = 1000;
 
 export type RegexMatch = { index: number; value: string; groups: string[] };
 export type RegexResult = {
@@ -64,38 +68,68 @@ export type RegexResult = {
   error: string | null;
 };
 
+function runRegexInWorker(pattern: string, flags: string, input: string, timeoutMs: number): Promise<RegexResult> {
+  return new Promise((resolve) => {
+    if (typeof Worker === 'undefined') {
+      resolve({ matches: [], count: 0, truncated: false, error: 'Worker không khả dụng — không thể chạy regex an toàn' });
+      return;
+    }
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./regexWorker.ts', import.meta.url), { type: 'module' });
+    } catch (e) {
+      resolve({ matches: [], count: 0, truncated: false, error: e instanceof Error ? e.message : String(e) });
+      return;
+    }
+    let settled = false;
+    const finish = (result: RegexResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(result);
+    };
+    const timer = setTimeout(
+      () => finish({ matches: [], count: 0, truncated: false, error: `Regex chạy quá ${timeoutMs} ms — đã hủy (pattern có thể gây backtracking)` }),
+      timeoutMs
+    );
+    worker.onmessage = (event: MessageEvent<{ matches: RegexMatch[]; truncated: boolean; error: string | null }>) => {
+      const { matches, truncated, error } = event.data;
+      finish(error
+        ? { matches: [], count: 0, truncated: false, error }
+        : { matches, count: matches.length, truncated, error: null });
+    };
+    worker.onerror = () => finish({ matches: [], count: 0, truncated: false, error: 'Regex worker lỗi' });
+    worker.postMessage({ pattern, flags, input });
+  });
+}
+
+/** Flags hợp lệ trong JS hiện đại; `d` (hasIndices) và `v` (unicodeSets) được phép. */
+export function validateRegexFlags(flags: string): string | null {
+  const invalid = [...flags].filter((f) => !'dgimsuvy'.includes(f));
+  if (invalid.length || new Set(flags).size !== flags.length) {
+    return `Flag không hợp lệ: ${invalid.join('') || 'trùng lặp'}. Chỉ dùng dgimsuvy`;
+  }
+  return null;
+}
+
 /**
- * Regex có thể backtracking cấp số nhân và treo UI. Chọn giới hạn cứng input/số match
- * thay vì Worker: giữ luồng đơn giản, dữ liệu không rời tab. Vẫn không chặn được
- * pattern nguy hiểm khớp một lần nhưng tốn thời gian — bỏ qua theo yêu cầu đơn giản.
+ * Regex có thể backtracking cấp số nhân và treo UI; JavaScript không ngắt RegExp sync.
+ * Pattern/flags được validate ở luồng chính, còn phần match chạy trong Worker có
+ * timeout terminate — đây là cách duy nhất chặn ReDoS thật mà không treo tab.
  */
-export function runRegex(pattern: string, flags: string, input: string): RegexResult {
+export async function runRegex(pattern: string, flags: string, input: string, timeoutMs = REGEX_TIMEOUT_MS): Promise<RegexResult> {
   if (input.length > REGEX_MAX_INPUT) {
     return { matches: [], count: 0, truncated: false, error: `Đầu vào quá dài (tối đa ${REGEX_MAX_INPUT.toLocaleString('vi-VN')} ký tự)` };
   }
-  const invalid = [...flags].filter((f) => !'gimsuy'.includes(f));
-  if (invalid.length || new Set(flags).size !== flags.length) {
-    return { matches: [], count: 0, truncated: false, error: `Flag không hợp lệ: ${invalid.join('') || 'trùng lặp'}. Chỉ dùng gimsuy` };
-  }
+  const flagError = validateRegexFlags(flags);
+  if (flagError) return { matches: [], count: 0, truncated: false, error: flagError };
   try {
-    const re = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g');
-    const matches: RegexMatch[] = [];
-    let truncated = false;
-    for (const hit of input.matchAll(re)) {
-      if (matches.length >= REGEX_MAX_MATCHES) {
-        truncated = true;
-        break;
-      }
-      matches.push({
-        index: hit.index ?? 0,
-        value: hit[0] ?? '',
-        groups: hit.slice(1).map((g) => g ?? ''),
-      });
-    }
-    return { matches, count: matches.length, truncated, error: null };
+    new RegExp(pattern, flags);
   } catch (e) {
     return { matches: [], count: 0, truncated: false, error: e instanceof Error ? e.message : String(e) };
   }
+  return runRegexInWorker(pattern, flags, input, timeoutMs);
 }
 
 export function timestampToDate(value: string, unit: 's' | 'ms'): { iso: string; local: string; utc: string; unixMs: number } {
@@ -113,10 +147,17 @@ export function timestampToDate(value: string, unit: 's' | 'ms'): { iso: string;
   };
 }
 
+/** Dayjs/Date.parse Chuẩn hóa 2024-02-30 → 2024-03-01; so sánh lại để chặn ngày không tồn tại. */
+export function isValidCalendarDate(dateStr: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const millis = Date.parse(`${dateStr}T00:00:00.000Z`);
+  return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === dateStr;
+}
+
 export function dateToTimestamp(dateStr: string): { seconds: number; millis: number } {
   // Đầu ngày UTC: timestamp không đổi theo timezone của máy chạy helper.
+  if (!isValidCalendarDate(dateStr)) throw new Error('Ngày không hợp lệ');
   const millis = Date.parse(`${dateStr}T00:00:00.000Z`);
-  if (!Number.isFinite(millis) || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error('Ngày không hợp lệ');
   return { seconds: Math.floor(millis / 1000), millis };
 }
 
@@ -129,12 +170,12 @@ export type DateCalcArgs = {
 };
 
 export function calculateDate(args: DateCalcArgs): { output: string; error: string | null } {
+  if (!isValidCalendarDate(args.date)) return { output: '', error: 'Ngày không hợp lệ' };
   const date = dayjs(args.date);
-  if (!date.isValid()) return { output: '', error: 'Ngày không hợp lệ' };
   if (args.op === 'diff') {
     if (!args.compareDate) return { output: '', error: 'Chọn ngày cần so sánh' };
+    if (!isValidCalendarDate(args.compareDate)) return { output: '', error: 'Ngày so sánh không hợp lệ' };
     const compare = dayjs(args.compareDate);
-    if (!compare.isValid()) return { output: '', error: 'Ngày so sánh không hợp lệ' };
     return { output: String(date.diff(compare, 'day')), error: null };
   }
   if (!Number.isFinite(args.amount)) return { output: '', error: 'Số lượng không hợp lệ' };
@@ -242,11 +283,18 @@ export function nextCronRuns(expr: string, count = 5, now = new Date()): Date[] 
   const start = new Date(now);
   start.setSeconds(0, 0);
   start.setMinutes(start.getMinutes() + 1);
-  const limit = start.getTime() + 366 * 24 * 60 * 60 * 1000;
+  // Vixie cron: khi CẢ day-of-month và day-of-week bị restrict, khớp OR.
+  const restrictedDay = dayRaw !== '*';
+  const restrictedWeekday = weekdayRaw !== '*';
+  const dayMatches = restrictedDay && restrictedWeekday
+    ? (d: Date) => days.has(d.getDate()) || weekdays.has(d.getDay())
+    : (d: Date) => days.has(d.getDate()) && weekdays.has(d.getDay());
+  // 4 năm để bắt được 29/02; scan 4 năm × 366 ngày vẫn là button-triggered.
+  const limit = start.getTime() + 4 * 366 * 24 * 60 * 60 * 1000;
   for (let cursor = start.getTime(); cursor <= limit && runs.length < count; cursor += 60000) {
     const d = new Date(cursor);
-    if (!minutes.has(d.getMinutes()) || !hours.has(d.getHours())) continue;
-    if (!months.has(d.getMonth() + 1) || !days.has(d.getDate()) || !weekdays.has(d.getDay())) continue;
+    if (!minutes.has(d.getMinutes()) || !hours.has(d.getHours()) || !months.has(d.getMonth() + 1)) continue;
+    if (!dayMatches(d)) continue;
     runs.push(d);
   }
   return runs;
@@ -296,11 +344,16 @@ export function decodeJwt(token: string): JwtResult {
       typeof claims[key] === 'number' && Number.isFinite(claims[key]) ? claims[key] as number : null;
     const iat = seconds('iat');
     const exp = seconds('exp');
+    // new Date(...).toISOString() ném RangeError với giá trị quá lớn — clamp thay vì mất payload.
+    const toIso = (s: number): string | null => {
+      const ms = s * 1000;
+      return Number.isFinite(ms) && Math.abs(ms) <= 8.64e15 ? new Date(ms).toISOString() : null;
+    };
     return {
       header,
       payload,
-      issuedAt: iat === null ? null : new Date(iat * 1000).toISOString(),
-      expiresAt: exp === null ? null : new Date(exp * 1000).toISOString(),
+      issuedAt: iat === null ? null : toIso(iat),
+      expiresAt: exp === null ? null : toIso(exp),
       expired: exp === null ? null : exp * 1000 < Date.now(),
       error: null,
     };

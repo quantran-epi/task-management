@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   encodeText, decodeText, runRegex, REGEX_MAX_INPUT, REGEX_MAX_MATCHES,
   timestampToDate, dateToTimestamp, calculateDate, transformText,
@@ -7,6 +7,35 @@ import {
 
 const b64url = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+/** jsdom không có Worker: fake tối giản chạy cùng logic trong onmessage để test helper. */
+class FakeWorker {
+  onmessage: ((event: MessageEvent<any>) => void) | null = null;
+  onerror: (() => void) | null = null;
+  constructor() {
+    setTimeout(() => {
+      const { pattern, flags, input } = (this as any)._payload;
+      try {
+        const re = new RegExp(pattern, flags.includes('g') ? flags : flags + 'g');
+        const matches = [];
+        let truncated = false;
+        for (const hit of input.matchAll(re)) {
+          if (matches.length >= REGEX_MAX_MATCHES) { truncated = true; break; }
+          matches.push({ index: hit.index ?? 0, value: hit[0] ?? '', groups: hit.slice(1).map((g: string | undefined) => g ?? '') });
+        }
+        this.onmessage?.({ data: { matches, truncated, error: null } } as MessageEvent);
+      } catch (e) {
+        this.onmessage?.({ data: { matches: [], truncated: false, error: (e as Error).message } } as MessageEvent);
+      }
+    }, 0);
+  }
+  postMessage(payload: any) { (this as any)._payload = payload; }
+  terminate() {}
+}
+
+const originalWorker = globalThis.Worker;
+beforeAll(() => { (globalThis as any).Worker = FakeWorker; });
+afterAll(() => { (globalThis as any).Worker = originalWorker; });
 
 describe('encode/decode', () => {
   it('roundtrip tiếng Việt qua base64, url, html', () => {
@@ -19,11 +48,18 @@ describe('encode/decode', () => {
   it('base64 sai throw lỗi rõ', () => {
     expect(() => decodeText('@@@', 'base64')).toThrow(/Base64/);
   });
+
+  it('decode HTML numeric/named entity', () => {
+    expect(decodeText('&#65;', 'html')).toBe('A');
+    expect(decodeText('&#x1F600;', 'html')).toBe('😀');
+    expect(decodeText('&nbsp;', 'html')).toBe(' ');
+    expect(decodeText('&apos;', 'html')).toBe("'");
+  });
 });
 
 describe('runRegex', () => {
-  it('bắt group và trả index', () => {
-    const r = runRegex('(a+)(b)', '', 'xxaaabyyab');
+  it('bắt group và trả index', async () => {
+    const r = await runRegex('(a+)(b)', '', 'xxaaabyyab');
     expect(r.error).toBeNull();
     expect(r.matches).toEqual([
       { index: 2, value: 'aaab', groups: ['aaa', 'b'] },
@@ -33,21 +69,40 @@ describe('runRegex', () => {
     expect(r.truncated).toBe(false);
   });
 
-  it('pattern sai và flag lạ trả error thay vì ném', () => {
-    expect(runRegex('(', '', 'x').error).toBeTruthy();
-    expect(runRegex('a', 'z', 'x').error).toMatch(/Flag/);
+  it('pattern sai và flag lạ trả error thay vì ném', async () => {
+    expect((await runRegex('(', '', 'x')).error).toBeTruthy();
+    expect((await runRegex('a', 'z', 'x')).error).toMatch(/Flag/);
+    expect((await runRegex('a', 'dgimsuy', 'a')).error).toBeNull();
+    expect((await runRegex('a', 'v', 'a')).error).toBeNull();
   });
 
-  it('input quá dài bị chặn, không cắt ngang', () => {
-    const r = runRegex('a', 'g', 'a'.repeat(REGEX_MAX_INPUT + 1));
+  it('input quá dài bị chặn, không cắt ngang', async () => {
+    const r = await runRegex('a', 'g', 'a'.repeat(REGEX_MAX_INPUT + 1));
     expect(r.error).toMatch(/100\.000/);
     expect(r.matches).toEqual([]);
   });
 
-  it('giới hạn số match và báo truncated', () => {
-    const r = runRegex('a', 'g', 'a'.repeat(REGEX_MAX_MATCHES + 10));
+  it('giới hạn số match và báo truncated', async () => {
+    const r = await runRegex('a', 'g', 'a'.repeat(REGEX_MAX_MATCHES + 10));
     expect(r.count).toBe(REGEX_MAX_MATCHES);
     expect(r.truncated).toBe(true);
+  });
+
+  it('worker không trả kết quả thì timeout hủy regex', async () => {
+    const saved = (globalThis as any).Worker;
+    (globalThis as any).Worker = class {
+      onmessage = null;
+      onerror = null;
+      postMessage() {}
+      terminate() {}
+    };
+    try {
+      const r = await runRegex('(a+)+$', '', 'a'.repeat(40) + '!', 20);
+      expect(r.error).toMatch(/hủy/);
+      expect(r.matches).toEqual([]);
+    } finally {
+      (globalThis as any).Worker = saved;
+    }
   });
 });
 
@@ -66,6 +121,7 @@ describe('timestamp / date', () => {
   it('dateToTimestamp theo đầu ngày UTC', () => {
     expect(dateToTimestamp('1970-01-02')).toEqual({ seconds: 86400, millis: 86400000 });
     expect(() => dateToTimestamp('không phải ngày')).toThrow();
+    expect(() => dateToTimestamp('2024-02-30')).toThrow(/không hợp lệ/);
   });
 
   it('add/subtract/diff và input sai', () => {
@@ -73,6 +129,7 @@ describe('timestamp / date', () => {
     expect(calculateDate({ date: '2024-01-10', op: 'subtract', amount: 2, unit: 'week' }).output).toBe('2023-12-27');
     expect(calculateDate({ date: '2024-01-10', op: 'diff', amount: 0, unit: 'day', compareDate: '2024-01-01' }).output).toBe('9');
     expect(calculateDate({ date: 'x', op: 'add', amount: 1, unit: 'day' }).error).toBeTruthy();
+    expect(calculateDate({ date: '2024-02-30', op: 'add', amount: 1, unit: 'day' }).error).toMatch(/không hợp lệ/);
     expect(calculateDate({ date: '2024-01-01', op: 'diff', amount: 0, unit: 'day' }).error).toBeTruthy();
   });
 });
@@ -110,6 +167,19 @@ describe('cron', () => {
     expect(runs[0]!.getMinutes()).toBe(0);
     expect(runs[1]!.getTime()).toBeGreaterThan(runs[0]!.getTime());
     expect(nextCronRuns('bad', 3, new Date())).toEqual([]);
+  });
+
+  it('29/02 vẫn tìm được lần chạy dù ngoài 366 ngày', () => {
+    const runs = nextCronRuns('0 0 29 2 *', 1, new Date('2025-03-01T00:00:00Z'));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.getUTCFullYear()).toBe(2028);
+  });
+
+  it('day-of-month và day-of-week dùng OR khi cả hai bị restrict', () => {
+    const runs = nextCronRuns('0 9 1 * 1', 3, new Date('2024-01-02T00:00:00Z'));
+    expect(runs.length).toBe(3);
+    // 2024-01-08 là Thứ Hai dù không phải ngày 1 → phải được tính
+    expect(runs.some((d) => d.getDate() === 8)).toBe(true);
   });
 });
 
@@ -151,5 +221,12 @@ describe('decodeJwt', () => {
   it('không có exp thì expired null; token hỏng trả error', () => {
     expect(decodeJwt(token({ sub: 'quan' })).expired).toBeNull();
     expect(decodeJwt('abc').error).toMatch(/3 phần/);
+  });
+
+  it('exp quá lớn không làm mất payload', () => {
+    const r = decodeJwt(token({ sub: 'quan', exp: 1e20 }));
+    expect(r.error).toBeNull();
+    expect(r.payload).toMatchObject({ sub: 'quan' });
+    expect(r.expiresAt).toBeNull();
   });
 });

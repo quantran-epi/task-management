@@ -10,9 +10,9 @@ import { UtilityToolAIAssistant } from './UtilityToolAIAssistant';
 import { LineNumberedPane, computeFoldRanges, countLines } from './LineNumberedPane';
 import { getUtilityContent, useUtilityContent, type DevToolContent, type Indent } from './utilityToolContentStore';
 import {
-  REGEX_MAX_INPUT, REGEX_MAX_MATCHES, calculateDate, computeHash, dateToTimestamp, decodeJwt,
+  REGEX_MAX_INPUT, REGEX_MAX_MATCHES, REGEX_TIMEOUT_MS, calculateDate, computeHash, dateToTimestamp, decodeJwt,
   decodeText, encodeText, makeUuids, nextCronRuns, parseCron, runRegex, timestampToDate,
-  transformText, type HashAlgo, type TextOp,
+  transformText, type HashAlgo, type RegexResult, type TextOp,
 } from './utilityToolHelpers';
 
 const splitPaneStyle: React.CSSProperties = {
@@ -843,12 +843,14 @@ function DevPanes({ inputLabel, outputLabel, input, output, inputAria, outputAri
   );
 }
 
-function useCommonToolbar(id: string, content: DevToolContent, patch: (p: Partial<DevToolContent>) => void, clear: () => void, db: TaskPlannerDatabase, controls?: React.ReactNode) {
+function useCommonToolbar(id: string, content: DevToolContent, patch: (p: Partial<DevToolContent>) => void, clear: () => void, db: TaskPlannerDatabase, controls?: React.ReactNode, outputOverride?: string) {
   const message = useMessage();
   const [aiOpen, setAiOpen] = useState(false);
+  const outputRef = useRef(outputOverride ?? content.output);
+  outputRef.current = outputOverride ?? content.output;
   const node = (children: React.ReactNode = null) => (
     <>
-      <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(content.output, (k, t) => message[k](t))}><CopyOutlined /></button>
+      <button type="button" className="utility-tool-btn" style={toolBtnStyle} title="Copy output" onClick={() => copyToClipboard(outputRef.current, (k, t) => message[k](t))}><CopyOutlined /></button>
       <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label="Clear" title="Clear" onClick={clear}><DeleteOutlined /></button>
       <button type="button" className="utility-tool-btn" style={toolBtnStyle} aria-label={`AI · ${TOOL_LABELS[id]}`} title={`AI · ${TOOL_LABELS[id]}`} onClick={() => setAiOpen(true)}><RobotOutlined /> AI</button>
       {children ?? controls}
@@ -873,8 +875,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('encoder_decoder');
-  const { input, error, option, option2 } = content;
-  const toolbar = useCommonToolbar('encoder_decoder', content, patchContent, clearContent, db);
+  const { input, option, option2 } = content;
   const result = useMemo(() => {
     if (!input) return { output: '', error: null };
     try {
@@ -884,6 +885,7 @@ function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
       return { output: '', error: e instanceof Error ? e.message : String(e) };
     }
   }, [input, option, option2]);
+  const toolbar = useCommonToolbar('encoder_decoder', content, patchContent, clearContent, db, undefined, result.output);
   const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
   return (
     <div style={panelStyle}>
@@ -896,7 +898,7 @@ function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
             <option value="base64">Base64</option><option value="url">URL</option><option value="html">HTML</option>
           </select>
         </>
-      )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : 'UTF-8 · local'}</span></DevToolbar>
+      )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{result.error ? `❌ ${result.error}` : 'UTF-8 · local'}</span></DevToolbar>
       <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={result.output} inputAria="Encoder input" outputAria="Encoder output" inputPlaceholder="Dán text vào đây..." onInput={onInput} />
       <DevFooter><span>Encode/Decode · UTF-8</span><span>{result.output.length} ký tự</span></DevFooter>
     </div>
@@ -905,11 +907,28 @@ function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
 
 function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('regex_tester');
-  const { input, aux, option2, output } = content;
-  const toolbar = useCommonToolbar('regex_tester', content, patchContent, clearContent, db);
-  const result = useMemo(() => (aux ? runRegex(aux, option2, input) : { matches: [], count: 0, truncated: false, error: null }), [aux, option2, input]);
+  const { input, aux, option2 } = content;
+  const [result, setResult] = useState<RegexResult>({ matches: [], count: 0, truncated: false, error: null });
+  const [running, setRunning] = useState(false);
+  const seqRef = useRef(0);
+  useEffect(() => {
+    const mySeq = ++seqRef.current;
+    if (!aux.trim() || !input) {
+      setResult({ matches: [], count: 0, truncated: false, error: null });
+      setRunning(false);
+      return;
+    }
+    setRunning(true);
+    void runRegex(aux, option2, input).then((next) => {
+      if (seqRef.current === mySeq) {
+        setResult(next);
+        setRunning(false);
+      }
+    });
+  }, [aux, option2, input]);
   const onInput = useCallback((value: string) => patchContent({ input: value }), [patchContent]);
   const details = useMemo(() => result.matches.map((m, i) => `${i + 1}. @${m.index} ${JSON.stringify(m.value)}${m.groups.length ? ` groups=${JSON.stringify(m.groups)}` : ''}`).join('\n'), [result.matches]);
+  const toolbar = useCommonToolbar('regex_tester', content, patchContent, clearContent, db, undefined, details);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
@@ -918,19 +937,17 @@ function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
           <input aria-label="Flags" value={option2} onChange={(e) => patchContent({ option2: e.target.value })} placeholder="flags" style={{ ...toolBtnStyle, width: 70, cursor: 'text' }} />
         </>
       )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small, 12px)' }}>
-        {result.error ? `❌ ${result.error}` : result.truncated ? `⚠ Giới hạn ${REGEX_MAX_MATCHES} match` : `${result.count} match`}
+        {result.error ? `❌ ${result.error}` : running ? 'Đang chạy trong Worker...' : result.truncated ? `⚠ Giới hạn ${REGEX_MAX_MATCHES} match` : `${result.count} match`}
       </span></DevToolbar>
-      <DevPanes inputLabel="CHUỖI TEST" outputLabel="KẾT QUẢ" input={input} output={details} inputAria="Regex test input" outputAria="Regex matches" inputPlaceholder="Dán chuỗi cần thử..." onInput={onInput}
-        extra={output ? <div style={noteStyle}>{output}</div> : undefined} />
-      <DevFooter><span>Regex · input tối đa {REGEX_MAX_INPUT.toLocaleString('vi-VN')} ký tự</span><span>Regex có thể gây treo — input và số match bị giới hạn; không dùng Worker</span></DevFooter>
+      <DevPanes inputLabel="CHUỖI TEST" outputLabel="KẾT QUẢ" input={input} output={details} inputAria="Regex test input" outputAria="Regex matches" inputPlaceholder="Dán chuỗi cần thử..." onInput={onInput} />
+      <DevFooter><span>Regex · input tối đa {REGEX_MAX_INPUT.toLocaleString('vi-VN')} ký tự</span><span>Chạy trong Worker · tự hủy sau {REGEX_TIMEOUT_MS} ms để chặn ReDoS</span></DevFooter>
     </div>
   );
 }
 
 function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('timestamp_converter');
-  const { input, error, option, option2 } = content;
-  const toolbar = useCommonToolbar('timestamp_converter', content, patchContent, clearContent, db);
+  const { input, option, option2 } = content;
   const result = useMemo(() => {
     if (!input.trim()) return { output: '', error: null };
     try {
@@ -940,7 +957,11 @@ function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
     }
   }, [input, option, option2]);
   const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
-  const useNow = () => patchContent({ input: option === 'to_timestamp' ? dayjs().format('YYYY-MM-DD') : String(Date.now()), error: null });
+  const toolbar = useCommonToolbar('timestamp_converter', content, patchContent, clearContent, db, undefined, result.output);
+  const useNow = () => patchContent({
+    input: option === 'to_timestamp' ? dayjs().format('YYYY-MM-DD') : String(option2 === 's' ? Math.floor(Date.now() / 1000) : Date.now()),
+    error: null,
+  });
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
@@ -955,7 +976,7 @@ function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
         </>
       )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{result.error ? `❌ ${result.error}` : 'dayjs · local'}</span></DevToolbar>
       <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={result.output} inputAria="Timestamp input" outputAria="Timestamp output" inputPlaceholder={option === 'to_date' ? '1700000000000' : 'YYYY-MM-DD'} onInput={onInput} />
-      <DevFooter><span>Timestamp · UTC ổn định</span><span>{error || 'Sẵn sàng'}</span></DevFooter>
+      <DevFooter><span>Timestamp · UTC ổn định</span><span>{result.error || 'Sẵn sàng'}</span></DevFooter>
     </div>
   );
 }
@@ -964,10 +985,12 @@ function DateCalcPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('date_calculation');
   const { input, aux, option, option2 } = content;
   const [amount, setAmount] = useState(1);
-  const toolbar = useCommonToolbar('date_calculation', content, patchContent, clearContent, db);
-  const result = useMemo(() => calculateDate({ date: input, op: option as 'add' | 'subtract' | 'diff', amount, unit: option2 as 'day' | 'week' | 'month' | 'year', ...(aux ? { compareDate: aux } : {}) }), [input, aux, option, option2, amount]);
+  const op = (option || 'add') as 'add' | 'subtract' | 'diff';
+  const unit = (option2 || 'day') as 'day' | 'week' | 'month' | 'year';
+  const result = useMemo(() => calculateDate({ date: input, op, amount, unit, ...(aux ? { compareDate: aux } : {}) }), [input, aux, op, amount, unit]);
   const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
-  const isDiff = option === 'diff';
+  const isDiff = op === 'diff';
+  const toolbar = useCommonToolbar('date_calculation', content, patchContent, clearContent, db, undefined, result.output);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
@@ -1000,8 +1023,8 @@ const TEXT_OPS: { value: TextOp; label: string }[] = [
 function TextUtilitiesPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('text_utilities');
   const { input, option } = content;
-  const toolbar = useCommonToolbar('text_utilities', content, patchContent, clearContent, db);
   const output = useMemo(() => transformText(input, (option || 'upper') as TextOp), [input, option]);
+  const toolbar = useCommonToolbar('text_utilities', content, patchContent, clearContent, db, undefined, output);
   const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
   return (
     <div style={panelStyle}>
@@ -1034,7 +1057,7 @@ function CronPanel({ db }: { db: TaskPlannerDatabase }) {
         <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>5 lần chạy tiếp</button>
       )}<span style={{ marginLeft: 'auto', color: status ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{status ? `❌ ${status}` : parsed?.description || '5 trường: phút giờ ngày tháng ngày-tuần'}</span></DevToolbar>
       <DevPanes inputLabel="BIỂU THỨC CRON" outputLabel="LẦN CHẠY (ISO)" input={input} output={output} inputAria="Cron expression" outputAria="Cron runs" inputPlaceholder="*/15 9 * * 1-5" onInput={onInput} />
-      <DevFooter><span>Cron · tự implement, không dependency</span><span>Quét tối đa 366 ngày</span></DevFooter>
+      <DevFooter><span>Cron · tự implement, không dependency</span><span>Quét tối đa 4 năm</span></DevFooter>
     </div>
   );
 }
@@ -1069,7 +1092,7 @@ function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <select aria-label="Thuật toán" value={option || 'SHA-256'} onChange={(e) => patchContent({ option: e.target.value, output: '', error: null })} style={selectStyle}>
+          <select aria-label="Thuật toán" value={option || 'SHA-256'} onChange={(e) => { seqRef.current++; patchContent({ option: e.target.value, output: '', error: null }); }} style={selectStyle}>
             <option value="SHA-256">SHA-256</option><option value="SHA-384">SHA-384</option><option value="SHA-512">SHA-512</option>
           </select>
           <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={runHash}>Hash</button>
@@ -1085,12 +1108,12 @@ function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
 
 function JwtPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('jwt_decoder');
-  const { input, error } = content;
-  const toolbar = useCommonToolbar('jwt_decoder', content, patchContent, clearContent, db);
+  const { input } = content;
   const result = useMemo(() => decodeJwt(input), [input]);
   const output = useMemo(() => (result.error ? '' : JSON.stringify({ header: result.header, payload: result.payload }, null, 2)), [result]);
   const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
-  const status = error || result.error;
+  const toolbar = useCommonToolbar('jwt_decoder', content, patchContent, clearContent, db, undefined, output);
+  const status = result.error;
   const statusText = result.expired === null ? 'Không có exp' : result.expired ? 'Hết hạn' : 'Còn hạn';
   return (
     <div style={panelStyle}>
