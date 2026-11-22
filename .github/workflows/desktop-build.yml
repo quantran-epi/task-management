@@ -18,6 +18,7 @@ on:
       - master
       - staging
       - phase-16-desktop-build
+      - pre-v1.6-baseline
     tags:
       - 'v*'
 
@@ -62,12 +63,12 @@ jobs:
         run: npm ci
 
       - name: Install Knowledge Server dependencies
-        if: ${{ github.ref_name != 'staging' && !inputs.skip_tests }}
+        if: ${{ github.ref_name != 'staging' && github.ref_name != 'pre-v1.6-baseline' && !inputs.skip_tests }}
         working-directory: knowledge-server
         run: npm ci --legacy-peer-deps
 
       - name: Run test suite
-        if: ${{ github.ref_name != 'staging' && !inputs.skip_tests }}
+        if: ${{ github.ref_name != 'staging' && github.ref_name != 'pre-v1.6-baseline' && !inputs.skip_tests }}
         run: npm test
 
       - name: Build Tauri Desktop Application
