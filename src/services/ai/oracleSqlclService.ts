@@ -206,7 +206,7 @@ export function stripCommentsAndLiterals(sql: string): string {
  * literal cannot smuggle a second command past the guard.
  */
 const SQLCL_DIRECTIVE_PATTERN =
-  /^\s*(SET|EXIT|HOST|SPOOL|PROMPT|DEFINE|CONNECT|CONN|CONNECT\/|@|@@|\/|!|COLUMN|COL|BREAK|COMPUTE|TTITLE|BTITLE|REPHEADER|REPFOOTER|ACCEPT|PAUSE|WHENEVER|SHOW|DESCRIBE|DESC|LIST|APPEND|CHANGE|DEL|INPUT|RUN|EXECUTE|EXEC|PASSWORD|PASSWD|DISCONNECT|STORE|GET|SAVE|START|SCRIPT|VARIABLE|VAR|PRINT|UNDEFINE|EDIT|ED|HELP)\b|^\s*(?:@|@@|\/|!)/i;
+  /^\s*(SET|EXIT|QUIT|HOST|SPOOL|PROMPT|REM|REMARK|DEFINE|CONNECT|CONN|CONNECT\/|@|@@|\/|!|COLUMN|COL|BREAK|COMPUTE|TTITLE|BTITLE|REPHEADER|REPFOOTER|ACCEPT|PAUSE|WHENEVER|SHOW|DESCRIBE|DESC|LIST|APPEND|CHANGE|DEL|INPUT|RUN|EXECUTE|EXEC|PASSWORD|PASSWD|DISCONNECT|STORE|GET|SAVE|START|SCRIPT|VARIABLE|VAR|PRINT|UNDEFINE|EDIT|ED|HELP|ARCHIVE)\b|^\s*(?:@|@@|\/|!)/i;
 
 /** Allowed OBJECT_TYPE values for the Database Explorer, mapped to DBMS_METADATA.GET_DDL. */
 export const ORACLE_OBJECT_TYPES: Readonly<Record<string, string>> = Object.freeze({
@@ -262,13 +262,13 @@ export function assertSqlclSingleStatement(sql: string): string {
     }
   }
 
-  // Strip a single trailing semicolon; any semicolon left belongs to a second statement.
-  const withoutTrailing = stripped.replace(/;\s*$/, '').trim();
-  if (withoutTrailing.includes(';')) {
+  // Inspect the stripped text, but RETURN the original SQL: stripping replaces every
+  // string literal with `''`, which would silently change query semantics downstream.
+  const strippedSingle = stripped.replace(/;\s*$/, '').trim();
+  if (strippedSingle.includes(';')) {
     throw new Error('Bị từ chối: chỉ cho phép một câu lệnh SQL duy nhất.');
   }
-
-  return withoutTrailing;
+  return sql.trim().replace(/;\s*$/, '').trim();
 }
 
 /**
@@ -278,7 +278,7 @@ export function assertSqlclSingleStatement(sql: string): string {
  */
 export function safeOracleObjectIdentifier(value: string | undefined, label: string): string {
   const raw = (value ?? '').trim();
-  if (!raw || raw.includes("'") || raw.includes(';') || raw.includes('--')) {
+  if (!raw || /[;'\r\n]/.test(raw) || raw.includes('--')) {
     throw new Error(`${label} không hợp lệ.`);
   }
   const parts = raw.split('.');
@@ -290,6 +290,14 @@ export function safeOracleObjectIdentifier(value: string | undefined, label: str
     return safeOracleIdentifier(token, label);
   });
   return normalized.join('.');
+}
+
+/**
+ * Dictionary views (ALL_SOURCE, ALL_TAB_COLS) store the bare identifier, while DBMS_METADATA
+ * expects the quoted form. Strip only a surrounding pair of `"` from a validated identifier.
+ */
+function oracleCatalogName(identifier: string): string {
+  return /^"[A-Za-z][A-Za-z0-9_$#]*"$/.test(identifier) ? identifier.slice(1, -1) : identifier;
 }
 
 /** True when the object type stores its body in ALL_SOURCE rather than DBMS_METADATA. */
@@ -319,9 +327,11 @@ export function assertReadOnlyQuery(sql: string): void {
     );
   }
 
-  // Guard against forbidden mutating DDL/DML/admin keywords anywhere in statement tokens
+  // Guard against mutating phrases inside a SELECT, without rejecting legitimate column names
+  // such as `comment`, `lock_version` or `flashback_date`. Bare DDL/DML at statement start is
+  // already rejected by the first-word check above.
   const FORBIDDEN_PATTERN =
-    /\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|MERGE|GRANT|REVOKE|CREATE|REPLACE|EXEC|EXECUTE|CALL|BEGIN|DECLARE|LOCK|COMMENT|PURGE|FLASHBACK)\b/i;
+    /\b(?:FOR\s+UPDATE|INSERT\s+INTO|DELETE\s+FROM|UPDATE\s+[A-Z_$#][\w$#]*\s+SET|MERGE\s+INTO|DROP\s+(?:TABLE|VIEW|INDEX|SEQUENCE|PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE|SYNONYM)|ALTER\s+(?:TABLE|VIEW|INDEX|SESSION|SYSTEM|USER|DATABASE)|TRUNCATE\s+(?:TABLE|CLUSTER)|GRANT\s+\w+|REVOKE\s+\w+|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|INDEX|SEQUENCE|PROCEDURE|FUNCTION|PACKAGE|TRIGGER|TYPE|SYNONYM)|FLASHBACK\s+TABLE)\b/i;
 
   const match = stripped.match(FORBIDDEN_PATTERN);
   if (match) {
@@ -351,6 +361,11 @@ export function safeOracleIdentifier(value: string | undefined, label: string): 
  * value stays a pure literal and cannot terminate the surrounding quote.
  */
 export function escapeOracleLikeFilter(value: string): string {
+  // A filter is embedded in a single-quoted SQL literal that later enters a shell heredoc.
+  // Newlines/control bytes must never enter that literal: they could terminate the heredoc.
+  if (/[\r\n\u0000-\u001f]/.test(value)) {
+    throw new Error('Bộ lọc không được chứa ký tự xuống dòng hoặc điều khiển.');
+  }
   return value.replace(/'/g, "''");
 }
 
@@ -464,7 +479,9 @@ export function buildOracleGrid(parsed: unknown): {
   for (let i = 0; i < rows.length; i++) {
     const size = rows[i]!.reduce<number>((sum, cell) => sum + String(cell ?? '').length, 0);
     if (total + size > MAX_UI_PAYLOAD_CHARS) {
-      rows.length = i;
+      // Keep the first row even on its own: "rowCount > 0, rows = []" looks like a failed
+      // query in the UI. Cells are already capped to MAX_CELL_CHARS individually.
+      rows.length = Math.max(1, i);
       truncated = true;
       break;
     }
@@ -559,7 +576,7 @@ async function runSqlclScriptOverSsh(
   sqlScript: string,
   db: TaskPlannerDatabase = defaultDb,
   callId?: string
-): Promise<{ stdout: string; stderr: string; exitStatus: number }> {
+): Promise<{ stdout: string; stderr: string; exitStatus: number; finishReason?: string }> {
   if (!config.sshConfigId) {
     throw new Error('Chưa chọn cấu hình SSH remote trong cấu hình Oracle AI Tool.');
   }
@@ -576,10 +593,23 @@ async function runSqlclScriptOverSsh(
   const secret = await getSshSecret(targetSsh.id);
   const sqlclBin = (config.sqlclPath || 'sql').trim();
   const envPrefix = config.envVars?.trim() ? `${config.envVars.trim()} && ` : '';
+  // Connection settings are operator-controlled but still reach a remote shell. Reject newlines
+  // and shell command separators so a bad saved profile cannot become a second command.
+  if (/[\r\n]/.test(config.connectionString) || /[\r\n]/.test(sqlclBin) || /[\r\n]/.test(envPrefix)) {
+    throw new Error('Cấu hình Oracle chứa ký tự xuống dòng không hợp lệ.');
+  }
+  if (config.connectionString.includes("'")) {
+    throw new Error('Chuỗi kết nối Oracle chứa dấu nháy đơn không hợp lệ.');
+  }
 
-  // Use heredoc to securely pipe SQL script without escaping hell
+  // Heredoc delimiter is random per call: even a newline smuggled into any future script path
+  // cannot guess it and close the heredoc early to execute shell commands. Guard anyway.
+  const delimiter = `EOF_ORACLE_SQLCL_${crypto.randomUUID().replace(/-/g, '').toUpperCase()}`;
+  if (sqlScript.includes(delimiter)) {
+    throw new Error('Nội dung SQL chứa delimiter heredoc không hợp lệ.');
+  }
   // -s: silent mode, -L: attempt login only once (prevents locking accounts)
-  const remoteCommand = `${envPrefix}${sqlclBin} -s -L '${config.connectionString}' << 'EOF_ORACLE_SQLCL'\n${sqlScript}\nEXIT;\nEOF_ORACLE_SQLCL`;
+  const remoteCommand = `${envPrefix}${sqlclBin} -s -L '${config.connectionString}' << '${delimiter}'\n${sqlScript}\nEXIT;\n${delimiter}`;
 
   // Every heavy tool passes the model tool-call id to Rust so cancel only needs that id.
   // Settings/test callers without a model call get a nonce id for symmetry.
@@ -629,7 +659,7 @@ EXIT;
     const duration = Date.now() - startTime;
     return {
       ok: false,
-      message: `Lỗi kết nối (${duration}ms): ${err?.message || 'Không rõ lỗi'}`,
+      message: `Lỗi kết nối (${duration}ms): ${redactOracleText(err?.message || 'Không rõ lỗi', config)}`,
     };
   }
 }
@@ -713,6 +743,7 @@ EXIT;
         return JSON.stringify({
           success: false,
           action: 'explain',
+          cancelled: res.finishReason === 'cancelled',
           error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
           executionTimeMs,
           ...emptyGrid,
@@ -752,6 +783,7 @@ EXIT;
       return JSON.stringify({
         success: false,
         action: 'query',
+        cancelled: res.finishReason === 'cancelled',
         error: oracleError ?? remoteFailure ?? 'Lỗi thực thi SQLcl không xác định.',
         executionTimeMs,
         executedSql: limitedSql,
@@ -930,8 +962,8 @@ EXIT;
         ? assertOracleObjectType(args.objectType)
         : undefined;
       const schemaFilter = schema ? `AND c.OWNER = '${schema}'` : '';
-      const nameLiteral = name.includes('.') ? name.split('.').at(-1)! : name;
-      const ownerLiteral = name.includes('.') ? name.split('.')[0]! : schema;
+      const nameLiteral = oracleCatalogName(name.includes('.') ? name.split('.').at(-1)! : name);
+      const ownerLiteral = name.includes('.') ? oracleCatalogName(name.split('.')[0]!) : schema;
 
       // Non-tabular PL/SQL objects expose arguments via ALL_ARGUMENTS instead of ALL_TAB_COLS.
       const isCodeObject = objectType ? !['TABLE', 'VIEW', 'MATERIALIZED VIEW'].includes(objectType) : false;
@@ -992,10 +1024,13 @@ ORDER BY c.COLUMN_ID`;
         return fail(action, 'Tên schema không hợp lệ.');
       }
       const name = rawName?.trim() ? safeOracleObjectIdentifier(rawName, 'Tên đối tượng') : '';
-      const nameLiteral = name.includes('.') ? name.split('.').at(-1)! : name;
-      const ownerLiteral = name.includes('.') ? name.split('.')[0]! : args.schema?.trim()
+      const rawNamePart = name.includes('.') ? name.split('.').at(-1)! : name;
+      const rawOwnerPart = name.includes('.') ? name.split('.')[0]! : args.schema?.trim()
         ? safeOracleObjectIdentifier(args.schema, 'Tên schema')
         : undefined;
+      // ALL_SOURCE / ALL_OBJECTS store bare names; DBMS_METADATA needs the quoted form.
+      const nameLiteral = oracleCatalogName(rawNamePart);
+      const ownerLiteral = rawOwnerPart ? oracleCatalogName(rawOwnerPart) : undefined;
       const schemaExpr = ownerLiteral ? `'${ownerLiteral}'` : 'USER';
 
       if (action === 'get_object_source') {
@@ -1063,8 +1098,10 @@ ORDER BY OWNER, OBJECT_NAME`;
         ? assertOracleObjectType(args.objectType)
         : 'TABLE';
       const mapped = ORACLE_OBJECT_TYPES[objectType]!;
+      const ddlName = rawNamePart;
+      const ddlSchemaExpr = rawOwnerPart ? `'${rawOwnerPart}'` : 'USER';
       const script = `${METADATA_PREAMBLE}
-SELECT DBMS_METADATA.GET_DDL('${mapped}', '${nameLiteral}', ${schemaExpr}) AS DDL FROM DUAL;
+SELECT DBMS_METADATA.GET_DDL('${mapped}', '${ddlName}', ${ddlSchemaExpr}) AS DDL FROM DUAL;
 EXIT;`.trim();
       const { stdout, error } = await run(script);
       if (error) return fail(action, error);

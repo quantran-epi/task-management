@@ -10,6 +10,7 @@ import {
   DEFAULT_ORACLE_CONFIG,
 } from '../../services/ai/oracleSqlclService';
 import { cancelToolCall } from '../../services/sshService';
+import { useThemeMode } from '../../hooks/useThemeMode';
 
 const LINE_HEIGHT = 20;
 const MAX_LINES = 5000;
@@ -63,6 +64,9 @@ export function OracleObjectViewer({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
+    // A reload while a previous read is in flight must cancel it; otherwise the stale
+    // response can land last and overwrite the fresh text in this tab.
+    if (callIdRef.current) void cancelToolCall(callIdRef.current);
     const callId = crypto.randomUUID();
     callIdRef.current = callId;
     setLoading(true);
@@ -124,11 +128,12 @@ export function OracleObjectViewer({
     estimateSize: () => LINE_HEIGHT,
     overscan: 8,
   });
-  const visible = useMemo(
-    () => virtualizer.getVirtualItems().map((item) => item.index),
-    // virtualizer identity is stable; recompute when line count changes.
-    [lines.length]
-  );
+  // Do NOT memoize on lines.length alone: the virtual items change on every scroll and the
+  // gutter must follow the rendered content, not the first viewport from mount time.
+  const virtualItems = virtualizer.getVirtualItems();
+  const visible = virtualItems.map((item) => item.index);
+  const { mode: themeMode } = useThemeMode();
+  const isDark = themeMode === 'dark';
 
   useEffect(() => {
     if (!search.trim() || !lines.length) {
@@ -192,7 +197,7 @@ export function OracleObjectViewer({
               style={{ flex: 1, minWidth: 0, overflow: 'auto', font: '12.5px/20px var(--font-mono, monospace)' }}
             >
               <div style={{ height: virtualizer.getTotalSize() || lines.length * LINE_HEIGHT, position: 'relative' }}>
-                {virtualizer.getVirtualItems().map((item) => {
+                {virtualItems.map((item) => {
                   const line = lines[item.index] ?? '';
                   return (
                     <div
@@ -209,7 +214,7 @@ export function OracleObjectViewer({
                         background: item.index === match ? 'var(--accent-soft, rgba(56,113,225,0.14))' : undefined,
                       }}
                     >
-                      <MemoLine content={line} />
+                      <MemoLine content={line} isDark={isDark} />
                     </div>
                   );
                 })}
@@ -222,6 +227,6 @@ export function OracleObjectViewer({
   );
 }
 
-const MemoLine = React.memo(function MemoLine({ content }: { content: string }) {
-  return <DiffLineCodeRenderer content={content} isDark={false} language="sql" />;
+const MemoLine = React.memo(function MemoLine({ content, isDark }: { content: string; isDark: boolean }) {
+  return <DiffLineCodeRenderer content={content} isDark={isDark} language="sql" />;
 });

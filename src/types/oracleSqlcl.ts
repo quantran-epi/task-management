@@ -124,6 +124,8 @@ export interface OracleQueryResult {
   executionTimeMs?: number;
   truncated?: boolean;
   error?: string;
+  /** True when the call was cancelled by the user — not a query failure. */
+  cancelled?: boolean;
   /** SQL actually sent to SQLcl (never contains the connection string). */
   executedSql?: string;
 }

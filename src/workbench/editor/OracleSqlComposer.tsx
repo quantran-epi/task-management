@@ -96,6 +96,7 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
       const payload = JSON.parse(raw) as {
         success: boolean;
         error?: string;
+        cancelled?: boolean;
         columns?: string[];
         rows?: unknown[][];
         rowCount?: number;
@@ -103,7 +104,10 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
         executionTimeMs?: number;
       };
       if (!payload.success) {
-        setError(redactOracleText(payload.error || 'Truy vấn thất bại.', DEFAULT_ORACLE_CONFIG));
+        // User cancellation is not a query failure; do not paint a red error after Cancel.
+        if (!payload.cancelled) {
+          setError(redactOracleText(payload.error || 'Truy vấn thất bại.', DEFAULT_ORACLE_CONFIG));
+        }
         return;
       }
       setResult({

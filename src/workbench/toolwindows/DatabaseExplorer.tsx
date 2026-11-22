@@ -23,8 +23,20 @@ interface DatabaseExplorerProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
+// Encode each part: Oracle object names may contain `|`, which would otherwise shift the
+// positional parsing used by lazy load and tab opening.
 function nodeKey(parts: string[]): string {
-  return parts.join('|');
+  return parts.map((part) => encodeURIComponent(part)).join('|');
+}
+
+function decodeParts(key: string): string[] {
+  return key.split('|').map((part) => {
+    try {
+      return decodeURIComponent(part);
+    } catch {
+      return part;
+    }
+  });
 }
 
 /** Left-docked lazy tree: connection -> schema -> object type group -> object. */
@@ -34,6 +46,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
   const [schemaFilter, setSchemaFilter] = useState('');
   const [debouncedFilter, setDebouncedFilter] = useState('');
   const [objectFilter, setObjectFilter] = useState('');
+  const [debouncedObjectFilter, setDebouncedObjectFilter] = useState('');
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
   const [error, setError] = useState('');
@@ -41,6 +54,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
   // Single cache: refilling a branch after collapse/expand never re-issues the same query.
   const cache = useRef(new Map<string, LoadedNode[]>());
   const mounted = useRef(true);
+  const generation = useRef(0);
 
   useEffect(() => {
     mounted.current = true;
@@ -65,13 +79,19 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
     return () => clearTimeout(timer);
   }, [schemaFilter]);
 
-  // An invalidated connection/filter changes every descendant key, so stale cached nodes
-  // can never render under a different connection.
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedObjectFilter(objectFilter.trim().slice(0, 100)), 300);
+    return () => clearTimeout(timer);
+  }, [objectFilter]);
+
+  // A filter change invalidates the whole tree. The generation counter drops any in-flight
+  // response from the previous filter so it cannot repaint already-expanded branches.
+  useEffect(() => {
+    generation.current += 1;
     cache.current.clear();
     setExpandedKeys([]);
     setSelectedKeys([]);
-  }, [debouncedFilter]);
+  }, [debouncedFilter, debouncedObjectFilter]);
 
   const query = useCallback(
     async (actionArgs: Parameters<typeof executeOracleDescribe>[0]) => {
@@ -94,9 +114,29 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
     async (key: string, connectionId: string): Promise<LoadedNode[]> => {
       const cached = cache.current.get(key);
       if (cached) return cached;
-      const parts = key.split('|');
+      const parts = decodeParts(key);
       let nodes: LoadedNode[] = [];
-      if (parts[0] === 'schema') {
+      if (parts[0] === 'search') {
+        // Cross-schema search: list_objects without an OWNER filter scans ALL_OBJECTS.
+        // Results are capped server-side by PAGE_SIZE and only whitelisted types become nodes.
+        const result = await query({
+          action: 'list_objects',
+          connectionId,
+          pageSize: PAGE_SIZE,
+          search: debouncedObjectFilter,
+        });
+        nodes = extractGridRows(result.data)
+          .slice(0, PAGE_SIZE)
+          .filter((row) => TYPE_GROUPS.includes(String(row.OBJECT_TYPE ?? '')))
+          .map((row) => ({
+            key: nodeKey([
+              'object', connectionId, String(row.OWNER ?? ''),
+              String(row.OBJECT_TYPE ?? ''), String(row.OBJECT_NAME ?? ''),
+            ]),
+            title: `${row.OWNER}.${row.OBJECT_NAME} (${row.OBJECT_TYPE})`,
+            isLeaf: true,
+          }));
+      } else if (parts[0] === 'schema') {
         const result = await query({
           action: 'list_schemas',
           connectionId,
@@ -119,7 +159,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
           connectionId,
           schema,
           pageSize: PAGE_SIZE,
-          ...(objectFilter.trim() ? { search: objectFilter.trim().slice(0, 100) } : {}),
+          ...(debouncedObjectFilter ? { search: debouncedObjectFilter } : {}),
         });
         const rows = extractGridRows(result.data);
         const allowedTypes = new Set<string>();
@@ -148,7 +188,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
           connectionId,
           schema,
           objectType,
-          ...(objectFilter.trim() ? { search: objectFilter.trim().slice(0, 100) } : {}),
+          ...(debouncedObjectFilter ? { search: debouncedObjectFilter } : {}),
           pageSize: PAGE_SIZE,
         });
         nodes = extractGridRows(result.data)
@@ -163,27 +203,28 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
       cache.current.set(key, nodes);
       return nodes;
     },
-    [debouncedFilter, objectFilter, query]
+    [debouncedFilter, debouncedObjectFilter, query]
   );
 
   const onLoadData = useCallback(
     async (node: TreeDataNode) => {
       const key = String(node.key);
       if (cache.current.has(key)) return;
-      const parts = key.split('|');
+      const parts = decodeParts(key);
       // Tree keys: root|c, schema|c|s, types|c|s, objects|c|s|type.
       const isRoot = parts[0] === 'root';
       const fetchKey = isRoot
-        ? nodeKey(['schema', parts[1] ?? ''])
+        ? nodeKey([debouncedObjectFilter ? 'search' : 'schema', parts[1] ?? ''])
         : parts[0] === 'schema'
           ? nodeKey(['types', parts[1] ?? '', parts[2] ?? ''])
           : key;
       const connectionId = parts[1] ?? '';
-      if (!['root', 'schema', 'types', 'objects'].includes(parts[0] ?? '')) return;
+      if (!['root', 'schema', 'types', 'objects', 'search'].includes(parts[0] ?? '')) return;
+      const requestGeneration = generation.current;
       try {
         setLoading(true);
         const children = await loadChildren(fetchKey, connectionId);
-        if (!mounted.current) return;
+        if (!mounted.current || requestGeneration !== generation.current) return;
         setTree((prev) => patchChildren(prev, key, children));
       } catch (err: any) {
         if (!mounted.current) return;
@@ -192,7 +233,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
         if (mounted.current) setLoading(false);
       }
     },
-    [loadChildren]
+    [loadChildren, debouncedObjectFilter]
   );
 
   const rootNodes = useMemo<LoadedNode[]>(
@@ -213,9 +254,16 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
     cache.current.clear();
   }, [rootNodes]);
 
+  // Global object search should show results immediately without a manual expand click.
+  useEffect(() => {
+    if (debouncedObjectFilter && rootNodes.length) {
+      setExpandedKeys(rootNodes.map((node) => node.key));
+    }
+  }, [debouncedObjectFilter, rootNodes]);
+
   const openObject = useCallback(
     (objectNodeKey: string) => {
-      const [, connectionId, schema, objectType, objectName] = objectNodeKey.split('|');
+      const [, connectionId, schema, objectType, objectName] = decodeParts(objectNodeKey);
       if (!objectName || !objectType) return;
       const mode = isOracleSourceObjectType(objectType)
         ? 'source'
@@ -266,7 +314,7 @@ export function DatabaseExplorer({ db }: DatabaseExplorerProps) {
       <InputSearch
         allowClear
         size="small"
-        placeholder="Tìm object..."
+        placeholder="Tìm object mọi schema..."
         value={objectFilter}
         onChange={(e) => {
           setObjectFilter(e.target.value);
