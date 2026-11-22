@@ -41,6 +41,8 @@ export interface Geometry {
   alignment?: string;
   overflow?: string;
   screenshotHash?: string;
+  /** IN-01: which app last wrote this shared geometry-{theme}.json file. */
+  app?: string;
 }
 
 export interface Interaction {
@@ -69,8 +71,14 @@ export function writeGeometry(dir: string, theme: 'light' | 'dark', geometry: Ge
   json(resolve(dir, `geometry-${theme}.json`), geometry);
 }
 
-export function writeDom(dir: string, theme: 'light' | 'dark', dom: unknown): void {
-  json(resolve(dir, `dom-${theme}.json`), dom);
+/**
+ * WR-01: one DOM snapshot per app+theme so reference/proof are not overwritten
+ * by wrapper. Also keep the legacy `dom-{theme}.json` (wrapper copy) for the
+ * §5 artifact contract.
+ */
+export function writeDom(dir: string, theme: 'light' | 'dark', app: string, dom: unknown): void {
+  json(resolve(dir, `dom-${app}-${theme}.json`), dom);
+  if (app === 'wrapper') json(resolve(dir, `dom-${theme}.json`), dom);
 }
 
 export function writeInteractions(dir: string, interactions: Interaction[]): void {

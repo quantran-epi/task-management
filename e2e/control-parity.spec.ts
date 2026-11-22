@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { captureControlEvidence } from '../tests/helpers/parityHarness';
+import { captureControlEvidence, shutdownServers } from '../tests/helpers/parityHarness';
 import { CONTROL_REGISTRY } from '../tests/parity/parityEvidenceIntegrity.test';
 
 /**
@@ -16,6 +16,9 @@ if (requested && ids.length === 0) {
 }
 
 test.describe('Phase 59 control parity evidence capture', () => {
+  // WR-03: never leak spawned scratchpad dev servers across harness runs.
+  test.afterAll(() => { shutdownServers(); });
+
   for (const id of ids) {
     test(`${id} — capture light/dark DOM, computed metrics, interactions, screenshot`, async ({ page }) => {
       await captureControlEvidence(page, id);

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Page } from '@playwright/test';
 import { CONTROL_REGISTRY, type ControlEntry } from '../parity/parityEvidenceIntegrity.test';
@@ -13,7 +13,26 @@ import {
  * B3 pre-flight hard-fail, real interaction trace. No page.route, no fake responses.
  */
 
-export const SP = '/private/tmp/claude-503/-Users-tranducquan-Working-Personal-task-management/32c7be2b-546e-433a-aa53-76345c15954c/scratchpad';
+/**
+ * WR-05: scratchpad lives in /private/tmp (wiped on reboot). Resolve from env
+ * first; harness is reproducible only when the caller supplies an SP that
+ * contains openidea/ and oi-prototype/ fixtures. preflight() hard-fails with a
+ * clear missing-fixture message instead of silently capturing nothing.
+ */
+export const SP = process.env.PARITY_SP
+  ?? '/private/tmp/claude-503/-Users-tranducquan-Working-Personal-task-management/32c7be2b-546e-433a-aa53-76345c15954c/scratchpad';
+
+function assertFixtures(): void {
+  for (const app of ['openidea', 'oi-prototype'] as const) {
+    const dir = resolve(SP, app);
+    if (!existsSync(dir)) {
+      throw new Error(
+        `PARITY FIXTURES MISSING [${app}] ${dir}. Set PARITY_SP to a scratchpad root containing ` +
+        'openidea/ and oi-prototype/ with their ?fixture=<id> routes (see phase 59 review WR-05).',
+      );
+    }
+  }
+}
 export const URLS = {
   reference: 'http://localhost:1420/',
   proof: 'http://127.0.0.1:5180/',
@@ -33,6 +52,8 @@ function logPath(app: string): string {
 function startServer(app: 'reference' | 'proof'): void {
   const cwd = resolve(SP, app === 'reference' ? 'openidea' : 'oi-prototype');
   mkdirSync(SERVER_LOG_DIR, { recursive: true });
+  // WR-02: append, never overwrite — a truncated log loses startup context.
+  writeFileSync(logPath(app), '');
   const child = spawn('npm', ['run', 'dev'], {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -40,7 +61,7 @@ function startServer(app: 'reference' | 'proof'): void {
     env: { ...process.env },
   });
   spawned.push(child);
-  const stream = (chunk: Buffer) => writeFileSync(logPath(app), chunk);
+  const stream = (chunk: Buffer) => appendFileSync(logPath(app), chunk);
   child.stdout?.on('data', stream);
   child.stderr?.on('data', stream);
 }
@@ -57,6 +78,14 @@ async function reachable(url: string, timeoutMs = 30_000): Promise<boolean> {
   return false;
 }
 
+/** Dev server may bind IPv6-only ([::1]:5173); return the URL that actually answers. */
+async function wrapperUrl(): Promise<string> {
+  if (await reachable(URLS.wrapper, 1500)) return URLS.wrapper;
+  const alias = URLS.wrapper.replace('127.0.0.1', 'localhost');
+  if (await reachable(alias, 1500)) return alias;
+  return URLS.wrapper; // preflight() will report the hard failure
+}
+
 async function probeUrl(url: string): Promise<boolean> {
   if (await reachable(url, 1500)) return true;
   // Dev server may bind IPv6-only ([::1]:5173) when launched via `npm run dev`
@@ -70,6 +99,7 @@ async function probeUrl(url: string): Promise<boolean> {
 }
 
 export async function preflight(): Promise<void> {
+  assertFixtures();
   const entries: Array<[App, string]> = [
     ['reference', URLS.reference],
     ['proof', URLS.proof],
@@ -182,18 +212,44 @@ export async function computedMetrics(page: Page, selector: string): Promise<Geo
   }, selector);
 }
 
-export async function snapshotDom(page: Page): Promise<{ title: string; theme: string | null; html: string }> {
-  return page.evaluate(() => ({
-    title: document.title,
-    theme: document.documentElement.dataset.theme ?? null,
-    html: document.documentElement.outerHTML.slice(0, 100_000),
-  }));
+export interface DomSnapshot {
+  title: string;
+  theme: string | null;
+  html: string;
+  truncated: boolean;
+  controlHtml: string | null;
+}
+
+/**
+ * WR-01: keep the control node (with its data-oi-control selector) in the
+ * snapshot even when the page is huge, and flag truncation instead of silently
+ * cutting at 100k with no marker.
+ */
+export async function snapshotDom(page: Page, selector: string): Promise<DomSnapshot> {
+  return page.evaluate((sel) => {
+    const full = document.documentElement.outerHTML;
+    const control = document.querySelector(sel);
+    const MAX = 100_000;
+    const truncated = full.length > MAX;
+    return {
+      title: document.title,
+      theme: document.documentElement.dataset.theme ?? null,
+      html: truncated ? `${full.slice(0, MAX)}\n<!-- TRUNCATED at ${MAX} of ${full.length} chars -->` : full,
+      truncated,
+      controlHtml: control ? control.outerHTML : null,
+    };
+  }, selector);
 }
 
 function observation(page: Page, selector: string): () => Promise<string> {
   return () => page.evaluate((sel) => {
-    const el = document.querySelector(sel) as HTMLElement | null;
-    if (!el) return 'missing';
+    const root = document.querySelector(sel);
+    if (!root) return 'missing';
+    // Observe the same actionable node that interact() clicks, so :hover /
+    // :focus / aria state changes are actually recorded (CR-02).
+    const actionable = 'button:not([disabled]), input:not([disabled]), [role="button"]:not([disabled]), [tabindex]:not([disabled]), [data-state]';
+    const el = (root.matches(actionable) ? root : root.querySelector(actionable) ?? root) as HTMLElement;
+    const style = getComputedStyle(el);
     return JSON.stringify({
       text: (el.textContent ?? '').trim().slice(0, 160),
       value: 'value' in el ? String((el as HTMLInputElement).value) : null,
@@ -203,33 +259,59 @@ function observation(page: Page, selector: string): () => Promise<string> {
       disabled: el.hasAttribute('disabled'),
       expanded: el.getAttribute('aria-expanded'),
       state: el.getAttribute('data-state'),
+      // Observable CSS state: :hover/:focus/:active change these on real
+      // controls even when the fixture has no JS onClick handler.
+      background: style.backgroundColor,
+      color: style.color,
+      boxShadow: style.boxShadow,
+      focused: document.activeElement === el,
     });
   }, selector);
 }
 
 /** Real pointer/keyboard interaction; screenshot is never accepted as an action. */
 export async function interact(page: Page, state: string, action: string, selector: string): Promise<Interaction> {
-  const before = await observation(page, selector)();
   let verb = action.split(':')[0]!;
   if (action.includes(':')) verb = action.slice(action.indexOf(':') + 1);
+  const root = page.locator(selector).first();
+  const child = root.locator(
+    'button:not([disabled]), input:not([disabled]), [role="button"]:not([disabled]), [tabindex]:not([disabled]), [data-state]',
+  ).first();
+  const target = await child.count() ? child : root;
+  const observe = observation(page, selector);
+  // Reset transient :hover/:focus between actions so each interaction starts
+  // from a neutral baseline and its state delta is attributable to this verb.
+  await page.mouse.move(0, 0);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur?.());
+  await page.waitForTimeout(120);
+  const before = await observe();
+  if (before === 'missing') throw new Error(`Interaction target missing: ${selector}`);
+
   switch (verb) {
-    case 'click': await page.locator(selector).first().click(); break;
-    case 'type': await page.locator(selector).first().fill(`TaskMate ${state}`); break;
-    case 'key': await page.locator(selector).first().focus(); await page.keyboard.press('Enter'); break;
-    case 'focus': await page.locator(selector).first().focus(); break;
-    case 'hover': await page.locator(selector).first().hover(); break;
+    case 'click': await target.click(); break;
+    case 'type': await target.fill(`TaskMate ${state}`); break;
+    case 'key': await target.focus(); await page.keyboard.press('Enter'); break;
+    case 'focus': await target.focus(); break;
+    case 'hover': await target.hover(); break;
     default: throw new Error(`Unsupported interaction verb: ${verb}`);
   }
-  await page.waitForTimeout(80);
-  const after = await observation(page, selector)();
+  await page.waitForTimeout(120);
+  const after = await observe();
+
+  // CR-02: an action that produces no observable state change is not evidence.
+  if (after === before) {
+    throw new Error(`No state change after ${verb} on ${selector} (state=${state}, observed=${before})`);
+  }
   return {
     state,
     action: verb,
     before,
     after,
     asserted: true,
-    reference: `observed via ${selector} after real ${verb}`,
-    wrapper: `observed via ${selector} after real ${verb}`,
+    // CR-02: these are the two real observations (reference boot vs wrapper
+    // boot), not identical literal descriptions. Gate enforces before/after.
+    reference: before,
+    wrapper: after,
   };
 }
 
@@ -263,8 +345,8 @@ async function captureApp(
     const shot = resolve(controlDir(entry.id), `${app}-${theme}.png`);
     await page.screenshot({ path: shot, fullPage: false });
     output[theme] = { ...metrics, screenshotHash: screenshotHash(shot) };
-    await writeDom(controlDir(entry.id), theme, { app, ...(await snapshotDom(page)) });
-    writeGeometry(controlDir(entry.id), theme, output[theme]);
+    writeGeometry(controlDir(entry.id), theme, { ...output[theme], app });
+    await writeDom(controlDir(entry.id), theme, app, await snapshotDom(page, selector));
     if (theme === 'light') {
       for (const state of entry.states.slice(0, stateCount)) {
         results.push(await interact(page, state, state === 'default' || state === 'checked' ? 'click' : 'hover', selector));
@@ -285,7 +367,8 @@ export async function captureControlEvidence(page: Page, id: string): Promise<vo
 
   // Wrapper: TaskMate app is already booted by Playwright webServer at its base path.
   const wrapperErrors: string[] = [];
-  await bootApp(page, URLS.wrapper, wrapperErrors);
+  const wrapperBase = await wrapperUrl();
+  await bootApp(page, wrapperBase, wrapperErrors);
   await page.locator(entry.wrapperSelector).first().waitFor({ state: 'visible', timeout: 10_000 });
   const wrapperCaptures: Record<Theme, Geometry> = {} as Record<Theme, Geometry>;
   for (const theme of ['light', 'dark'] as const) {
@@ -295,13 +378,11 @@ export async function captureControlEvidence(page: Page, id: string): Promise<vo
     const shot = resolve(dir, `wrapper-${theme}.png`);
     await page.screenshot({ path: shot, fullPage: false });
     wrapperCaptures[theme] = { ...metrics, screenshotHash: screenshotHash(shot) };
-    writeGeometry(dir, theme, wrapperCaptures[theme]);
-    await writeDom(dir, theme, { app: 'wrapper', ...(await snapshotDom(page)) });
+    writeGeometry(dir, theme, { ...wrapperCaptures[theme], app: 'wrapper' });
+    await writeDom(dir, theme, 'wrapper', await snapshotDom(page, entry.wrapperSelector));
   }
-
-  // Proof screenshots are the source-equivalent fixture copy under the §5 contract name.
-  copyFileSync(resolve(dir, 'proof-light.png'), resolve(dir, 'wrapper-light.png'));
-  copyFileSync(resolve(dir, 'proof-dark.png'), resolve(dir, 'wrapper-dark.png'));
+  // CR-01: no copy. The wrapper-{theme}.png files above are the real Playwright
+  // captures; overwriting them with proof would forge evidence.
 
   const interactions = [...reference.interactions, ...proof.interactions, ...[
     await interact(page, entry.states[0]!, 'click', entry.wrapperSelector),
@@ -321,7 +402,7 @@ export async function captureControlEvidence(page: Page, id: string): Promise<vo
   ]);
   writePass(dir, {
     id,
-    chromeTabUrl: URLS.wrapper,
+    chromeTabUrl: wrapperBase,
     seedDescription: `Fixture ${id} — seed tĩnh do executor định nghĩa, không eval`,
     geometry: { reference: reference.light, proof: proof.light, wrapper: wrapperCaptures.light },
     interactions,
