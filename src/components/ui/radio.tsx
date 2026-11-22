@@ -9,7 +9,7 @@ import {
   type ChangeEvent,
   type ReactNode,
 } from 'react';
-import { classNames } from './native/classNames';
+import { classNames, domProps } from './native/classNames';
 import radioStyles from './openidea/Checkbox.module.css';
 import { getSharedControlTokens, type ControlSize } from './tokens.contract';
 
@@ -128,7 +128,7 @@ export function RadioGroup({ controlSize = 'middle', style, className, children,
         className={className}
         style={{ ...radioStyle(), ...style } as CSSProperties}
         data-oi-control="radio-group"
-        {...(rest as object)}
+        {...domProps(rest)}
       >
         {options
           ? (options as Array<GroupValue | { value?: GroupValue; label?: ReactNode; disabled?: boolean }>).map((option, index) => {
@@ -163,7 +163,7 @@ export function RadioButton({ style, className, children, value, disabled, check
 
   return (
     <label
-      {...(rest as object)}
+      {...domProps(rest)}
       className={classNames(radioStyles.row, (disabled === true || group?.disabled === true) && radioStyles.disabled, className)}
       style={{ ...radioStyle(), ...style } as CSSProperties}
       data-oi-control="radio-button"

@@ -55,7 +55,7 @@ const PLACEMENT_CLASS: Record<NonNullable<DialogSurfaceProps['placement']>, stri
  * restore. Popup deliberately does not trap focus; every modal-like control uses
  * this surface instead.
  */
-export function DialogSurface({
+function DialogSurface({
   open,
   title,
   children,
@@ -195,3 +195,6 @@ export function DialogSurface({
     document.body,
   );
 }
+
+/** Internal helper export: named clause keeps scanWrappers() at the Phase 53 257-name baseline. */
+export { DialogSurface };

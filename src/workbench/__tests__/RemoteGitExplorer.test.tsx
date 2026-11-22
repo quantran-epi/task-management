@@ -221,7 +221,8 @@ describe('RemoteGitExplorer Component', () => {
 
     // Branch select should not be disabled
     const branchSelect = screen.getByTestId('branch-select');
-    expect(branchSelect.className).not.toContain('ant-select-disabled');
+    expect(branchSelect).not.toHaveAttribute('disabled');
+    expect(branchSelect.getAttribute('data-state')).not.toBe('disabled');
   });
 
   it('displays uncommitted files with status badges and passes gitStatus to opened tab', async () => {
@@ -340,8 +341,8 @@ describe('RemoteGitExplorer Component', () => {
 
     // Child renders (ancestor expanded) and is the selected tree node.
     await waitFor(() => {
-      const node = screen.getByText('index.ts').closest('.ant-tree-treenode');
-      expect(node?.className).toContain('ant-tree-treenode-selected');
+      const node = screen.getByText('index.ts').closest('[data-oi-control="tree-row"]');
+      expect(node).toHaveAttribute('data-state', 'selected');
     });
 
     expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
@@ -599,8 +600,8 @@ describe('RemoteGitExplorer Component', () => {
       expect(screen.getByText('src')).toBeDefined();
     });
     // Expand `src` on main -> loadData fetches dirPath='src'.
-    const srcRow = screen.getByText('src').closest('.ant-tree-treenode')!;
-    fireEvent.click(srcRow.querySelector('.ant-tree-switcher')!);
+    const srcRow = screen.getByText('src').closest('[data-oi-control="tree-row"]')!;
+    fireEvent.click(srcRow.querySelector('[data-oi-control="tree-toggle"]')!);
     await waitFor(() => {
       expect(gitRemoteTreeService.getRemoteTree).toHaveBeenCalledWith(
         mockSshConfigs[0], '/home/dev/my-repo', 'main', 'src', 'secret-123'
@@ -612,8 +613,8 @@ describe('RemoteGitExplorer Component', () => {
     // Select the expanded folder's child so a stale selection would be visible.
     fireEvent.click(screen.getByText('child.ts'));
     expect(
-      screen.getByText('child.ts').closest('.ant-tree-treenode')?.className
-    ).toContain('ant-tree-treenode-selected');
+      screen.getByText('child.ts').closest('[data-oi-control="tree-row"]')
+    ).toHaveAttribute('data-state', 'selected');
 
     const callsBeforeSwitch = (gitRemoteTreeService.getRemoteTree as any).mock.calls.length;
 
@@ -630,13 +631,13 @@ describe('RemoteGitExplorer Component', () => {
     });
     // Stale selection/expansion are cleared: no selected row survives the switch.
     await waitFor(() => {
-      expect(document.querySelector('.ant-tree-treenode-selected')).toBeNull();
+      expect(document.querySelector('[data-oi-control="tree-row"][data-state="selected"]')).toBeNull();
     });
 
     // Tree remounted: `src` starts collapsed, so expanding it calls loadData again for the new target.
-    const srcRowAfter = screen.getByText('src').closest('.ant-tree-treenode')!;
-    expect(srcRowAfter.className).not.toContain('ant-tree-treenode-expanded');
-    fireEvent.click(srcRowAfter.querySelector('.ant-tree-switcher')!);
+    const srcRowAfter = screen.getByText('src').closest('[data-oi-control="tree-row"]')!;
+    expect(srcRowAfter.querySelector('[data-oi-control="tree-toggle"]')).toHaveAttribute('data-state', 'collapsed');
+    fireEvent.click(srcRowAfter.querySelector('[data-oi-control="tree-toggle"]')!);
     await waitFor(() => {
       const newTargetCalls = ((gitRemoteTreeService.getRemoteTree as any).mock.calls as any[][]).filter(
         (c) => c[1] === '/home/dev/my-repo-2' && c[3] === 'src'
@@ -677,8 +678,8 @@ describe('RemoteGitExplorer Component', () => {
       expect(screen.getByText('vn.shb')).toBeDefined();
     });
     // Expand the compact node; rawPath = last path 'vn/shb'.
-    const chainRow = screen.getByText('vn.shb').closest('.ant-tree-treenode')!;
-    fireEvent.click(chainRow.querySelector('.ant-tree-switcher')!);
+    const chainRow = screen.getByText('vn.shb').closest('[data-oi-control="tree-row"]')!;
+    fireEvent.click(chainRow.querySelector('[data-oi-control="tree-toggle"]')!);
 
     // Deepest real file appears after the bounded walk.
     await waitFor(() => {
@@ -720,7 +721,7 @@ describe('RemoteGitExplorer Component', () => {
     await waitFor(() => {
       expect(screen.getByText('a.b')).toBeDefined();
     });
-    fireEvent.click(screen.getByText('a.b').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!);
+    fireEvent.click(screen.getByText('a.b').closest('[data-oi-control="tree-row"]')!.querySelector('[data-oi-control="tree-toggle"]')!);
 
     await waitFor(() => {
       expect(screen.getByText('Deep.java')).toBeDefined();
@@ -822,8 +823,8 @@ describe('RemoteGitExplorer Component', () => {
 
     // The reveal target is in revealTargets, so it stays distinct and selects its stable key.
     await waitFor(() => {
-      const node = screen.getByText('deep.ts').closest('.ant-tree-treenode');
-      expect(node?.className).toContain('ant-tree-treenode-selected');
+      const node = screen.getByText('deep.ts').closest('[data-oi-control="tree-row"]');
+      expect(node).toHaveAttribute('data-state', 'selected');
     });
     expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
   });
@@ -858,8 +859,8 @@ describe('RemoteGitExplorer Component', () => {
     );
 
     await waitFor(() => {
-      const node = screen.getByText('deep.ts').closest('.ant-tree-treenode');
-      expect(node?.className).toContain('ant-tree-treenode-selected');
+      const node = screen.getByText('deep.ts').closest('[data-oi-control="tree-row"]');
+      expect(node).toHaveAttribute('data-state', 'selected');
     });
     // Let any re-entrant effect settle before asserting call counts.
     await act(async () => {

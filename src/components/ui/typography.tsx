@@ -1,6 +1,6 @@
 import type { Typography as AntTypography } from 'antd';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
-import { classNames } from './native/classNames';
+import { classNames, domProps } from './native/classNames';
 import { getSharedControlTokens } from './tokens.contract';
 
 export type TextProps = ComponentProps<typeof AntTypography.Text>;
@@ -56,7 +56,7 @@ function nativeTypography(tag: 'span' | 'p' | 'h1' | 'a') {
         data-oi-control={tag === 'a' ? 'link' : 'text'}
         className={classNames(className)}
         style={roleStyle(fontRole ?? 'body', style)}
-        {...rest}
+        {...domProps(rest)}
       >
         {children}
       </Tag>

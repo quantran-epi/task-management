@@ -84,19 +84,19 @@ describe('input-family policy', () => {
 describe('overlay policy', () => {
   it.each(modes)('applies token-derived width, default footer and close policy in %s mode', (mode) => {
     shell(mode, <Modal open title="Xác nhận" onCancel={() => {}} />);
-    const dialog = document.querySelector('.ant-modal') as HTMLElement;
+    const dialog = document.querySelector('[data-oi-control="dialog"]') as HTMLElement;
     expect(dialog).not.toBeNull();
     expect(dialog.style.width).toBe(`${getOverlayWidth('md')}px`);
-    expect(document.querySelector('.ant-modal-footer')).not.toBeNull();
-    expect(document.querySelector('.ant-modal-close')).not.toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-footer"]')).not.toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-close"]')).not.toBeNull();
   });
 
   it('honours an explicit mask={false} on Modal and Drawer (WR-04)', () => {
     const { unmount } = render(<Modal open title="No mask" mask={false} onCancel={() => {}} />);
-    expect(document.querySelector('.ant-modal-mask')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-backdrop"]')).toBeNull();
     unmount();
     render(<Drawer open title="No mask" mask={false} onClose={() => {}} />);
-    expect(document.querySelector('.ant-drawer-mask')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-backdrop"]')).toBeNull();
   });
 
   it('passes a raw CSS width straight through to Drawer (WR-04)', () => {
@@ -104,25 +104,25 @@ describe('overlay policy', () => {
     // (previously the wrapper coerced it through the numeric size scale).
     const cssWidth = 'calc(100vw - 32px)';
     render(<Drawer open title="Wide" width={cssWidth} onClose={() => {}} />);
-    const panel = document.querySelector('.ant-drawer-content-wrapper') as HTMLElement;
+    const panel = document.querySelector('[data-oi-control="drawer"]') as HTMLElement;
     expect(panel.style.width).toBe(cssWidth);
   });
 
   it('supports silent close and no-footer policies', () => {
     render(<Modal open title="Chỉ đọc" footerPolicy="none" closePolicy="silent" onCancel={() => {}} />);
-    expect(document.querySelector('.ant-modal-footer')).toBeNull();
-    expect(document.querySelector('.ant-modal-close')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-footer"]')).toBeNull();
+    expect(document.querySelector('[data-oi-control="dialog-close"]')).toBeNull();
   });
 
   it('uses the sm/lg width scale supplied by the contract', () => {
     expect(getOverlayWidth('sm')).toBe(metrics.controlHeight * 10);
     expect(getOverlayWidth('lg')).toBe(metrics.controlHeight * 28);
     const { unmount } = render(<Modal open title="Nhỏ" widthScale="sm" onCancel={() => {}} />);
-    expect((document.querySelector('.ant-modal') as HTMLElement).style.width).toBe(`${getOverlayWidth('sm')}px`);
+    expect((document.querySelector('[data-oi-control="dialog"]') as HTMLElement).style.width).toBe(`${getOverlayWidth('sm')}px`);
     unmount();
     render(<Drawer open title="Lớn" widthScale="lg" onClose={() => {}} />);
     expect(screen.getByText('Lớn')).toBeInTheDocument();
-    expect((document.querySelector('.ant-drawer-content-wrapper') as HTMLElement).style.width).toBe(`${getOverlayWidth('lg')}px`);
+    expect((document.querySelector('[data-oi-control="drawer"]') as HTMLElement).style.width).toBe(`${getOverlayWidth('lg')}px`);
   });
 
   it('gives Popconfirm a shared danger-tone policy', () => {
@@ -132,7 +132,7 @@ describe('overlay policy', () => {
         <button type="button">Xóa</button>
       </Popconfirm>,
     );
-    expect(screen.getByText('Xác nhận').closest('button')).toHaveClass('ant-btn-dangerous');
+    expect(screen.getByText('Xác nhận').closest('button')?.className).toContain('danger');
     fireEvent.click(screen.getByText('Xác nhận'));
     expect(onConfirm).toHaveBeenCalled();
   });
@@ -161,36 +161,37 @@ describe('overlay policy', () => {
         </ThemeAppHolder>
       </ConfigProvider>,
     );
-    expect(container.querySelector('.ant-app')).not.toBeNull();
+    expect(container.querySelector('[data-oi-control="message"]')).not.toBeNull();
     fireEvent.click(screen.getByText('message'));
     expect(screen.getByText('ok')).toBeInTheDocument();
     fireEvent.click(screen.getByText('notification'));
     expect(screen.getByText('thông báo')).toBeInTheDocument();
     fireEvent.click(screen.getByText('confirm'));
-    expect(screen.getAllByText('chắc chứ').length).toBeGreaterThan(1);
+    expect(screen.getByRole('dialog', { name: 'chắc chứ' })).toBeInTheDocument();
+    expect(screen.getByText('chắc chứ')).toBeInTheDocument();
   });
 });
 
 describe('Form wrapper layout policy', () => {
   function formClass(ui: React.ReactElement): string {
     const { container, unmount } = render(ui);
-    const cls = (container.querySelector('form') as HTMLElement | null)?.className ?? '';
+    const cls = (container.querySelector('form') as HTMLElement | null)?.getAttribute('data-state') ?? '';
     unmount();
     return cls;
   }
 
   it('uses the labelPolicy default when caller omits layout', () => {
-    expect(formClass(<Form labelPolicy="top" />)).toContain('ant-form-vertical');
-    expect(formClass(<Form labelPolicy="left" />)).toContain('ant-form-horizontal');
-    expect(formClass(<Form labelPolicy="inline" />)).toContain('ant-form-inline');
+    expect(formClass(<Form labelPolicy="top" />)).toBe('vertical');
+    expect(formClass(<Form labelPolicy="left" />)).toBe('horizontal');
+    expect(formClass(<Form labelPolicy="inline" />)).toBe('inline');
   });
 
   it('honours an explicit caller layout over labelPolicy (WR-01)', () => {
     // Regression: GitHubSyncCard passes layout="inline"; the wrapper used to
     // overwrite it with the vertical policy default.
-    expect(formClass(<Form layout="inline" />)).toContain('ant-form-inline');
-    expect(formClass(<Form labelPolicy="left" layout="inline" />)).toContain('ant-form-inline');
-    expect(formClass(<Form labelPolicy="inline" layout="vertical" />)).toContain('ant-form-vertical');
+    expect(formClass(<Form layout="inline" />)).toBe('inline');
+    expect(formClass(<Form labelPolicy="left" layout="inline" />)).toBe('inline');
+    expect(formClass(<Form labelPolicy="inline" layout="vertical" />)).toBe('vertical');
   });
 });
 

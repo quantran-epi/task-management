@@ -75,7 +75,8 @@ function flatten(nodes: TreeDataNode[] | undefined, children: ReactNode, depth =
       title: typeof source.title === 'function' ? source.title(node) : source.title,
       disabled: source.disabled === true,
       checkable: source.checkable === true,
-      isLeaf: source.isLeaf === true || !source.children?.length,
+      // Explicit isLeaf=false wins: lazy folders have no children until loadData runs.
+      isLeaf: source.isLeaf === true || (source.isLeaf !== false && !source.children?.length),
     });
     source.children?.forEach((child) => visit(child, level + 1));
   };

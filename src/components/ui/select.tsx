@@ -11,7 +11,7 @@ import {
   type KeyboardEventHandler,
   type ReactNode,
 } from 'react';
-import { classNames } from './native/classNames';
+import { classNames, domProps } from './native/classNames';
 import { Popup } from './native/popup';
 import listStyles from './openidea/List.module.css';
 import selectStyles from './openidea/Select.module.css';
@@ -202,11 +202,19 @@ export function Select<
   }
 
   const clearButton = allowClear && !disabled && selectedKeys.size > 0 ? (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       aria-label="Xóa lựa chọn"
       className={classNames(selectStyles.rowAction)}
       onClick={(event) => {
+        event.stopPropagation();
+        emit(multiple ? [] : null, multiple ? [] : {});
+        close(false);
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
         event.stopPropagation();
         emit(multiple ? [] : null, multiple ? [] : {});
         close(false);
@@ -215,7 +223,7 @@ export function Select<
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
         <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
-    </button>
+    </span>
   ) : null;
 
   const selectedOptions: Option[] = multiple && Array.isArray(current)
@@ -231,7 +239,7 @@ export function Select<
 
   const renderedStyle = { ...controlStyle(), ...controlWidthStyle(width), ...style } as CSSProperties;
   const triggerClasses = classNames(selectStyles.trigger, selectStyles.framed, invalid && selectStyles.invalid, className);
-  const sharedTrigger = withoutUndefined({
+  const sharedTrigger = { ...domProps(rest), ...withoutUndefined({
     'aria-label': rest['aria-label'],
     'aria-invalid': invalid || undefined,
     'aria-haspopup': 'listbox' as const,
@@ -240,7 +248,7 @@ export function Select<
     disabled,
     style: renderedStyle,
     className: triggerClasses,
-  });
+  }) };
 
   return (
     <>

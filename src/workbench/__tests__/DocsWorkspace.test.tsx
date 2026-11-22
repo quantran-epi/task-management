@@ -162,7 +162,7 @@ describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
     expect(rows).toHaveLength(10);
     expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 1');
     expect(documentsTable.textContent).not.toContain('Bộ lớn tài liệu 25');
-    expect(document.querySelector('.ant-pagination')).not.toBeNull();
+    expect(documentsTable.querySelector('[data-oi-control="table-pagination"]')).not.toBeNull();
   });
 
   it('mounts the shared DocumentSetDeleteDialog from the library detail', async () => {

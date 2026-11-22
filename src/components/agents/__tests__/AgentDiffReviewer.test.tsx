@@ -41,7 +41,7 @@ function renderReviewer(selectedFilePath: string | null = null, onSelectFilePath
 }
 
 function treeTitles(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll('.ant-tree-title')).map((el) => el.textContent ?? '');
+  return Array.from(container.querySelectorAll('[data-oi-control="tree-label"]')).map((el) => el.textContent ?? '');
 }
 
 describe('AgentDiffReviewer compact tree', () => {
@@ -54,16 +54,16 @@ describe('AgentDiffReviewer compact tree', () => {
     const titles = treeTitles(container);
     expect(titles.some((t) => t.includes('com.acme.orders'))).toBe(true);
     expect(titles).not.toContain('acme');
-    expect(container.querySelectorAll('.ant-tree-treenode').length).toBeLessThan(6);
+    expect(container.querySelectorAll('[data-oi-control="tree-row"]').length).toBeLessThan(6);
   });
 
   it('click leaf compact gọi onSelectFilePath với path cuối cùng của chain', async () => {
     const { container, onSelectFilePath } = renderReviewer();
-    const node = Array.from(container.querySelectorAll<HTMLElement>('.ant-tree-treenode')).find((el) =>
-      el.querySelector('.ant-tree-title')?.textContent?.includes('OrderService.java')
+    const node = Array.from(container.querySelectorAll<HTMLElement>('[data-oi-control="tree-row"]')).find((el) =>
+      el.querySelector('[data-oi-control="tree-label"]')?.textContent?.includes('OrderService.java')
     );
     expect(node).toBeDefined();
-    fireEvent.click(node!.querySelector('.ant-tree-node-content-wrapper')!);
+    fireEvent.click(node!);
     await waitFor(() => {
       expect(onSelectFilePath).toHaveBeenCalledWith('com/acme/orders/OrderService.java');
     });
@@ -71,7 +71,7 @@ describe('AgentDiffReviewer compact tree', () => {
 
   it('highlight node gộp khi selectedFilePath là path sâu', () => {
     const { container } = renderReviewer('com/acme/orders/OrderService.java');
-    const selected = container.querySelectorAll('.ant-tree-treenode-selected');
+    const selected = container.querySelectorAll('[data-oi-control="tree-row"][data-state="selected"]');
     expect(selected.length).toBeGreaterThan(0);
     expect(selected[0]?.textContent).toContain('OrderService.java');
   });
@@ -101,7 +101,8 @@ describe('.agent-diff-tree CSS contract', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/styles/workbench-tokens.css'), 'utf8');
     const start = css.indexOf('.agent-diff-tree');
     expect(start).toBeGreaterThan(-1);
-    const block = css.slice(start);
+    // Scope to this block only; later utility-tool rules are unrelated.
+    const block = css.slice(start, css.indexOf('/* Utility tool editor', start));
     for (const token of [
       'var(--row)',
       'var(--tree-indent)',
