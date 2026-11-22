@@ -1,6 +1,6 @@
 ---
 slug: native-controls-fake-render
-status: investigating
+status: fixed_pending_review
 trigger: "Audit phát hiện hệ thống wrapper native render hàng giả (DatePicker dropdown số, List/Table/Typography/Grid/etc drop prop) dù gate xanh; cần khắc phục toàn bộ trước khi đóng milestone v1.6"
 created: 2026-11-22
 updated: 2026-11-22
@@ -34,6 +34,8 @@ updated: 2026-11-22
 
 - timestamp: 2026-11-22 — Audit fake native controls: 56 wrapper, nhiều defect ranked; Phase 54 sign-off `555c6a9a` bị invalidate.
 - timestamp: 2026-11-22 — User bổ sung defect icon size; yêu cầu so sánh cả size, không chỉ token.
+- timestamp: 2026-11-22 — User bổ sung behavior parity (payload/focus/keyboard/state/validation/popup) bắt buộc, light+dark.
+- timestamp: 2026-11-22 — ROOT CAUSE CONFIRMED + FIX APPLIED. DatePicker rebuilt N-08 calendar; wrapIcon 16px default; 11 fake/drop-prop wrappers repaired; 162 scoped UI tests pass; Chrome parity light+dark pass (artifacts in `.planning/debug/artifacts/`). Commits `8b17e301` + `175a1134`. Chờ gsd-code-review/verifier + push bởi orchestrator.
 
 ## Eliminated
 

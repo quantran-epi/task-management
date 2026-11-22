@@ -1,0 +1,23 @@
+{
+  "theme": "dark",
+  "icon": {
+    "width": 15.92,
+    "height": 15.92,
+    "fontSize": "16px",
+    "padding": "0px",
+    "margin": "0px 6px 0px 0px",
+    "radius": "0px"
+  },
+  "trigger": {
+    "height": 28,
+    "fontSize": "13px",
+    "radius": "4px"
+  },
+  "cell": {
+    "width": 34,
+    "height": 24
+  },
+  "gridColumns": 7,
+  "weekdayCount": 7,
+  "cellCount": 35
+}
