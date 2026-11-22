@@ -34,8 +34,7 @@ type DateValue = Dayjs | null;
 const WEEKDAYS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 const MONTHS = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 const CALENDAR_WIDTH = 252;
-const CURRENT_YEAR = dayjs().year();
-const YEARS = Array.from({ length: 21 }, (_, index) => CURRENT_YEAR - 10 + index);
+const YEAR_SPAN = 21;
 
 function pickerStyle(width: 'full' | 'auto', caller?: CSSProperties): CSSProperties {
   const { fontSize, controlHeight, borderRadius } = getSharedControlTokens();
@@ -77,6 +76,12 @@ function Calendar({ month, value, range, disabledDate, onMonth, onPick, onClear 
     (_, index) => month.startOf('month').add(index - offset, 'day'),
   ), [month, offset, daysInMonth]);
   const today = dayjs();
+  // Compute from the current render, not module load, so a long-lived app
+  // crossing New Year's Eve shows the new year range.
+  const YEARS = useMemo(
+    () => Array.from({ length: YEAR_SPAN }, (_, index) => today.year() - 10 + index),
+    [today.year()],
+  );
   const [lead, setLead] = useState<Dayjs>(value ?? month.startOf('month'));
   useEffect(() => { setLead(value ?? month.startOf('month')); }, [value, month]);
   const inRange = (date: Dayjs) => Boolean(
