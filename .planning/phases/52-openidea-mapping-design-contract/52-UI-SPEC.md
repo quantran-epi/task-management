@@ -41,13 +41,13 @@ Kiểm tra chéo Phase 51: `WRAPPER-ROW` 56 = `CLASSIFY` 56 = file `.tsx` 56; 25
 
 | Property | Value |
 |---|---|
-| Tool | none — shadcn không khởi tạo; `components.json` không tồn tại; shadcn init gate không áp dụng vì milestone cấm thêm UI runtime library |
+| Tool | none — shadcn không khởi tạo; `components.json` không tồn tại. Cho phép dependency nhẹ theo chuẩn OpenIDEA (`@floating-ui/react-dom`, `@tanstack/react-virtual`, `zustand`) và lib nhẹ tương tự; chỉ cấm UI kit nặng kiểu AntD |
 | Preset | not applicable |
 | Component library | none — control tự build bằng React 19 + CSS module/CSS variables + Web API, đi qua 56 wrapper hiện hữu. AntD 6.6.5 bị gỡ ở Phase 56. |
 | Icon library | Bộ SVG tự build: vendored OpenIDEA SVG (`src/ui/expui/**`, `src/ui/openidea/**`) qua một factory `wrapIcon`; **giữ nguyên 141 tên export** và 8 deep-import trong `RemoteGitExplorer.tsx` |
 | Font | Inter (UI) + IBM Plex Mono (mono), bundle offline — giữ từ Phase 49/50; control dùng 13/12/11px |
 | CSS module nguồn | 28 file `*.module.css` + `tokens.css` + `global.css` từ OpenIDEA, copy nguyên vẹn kèm `LICENSE` và `NOTICE` (Apache-2.0) vào `src/components/ui/openidea/` ở Phase 53/54. Không import từ scratchpad, không sửa metric nguồn. |
-| Popup positioning | Native CSS fixed portal tới `BODY`; flip/shift tự tính trong popup helper. **Không cài dependency mới** (kể cả `@floating-ui/react-dom`); không AntD, không Popper, không thư viện UI khác. |
+| Popup positioning | Portal tới `BODY` qua `createPortal` + `@floating-ui/react-dom` (`useFloating`, `offset(4)`, `flip`, `shift`, `autoUpdate`) — đúng stack OpenIDEA. Không AntD / Popper / UI kit nặng. |
 | Runtime | Tauri primary. Không PWA/GitHub Pages, không server, không đổi data model/ID/backup/sync. |
 
 ### Nguyên tắc biên giới (không đàm phán ở Phase 53-56)
@@ -382,7 +382,7 @@ Mọi giá trị nằm ở `src/styles/tokens.ts` (shared/light/dark objects) v�
 | `--dur-fast` / `--dur` / `--ease` | không có riêng | `80ms` / `140ms` / `cubic-bezier(0.2,0,0,1)` | Source tokens; `prefers-reduced-motion` tắt transition/animation. |
 | `data-theme` enum | `light|dark` | giữ nguyên | Không dùng tên theme OpenIDEA (`dark-hc`, v.v.) trong app; chỉ map giá trị token. |
 | CSS module nguồn | AntD CSS-in-JS | vendor 28 module + tokens/global + LICENSE/NOTICE vào repo | Copy nguyên ở Phase 53/54; không sửa selector hay metric nguồn. |
-| `@floating-ui/react-dom` | chưa cài | **giữ chưa cài** — flip/shift tự tính, không dependency mới | Milestone cấm thêm UI runtime library; MAP/registry safety. |
+| `@floating-ui/react-dom` | sẽ cài | **dùng cho mọi popup** — same stack OpenIDEA, computed style và keyboard parity đã proof | Quyết định cập nhật 2026-11-22: cho phép lib nhẹ OpenIDEA dùng; chỉ cấm UI kit nặng. |
 
 Migration order (bắt buộc để không regression): (1) thêm token mới + alias vào `tokens.ts` / CSS vars; (2) vendor CSS module + license; (3) Phase 53 đổi core/form; (4) Phase 54 đổi overlay/complex; (5) Phase 55 adoption + theme parity; (6) Phase 56 gỡ AntD. Không bước nào được giữ import AntD trong wrapper sau bước tương ứng.
 
@@ -466,7 +466,7 @@ Phase 57 cũng ghi log pass/fail + screenshot cho từng route/view/tool window/
 |----------|-------------|-------------|
 | shadcn official | none | not applicable — `shadcn_initialized: false`, không registry |
 | OpenIDEA source (Apache-2.0) | 28 `*.module.css` + `tokens.css` + `global.css` + SVG icon, vendored dưới `src/components/ui/openidea/` | copy nguyên vẹn + kèm `LICENSE-OPENIDEA` và `NOTICE-OPENIDEA` từ proof; diff với source khi review Phase 53/54; **không** sửa selector/metric nguồn |
-| `@floating-ui/react-dom` | — | **không dùng, không cài** — milestone cấm thêm UI runtime library; flip/shift tự tính trong popup helper |
+| `@floating-ui/react-dom` | — | **được phép và khuyên dùng** — popup positioning chuẩn OpenIDEA; không phải UI kit nặng |
 
 Không block shadcn nào. CSS module OpenIDEA là source code bên thứ ba đã được proof dùng và sếp duyệt; license Apache-2.0 cho phép vendoring kèm notice. Session này không khởi tạo registry, không gọi lệnh cài package.
 
@@ -499,9 +499,9 @@ Chạy sau khi contract được review; mọi dimension cần bằng chứng qu
 - [x] Dimension 3 Color: PASS — accent `#3871e1` both, control palette light/dark rõ (§5), shell palette tách biệt (§8). Checker bổ sung:Spinner ring D-12 accent (`--ui-spin-accent`), ghost/chip `--fg-secondary` light `#5f6269`/dark `#9fa2a8`, `--bg-tab-selected` light `#e3ebfe`/dark `#233558` — đã khớp source token.
 - [x] Dimension 4 Typography: PASS — 13/12/11 + 16 legacy, 2 weight (400/600), không fractional control (§4); `.large` 38px là metric height, font `-fs-input-large` nằm ngoài control contract theo §4.
 - [x] Dimension 5 Spacing: PASS — scale 4/8/16/24/32/48/64 + exceptions 2/6/12/4-offset (§3); margin/alignment/overflow có rule đo bổ sung ở §10.
-- [x] Dimension 6 Registry Safety: PASS — shadcn none (`components.json` không tồn tại); OpenIDEA Apache-2.0 vendored kèm `LICENSE-OPENIDEA`/`NOTICE-OPENIDEA`; **không cài dependency mới** — `@floating-ui/react-dom` bị loại, flip/shift tự tính.
+- [x] Dimension 6 Registry Safety: PASS — shadcn none (`components.json` không tồn tại); OpenIDEA Apache-2.0 vendored kèm `LICENSE-OPENIDEA`/`NOTICE-OPENIDEA`; `@floating-ui/react-dom` được phép (cùng stack OpenIDEA), chỉ cấm UI kit nặng như AntD.
 
-**Checker findings đã sửa trực tiếp trong contract:** (1) `.small` height 28 → 24 theo `--h-control:24px` (§1.1 + §10); (2) Spinner baseline dùng `--fg-muted` mâu thuẫn với API `--ui-spin-accent` D-12 → ring accent `#3871e1` (§1/§2/§5/§8/§10); (3) optional `@floating-ui/react-dom` vi phạm "không thêm UI runtime library" → cấm cài (§Design System, §8, Registry); (4) bổ sung rule đo margin/alignment/overflow cho criterion #4 (§10); (5) ghi rõ nguồn color bổ sung.
+**Checker findings đã sửa trực tiếp trong contract:** (1) `.small` height 28 → 24 theo `--h-control:24px` (§1.1 + §10); (2) Spinner baseline dùng `--fg-muted` mâu thuẫn với API `--ui-spin-accent` D-12 → ring accent `#3871e1` (§1/§2/§5/§8/§10); (3) `@floating-ui/react-dom` ban đầu bị cấm do hiểu nhầm "no UI lib" — đã đảo lại theo quyết định 2026-11-22: dùng lib OpenIDEA, chỉ cấm UI kit nặng (§Design System, §8, Registry); (4) bổ sung rule đo margin/alignment/overflow cho criterion #4 (§10); (5) ghi rõ nguồn color bổ sung.
 
 **Approval:** APPROVED (gsd-ui-checker, 2026-11-22) — 6/6 dimension PASS; `status: approved`. Gate evidence: 56/56/34/257 counts khớp, focused test 3 file/12 test passed, `git status --short src` empty. Không commit.
 
