@@ -307,6 +307,7 @@ export function DateRangePicker({
   const [texts, setTexts] = useState<[string, string]>([formatValue(draft[0], format), formatValue(draft[1], format)]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<0 | 1>(0);
+  const [lead, setLead] = useState<DateValue>(null);
   const [month, setMonth] = useState(pair[0] ?? pair[1] ?? dayjs());
   const anchorRef = active === 0 ? startRef : endRef;
   // Callers often rebuild dayjs objects inline each render. Key on the date
@@ -327,17 +328,21 @@ export function DateRangePicker({
   }, [pair[0], pair[1], format]);
 
   function commit(next: Dayjs) {
-    const updated: [DateValue, DateValue] = active === 0 ? [next, draft[1]] : [draft[0], next];
+    const start = active === 0 ? next : lead ?? draft[0];
+    const end = active === 0 ? null : next;
+    const updated: [DateValue, DateValue] = [start, end];
+    setLead(end ? null : start);
     setDraft(updated);
     setTexts([formatValue(updated[0], format), formatValue(updated[1], format)]);
-    const completed = active === 0 ? updated[1] !== null : updated[0] !== null;
-    onChange?.(
-      updated as [Dayjs | null, Dayjs | null],
-      [updated[0]?.format(format) ?? '', updated[1]?.format(format) ?? ''],
-    );
-    if (!completed) {
+    if (!end) {
       setActive(1);
       return; // keep the same calendar open: the user is picking the second end
+    }
+    if (start && end) {
+      onChange?.(
+        [start, end],
+        [start.format(format), end.format(format)],
+      );
     }
     setOpen(false);
     anchorRef.current?.focus();
@@ -345,6 +350,7 @@ export function DateRangePicker({
 
   function clear() {
     setDraft([null, null]);
+    setLead(null);
     setTexts(['', '']);
     setOpen(false);
     anchorRef.current?.focus();
@@ -388,9 +394,9 @@ export function DateRangePicker({
       >
         <Calendar
           month={month}
-          value={draft[active]}
-          range={draft}
-          hint={draft[0] && draft[1] ? `${draft[0].format(format)} → ${draft[1].format(format)}` : active === 0 ? 'Chọn ngày bắt đầu' : 'Chọn ngày kết thúc'}
+          value={lead ?? draft[active]}
+          range={lead ? [lead, null] : draft}
+          hint={lead ? `${lead.format(format)} → …` : draft[0] && draft[1] ? `${draft[0].format(format)} → ${draft[1].format(format)}` : active === 0 ? 'Chọn ngày bắt đầu' : 'Chọn ngày kết thúc'}
           disabledDate={rest.disabledDate}
           onMonth={setMonth}
           onPick={commit}
