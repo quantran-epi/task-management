@@ -128,7 +128,7 @@ function NavFixture() {
   );
 }
 
-const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, tag: TagFixture, badge: BadgeAvatarFixture, feedback: FeedbackFixture, nav: NavFixture };
+const FIXTURES: Record<string, React.ComponentType> = { button: ButtonFixture , input: InputFixture , textarea: TextareaFixture, checkbox: CheckboxFixture, radio: RadioFixture, switch: SwitchFixture, tag: TagFixture, feedback: FeedbackFixture, nav: NavFixture };
 
 function App() {
   const params = new URLSearchParams(location.search);
