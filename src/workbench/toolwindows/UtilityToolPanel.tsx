@@ -815,6 +815,19 @@ function DevFooter({ children }: { children: React.ReactNode }) {
   return <div style={footerStyle}>{children}</div>;
 }
 
+/** Visible label for a toolbar control — aria-label already covers assistive tech. */
+function DevField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <span style={{ fontSize: 'var(--font-size-xs, 11px)', color: 'var(--fg-muted, #6c707e)', whiteSpace: 'nowrap' }}>{label}</span>
+    {children}
+  </label>;
+}
+
+/** One-line, tool-specific usage guidance shown above the input/output panes. */
+function DevHelp({ children }: { children: React.ReactNode }) {
+  return <div style={{ padding: '6px 14px', background: 'var(--bg-elev, #f7f8fa)', borderBottom: '1px solid var(--border, #e9eaee)', color: 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small, 12px)' }}>{children}</div>;
+}
+
 function DevPanes({ inputLabel, outputLabel, input, output, inputAria, outputAria, inputPlaceholder, onInput, extra }: {
   inputLabel: string; outputLabel: string; input: string; output: string;
   inputAria: string; outputAria: string; inputPlaceholder: string;
@@ -825,16 +838,16 @@ function DevPanes({ inputLabel, outputLabel, input, output, inputAria, outputAri
     <>
       <div style={splitPaneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
-          <div style={colHeadStyle}>{inputLabel}</div>
+          <div style={colHeadStyle}><label htmlFor={`dev-input-${inputAria.replace(/\s+/g, '-')}`}>{inputLabel}</label></div>
           <LineNumberedPane scrollRef={leftRef} totalLines={countLines(input)}>
-            <textarea ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label={inputAria} spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={inputPlaceholder} />
+            <textarea id={`dev-input-${inputAria.replace(/\s+/g, '-')}`} ref={leftRef} wrap="off" onScroll={onLeftScroll} aria-label={inputAria} spellCheck={false} style={editorStyle} value={input} onChange={(e) => onInput(e.target.value)} placeholder={inputPlaceholder} />
           </LineNumberedPane>
         </div>
         <PaneDivider />
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0 }}>
-          <div style={colHeadStyle}>{outputLabel}</div>
+          <div style={colHeadStyle}><label htmlFor={`dev-output-${outputAria.replace(/\s+/g, '-')}`}>{outputLabel}</label></div>
           <LineNumberedPane scrollRef={rightRef} totalLines={countLines(output)}>
-            <pre ref={rightRef} onScroll={onRightScroll} aria-label={outputAria} style={outputStyle}>{output}</pre>
+            <pre id={`dev-output-${outputAria.replace(/\s+/g, '-')}`} ref={rightRef} onScroll={onRightScroll} aria-label={outputAria} style={outputStyle}>{output}</pre>
           </LineNumberedPane>
         </div>
       </div>
@@ -875,32 +888,34 @@ const TOOL_LABELS: Record<string, string> = {
 
 function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('encoder_decoder');
-  const { input, option, option2 } = content;
-  const result = useMemo(() => {
-    if (!input) return { output: '', error: null };
+  const { input, option, option2, output, error } = content;
+  const run = useCallback(() => {
+    if (!input) { patchContent({ output: '', error: null }); return; }
     try {
       const kind = (option2 || 'base64') as 'base64' | 'url' | 'html';
-      return { output: option === 'decode' ? decodeText(input, kind) : encodeText(input, kind), error: null };
+      patchContent({ output: option === 'decode' ? decodeText(input, kind) : encodeText(input, kind), error: null });
     } catch (e) {
-      return { output: '', error: e instanceof Error ? e.message : String(e) };
+      patchContent({ output: '', error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, option, option2]);
-  const toolbar = useCommonToolbar('encoder_decoder', content, patchContent, clearContent, db, undefined, result.output);
-  const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
+  }, [input, option, option2, patchContent]);
+  const toolbar = useCommonToolbar('encoder_decoder', content, patchContent, clearContent, db, undefined, output);
+  const onInput = useCallback((value: string) => patchContent({ input: value, output: '', error: null }), [patchContent]);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <select aria-label="Chiều" value={option || 'encode'} onChange={(e) => patchContent({ option: e.target.value, error: null })} style={selectStyle}>
+          <DevField label="Chiều"><select aria-label="Chiều" value={option || 'encode'} onChange={(e) => patchContent({ option: e.target.value, output: '', error: null })} style={selectStyle}>
             <option value="encode">Encode</option><option value="decode">Decode</option>
-          </select>
-          <select aria-label="Định dạng" value={option2 || 'base64'} onChange={(e) => patchContent({ option2: e.target.value, error: null })} style={selectStyle}>
+          </select></DevField>
+          <DevField label="Định dạng"><select aria-label="Định dạng" value={option2 || 'base64'} onChange={(e) => patchContent({ option2: e.target.value, output: '', error: null })} style={selectStyle}>
             <option value="base64">Base64</option><option value="url">URL</option><option value="html">HTML</option>
-          </select>
+          </select></DevField>
+          <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
         </>
-      )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{result.error ? `❌ ${result.error}` : 'UTF-8 · local'}</span></DevToolbar>
-      <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={result.output} inputAria="Encoder input" outputAria="Encoder output" inputPlaceholder="Dán text vào đây..." onInput={onInput} />
-      <DevFooter><span>Encode/Decode · UTF-8</span><span>{result.output.length} ký tự</span></DevFooter>
+      )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : 'UTF-8 · local'}</span></DevToolbar>
+      <DevHelp>Nhập text, chọn chiều Encode/Decode và định dạng, rồi bấm Chạy. Dùng Decode với đúng định dạng đã dùng để Encode.</DevHelp>
+      <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={output} inputAria="Encoder input" outputAria="Encoder output" inputPlaceholder="Dán text vào đây..." onInput={onInput} />
+      <DevFooter><span>Encode/Decode · UTF-8</span><span>{output.length} ký tự</span></DevFooter>
     </div>
   );
 }
@@ -911,7 +926,7 @@ function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
   const [result, setResult] = useState<RegexResult>({ matches: [], count: 0, truncated: false, error: null });
   const [running, setRunning] = useState(false);
   const seqRef = useRef(0);
-  useEffect(() => {
+  const run = useCallback(() => {
     const mySeq = ++seqRef.current;
     if (!aux.trim() || !input) {
       setResult({ matches: [], count: 0, truncated: false, error: null });
@@ -926,19 +941,27 @@ function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
       }
     });
   }, [aux, option2, input]);
-  const onInput = useCallback((value: string) => patchContent({ input: value }), [patchContent]);
+  const reset = useCallback((p: Partial<DevToolContent>) => {
+    seqRef.current++;
+    setResult({ matches: [], count: 0, truncated: false, error: null });
+    setRunning(false);
+    patchContent(p);
+  }, [patchContent]);
+  const onInput = useCallback((value: string) => reset({ input: value }), [reset]);
   const details = useMemo(() => result.matches.map((m, i) => `${i + 1}. @${m.index} ${JSON.stringify(m.value)}${m.groups.length ? ` groups=${JSON.stringify(m.groups)}` : ''}`).join('\n'), [result.matches]);
   const toolbar = useCommonToolbar('regex_tester', content, patchContent, clearContent, db, undefined, details);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <input aria-label="Pattern" value={aux} onChange={(e) => patchContent({ aux: e.target.value })} placeholder="Pattern, ví dụ: (a+)(b)" style={{ ...toolBtnStyle, width: 240, cursor: 'text' }} />
-          <input aria-label="Flags" value={option2} onChange={(e) => patchContent({ option2: e.target.value })} placeholder="flags" style={{ ...toolBtnStyle, width: 70, cursor: 'text' }} />
+          <DevField label="Pattern"><input aria-label="Pattern" value={aux} onChange={(e) => reset({ aux: e.target.value })} placeholder="Ví dụ: (a+)(b)" style={{ ...toolBtnStyle, width: 200, cursor: 'text' }} /></DevField>
+          <DevField label="Flags"><input aria-label="Flags" value={option2} onChange={(e) => reset({ option2: e.target.value })} placeholder="ví dụ: gi" style={{ ...toolBtnStyle, width: 60, cursor: 'text' }} /></DevField>
+          <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
         </>
       )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : 'var(--fg-muted, #6c707e)', fontSize: 'var(--font-size-small, 12px)' }}>
         {result.error ? `❌ ${result.error}` : running ? 'Đang chạy trong Worker...' : result.truncated ? `⚠ Giới hạn ${REGEX_MAX_MATCHES} match` : `${result.count} match`}
       </span></DevToolbar>
+      <DevHelp>Nhập pattern, flags tùy chọn (vd. gi) và chuỗi cần thử, rồi bấm Chạy. Regex chạy trong Worker, tự hủy sau {REGEX_TIMEOUT_MS} ms nếu pattern gây ReDoS.</DevHelp>
       <DevPanes inputLabel="CHUỖI TEST" outputLabel="KẾT QUẢ" input={input} output={details} inputAria="Regex test input" outputAria="Regex matches" inputPlaceholder="Dán chuỗi cần thử..." onInput={onInput} />
       <DevFooter><span>Regex · input tối đa {REGEX_MAX_INPUT.toLocaleString('vi-VN')} ký tự</span><span>Chạy trong Worker · tự hủy sau {REGEX_TIMEOUT_MS} ms để chặn ReDoS</span></DevFooter>
     </div>
@@ -947,68 +970,75 @@ function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
 
 function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('timestamp_converter');
-  const { input, option, option2 } = content;
-  const result = useMemo(() => {
-    if (!input.trim()) return { output: '', error: null };
+  const { input, option, option2, output, error } = content;
+  const run = useCallback(() => {
+    if (!input.trim()) { patchContent({ output: '', error: null }); return; }
     try {
-      return { output: JSON.stringify(option === 'to_timestamp' ? dateToTimestamp(input) : timestampToDate(input, option2 === 's' ? 's' : 'ms'), null, 2), error: null };
+      patchContent({ output: JSON.stringify(option === 'to_timestamp' ? dateToTimestamp(input) : timestampToDate(input, option2 === 's' ? 's' : 'ms'), null, 2), error: null });
     } catch (e) {
-      return { output: '', error: e instanceof Error ? e.message : String(e) };
+      patchContent({ output: '', error: e instanceof Error ? e.message : String(e) });
     }
-  }, [input, option, option2]);
-  const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
-  const toolbar = useCommonToolbar('timestamp_converter', content, patchContent, clearContent, db, undefined, result.output);
+  }, [input, option, option2, patchContent]);
+  const onInput = useCallback((value: string) => patchContent({ input: value, output: '', error: null }), [patchContent]);
+  const toolbar = useCommonToolbar('timestamp_converter', content, patchContent, clearContent, db, undefined, output);
   const useNow = () => patchContent({
     input: option === 'to_timestamp' ? dayjs().format('YYYY-MM-DD') : String(option2 === 's' ? Math.floor(Date.now() / 1000) : Date.now()),
-    error: null,
+    output: '', error: null,
   });
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <select aria-label="Chiều" value={option || 'to_date'} onChange={(e) => patchContent({ option: e.target.value, error: null })} style={selectStyle}>
+          <DevField label="Chiều"><select aria-label="Chiều" value={option || 'to_date'} onChange={(e) => patchContent({ option: e.target.value, output: '', error: null })} style={selectStyle}>
             <option value="to_date">Timestamp → Date</option><option value="to_timestamp">Date → Timestamp</option>
-          </select>
-          <select aria-label="Đơn vị" value={option2 || 'ms'} onChange={(e) => patchContent({ option2: e.target.value, error: null })} style={{ ...toolBtnStyle, minWidth: 64 }}>
+          </select></DevField>
+          <DevField label="Đơn vị"><select aria-label="Đơn vị" value={option2 || 'ms'} onChange={(e) => patchContent({ option2: e.target.value, output: '', error: null })} style={{ ...toolBtnStyle, minWidth: 64 }}>
             <option value="ms">ms</option><option value="s">s</option>
-          </select>
+          </select></DevField>
           <button type="button" className="utility-tool-btn" style={toolBtnStyle} onClick={useNow}>Dùng now</button>
+          <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
         </>
-      )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{result.error ? `❌ ${result.error}` : 'dayjs · local'}</span></DevToolbar>
-      <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={result.output} inputAria="Timestamp input" outputAria="Timestamp output" inputPlaceholder={option === 'to_date' ? '1700000000000' : 'YYYY-MM-DD'} onInput={onInput} />
-      <DevFooter><span>Timestamp · UTC ổn định</span><span>{result.error || 'Sẵn sàng'}</span></DevFooter>
+      )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : 'dayjs · local'}</span></DevToolbar>
+      <DevHelp>Nhập timestamp hoặc ngày YYYY-MM-DD, chọn chiều và đơn vị (ms/s), rồi bấm Chạy. "Dùng now" điền giá trị hiện tại; kết quả tính theo UTC.</DevHelp>
+      <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={output} inputAria="Timestamp input" outputAria="Timestamp output" inputPlaceholder={option === 'to_date' ? '1700000000000' : 'YYYY-MM-DD'} onInput={onInput} />
+      <DevFooter><span>Timestamp · UTC ổn định</span><span>{error || 'Sẵn sàng'}</span></DevFooter>
     </div>
   );
 }
 
 function DateCalcPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('date_calculation');
-  const { input, aux, option, option2 } = content;
+  const { input, aux, option, option2, output, error } = content;
   const [amount, setAmount] = useState(1);
   const op = (option || 'add') as 'add' | 'subtract' | 'diff';
   const unit = (option2 || 'day') as 'day' | 'week' | 'month' | 'year';
-  const result = useMemo(() => calculateDate({ date: input, op, amount, unit, ...(aux ? { compareDate: aux } : {}) }), [input, aux, op, amount, unit]);
-  const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
+  const run = useCallback(() => {
+    const result = calculateDate({ date: input, op, amount, unit, ...(aux ? { compareDate: aux } : {}) });
+    patchContent({ output: result.output, error: result.error });
+  }, [input, aux, op, amount, unit, patchContent]);
+  const onInput = useCallback((value: string) => patchContent({ input: value, output: '', error: null }), [patchContent]);
   const isDiff = op === 'diff';
-  const toolbar = useCommonToolbar('date_calculation', content, patchContent, clearContent, db, undefined, result.output);
+  const toolbar = useCommonToolbar('date_calculation', content, patchContent, clearContent, db, undefined, output);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <select aria-label="Phép tính" value={option || 'add'} onChange={(e) => patchContent({ option: e.target.value, error: null })} style={selectStyle}>
+          <DevField label="Phép tính"><select aria-label="Phép tính" value={option || 'add'} onChange={(e) => patchContent({ option: e.target.value, output: '', error: null })} style={selectStyle}>
             <option value="add">Cộng</option><option value="subtract">Trừ</option><option value="diff">Hiệu ngày</option>
-          </select>
-          {!isDiff && <select aria-label="Số lượng" value={amount} onChange={(e) => setAmount(Number(e.target.value))} style={{ ...toolBtnStyle, minWidth: 62 }}>
+          </select></DevField>
+          {!isDiff && <DevField label="Số lượng"><select aria-label="Số lượng" value={amount} onChange={(e) => { setAmount(Number(e.target.value)); patchContent({ output: '', error: null }); }} style={{ ...toolBtnStyle, minWidth: 62 }}>
             {Array.from({ length: 31 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>}
-          {!isDiff && <select aria-label="Đơn vị" value={option2 || 'day'} onChange={(e) => patchContent({ option2: e.target.value, error: null })} style={{ ...toolBtnStyle, minWidth: 76 }}>
+          </select></DevField>}
+          {!isDiff && <DevField label="Đơn vị"><select aria-label="Đơn vị" value={option2 || 'day'} onChange={(e) => patchContent({ option2: e.target.value, output: '', error: null })} style={{ ...toolBtnStyle, minWidth: 76 }}>
             <option value="day">ngày</option><option value="week">tuần</option><option value="month">tháng</option><option value="year">năm</option>
-          </select>}
-          {isDiff && <input aria-label="Ngày so sánh" value={aux} onChange={(e) => patchContent({ aux: e.target.value })} placeholder="YYYY-MM-DD" style={{ ...toolBtnStyle, width: 130, cursor: 'text' }} />}
+          </select></DevField>}
+          {isDiff && <DevField label="Ngày so sánh"><input aria-label="Ngày so sánh" value={aux} onChange={(e) => patchContent({ aux: e.target.value, output: '', error: null })} placeholder="YYYY-MM-DD" style={{ ...toolBtnStyle, width: 130, cursor: 'text' }} /></DevField>}
+          <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
         </>
-      )}<span style={{ marginLeft: 'auto', color: result.error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{result.error ? `❌ ${result.error}` : 'YYYY-MM-DD'}</span></DevToolbar>
-      <DevPanes inputLabel="NGÀY" outputLabel="KẾT QUẢ" input={input} output={result.output} inputAria="Date input" outputAria="Date result" inputPlaceholder="YYYY-MM-DD" onInput={onInput} />
-      <DevFooter><span>Date Calculation · dayjs</span><span>{result.output || 'Sẵn sàng'}</span></DevFooter>
+      )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : 'YYYY-MM-DD'}</span></DevToolbar>
+      <DevHelp>Nhập ngày YYYY-MM-DD. Chọn Cộng/Trừ kèm số lượng và đơn vị, hoặc Hiệu ngày kèm ngày so sánh. Bấm Chạy để xem kết quả.</DevHelp>
+      <DevPanes inputLabel="NGÀY" outputLabel="KẾT QUẢ" input={input} output={output} inputAria="Date input" outputAria="Date result" inputPlaceholder="YYYY-MM-DD" onInput={onInput} />
+      <DevFooter><span>Date Calculation · dayjs</span><span>{output || 'Sẵn sàng'}</span></DevFooter>
     </div>
   );
 }
@@ -1022,17 +1052,21 @@ const TEXT_OPS: { value: TextOp; label: string }[] = [
 
 function TextUtilitiesPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('text_utilities');
-  const { input, option } = content;
-  const output = useMemo(() => transformText(input, (option || 'upper') as TextOp), [input, option]);
+  const { input, option, output } = content;
+  const run = useCallback(() => patchContent({ output: transformText(input, (option || 'upper') as TextOp) }), [input, option, patchContent]);
   const toolbar = useCommonToolbar('text_utilities', content, patchContent, clearContent, db, undefined, output);
-  const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
+  const onInput = useCallback((value: string) => patchContent({ input: value, output: '' }), [patchContent]);
   return (
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
-        <select aria-label="Phép biến đổi" value={option || 'upper'} onChange={(e) => patchContent({ option: e.target.value, error: null })} style={{ ...selectStyle, minWidth: 140 }}>
-          {TEXT_OPS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
-        </select>
+        <>
+          <DevField label="Phép biến đổi"><select aria-label="Phép biến đổi" value={option || 'upper'} onChange={(e) => patchContent({ option: e.target.value, output: '' })} style={{ ...selectStyle, minWidth: 140 }}>
+            {TEXT_OPS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
+          </select></DevField>
+          <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
+        </>
       )}</DevToolbar>
+      <DevHelp>Nhập text, chọn phép biến đổi (đổi case, sort/dedupe dòng, thống kê...), rồi bấm Chạy. Với camelCase/snake_case, cách nhau bằng dấu cách, gạch dưới hoặc gạch ngang.</DevHelp>
       <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={output} inputAria="Text utilities input" outputAria="Text utilities output" inputPlaceholder="Dán text vào đây..." onInput={onInput} />
       <DevFooter><span>Text Utilities · deterministic, local</span><span>{input.length} ký tự</span></DevFooter>
     </div>
@@ -1056,6 +1090,7 @@ function CronPanel({ db }: { db: TaskPlannerDatabase }) {
       <DevToolbar>{toolbar(
         <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>5 lần chạy tiếp</button>
       )}<span style={{ marginLeft: 'auto', color: status ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{status ? `❌ ${status}` : parsed?.description || '5 trường: phút giờ ngày tháng ngày-tuần'}</span></DevToolbar>
+      <DevHelp>Nhập biểu thức cron 5 trường (phút, giờ, ngày, tháng, ngày-tuần), rồi bấm "5 lần chạy tiếp" để xem các lần chạy theo định dạng ISO.</DevHelp>
       <DevPanes inputLabel="BIỂU THỨC CRON" outputLabel="LẦN CHẠY (ISO)" input={input} output={output} inputAria="Cron expression" outputAria="Cron runs" inputPlaceholder="*/15 9 * * 1-5" onInput={onInput} />
       <DevFooter><span>Cron · tự implement, không dependency</span><span>Quét tối đa 4 năm</span></DevFooter>
     </div>
@@ -1092,14 +1127,15 @@ function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
     <div style={panelStyle}>
       <DevToolbar>{toolbar(
         <>
-          <select aria-label="Thuật toán" value={option || 'SHA-256'} onChange={(e) => { seqRef.current++; patchContent({ option: e.target.value, output: '', error: null }); }} style={selectStyle}>
+          <DevField label="Thuật toán"><select aria-label="Thuật toán" value={option || 'SHA-256'} onChange={(e) => { seqRef.current++; patchContent({ option: e.target.value, output: '', error: null }); }} style={selectStyle}>
             <option value="SHA-256">SHA-256</option><option value="SHA-384">SHA-384</option><option value="SHA-512">SHA-512</option>
-          </select>
+          </select></DevField>
           <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={runHash}>Hash</button>
-          <input aria-label="Số UUID" value={option2} onChange={(e) => patchContent({ option2: e.target.value })} placeholder="số UUID" style={{ ...toolBtnStyle, width: 80, cursor: 'text' }} />
+          <DevField label="Số lượng UUID (1–100)"><input aria-label="Số lượng UUID" value={option2} onChange={(e) => patchContent({ option2: e.target.value })} placeholder="1" style={{ ...toolBtnStyle, width: 56, cursor: 'text' }} /></DevField>
           <button type="button" className="utility-tool-btn" style={toolBtnStyle} onClick={makeUuid}>Tạo UUID</button>
         </>
       )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : 'Web Crypto · local'}</span></DevToolbar>
+      <DevHelp>Để hash: nhập text vào ô INPUT, chọn thuật toán rồi bấm Hash. Để tạo UUID: nhập số lượng (1–100) vào ô "Số lượng UUID" rồi bấm Tạo UUID — ô này CHỈ là số lượng, không phải nội dung cần hash.</DevHelp>
       <DevPanes inputLabel="INPUT" outputLabel="OUTPUT" input={input} output={output} inputAria="Hash input" outputAria="Hash output" inputPlaceholder="Dán text cần hash..." onInput={onInput} />
       <DevFooter><span>Hash chạy local qua Web Crypto · kết quả cũ bị bỏ khi input đổi</span><span>UUID 1–100</span></DevFooter>
     </div>
@@ -1108,20 +1144,30 @@ function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
 
 function JwtPanel({ db }: { db: TaskPlannerDatabase }) {
   const [content, patchContent, clearContent] = useUtilityContent('jwt_decoder');
-  const { input } = content;
-  const result = useMemo(() => decodeJwt(input), [input]);
-  const output = useMemo(() => (result.error ? '' : JSON.stringify({ header: result.header, payload: result.payload }, null, 2)), [result]);
-  const onInput = useCallback((value: string) => patchContent({ input: value, error: null }), [patchContent]);
+  const { input, output, error } = content;
+  const [statusText, setStatusText] = useState('Chưa chạy');
+  const run = useCallback(() => {
+    const result = decodeJwt(input.trim());
+    if (result.error) {
+      patchContent({ output: '', error: result.error });
+      setStatusText('Token không hợp lệ');
+      return;
+    }
+    patchContent({ output: JSON.stringify({ header: result.header, payload: result.payload }, null, 2), error: null });
+    setStatusText(result.expired === null ? 'Không có exp' : result.expired ? 'Hết hạn' : 'Còn hạn');
+  }, [input, patchContent]);
+  const onInput = useCallback((value: string) => patchContent({ input: value, output: '', error: null }), [patchContent]);
   const toolbar = useCommonToolbar('jwt_decoder', content, patchContent, clearContent, db, undefined, output);
-  const status = result.error;
-  const statusText = result.expired === null ? 'Không có exp' : result.expired ? 'Hết hạn' : 'Còn hạn';
   return (
     <div style={panelStyle}>
-      <DevToolbar>{toolbar()}<span style={{ marginLeft: 'auto', color: status ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{status ? `❌ ${status}` : `${result.issuedAt ? `iat ${result.issuedAt}` : 'Không có iat'} · ${result.expiresAt ? `exp ${result.expiresAt}` : 'Không có exp'}`}</span></DevToolbar>
+      <DevToolbar>{toolbar(
+        <button type="button" className="utility-tool-btn primary" style={toolPrimaryBtnStyle} onClick={run}>Chạy</button>
+      )}<span style={{ marginLeft: 'auto', color: error ? 'var(--danger, #d1484f)' : noteStyle.color, fontSize: noteStyle.fontSize }}>{error ? `❌ ${error}` : statusText}</span></DevToolbar>
 
       <div style={{ padding: '6px 14px', background: 'var(--warning-bg, #fff7e6)', color: 'var(--warning, #a56906)', fontSize: 'var(--font-size-small, 12px)', borderBottom: '1px solid var(--border, #e9eaee)' }}>
         ⚠ Chỉ decode — KHÔNG verify chữ ký. Không dùng để xác thực token.
       </div>
+      <DevHelp>Dán JWT (3 phần, cách nhau bằng dấu chấm) vào ô TOKEN rồi bấm Chạy để xem header và payload. Signature bị bỏ qua.</DevHelp>
       <DevPanes inputLabel="TOKEN" outputLabel="HEADER + PAYLOAD" input={input} output={output} inputAria="JWT token" outputAria="JWT decoded" inputPlaceholder="Dán JWT vào đây..." onInput={onInput} />
       <DevFooter><span>JWT · decode local, bỏ qua signature</span><span>{statusText}</span></DevFooter>
     </div>
