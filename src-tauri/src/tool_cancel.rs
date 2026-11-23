@@ -511,15 +511,16 @@ pub fn run_cancellable_remote_command(
                 loop {
                     match channel.wait_close() {
                         Ok(()) => break,
-                        // ssh2::Error converts to io::Error with EAGAIN/TIMEOUT mapped to
-                        // WouldBlock/TimedOut, which is exactly what the wake-up guard checks.
-                        Err(e) if is_wakeup_timeout(&std::io::Error::from(e)) => {
-                            if stdout_cancelled.load(Ordering::SeqCst) {
+                        Err(e) => {
+                            // ssh2::Error is not Clone and From<ssh2::Error> for io::Error
+                            // consumes it; a pattern guard cannot move the guard variable.
+                            // ssh2 maps EAGAIN/TIMEOUT to these exact messages in from_errno.
+                            let wakeup = matches!(e.message(), "operation would block" | "timed out");
+                            if !wakeup || stdout_cancelled.load(Ordering::SeqCst) {
                                 break;
                             }
                             continue;
                         }
-                        Err(_) => break,
                     }
                 }
                 channel.exit_status().unwrap_or(-1)
@@ -856,9 +857,9 @@ mod tests {
         // A wake-up timeout must be retried; otherwise a late close leaves exit_status
         // unavailable and the old unwrap_or(0) falsely reports success.
         assert!(
-            source.contains("Err(e) if is_wakeup_timeout(&e)") &&
+            source.contains("matches!(e.message()") &&
                 source.contains("channel.exit_status().unwrap_or(-1)"),
-            "close must retry wake-ups and unknown exit must stay -1"
+            "close must retry libssh2 wake-ups and unknown exit must stay -1"
         );
     }
 
