@@ -511,7 +511,9 @@ pub fn run_cancellable_remote_command(
                 loop {
                     match channel.wait_close() {
                         Ok(()) => break,
-                        Err(e) if is_wakeup_timeout(&e) => {
+                        // ssh2::Error converts to io::Error with EAGAIN/TIMEOUT mapped to
+                        // WouldBlock/TimedOut, which is exactly what the wake-up guard checks.
+                        Err(e) if is_wakeup_timeout(&std::io::Error::from(e)) => {
                             if stdout_cancelled.load(Ordering::SeqCst) {
                                 break;
                             }
