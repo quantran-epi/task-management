@@ -31,6 +31,7 @@ import {
   listSkills,
 } from '../../../db/repositories/aiOfficeRepo';
 import { ensureTeamThread, listInterruptedAssignments } from '../../../db/repositories/teamTranscriptRepo';
+import { getTeamChatDraft, setTeamChatDraft } from '../../../services/ai/office/teamChatDraftStore';
 import { getMessagesByThreadId } from '../../../db/repositories/chatRepo';
 import {
   getNineRouterApiKey,
@@ -177,7 +178,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraftState] = useState(() => getTeamChatDraft(team.id));
+  // Re-seed when the prop changes on the same instance (EditorArea keeps the tab mounted).
+  useEffect(() => setDraftState(getTeamChatDraft(team.id)), [team.id]);
+  // Stable identity: AiChatWidget is memoized; a raw React setter was already stable.
+  const setDraft = useCallback(
+    (next: string) => {
+      setDraftState(next);
+      setTeamChatDraft(team.id, next);
+    },
+    [team.id]
+  );
   // Bumped on every valid send so ChatMessageList pins the transcript to bottom after the
   // persisted user row arrives. Team chat passes onMessageRead, so its passive scroll is off.
   const [scrollTrigger, setScrollTrigger] = useState(0);
