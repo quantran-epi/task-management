@@ -441,17 +441,39 @@ export function extractJsonFromSqlclOutput(stdout: string): unknown {
   return stdout;
 }
 
+/** Canonicalize SQLcl item keys using the group's declared column names. */
+function normalizeSqlclRow(
+  row: Record<string, unknown>,
+  columns: readonly { name?: unknown }[] | undefined
+): Record<string, unknown> {
+  const declared = (columns ?? [])
+    .map((col) => (typeof col?.name === 'string' ? col.name : ''))
+    .filter(Boolean);
+  // SQLcl lowercases all JSON item keys. Every internal metadata query uses UPPERCASE
+  // aliases, so declared names win and uppercase is the fallback when a server omits metadata.
+  const canonical = new Map(declared.map((name) => [name.toLowerCase(), name]));
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    out[canonical.get(key.toLowerCase()) ?? key.toUpperCase()] = value;
+  }
+  return out;
+}
+
 /** SQLcl JSON comes as an array of row objects, or as `{ results: [{ items: [...] }] }`. */
 export function extractGridRows(parsed: unknown): Record<string, unknown>[] {
-  const asItems = (value: unknown): Record<string, unknown>[] =>
+  const asItems = (value: unknown, columns?: readonly { name?: unknown }[]): Record<string, unknown>[] =>
     Array.isArray(value)
-      ? value.filter((row): row is Record<string, unknown> => row !== null && typeof row === 'object')
+      ? value
+          .filter((row): row is Record<string, unknown> => row !== null && typeof row === 'object')
+          .map((row) => normalizeSqlclRow(row, columns))
       : [];
   if (Array.isArray(parsed)) return asItems(parsed);
   if (parsed && typeof parsed === 'object' && 'results' in parsed) {
     const groups = (parsed as { results?: unknown }).results;
     return Array.isArray(groups)
-      ? groups.flatMap((group: any) => asItems(group?.items))
+      ? groups.flatMap((group: any) =>
+          asItems(group?.items, Array.isArray(group?.columns) ? group.columns : undefined)
+        )
       : [];
   }
   return [];

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, InputNumber, Select, Spin, useMessage } from '../../components/ui';
+import { Alert, Button, InputNumber, Select, Spin, Table, useMessage } from '../../components/ui';
+import type { TableColumnsType } from '../../components/ui';
 import { CopyOutlined, DownloadOutlined, PlayCircleOutlined, StopOutlined } from '../../components/ui/icon';
-import { VirtualizedList } from '../virtual/VirtualizedList';
 import {
   assertReadOnlyQuery,
   assertSqlclSingleStatement,
@@ -12,10 +12,9 @@ import {
 import type { OracleConnectionSummary } from '../../types/oracleSqlcl';
 import { cancelToolCall } from '../../services/sshService';
 import { generateXlsxBlobFromGrid } from '../../utils/dynamicFileSandbox';
-import { saveFileWithPicker, sanitizeFilename } from '../../utils/fileExport';
+import { downloadBlob, sanitizeFilename } from '../../utils/fileExport';
 
-const ROW_HEIGHT = 28;
-const CELL_MAX_WIDTH = 460;
+type GridRecord = Record<string, unknown>;
 
 interface Result {
   columns: string[];
@@ -139,8 +138,8 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
       const filename = sanitizeFilename(
         `oracle_${name}_${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')}.xlsx`
       );
-      const saved = await saveFileWithPicker(filename, blob);
-      if (saved.saved) message.success('Đã xuất kết quả ra Excel.');
+      const downloaded = await downloadBlob(blob, filename);
+      if (downloaded.kind === 'download_initiated') message.success('Đã xuất kết quả ra Excel.');
     } catch (err: any) {
       setError(String(err?.message || 'Không xuất được Excel.'));
     }
@@ -151,28 +150,33 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
     [profiles]
   );
 
-  const gridRow = useCallback(
-    (row: unknown[], index: number) => (
-      <div
-        key={index}
-        role="row"
-        style={{ display: 'flex', height: ROW_HEIGHT, alignItems: 'center', borderBottom: '1px solid var(--border, #e9eaee)', fontSize: 'var(--font-size-small)' }}
-      >
-        <span style={{ width: 48, flexShrink: 0, color: 'var(--fg-muted)', paddingLeft: 6 }}>{index + 1}</span>
-        {row.map((cell, cellIndex) => (
-          <span
-            key={cellIndex}
-            role="cell"
-            title={String(cell ?? '')}
-            style={{ width: CELL_MAX_WIDTH / Math.max(1, result?.columns.length ?? 1), flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 6px', fontFamily: 'var(--font-mono, monospace)' }}
-          >
-            {cell === null || cell === undefined ? '' : String(cell)}
-          </span>
-        ))}
-      </div>
-    ),
-    [result]
-  );
+  const { tableData, tableColumns } = useMemo(() => {
+    if (!result?.columns.length) return { tableData: [] as GridRecord[], tableColumns: [] as TableColumnsType<GridRecord> };
+    const cellKey = (index: number) => `__c${index}`;
+    const data = result.rows.map((row, index) => {
+      const record: GridRecord = { __rowKey: index };
+      result.columns.forEach((_, colIndex) => { record[cellKey(colIndex)] = row[colIndex]; });
+      return record;
+    });
+    const columns: TableColumnsType<GridRecord> = [
+      {
+        title: '#',
+        dataIndex: '__rowKey',
+        key: '__rowKey',
+        width: 56,
+        fixed: 'left',
+        render: (value: unknown) => Number(value) + 1,
+      },
+      ...result.columns.map((col, index) => ({
+        title: col,
+        dataIndex: cellKey(index),
+        key: cellKey(index),
+        ellipsis: true,
+        render: (value: unknown) => (value === null || value === undefined ? '' : String(value)),
+      })),
+    ];
+    return { tableData: data, tableColumns: columns };
+  }, [result]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 'var(--gap-8)', padding: 'var(--gap-8)' }}>
@@ -255,26 +259,17 @@ export function OracleSqlComposer({ connectionId }: OracleSqlComposerProps) {
         </Button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', border: '1px solid var(--border, #e9eaee)' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {result?.columns.length ? (
-          <>
-            <div role="row" style={{ display: 'flex', height: ROW_HEIGHT, alignItems: 'center', background: 'var(--bg-elev, #f7f8fa)', fontWeight: 600, fontSize: 'var(--font-size-small)' }}>
-              <span style={{ width: 48, flexShrink: 0 }} />
-              {result.columns.map((col) => (
-                <span key={col} style={{ width: CELL_MAX_WIDTH / result.columns.length, flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 6px' }}>
-                  {col}
-                </span>
-              ))}
-            </div>
-            <VirtualizedList
-              items={result.rows}
-              estimateSize={() => ROW_HEIGHT}
-              renderItem={gridRow}
-              height="calc(100% - 28px)"
-              role="grid"
-              aria-label="Kết quả truy vấn Oracle"
-            />
-          </>
+          <Table<GridRecord>
+            size="small"
+            rowKey="__rowKey"
+            columns={tableColumns}
+            dataSource={tableData}
+            pagination={{ pageSize: 100, showSizeChanger: false }}
+            scroll={{ x: 'max-content', y: 'calc(100vh - 420px)' }}
+            aria-label="Kết quả truy vấn Oracle"
+          />
         ) : null}
       </div>
     </div>

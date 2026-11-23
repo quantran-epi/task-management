@@ -23,7 +23,7 @@ vi.mock('../../services/sshService', async (importOriginal) => {
 });
 
 vi.mock('../../utils/fileExport', () => ({
-  saveFileWithPicker: vi.fn(async () => ({ saved: true })),
+  downloadBlob: vi.fn(async () => ({ kind: 'download_initiated', filename: 'out.xlsx' })),
   sanitizeFilename: (name: string) => name.replace(/[\\/:*?"<>|]/g, '_'),
 }));
 
@@ -60,6 +60,18 @@ describe('OracleSqlComposer safety', () => {
     const callId = (oracleService.executeOracleQuery as any).mock.calls[0]?.[2] as string;
     expect(callId).toMatch(/^[0-9a-f-]{36}$/);
     await waitFor(() => expect(screen.getByText('2 dòng · 5 ms')).toBeDefined());
-    expect(screen.getByRole('grid')).toBeDefined();
+    expect(screen.getAllByRole('table').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('ID').length).toBeGreaterThan(0);
+  });
+
+  it('exports Excel via browser download, never a filesystem save', async () => {
+    const fileExport = await import('../../utils/fileExport');
+    render(<OracleSqlComposer />);
+    fireEvent.click(screen.getByRole('button', { name: /Chạy/i }));
+    await waitFor(() => expect(screen.getAllByRole('table').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /Xuất Excel/i }));
+    await waitFor(() => expect(fileExport.downloadBlob).toHaveBeenCalled());
+    const blobArg = (fileExport.downloadBlob as any).mock.calls[0][0];
+    expect(blobArg).toBeInstanceOf(Blob);
   });
 });

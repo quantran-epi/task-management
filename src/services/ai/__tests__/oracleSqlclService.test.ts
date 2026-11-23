@@ -4,6 +4,7 @@ import {
   assertReadOnlyQuery,
   applyQueryLimit,
   extractJsonFromSqlclOutput,
+  extractGridRows,
   extractOracleError,
   executeOracleQuery,
   executeOracleDescribe,
@@ -192,6 +193,24 @@ Disconnected from Oracle Database.
     const config = { sshConfigId: 'ssh-1', connectionString: 'hr/s3cret@dbhost:1521/SRV' };
     expect(redactOracleText('ORA-01017: hr/s3cret@dbhost:1521/SRV failed s3cret', config)).not.toContain('s3cret');
     expect(redactOracleText('login as /s3cret@dbhost failed', config)).not.toContain('s3cret');
+  });
+
+  it('normalizes lowercase SQLcl result keys to declared column names', () => {
+    const payload = {
+      results: [{
+        columns: [{ name: 'USERNAME' }, { name: 'OBJECT_NAME' }],
+        items: [{ username: 'HR', object_name: 'EMPLOYEES' }],
+      }],
+    };
+    const rows = extractGridRows(payload);
+    expect(rows).toEqual([{ USERNAME: 'HR', OBJECT_NAME: 'EMPLOYEES' }]);
+    expect(buildOracleGrid(payload).columns).toEqual(['USERNAME', 'OBJECT_NAME']);
+  });
+
+  it('uppercases lowercase SQLcl result keys when column metadata is absent', () => {
+    expect(extractGridRows({ results: [{ items: [{ username: 'HR' }] }] })).toEqual([
+      { USERNAME: 'HR' },
+    ]);
   });
 
   it('buildOracleGrid caps rows, cells and payload', () => {

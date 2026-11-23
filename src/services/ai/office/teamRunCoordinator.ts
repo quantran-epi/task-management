@@ -1502,6 +1502,30 @@ export function createTeamRunCoordinator(
   }
 
   /**
+   * Fallback for a missing live push: re-read the exact same linked-system source the
+   * workspace uses. Only a single unambiguous usable system is auto-selected; ambiguity
+   * stays unresolved and must be answered by the user in chat.
+   */
+  async function hydrateWorktreeTargetFromLinks(): Promise<void> {
+    // No guard: this runs only when there is NO target at all, so there is no live
+    // worktree identity to swap underneath a running verb.
+    try {
+      const usable = (await listLinkedSystems(teamId, db)).filter(
+        (row) => row.sshConfigId && row.remoteRepoPath
+      );
+      if (usable.length !== 1) return;
+      const row = usable[0]!;
+      const target = { sshConfigId: row.sshConfigId!, remoteRepoPath: row.remoteRepoPath! };
+      // Assign directly: setAgentDeveloperWorktree refuses while the developer is running,
+      // but a missing target means no live worktree exists to protect from a swap.
+      currentWorktreeTarget = target;
+      options.onAgentDeveloperWorktreeSet?.(target);
+    } catch {
+      // A transient DB read failure must not create a target; the truthful refusal stays.
+    }
+  }
+
+  /**
    * 261121-s4k CR-01: never swap a worktree under a running verb. Runtime state is the
    * authority (the same liveness check `send` uses), not the ledger or a stale descriptor.
    */
@@ -1543,6 +1567,13 @@ export function createTeamRunCoordinator(
   async function provisionAgentSession(agentId: string): Promise<void> {
     if (agentId !== developerAgentId()) return;
     if (provisionedWorktrees.has(agentId)) return;
+    // 261123: the live push from the workspace can legitimately be absent for one turn
+    // (mount ordering, a live-query tick, a transient resolver read). Re-resolve from the
+    // SAME linked-system source before refusing, so a system that IS configured in
+    // Settings > Hệ thống never reports WORKTREE_NOT_AVAILABLE for want of a push.
+    if (!currentWorktreeTarget?.sshConfigId || !currentWorktreeTarget.remoteRepoPath) {
+      await hydrateWorktreeTargetFromLinks();
+    }
     const target = currentWorktreeTarget;
     if (!target?.sshConfigId || !target.remoteRepoPath) {
       throw new LocalWorktreeError(

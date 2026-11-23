@@ -3046,6 +3046,32 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         expect(bubble?.kind).toBe('report');
       });
 
+      it('re-resolves a configured linked system before refusing for a missing target', async () => {
+        const targetCalls: Array<{ sshConfigId: string; remoteRepoPath: string } | undefined> = [];
+        harness = await createHarness({
+          scripts: {
+            [EMP_D_MODEL]: async () => loopResult('should never run'),
+          },
+          agentDeveloperWorktree: { sshConfigId: 'ssh-missing-config', remoteRepoPath: '' },
+          linkedSystems: [
+            { name: 'Core', code: 'CORE', sshConfigId: 'ssh-core', remoteRepoPath: '/srv/core' },
+          ],
+          onAgentDeveloperWorktreeSet: (target) => { targetCalls.push(target); },
+        });
+        const current = harness;
+        const developerId = developerOf(current).id;
+
+        // No construction-time target. The coordinator must re-read the single linked
+        // system with SSH + repo path instead of reporting an unconfigured worktree.
+        await current.coordinator.send('@[Agent Developer](agent:' + developerId + ') sửa giúp lỗi').catch(() => {});
+        expect(targetCalls).toContainEqual({ sshConfigId: 'ssh-core', remoteRepoPath: '/srv/core' });
+        const messages = await current.db.chatMessages
+          .where('threadId')
+          .equals(current.threadId)
+          .toArray();
+        expect(messages.some((row) => row.content.includes(LOCAL_MARKER))).toBe(false);
+      });
+
       it('resolves an ambiguity answer to a catalog row before the next turn (CR-01)', async () => {
         const targetCalls: Array<{ sshConfigId: string; remoteRepoPath: string } | undefined> = [];
         const ambiguityCalls: Array<readonly string[]> = [];

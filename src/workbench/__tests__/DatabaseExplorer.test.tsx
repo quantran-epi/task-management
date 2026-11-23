@@ -36,8 +36,8 @@ vi.mock('../../services/ai/oracleSqlclService', async (importOriginal) => {
         action: args.action,
         data:
           args.action === 'list_schemas'
-            ? [{ USERNAME: 'HR' }]
-            : [{ OWNER: 'HR', OBJECT_NAME: 'EMPLOYEES', OBJECT_TYPE: 'TABLE' }],
+            ? [{ username: 'HR' }]
+            : [{ owner: 'HR', object_name: 'EMPLOYEES', object_type: 'TABLE' }],
       })
     ),
   };
@@ -125,6 +125,20 @@ describe('Database Explorer workbench shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /SQL Composer/i }));
     const composer = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'oracle_sql_composer');
     expect(composer?.params).toMatchObject({ composerId: 'composer:active' });
+  });
+
+  it('renders schema and object names from lowercase SQLcl result keys', async () => {
+    // The default mock above already returns lowercase keys, matching real SQLcl output.
+    render(<DatabaseExplorer />);
+    await waitFor(() => expect(screen.getByText('Main SIT (SIT)')).toBeDefined());
+    fireEvent.click(screen.getByText('Main SIT (SIT)').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(screen.getByText('HR')).toBeDefined());
+    const schema = screen.getByText('HR').closest('.ant-tree-treenode')!;
+    fireEvent.click(schema.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(screen.getByText('TABLE')).toBeDefined());
+    const type = screen.getByText('TABLE').closest('.ant-tree-treenode')!;
+    fireEvent.click(type.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(screen.getByText('EMPLOYEES')).toBeDefined());
   });
 
   it('renders object/composer tabs in the center editor and keeps two objects independent', () => {
