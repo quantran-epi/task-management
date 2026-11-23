@@ -500,7 +500,14 @@ pub fn run_cancellable_remote_command(
             }
 
             let was_cancelled = stdout_cancelled.load(Ordering::SeqCst);
-            let exit_status = if was_cancelled { -1 } else { channel.exit_status().unwrap_or(0) };
+            let exit_status = if was_cancelled {
+                -1
+            } else {
+                // libssh2 only delivers the real exit-status packet after the channel closes.
+                // Reading it first reports -1 even when stdout carried valid data.
+                let _ = channel.wait_close();
+                channel.exit_status().unwrap_or(0)
+            };
             let _ = tx.send(Chunk::ReaderExited {
                 exit_status,
                 cancelled: was_cancelled,
@@ -808,6 +815,28 @@ mod tests {
             .0;
         assert!(!outer.contains('\''));
         assert!(outer.contains(&format!("echo {PGID_LINE_PREFIX}$$; exec sh -c")));
+    }
+
+    #[test]
+    fn reader_waits_for_channel_close_before_reading_exit_status() {
+        // Source guard: libssh2 only exposes the real exit status after wait_close. Reading
+        // exit_status first turns a successful remote command into a false -1 failure.
+        let source = include_str!("tool_cancel.rs");
+        let cancelled_marker = "let was_cancelled = stdout_cancelled.load(Ordering::SeqCst);";
+        let start = source
+            .find(cancelled_marker)
+            .expect("cancelled marker in reader branch");
+        let tail = &source[start..];
+        let wait_close = tail
+            .find("channel.wait_close()")
+            .expect("wait_close before exit_status in the reader branch");
+        let exit_status = tail
+            .find("channel.exit_status()")
+            .expect("exit_status in the reader branch");
+        assert!(
+            wait_close < exit_status,
+            "wait_close() must precede exit_status() on the non-cancelled path"
+        );
     }
 
     #[test]

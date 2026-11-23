@@ -494,8 +494,33 @@ const AMENDED_REPORT_COPY =
  * D-17/T-37-07: the ONLY carrier of raw error detail. It reaches `diagnosticDetail` on the
  * assignment row and nothing else — never `content`, a `ChatMessage`, or the backup.
  */
-function boundedDiagnostic(err: unknown): string {
-  return err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 300) : 'unknown';
+export function boundedDiagnostic(err: unknown): string {
+  let text: string;
+  if (err instanceof Error) {
+    text = `${err.name}: ${err.message}`;
+  } else if (typeof err === 'string') {
+    text = err;
+  } else if (err !== null && typeof err === 'object') {
+    // Tauri invoke rejections are plain objects, not Error instances. Pull the useful fields
+    // JSON-safely so a circular/unserializable extra field cannot throw inside the error path.
+    const obj = err as Record<string, unknown>;
+    const name = typeof obj.name === 'string' ? obj.name : '';
+    const code = typeof obj.code === 'string' ? obj.code : '';
+    const message = typeof obj.message === 'string' ? obj.message : jsonStringifySafe(err);
+    const prefix = [name, code].filter(Boolean).join('/');
+    text = prefix ? `${prefix}: ${message}` : message;
+  } else {
+    text = String(err);
+  }
+  return text.slice(0, 300);
+}
+
+function jsonStringifySafe(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
 }
 
 /**
@@ -503,9 +528,21 @@ function boundedDiagnostic(err: unknown): string {
  * thrown by our own provisioning sites is truthful; matching provider text by marker would let
  * untrusted provider copy reach `content`.
  */
-function truthfulLocalReport(err: unknown): string | undefined {
-  if (!(err instanceof LocalWorktreeError)) return undefined;
-  return `Không thể chuẩn bị môi trường làm việc: ${err.message}`.slice(0, 300);
+export function truthfulLocalReport(err: unknown): string | undefined {
+  // A genuine Error from a provider (even one echoing the local code in its text) is never
+  // trusted — only our own error class or a plain rejection object with the app-owned code.
+  if (err instanceof LocalWorktreeError) {
+    return `Không thể chuẩn bị môi trường làm việc: ${err.message}`.slice(0, 300);
+  }
+  if (err instanceof Error) return undefined;
+  if (err === null || typeof err !== 'object') return undefined;
+  const obj = err as Record<string, unknown>;
+  const message = typeof obj.message === 'string' ? obj.message : '';
+  const isLocalCode = obj.code === 'WORKTREE_NOT_AVAILABLE';
+  const hasLocalText = message.includes('WORKTREE_NOT_AVAILABLE');
+  if (!isLocalCode && !hasLocalText) return undefined;
+  const text = message || (isLocalCode ? 'WORKTREE_NOT_AVAILABLE' : '');
+  return `Không thể chuẩn bị môi trường làm việc: ${text}`.slice(0, 300);
 }
 
 const PLAN_REJECTED = JSON.stringify({
@@ -1516,7 +1553,10 @@ export function createTeamRunCoordinator(
     if (provisionedWorktrees.has(agentId)) return;
     const target = currentWorktreeTarget;
     if (!target?.sshConfigId || !target.remoteRepoPath) {
-      throw new LocalWorktreeError('WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.');
+      throw new LocalWorktreeError(
+        'WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer. ' +
+        'Mở Cài đặt > Hệ thống, chọn hệ thống được liên kết (trực tiếp hoặc qua CR) và điền SSH config + đường dẫn repo remote.'
+      );
     }
     const config = await getSshConfigById(target.sshConfigId, db);
     if (!config) {

@@ -5,11 +5,13 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../../../src/db/index';
 import {
   abortAllAssignmentControllers,
+  boundedDiagnostic,
   createTeamRunCoordinator,
   DEFAULT_SETTLE_POLL_DEADLINE_MS,
   EMPLOYEE_AMEND_REFUSAL,
   resolveTeamToolName,
   STOPPED_REPORT_COPY,
+  truthfulLocalReport,
   type TeamRunCoordinator,
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
@@ -2984,6 +2986,24 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         const report = rows.find((row) => row.agentId === current.employees[0]!.id && row.messageKind === 'report');
         expect(report?.content).toBe(SANITIZED_TURN_ERROR);
         expect(report?.content).not.toContain(LOCAL_MARKER);
+      });
+
+      it('trusts a plain-object local worktree rejection but never a provider Error with the same wording', () => {
+        // 261123-et1: Tauri-style rejections are plain objects. The app-owned code makes them
+        // truthful; a genuine Error from a provider stays sanitized even with the same words.
+        const plain = {
+          message: 'WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.',
+          code: 'WORKTREE_NOT_AVAILABLE',
+        };
+        expect(truthfulLocalReport(plain)).toContain('Không thể chuẩn bị môi trường làm việc:');
+        expect(truthfulLocalReport(plain)).toContain(LOCAL_MARKER);
+        expect(boundedDiagnostic(plain)).toContain('WORKTREE_NOT_AVAILABLE:');
+        expect(boundedDiagnostic(plain)).not.toBe('unknown');
+
+        const providerError = Object.assign(new Error(plain.message), { name: 'APIError' });
+        expect(truthfulLocalReport(providerError)).toBeUndefined();
+        expect(boundedDiagnostic('lỗi kết nối nhà cung cấp AI')).toBe('lỗi kết nối nhà cung cấp AI');
+        expect(boundedDiagnostic(null)).toBe('null');
       });
 
       it('addresses a provisioning failure to the peer that sent the message (WR-03)', async () => {
