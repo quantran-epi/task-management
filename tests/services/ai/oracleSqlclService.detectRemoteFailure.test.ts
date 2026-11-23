@@ -11,9 +11,22 @@ describe('detectRemoteFailure — unreliable -1 exit (261123-et1)', () => {
   it('lets stdout parse when -1 is the only negative signal', () => {
     const stdout = 'COL\n---\n42\n';
     expect(detectRemoteFailure({ stdout, stderr: '', exitStatus: -1 }, config)).toBeNull();
+    // A definite reader/cancel finish is independent evidence and must not be suppressed.
     expect(
       detectRemoteFailure({ stdout, stderr: '', exitStatus: -1, finishReason: 'error' }, config)
-    ).toBeNull();
+    ).toBeTruthy();
+  });
+
+  it('fails on a real reader error even when stdout carried data', () => {
+    const readerError = 'Lỗi đọc stdout: connection reset';
+    for (const exitStatus of [-1, 0]) {
+      expect(
+        detectRemoteFailure(
+          { stdout: 'COL\n---\n42\n', stderr: readerError, exitStatus, finishReason: 'error' },
+          config
+        )
+      ).toContain('Lỗi đọc stdout');
+    }
   });
 
   it('still fails on a real nonzero exit even with stdout data', () => {

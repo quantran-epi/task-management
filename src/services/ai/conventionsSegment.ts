@@ -1,11 +1,14 @@
+import { wrapUntrusted } from './untrustedData';
+
 /**
  * Shared convention framing for organization and repository rules in chat prompts.
  *
- * 261123-et1: global conventions and the per-team pin are authored deliberately by the user
- * as standing instructions — they are trusted prompt instructions, NOT retrieved data. Read-only
+ * 261123-et1: global conventions (Settings) and the per-team pin are authored deliberately by
+ * the user as standing instructions — trusted prompt instructions, NOT retrieved data. Repo
+ * conventions are read from CONVENTIONS.md over SSH and remain wrapped as untrusted. Read-only
  * and safety policy are enforced in code by the tool handlers, so trusting a pin never grants
- * write permission. Retrieved data (skill body, doc chunks, transcript) still uses
- * `wrapUntrusted()` unchanged.
+ * write permission. Other retrieved data (skill body, doc chunks, transcript) likewise still
+ * uses `wrapUntrusted()`.
  */
 export const CONVENTIONS_CONFLICT_POLICY = [
   'NGUYÊN TẮC XỬ LÝ XUNG ĐỘT QUY ƯỚC BẮT BUỘC:',
@@ -57,13 +60,15 @@ export function buildConventionsSegment(conventions?: {
       const header = r.repoPath
         ? `[REPOSITORY CONVENTIONS - ${r.systemCode} (${r.repoPath})]`
         : `[REPOSITORY CONVENTIONS - ${r.systemCode}]`;
-      parts.push(`${header}\n` + r.content.trim());
+      // Repo CONVENTIONS.md is retrieved from SSH, not authored in Settings. It stays
+      // untrusted data; only the global setting above is a standing trusted instruction.
+      parts.push(wrapUntrusted(header, r.content.trim()));
     }
   } else if (repoText) {
     const header = conventions?.repoPath
       ? `[REPOSITORY CONVENTIONS - ${conventions.repoPath}]`
       : '[REPOSITORY CONVENTIONS]';
-    parts.push(`${header}\n` + repoText);
+    parts.push(wrapUntrusted(header, repoText));
   }
 
   parts.push('[HẾT QUY ƯỚC TỔ CHỨC]');

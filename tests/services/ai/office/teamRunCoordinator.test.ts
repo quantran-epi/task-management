@@ -2988,15 +2988,15 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
         expect(report?.content).not.toContain(LOCAL_MARKER);
       });
 
-      it('trusts a plain-object local worktree rejection but never a provider Error with the same wording', () => {
-        // 261123-et1: Tauri-style rejections are plain objects. The app-owned code makes them
-        // truthful; a genuine Error from a provider stays sanitized even with the same words.
+      it('never trusts a plain-object rejection even with a local-looking code, but still records its diagnostic', () => {
+        // Trust is by provenance (LocalWorktreeError from provisionWorktree), not by shape.
+        // A provider/MCP rejection echoing our code must stay sanitized in the bubble while
+        // its technical detail remains available in diagnosticDetail.
         const plain = {
           message: 'WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer.',
           code: 'WORKTREE_NOT_AVAILABLE',
         };
-        expect(truthfulLocalReport(plain)).toContain('Không thể chuẩn bị môi trường làm việc:');
-        expect(truthfulLocalReport(plain)).toContain(LOCAL_MARKER);
+        expect(truthfulLocalReport(plain)).toBeUndefined();
         expect(boundedDiagnostic(plain)).toContain('WORKTREE_NOT_AVAILABLE:');
         expect(boundedDiagnostic(plain)).not.toBe('unknown');
 

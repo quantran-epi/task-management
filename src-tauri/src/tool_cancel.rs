@@ -504,9 +504,23 @@ pub fn run_cancellable_remote_command(
                 -1
             } else {
                 // libssh2 only delivers the real exit-status packet after the channel closes.
-                // Reading it first reports -1 even when stdout carried valid data.
-                let _ = channel.wait_close();
-                channel.exit_status().unwrap_or(0)
+                // The tool session uses a 250ms wake-up socket timeout, so EAGAIN here is a
+                // poll tick, not a command failure — retry until close or a real transport
+                // error. If close never completes, keep -1 as "unknown" instead of claiming
+                // success from unwrap_or(0).
+                loop {
+                    match channel.wait_close() {
+                        Ok(()) => break,
+                        Err(e) if is_wakeup_timeout(&e) => {
+                            if stdout_cancelled.load(Ordering::SeqCst) {
+                                break;
+                            }
+                            continue;
+                        }
+                        Err(_) => break,
+                    }
+                }
+                channel.exit_status().unwrap_or(-1)
             };
             let _ = tx.send(Chunk::ReaderExited {
                 exit_status,
@@ -836,6 +850,13 @@ mod tests {
         assert!(
             wait_close < exit_status,
             "wait_close() must precede exit_status() on the non-cancelled path"
+        );
+        // A wake-up timeout must be retried; otherwise a late close leaves exit_status
+        // unavailable and the old unwrap_or(0) falsely reports success.
+        assert!(
+            source.contains("Err(e) if is_wakeup_timeout(&e)") &&
+                source.contains("channel.exit_status().unwrap_or(-1)"),
+            "close must retry wake-ups and unknown exit must stay -1"
         );
     }
 

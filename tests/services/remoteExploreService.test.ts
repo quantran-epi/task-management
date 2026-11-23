@@ -322,6 +322,18 @@ describe('runRemoteExplore (43-04 D-03)', () => {
     resetRemoteClaudeProbeCache();
   });
 
+  it('retries an unknown (-1) probe instead of reporting the CLI as missing', async () => {
+    resetRemoteClaudeProbeCache();
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitStatus: -1 })
+      .mockResolvedValueOnce({ stdout: '', stderr: '', exitStatus: 0 });
+
+    expect(await probeRemoteClaude(CONFIG, undefined, { exec })).toBe(true);
+    expect(exec).toHaveBeenCalledTimes(2);
+    resetRemoteClaudeProbeCache();
+  });
+
   it('caps an oversized stderr detail on a failed run', async () => {
     const stream = vi.fn(
       async (

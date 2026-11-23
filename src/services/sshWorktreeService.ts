@@ -75,13 +75,20 @@ export async function provisionWorktree(params: ProvisionWorktreeParams): Promis
     throw new LocalWorktreeError('Tính năng SSH worktree chỉ hoạt động trên môi trường Desktop Tauri.');
   }
   const { invoke } = await import('@tauri-apps/api/core');
-  return invoke<WorktreeDescriptor>('ssh_worktree_provision', {
-    config: params.config ?? null,
-    secret: params.secret ?? null,
-    remoteRepoPath: params.remoteRepoPath.trim().replace(/\/+$/, ''),
-    sessionKey: params.sessionKey,
-    baseRef: params.baseRef ?? null,
-  });
+  try {
+    return await invoke<WorktreeDescriptor>('ssh_worktree_provision', {
+      config: params.config ?? null,
+      secret: params.secret ?? null,
+      remoteRepoPath: params.remoteRepoPath.trim().replace(/\/+$/, ''),
+      sessionKey: params.sessionKey,
+      baseRef: params.baseRef ?? null,
+    });
+  } catch (err) {
+    // Only this app-owned boundary is allowed to classify a provisioning rejection as local
+    // and truthful. Provider/MCP errors elsewhere never pass through here.
+    const detail = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+    throw new LocalWorktreeError(detail || 'WORKTREE_NOT_AVAILABLE: không thể chuẩn bị worktree SSH.');
+  }
 }
 
 // -------------------------------------------------------------------------------------------------

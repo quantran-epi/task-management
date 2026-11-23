@@ -304,15 +304,21 @@ export async function probeRemoteClaude(
   if (cached) return true;
 
   const exec = deps?.exec ?? execRemoteCommand;
-  const res = await withSshTransportRetry(
-    () => exec(config, 'command -v claude >/dev/null 2>&1', secret),
-    deps
-  );
-  const available = res.exitStatus === 0;
-  // A transport failure throws above and is deliberately NOT cached — it says nothing about
-  // whether the CLI is installed.
-  if (available) probeCache.add(config.id);
-  return available;
+  // -1 is libssh2's "exit status unknown" signal, not a shell exit code. Treating it as a
+  // negative probe used to produce the false "CLI not installed" refusal for healthy hosts.
+  // Retry the read-only probe; a transport failure throws above and is deliberately not cached.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const res = await withSshTransportRetry(
+      () => exec(config, 'command -v claude >/dev/null 2>&1', secret),
+      deps
+    );
+    if (res.exitStatus === 0) {
+      probeCache.add(config.id);
+      return true;
+    }
+    if (res.exitStatus !== -1) return false;
+  }
+  return false;
 }
 
 export interface RunRemoteExploreDeps {

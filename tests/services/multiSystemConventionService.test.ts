@@ -225,13 +225,13 @@ describe('multiSystemConventionService and prompt composer', () => {
         ],
       });
 
-      expect(segment).toContain('[QUY ƯỚC TỔ CHỨC — DỮ LIỆU KHÔNG TIN CẬY]');
+      expect(segment).toContain('[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]');
       expect(segment).toContain(CONVENTIONS_CONFLICT_POLICY);
       expect(segment).toContain('[GLOBAL CONVENTIONS - QUY ƯỚC CHUNG TỔ CHỨC]');
       expect(segment).toContain('# Global standards');
-      expect(segment).toContain('[REPOSITORY CONVENTIONS - PAY-GW (/var/repos/payment-gateway)]');
+      expect(segment).toContain('REPOSITORY CONVENTIONS - PAY-GW (/var/repos/payment-gateway)');
       expect(segment).toContain('# Payment rules');
-      expect(segment).toContain('[REPOSITORY CONVENTIONS - ORDER-SVC (/var/repos/order-service)]');
+      expect(segment).toContain('REPOSITORY CONVENTIONS - ORDER-SVC (/var/repos/order-service)');
       expect(segment).toContain('# Order rules');
       expect(segment).toContain('[HẾT QUY ƯỚC TỔ CHỨC]');
     });
@@ -243,7 +243,7 @@ describe('multiSystemConventionService and prompt composer', () => {
         repoPath: '/var/repos/single',
       });
 
-      expect(segment).toContain('[REPOSITORY CONVENTIONS - /var/repos/single]');
+      expect(segment).toContain('REPOSITORY CONVENTIONS - /var/repos/single');
       expect(segment).toContain('# Single repo conventions');
     });
   });

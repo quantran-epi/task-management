@@ -529,20 +529,12 @@ function jsonStringifySafe(value: unknown): string {
  * untrusted provider copy reach `content`.
  */
 export function truthfulLocalReport(err: unknown): string | undefined {
-  // A genuine Error from a provider (even one echoing the local code in its text) is never
-  // trusted — only our own error class or a plain rejection object with the app-owned code.
+  // PROVENANCE, not shape: only our own typed error may reach the bubble. A provider/MCP
+  // rejection that happens to carry the same code/text must stay sanitized.
   if (err instanceof LocalWorktreeError) {
     return `Không thể chuẩn bị môi trường làm việc: ${err.message}`.slice(0, 300);
   }
-  if (err instanceof Error) return undefined;
-  if (err === null || typeof err !== 'object') return undefined;
-  const obj = err as Record<string, unknown>;
-  const message = typeof obj.message === 'string' ? obj.message : '';
-  const isLocalCode = obj.code === 'WORKTREE_NOT_AVAILABLE';
-  const hasLocalText = message.includes('WORKTREE_NOT_AVAILABLE');
-  if (!isLocalCode && !hasLocalText) return undefined;
-  const text = message || (isLocalCode ? 'WORKTREE_NOT_AVAILABLE' : '');
-  return `Không thể chuẩn bị môi trường làm việc: ${text}`.slice(0, 300);
+  return undefined;
 }
 
 const PLAN_REJECTED = JSON.stringify({

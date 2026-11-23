@@ -567,14 +567,11 @@ export function detectRemoteFailure(
   const unknownExit = res.exitStatus === -1;
   const nonZeroExit = typeof res.exitStatus === 'number' && res.exitStatus !== 0 && !unknownExit;
   const badFinish = res.finishReason === 'error' || res.finishReason === 'cancelled';
-  // 261123-et1: -1 means "unreliable" (libssh2 often reports it before wait_close). When
-  // stdout carries data and the only negative signal is that unknown exit, let the caller
-  // parse stdout rather than turning a successful query into a false failure.
-  // finishReason 'error' can come solely from the reader error that produced the -1, so it
-  // is not an independent negative signal here; an explicit cancel always is.
-  const onlyReaderError = res.finishReason === undefined || res.finishReason === 'error';
+  // 261123-et1: -1 means "exit status unknown" (late/closed SSH channel). It alone must not
+  // discard valid stdout. A real `error`/`cancelled` finishReason is an independent negative
+  // signal — a mid-stream reader disconnect can leave partial stdout — so keep failing then.
   const unreliableExitWithData =
-    unknownExit && Boolean(stdout) && !stderr && onlyReaderError;
+    unknownExit && Boolean(stdout) && !stderr && res.finishReason === undefined;
   // Empty stdout WITH stderr content on an otherwise-ok exit is a silent shell/sqlcl failure
   // (e.g. `sql: command not found` written to stderr). Empty stdout alone may be a valid 0-row
   // result, so it is not by itself an error.
