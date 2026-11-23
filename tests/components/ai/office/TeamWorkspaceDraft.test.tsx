@@ -7,7 +7,7 @@ import type { AiTeam } from '../../../../src/types/aiOffice';
 import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 import { getTeamChatDraft, clearTeamChatDraft } from '../../../../src/services/ai/office/teamChatDraftStore';
 
-const sendMock = vi.fn(async () => 'started' as const);
+const sendMock = vi.fn(async (_text: string): Promise<'started' | 'blocked'> => 'started');
 
 vi.mock('../../../../src/components/ai/AiChatWidget', () => ({
   AiChatWidget: ({ draft, onDraftChange, onSubmit }: {
@@ -46,7 +46,7 @@ vi.mock('../../../../src/services/ai/office/teamRunCoordinator', async (importOr
   return {
     ...actual,
     createTeamRunCoordinator: vi.fn(() => ({
-      send: (...args: unknown[]) => sendMock(...args),
+      send: async (text: string) => sendMock(text),
       stopAgent: vi.fn(),
       abortAll: vi.fn(),
       resolvePlan: vi.fn(),
@@ -132,7 +132,8 @@ describe('TeamWorkspace chat draft survives tab remount', () => {
   });
 
   it('restores the text to the store when the coordinator blocks the send', async () => {
-    sendMock.mockResolvedValue('blocked');
+    // A blocked coordinator outcome restores the draft rather than clearing it.
+    sendMock.mockResolvedValueOnce('blocked');
     const first = renderWorkspace(team);
     fireEvent.change(await screen.findByTestId('draft-input'), { target: { value: 'Giữ lại khi blocked' } });
     fireEvent.click(screen.getByTestId('send'));
