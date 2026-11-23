@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-22 -- Completed quick task 261122-w9j: developer utility tools expansion
+Last activity: 2026-11-23 - Completed quick task 261123-et1: draft team chat, trusted conventions, SSH/SQLcl diagnostics
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -120,6 +120,7 @@ Progress: [█████████░] 91%
 | 261122-ut7 | Verify and fix 4 code-review findings in TS team/AI workspace | 2026-11-22 | 40e04955, d3aeef22 | [261122-ut7-verify-and-fix-4-code-review-findings-in](./quick/261122-ut7-verify-and-fix-4-code-review-findings-in/) |
 | 261122-ut4 | Verify three Rust tool-cancellation review findings | 2026-11-22 | b8def166, ab0f0882, 79fe6f95 | [261122-ut4-verify-three-rust-tool-cancellation-revi](./quick/261122-ut4-verify-three-rust-tool-cancellation-revi/) |
 | 261122-w9j | Mở rộng Tool Explorer với 8 tool dev (encoder, regex, timestamp, date, text, cron, hash/UUID, JWT), AI context-aware, fix review findings | 2026-11-22 | 7234ce4b, 89b072f9, 9b216486, 1fbed59e | [261122-w9j-developer-utility-tools-expansion](./quick/261122-w9j-developer-utility-tools-expansion/) |
+| 261123-et1 | Draft team chat theo conversation, pin/global convention thành trusted instruction, fixes diagnostics/SQLcl | 2026-11-23 | cf04a416, 4d4be556, 85020d1f, 81378439, 7ddb93e7 | [261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo](./quick/261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo/) |
 
 ## Accumulated Context
 
