@@ -47,14 +47,14 @@ export interface BuildEmployeeTurnRequestInput {
   batchResults?: readonly BatchResult[] | undefined;
   /**
    * Org-wide conventions segment, built by the coordinator from `getGlobalConventions()` via
-   * `buildConventionsSegment()` (already framed as untrusted data with the conflict policy).
+   * `buildConventionsSegment()` (framed as trusted instruction with the conflict policy).
    * teamPrompts stays pure: it never reads the DB itself.
    */
   conventionsSegment?: string | undefined;
   /**
-   * Phase 45 D-16/D-17: per-team pinned context, already framed by the coordinator via
-   * `buildPinnedContextSegment()` as untrusted data with a safety-override negation. The
-   * builder never sees raw pin text — same purity rule as `conventionsSegment`.
+   * 261123-et1: per-team pinned context, already framed by the coordinator via
+   * `buildPinnedContextSegment()` as a trusted instruction. The builder never sees raw pin
+   * text — same purity rule as `conventionsSegment`. Read-only stays code-enforced.
    */
   pinnedContextSegment?: string | undefined;
   /** Newest-first from `listAssignmentHistory`. */
@@ -158,9 +158,10 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     ANTI_FABRICATION_BLOCK,
     // Org-wide conventions reach every team member. The coordinator builds this segment from
     // the single source of truth (db.settings 'global_conventions'), so it is framed exactly
-    // like the single-chat prompt — untrusted-data delimiters + conflict policy included.
+    // like the single-chat prompt — trusted instruction + conflict policy included.
     ...(conventionsSegment ? [conventionsSegment] : []),
-    // Phase 45 D-16/D-17: the team pin follows conventions as framed untrusted data.
+    // 261123-et1: the team pin follows conventions as a trusted instruction (read-only
+    // enforcement stays in the tool handlers, never in this prompt).
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
   ];
 
@@ -390,7 +391,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ANTI_FABRICATION_BLOCK,
     // Same single-source-of-truth convention segment the employees receive (see above).
     ...(conventionsSegment ? [conventionsSegment] : []),
-    // Phase 45 D-16/D-17: the team pin follows conventions as framed untrusted data.
+    // 261123-et1: the team pin follows conventions as a trusted instruction.
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
     // 261121-qpp: only present when the coordinator detected >1 usable worktree.
     ...(worktreeAmbiguitySegment ? [worktreeAmbiguitySegment] : []),
