@@ -330,6 +330,18 @@ fn is_wakeup_timeout(err: &std::io::Error) -> bool {
     )
 }
 
+/// Combine two reader-completion slots only when BOTH are present. `.take()` must never sit
+/// directly in an `if let` scrutinee: it consumes on pattern mismatch, so the first reader's
+/// result is silently dropped while waiting for the second — every command then resolves via
+/// the `Disconnected` fallback as `exit -1 / error` despite complete stdout.
+fn take_reader_pair<A, B>(a: &mut Option<A>, b: &mut Option<B>) -> Option<(A, B)> {
+    if a.is_some() && b.is_some() {
+        Some((a.take().expect("checked is_some"), b.take().expect("checked is_some")))
+    } else {
+        None
+    }
+}
+
 /// Run a remote command with explicit cancellation only. The SSH read runs on a detached
 /// reader thread; this command thread waits in short `recv_timeout(CANCEL_POLL_INTERVAL)`
 /// loops whose ONLY purpose is to observe the cancel token. No deadline, no idle watchdog.
@@ -609,8 +621,8 @@ pub fn run_cancellable_remote_command(
             }
         }
 
-        if let (Some((exit_status, was_cancelled, stdout_error)), Some(stderr_error)) =
-            (stdout_exit.take(), stderr_error.take())
+        if let Some(((exit_status, was_cancelled, stdout_error), stderr_error)) =
+            take_reader_pair(&mut stdout_exit, &mut stderr_error)
         {
             stdout_coalescer.flush();
             stderr_coalescer.flush();
@@ -877,6 +889,32 @@ mod tests {
     }
 
     #[test]
+    fn reader_pair_is_not_consumed_until_both_readers_finish() {
+        // Regression: `.take()` in an `if let` scrutinee consumes on mismatch, dropping the
+        // first completion and forcing every exec into the -1/error Disconnected fallback
+        // (git branch list + sqlcl schema rows returned full stdout but exitStatus -1).
+        let mut stdout_exit = Some((0i32, false, None::<String>));
+        let mut stderr_error: Option<Option<String>> = None;
+        assert!(take_reader_pair(&mut stdout_exit, &mut stderr_error).is_none());
+        assert_eq!(stdout_exit, Some((0, false, None)), "first completion must survive");
+
+        stderr_error = Some(None);
+        let pair = take_reader_pair(&mut stdout_exit, &mut stderr_error).expect("both present");
+        assert_eq!(pair.0, (0, false, None));
+        assert!(stdout_exit.is_none() && stderr_error.is_none(), "both consumed once paired");
+    }
+
+    #[test]
+    fn exec_result_pairing_uses_guarded_take() {
+        // Source guard: a future refactor back to `(a.take(), b.take())` in the scrutinee
+        // reintroduces the dropped-completion bug.
+        let source = include_str!("tool_cancel.rs");
+        let body = command_body(source, "pub fn run_cancellable_remote_command(");
+        assert!(body.contains("take_reader_pair(&mut stdout_exit, &mut stderr_error)"),
+            "result pairing must guard both slots before consuming either");
+    }
+
+    #[test]
     fn stdout_and_stderr_are_drained_on_separate_threads() {
         let source = include_str!("tool_cancel.rs");
         let body = command_body(source, "pub fn run_cancellable_remote_command(");
@@ -884,7 +922,7 @@ mod tests {
         assert!(body.contains("stderr_channel.stderr()"), "stderr thread must own the stderr stream");
         assert!(body.contains("Chunk::StderrExited"), "result must wait for stderr completion");
         assert!(
-            body.contains("stdout_exit.take()") && body.contains("stderr_error.take()"),
+            body.contains("take_reader_pair(&mut stdout_exit, &mut stderr_error)"),
             "invoke must resolve only after both readers exit"
         );
     }
