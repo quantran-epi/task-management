@@ -324,6 +324,21 @@ describe('DocEditorPane', () => {
     expect(promptArg).toContain('Hãy phân tích nội dung, tóm tắt các điểm then chốt và gợi ý các hành động tiếp theo');
   });
 
+  it('keeps the split-mode editor textarea at full container height without autoSize inline px height', () => {
+    const longBody = Array.from({ length: 40 }, (_, i) => `Dòng ${i + 1}: nội dung dài`).join('\n');
+    const docWithLongBody: Note = { ...mockDoc, body: longBody };
+
+    const { container } = render(
+      <DocEditorPane doc={docWithLongBody} onUpdateDoc={vi.fn()} db={db} />
+    );
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    expect(textarea).not.toBeNull();
+    expect(textarea.style.height).toBe('100%');
+    expect(textarea.style.resize).toBe('none');
+    expect(textarea.getAttribute('style')).not.toMatch(/(?:^|;)\s*height:\s*\d+px/);
+  });
+
   it('renders resizable splitter for ToC rail when headings exist and ToC is visible', () => {
     const docWithHeadings: Note = {
       ...mockDoc,

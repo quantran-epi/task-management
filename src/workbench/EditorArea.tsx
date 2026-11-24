@@ -878,9 +878,11 @@ export function EditorArea({ db }: EditorAreaProps) {
           flex: 1,
           minHeight: 0,
           height: '100%',
-          overflow: activeTab?.viewType === 'notes' ? 'hidden' : 'auto',
+          overflow:
+            activeTab?.viewType === 'notes' || activeTab?.viewType === 'config-profiles' ? 'hidden' : 'auto',
           position: 'relative',
-          padding: activeTab?.viewType === 'notes' ? 0 : '16px 20px',
+          padding:
+            activeTab?.viewType === 'notes' || activeTab?.viewType === 'config-profiles' ? 0 : '16px 20px',
           display: 'flex',
           flexDirection: 'column',
         }}

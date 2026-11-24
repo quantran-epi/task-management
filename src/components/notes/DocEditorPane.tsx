@@ -922,6 +922,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             <TextArea
               ref={textareaRef}
               value={body}
+              autoSize={false}
               readOnly={Boolean(doc.deletedAt)}
               onFocus={() => {
                 activePaneRef.current = 'editor';
@@ -953,6 +954,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                 boxShadow: 'none',
                 padding: '8px 12px',
                 height: '100%',
+                minHeight: 0,
               }}
             />
 

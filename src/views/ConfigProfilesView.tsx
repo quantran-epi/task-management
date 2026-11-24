@@ -487,25 +487,37 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   };
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px' }}>
-      {contextHolder}
-      <PageHeader
-        title="Cấu hình cho người khác (Settings for Others)"
-        subtitle="Soạn profile mới từ cấu hình mặc định, đặt tên và xuất ra tệp JSON. Không đọc cấu hình hiện tại của bạn."
-        extra={
-          onNavigate && (
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => onNavigate('settings')}
-              aria-label="Quay lại Cài đặt"
-            >
-              Quay lại Cài đặt
-            </Button>
-          )
-        }
-      />
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        padding: 0,
+      }}
+    >
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', boxSizing: 'border-box', padding: '24px' }}>
+        {contextHolder}
+        <PageHeader
+          title="Cấu hình cho người khác (Settings for Others)"
+          subtitle="Soạn profile mới từ cấu hình mặc định, đặt tên và xuất ra tệp JSON. Không đọc cấu hình hiện tại của bạn."
+          extra={
+            onNavigate && (
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={() => onNavigate('settings')}
+                aria-label="Quay lại Cài đặt"
+              >
+                Quay lại Cài đặt
+              </Button>
+            )
+          }
+        />
 
-      <Row gutter={16} align="top">
+        <Row gutter={16} align="top">
       <Col xs={24} md={7} lg={6}>
       <div
         style={{
@@ -921,8 +933,9 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           },
         ]}
       />
-      </Col>
-      </Row>
+        </Col>
+        </Row>
+      </div>
     </div>
   );
 };

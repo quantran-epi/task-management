@@ -19,6 +19,16 @@ vi.mock('../../src/components/common/AriaLiveRegion', () => ({
 describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => {
   let db: TaskPlannerDatabase;
 
+  it('fills the workbench panel with a border-box root and no centering maxWidth', () => {
+    const { container } = render(<ConfigProfilesView db={db} />);
+
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.style.width).toBe('100%');
+    expect(root.style.height).toBe('100%');
+    expect(root.style.boxSizing).toBe('border-box');
+    expect(root.style.maxWidth).toBe('');
+  });
+
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`Authoring_${Date.now()}_${Math.random()}`);
     await db.open();
