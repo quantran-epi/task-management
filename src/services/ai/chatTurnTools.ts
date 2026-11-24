@@ -264,6 +264,7 @@ const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
     ],
   },
   ssh_read_file_page: SSH_ORACLE_USAGE,
+  ssh_read_document: SSH_ORACLE_USAGE,
   ssh_list_dir: SSH_ORACLE_USAGE,
   ssh_grep_files: SSH_ORACLE_USAGE,
   oracle_query: SSH_ORACLE_USAGE,

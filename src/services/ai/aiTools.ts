@@ -92,6 +92,7 @@ import {
 import {
   executeSshListDir,
   executeSshReadFile,
+  executeSshReadDocument,
   executeSshGrepFiles,
 } from './sshFsToolService';
 import dayjs from 'dayjs';
@@ -2260,6 +2261,24 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'ssh_read_document',
+      description:
+        'Read a remote .docx, .xlsx, or .pdf document over SSH and return its text for AI analysis. Returns format, sheetCount/pageCount when available, and a truncated flag. Cap 10 MB per file and ~24k characters of text output. Does NOT support scanned PDFs (no OCR).',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote path of the .docx, .xlsx, or .pdf file to read.',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ssh_grep_files',
       description:
         'Search for a string or regex pattern in remote files or directories using read-only grep over SSH. Ignores binary files. Returns matching file paths, line numbers, and contents.',
@@ -2368,6 +2387,10 @@ export async function executeAiTool(
 
       case 'ssh_read_file_page': {
         return await executeSshReadFile(args as any, db, options?.remoteTarget);
+      }
+
+      case 'ssh_read_document': {
+        return await executeSshReadDocument(args as any, db, options?.remoteTarget);
       }
 
       case 'ssh_grep_files': {
@@ -5152,7 +5175,7 @@ export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((t
  * advertised when enabled and a connection is configured.
  */
 export const SSH_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
-  ['ssh_list_dir', 'ssh_read_file_page', 'ssh_grep_files'].includes(normalizeToolName(tool.function.name))
+  ['ssh_list_dir', 'ssh_read_file_page', 'ssh_read_document', 'ssh_grep_files'].includes(normalizeToolName(tool.function.name))
 );
 
 /**

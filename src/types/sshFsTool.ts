@@ -47,6 +47,11 @@ export interface SshReadFileArgs {
   limit?: number;
 }
 
+export interface SshReadDocumentArgs {
+  /** Remote path of a .docx, .xlsx, or .pdf document to parse into text */
+  path: string;
+}
+
 export interface SshGrepFilesArgs {
   /** Remote directory or file path to search in */
   path: string;
@@ -62,7 +67,7 @@ export interface SshGrepFilesArgs {
 
 export interface SshFsToolResult {
   success: boolean;
-  action: 'list_dir' | 'read_file' | 'grep_files';
+  action: 'list_dir' | 'read_file' | 'grep_files' | 'read_document';
   data?: unknown;
   count?: number;
   truncated?: boolean;

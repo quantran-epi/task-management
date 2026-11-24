@@ -3,6 +3,7 @@ import {
   type SshFsToolConfig,
   type SshListDirArgs,
   type SshReadFileArgs,
+  type SshReadDocumentArgs,
   type SshGrepFilesArgs,
   type SshFsToolResult,
   type RemoteToolTarget,
@@ -11,11 +12,15 @@ import {
 import {
   getSshConfigById,
   listRemoteDir,
+  readRemoteFileBytes,
   readRemoteFileSlice,
   execRemoteCommand,
   testSshConnection,
 } from '../sshService';
 import type { SshConfig } from '../../types/ssh';
+import { parseSshDocument } from './sshDocumentParser';
+import { wrapField } from './untrustedData';
+import { sanitizeBrowserFileText } from './browserFileReader';
 
 const KNOWN_BINARY_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'ico',
@@ -292,6 +297,63 @@ export async function executeSshReadFile(
     const result: SshFsToolResult = {
       success: false,
       action: 'read_file',
+      error: err?.message || String(err),
+      executionTimeMs: Math.round(performance.now() - start),
+    };
+    return JSON.stringify(result);
+  }
+}
+
+/**
+ * Execute ssh_read_document tool call: raw bytes over SFTP -> JS parser -> sanitized,
+ * nonce-wrapped text. This path deliberately bypasses `isLikelyBinaryPath` — docx/xlsx/pdf
+ * ARE binary files, and this tool exists precisely to read them.
+ */
+export async function executeSshReadDocument(
+  args: SshReadDocumentArgs,
+  db: TaskPlannerDatabase = defaultDb,
+  remoteTarget?: RemoteToolTarget,
+): Promise<string> {
+  const start = performance.now();
+  try {
+    if (!args.path || !args.path.trim()) {
+      throw new Error('Tham số "path" không được để trống.');
+    }
+
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
+    const targetPath = resolveRemoteToolPath(args.path, fsConfig.defaultBasePath, remoteTarget);
+
+    const ext = targetPath.split('.').pop()?.toLowerCase() ?? '';
+    if (!['docx', 'xlsx', 'pdf'].includes(ext)) {
+      throw new Error('Định dạng tệp không được hỗ trợ. Chỉ hỗ trợ .docx, .xlsx, .pdf.');
+    }
+
+    const bytes = await readRemoteFileBytes(sshConfig, targetPath);
+    const parsed = await parseSshDocument(bytes, targetPath);
+
+    const result: SshFsToolResult = {
+      success: true,
+      action: 'read_document',
+      truncated: parsed.truncated,
+      executionTimeMs: Math.round(performance.now() - start),
+      data: {
+        path: targetPath,
+        format: parsed.format,
+        ...parsed.metadata,
+        // Document text is untrusted: strip control chars/forged tags, then wrap with a
+        // fresh random nonce so embedded text cannot forge the closing delimiter.
+        content: wrapField(
+          `NỘI DUNG TÀI LIỆU ${targetPath}`,
+          sanitizeBrowserFileText(parsed.text),
+        ),
+      },
+    };
+
+    return JSON.stringify(result);
+  } catch (err: any) {
+    const result: SshFsToolResult = {
+      success: false,
+      action: 'read_document',
       error: err?.message || String(err),
       executionTimeMs: Math.round(performance.now() - start),
     };
