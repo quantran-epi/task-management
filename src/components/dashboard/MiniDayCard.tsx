@@ -79,7 +79,10 @@ export const MiniDayCard: React.FC<MiniDayCardProps> = ({ day, onNavigateToDate 
       onKeyDown={handleKeyDown}
       style={{
         cursor: 'pointer',
-        minWidth: 180,
+        boxSizing: 'border-box',
+        width: '100%',
+        minWidth: 0,
+        flexShrink: 0,
         padding: '8px 10px',
         borderRadius: 'var(--radius-control)',
         border: metrics.isOverloaded

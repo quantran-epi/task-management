@@ -1,6 +1,7 @@
 import React from 'react';
 import { Tooltip } from '../../components/ui';
-import { MinusOutlined, BellOutlined, ToolOutlined } from '../../components/ui/icon';
+import { MinusOutlined, BellOutlined } from '../../components/ui/icon';
+import { toolExplorerIcon } from '../toolExplorerIcon';
 import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
 import { useAIChat } from '../../context/AIChatContext';
@@ -36,7 +37,7 @@ export function RightToolWindow({
       case 'tool_explorer':
         return {
           title: 'Tool Explorer',
-          icon: <ToolOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />,
+          icon: toolExplorerIcon(13),
         };
       case 'notifications':
         return {

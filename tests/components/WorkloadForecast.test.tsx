@@ -136,6 +136,34 @@ describe('WorkloadForecast component', () => {
     expect(handleDateClick).toHaveBeenCalledWith('2026-09-27');
   });
 
+  it('keeps 14 forecast cards inside their grid track with border-box sizing', () => {
+    const days: HorizonDayData[] = Array.from({ length: 14 }, (_, i) => ({
+      ...mockHorizonDays[0]!,
+      date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+      isToday: false,
+    }));
+
+    const { container } = render(
+      <WorkloadForecast
+        horizon={14}
+        onHorizonChange={vi.fn()}
+        horizonDays={days}
+        overloadedDays={[]}
+        onDateClick={vi.fn()}
+      />
+    );
+
+    const cards = container.querySelectorAll('[data-testid^="mini-day-card-"]');
+    expect(cards).toHaveLength(14);
+    for (const card of Array.from(cards)) {
+      const style = (card as HTMLElement).style;
+      expect(style.boxSizing).toBe('border-box');
+      expect(style.width).toBe('100%');
+    }
+    const grid = screen.getByTestId('forecast-grid');
+    expect(grid.style.gridTemplateColumns).toContain('minmax');
+  });
+
   it('supports keyboard navigation (Enter and Space) on mini day cards', () => {
     const handleDateClick = vi.fn();
 
