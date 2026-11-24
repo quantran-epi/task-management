@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, Dropdown, Splitter, Tag, Tooltip, useAntdToken, SplitterPanel } from '../../ui';
+import { Alert, Avatar, Button, Dropdown, Select, Splitter, Tag, Tooltip, useAntdToken, SplitterPanel } from '../../ui';
 import { PushpinFilled, SettingOutlined } from '../../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { TaskPlannerDatabase } from '../../../db';
@@ -47,7 +47,7 @@ import {
 } from '../../../services/ai/office/teamRunCoordinator';
 import { getOrCreateRun } from '../../../services/ai/office/teamRunManager';
 import { cancelToolCall } from '../../../services/sshService';
-import { CODE_EDIT_AGENT_NAME, resolveAgentDeveloperWorktree } from '../../../services/ai/office/teamTools';
+import { CODE_EDIT_AGENT_NAME, listLinkedSystems, resolveAgentDeveloperWorktree } from '../../../services/ai/office/teamTools';
 
 /** Bounded prompt-debug log shown in the activity rail (never grows without limit). */
 const MAX_DEBUG_LOGS = 100;
@@ -119,6 +119,10 @@ const BOOTSTRAP_ERROR_COPY =
 
 /** WR-02: a refused retry is a normal outcome (busy phase, disposed run), not a dead end. */
 const RETRY_ERROR_COPY = 'Chưa thể chạy lại lần này. Hãy chờ lượt hiện tại kết thúc rồi thử lại.';
+
+/** 261124-uuo: fixed copy — coordinator can refuse a swap while the developer is running. */
+const WORKTREE_SWAP_BLOCKED_COPY =
+  'Không đổi được hệ thống khi Agent Developer đang chạy. Hãy dừng phiên rồi chọn lại.';
 
 /** IN-05: fixed copy — a repo error message can embed ids, which must not reach the UI. */
 const LEADER_LOCK_FAILED_COPY = 'Không khoá được leader cho nhóm. Vui lòng thử lại.';
@@ -644,28 +648,78 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     () => resolveAgentDeveloperWorktree(team.id, db),
     [db, team.id]
   );
-  // 261121-s4k WR-02: push live resolver changes into the ALIVE coordinator. Primitive deps only
-  // — no array identity, no `getOrCreateRun`, so the creation effect (WR-06) never re-runs.
+  // 261124-uuo: same source as the resolver, but exposed as picker options. Runtime-only
+  // selection — no AiTeam/settings write, so reload and team switch fall back to the resolver.
+  type WorktreeOverride = { systemId: string; sshConfigId: string; remoteRepoPath: string };
+  const [worktreeOverride, setWorktreeOverride] = useState<WorktreeOverride | undefined>(undefined);
+  const linkedSystems = useLiveQuery(() => listLinkedSystems(team.id, db), [db, team.id]) ?? [];
+  const usableCandidates = useMemo(
+    () => linkedSystems.filter((system) => system.sshConfigId && system.remoteRepoPath),
+    [linkedSystems]
+  );
+  // Deterministic: reordering links must not invalidate a still-good override.
+  const candidateKey = useMemo(
+    () => usableCandidates
+      .map((s) => `${s.id}|${s.sshConfigId}|${s.remoteRepoPath}`)
+      .sort()
+      .join(';'),
+    [usableCandidates]
+  );
+  const overrideStillValid = worktreeOverride
+    ? usableCandidates.some((s) =>
+        s.id === worktreeOverride.systemId &&
+        s.sshConfigId === worktreeOverride.sshConfigId &&
+        s.remoteRepoPath === worktreeOverride.remoteRepoPath)
+    : false;
+  useEffect(() => {
+    if (worktreeOverride && !overrideStillValid) setWorktreeOverride(undefined);
+  }, [candidateKey, worktreeOverride, overrideStillValid]);
+
   const ambiguityKey = (worktreeResolution?.ambiguousSystemNames ?? []).join('|');
+  // Effective target: override wins while valid, otherwise the resolver decides.
+  const effectiveSshConfigId = worktreeOverride && overrideStillValid
+    ? worktreeOverride.sshConfigId
+    : worktreeResolution?.worktree?.sshConfigId;
+  const effectiveRemoteRepoPath = worktreeOverride && overrideStillValid
+    ? worktreeOverride.remoteRepoPath
+    : worktreeResolution?.worktree?.remoteRepoPath;
+  const effectiveAmbiguityKey = worktreeOverride && overrideStillValid ? '' : ambiguityKey;
+  // 261121-s4k WR-02: push live target changes into the ALIVE coordinator. Primitive deps only
+  // — no array identity, no `getOrCreateRun`, so the creation effect (WR-06) never re-runs.
   useEffect(() => {
     if (!coordinator) return;
-    coordinator.setWorktreeAmbiguousSystems(ambiguityKey ? ambiguityKey.split('|') : []);
-    const sshConfigId = worktreeResolution?.worktree?.sshConfigId;
-    const remoteRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
+    coordinator.setWorktreeAmbiguousSystems(
+      effectiveAmbiguityKey ? effectiveAmbiguityKey.split('|') : []
+    );
     // Always push, including `undefined`: when the live resolver becomes ambiguous or loses
     // its usable system, the alive coordinator must drop the stale target instead of keeping
     // code_edit granted for a repo that is no longer selected.
     coordinator.setAgentDeveloperWorktree(
-      sshConfigId && remoteRepoPath ? { sshConfigId, remoteRepoPath } : undefined
+      effectiveSshConfigId && effectiveRemoteRepoPath
+        ? { sshConfigId: effectiveSshConfigId, remoteRepoPath: effectiveRemoteRepoPath }
+        : undefined
     );
-  }, [
-    coordinator,
-    worktreeResolution?.worktree?.sshConfigId,
-    worktreeResolution?.worktree?.remoteRepoPath,
-    ambiguityKey,
-  ]);
-  const codingZoneSshConfigId = worktreeResolution?.worktree?.sshConfigId;
-  const codingZoneRepoPath = worktreeResolution?.worktree?.remoteRepoPath;
+  }, [coordinator, effectiveSshConfigId, effectiveRemoteRepoPath, effectiveAmbiguityKey]);
+
+  const handleWorktreeSystemSelect = useCallback((systemId: string) => {
+    const system = usableCandidates.find((row) => row.id === systemId);
+    if (!system || !system.sshConfigId || !system.remoteRepoPath) return;
+    const target = { sshConfigId: system.sshConfigId, remoteRepoPath: system.remoteRepoPath };
+    // Ask the live coordinator first: a refusal while the developer runs must NOT be committed.
+    if (coordinator?.setAgentDeveloperWorktree(target) === false) {
+      setActionError(WORKTREE_SWAP_BLOCKED_COPY);
+      return;
+    }
+    setActionError(null);
+    setWorktreeOverride({
+      systemId: system.id,
+      sshConfigId: target.sshConfigId,
+      remoteRepoPath: target.remoteRepoPath,
+    });
+  }, [coordinator, usableCandidates]);
+
+  const codingZoneSshConfigId = effectiveSshConfigId;
+  const codingZoneRepoPath = effectiveRemoteRepoPath;
   const codingZoneDescriptor = useMemo(() => {
     if (!codingZoneActive || !codingZoneSshConfigId || !codingZoneRepoPath || !developerId) return undefined;
     return {
@@ -1124,6 +1178,27 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 />
                 {busy ? 'Đang chạy' : 'Rảnh'}
               </span>
+              {usableCandidates.length > 1 ? (
+                <span
+                  data-testid="worktree-system-picker"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-5)' }}
+                >
+                  <Select
+                    size="small"
+                    allowClear={false}
+                    width="auto"
+                    style={{ width: 220 }}
+                    aria-label="Chọn hệ thống worktree"
+                    placeholder="Chọn hệ thống để sửa code"
+                    value={worktreeOverride?.systemId ?? null}
+                    options={usableCandidates.map((system) => ({
+                      value: system.id,
+                      label: `${system.name} (${system.code})`,
+                    }))}
+                    onChange={handleWorktreeSystemSelect}
+                  />
+                </span>
+              ) : null}
               {codingZoneTrigger}
               <Button
                 size="small"

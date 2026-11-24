@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-24 - Completed quick task 261124-udx: sửa layout doc-set khi center workbench hẹp (rail co 160px, observer đăng ký lại khi set sẵn)
+Last activity: 2026-11-24 - Completed quick task 261124-uuo: picker chọn hệ thống worktree trong Coding Zone khi có nhiều ứng viên
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -125,6 +125,7 @@ Progress: [█████████░] 91%
 | 261124-sav | Refactor màn hình bộ tài liệu theo 3 sketch winner: rail+inspector, virtual scroll+filter dính, inline progress+flat picker; tách hash khỏi full note scan | 2026-11-24 | 57c58272 | Needs Review | [261124-sav-refactor-m-n-h-nh-b-t-i-li-u-theo-3-sket](./quick/261124-sav-refactor-m-n-h-nh-b-t-i-li-u-theo-3-sket/) |
 | 261124-u84 | Strip dòng TASKMATE_PGID khỏi stdout trong exec_remote, fix lỗi "Không xác thực được worktree remote" | 2026-11-24 | pending | Verified | [261124-u84-fix-rust-ssh-worktree-provision-strip-d-](./quick/261124-u84-fix-rust-ssh-worktree-provision-strip-d-/) |
 | 261124-udx | Sửa layout doc-set bị vỡ khi center workbench hẹp: rail co 248→160px, ResizeObserver đăng ký lại khi set có sẵn, inspector ẩn khi hẹp | 2026-11-24 | a6ae8ca5, d3401afd | Verified | [261124-udx-s-a-layout-doc-set-b-v-khi-center-workbe](./quick/261124-udx-s-a-layout-doc-set-b-v-khi-center-workbe/) |
+| 261124-uuo | Picker chọn hệ thống worktree trong Coding Zone khi có nhiều ứng viên; override runtime-only, giữ chat fallback | 2026-11-24 | pending | Verified | [261124-uuo-add-worktree-system-picker-chip-in-codin](./quick/261124-uuo-add-worktree-system-picker-chip-in-codin/) |
 
 ## Accumulated Context
 

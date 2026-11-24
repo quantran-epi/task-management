@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../../src/db';
 import { createEmployee, createLead } from '../../../../src/db/repositories/aiOfficeRepo';
@@ -46,11 +46,11 @@ describe('TeamWorkspace wires the persisted agent-developer worktree target (CR-
   let db: TaskPlannerDatabase;
   let team: AiTeam;
 
-  const addSystem = async (name: string, repo: string, ssh: string) => {
+  const addSystem = async (name: string, repo: string, ssh: string, code = name) => {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     await db.systems.add({
-      id, name, code: name, parentId: null, type: 'SERVICE',
+      id, name, code, parentId: null, type: 'SERVICE',
       sshConfigId: ssh, remoteRepoPath: repo, createdAt: now, updatedAt: now,
     });
     return id;
@@ -192,5 +192,149 @@ describe('TeamWorkspace wires the persisted agent-developer worktree target (CR-
       expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith(undefined);
     });
     expect(coordinatorOptionsMock.mock.calls.length).toBe(creationCount);
+  });
+});
+
+describe('TeamWorkspace worktree system picker (261124-uuo)', () => {
+  let db: TaskPlannerDatabase;
+  let team: AiTeam;
+
+  const addSystem = async (name: string, repo: string, ssh: string, code: string) => {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db.systems.add({
+      id, name, code, parentId: null, type: 'SERVICE',
+      sshConfigId: ssh, remoteRepoPath: repo, createdAt: now, updatedAt: now,
+    });
+    return id;
+  };
+  const linkSystem = async (systemId: string) => {
+    const link = await addTeamLink({ teamId: team.id, itemType: 'system', itemId: systemId }, db);
+    return link.id;
+  };
+  const renderWorkspace = () =>
+    render(<TeamWorkspace team={team} lead={undefined} members={[]} employees={[]} skills={[]} db={db} />);
+  const openPicker = async () => {
+    const picker = await screen.findByTestId('worktree-system-picker');
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Chọn hệ thống worktree' }));
+    return picker;
+  };
+  const selectSystem = async (label: string) => {
+    await openPicker();
+    fireEvent.click(await screen.findByText(label, { selector: '.ant-select-item-option-content' }));
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    db = new TaskPlannerDatabase('test-uuo-picker-' + Math.random().toString(36).slice(2));
+    await db.open();
+    await db.settings.put({ key: 'ninerouter_api_key', value: 'sk-test' });
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'https://example.invalid/v1' });
+    const lead = await createLead(
+      { name: 'Lead', role: 'Lead', capability: 'Điều phối.', persona: 'Bạn là lead.', model: 'claude-opus-4' },
+      db
+    );
+    const employee = await createEmployee(
+      { name: 'An', role: 'Phân tích', capability: 'Phân tích.', persona: 'Bạn là An.', model: 'claude-sonnet-4' },
+      db
+    );
+    team = await createTeam(
+      { name: 'Nhóm thử', budgetTokens: 1000, leadId: lead.id, employeeIds: [employee.id] },
+      db
+    );
+  });
+
+  afterEach(async () => {
+    await db.delete();
+  });
+
+  it('shows the picker with all usable candidates and does not auto-select', async () => {
+    await linkSystem(await addSystem('Core', '/srv/repo', 'ssh-1', 'CORE'));
+    await linkSystem(await addSystem('Payments', '/srv/payments', 'ssh-2', 'PAY'));
+
+    renderWorkspace();
+    await screen.findByTestId('worktree-system-picker');
+    await openPicker();
+    expect(await screen.findByText('Core (CORE)', { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+    expect(screen.getByText('Payments (PAY)', { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith(undefined);
+      expect(setWorktreeAmbiguousSystemsMock).toHaveBeenCalledWith(
+        expect.arrayContaining(['Core', 'Payments'])
+      );
+    });
+    expect(setAgentDeveloperWorktreeMock).not.toHaveBeenCalledWith({
+      sshConfigId: 'ssh-1', remoteRepoPath: '/srv/repo',
+    });
+    expect(setAgentDeveloperWorktreeMock).not.toHaveBeenCalledWith({
+      sshConfigId: 'ssh-2', remoteRepoPath: '/srv/payments',
+    });
+  });
+
+  it('pushes the selected target live without changing AiTeam', async () => {
+    await linkSystem(await addSystem('Core', '/srv/repo', 'ssh-1', 'CORE'));
+    await linkSystem(await addSystem('Payments', '/srv/payments', 'ssh-2', 'PAY'));
+    const before = await db.aiTeams.get(team.id);
+
+    renderWorkspace();
+    await selectSystem('Payments (PAY)');
+
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith({
+        sshConfigId: 'ssh-2', remoteRepoPath: '/srv/payments',
+      });
+      expect(setWorktreeAmbiguousSystemsMock).toHaveBeenCalledWith([]);
+    });
+    expect(await db.aiTeams.get(team.id)).toEqual(before);
+  });
+
+  it('keeps the override uncommitted when the live coordinator refuses the swap', async () => {
+    await linkSystem(await addSystem('Core', '/srv/repo', 'ssh-1', 'CORE'));
+    await linkSystem(await addSystem('Payments', '/srv/payments', 'ssh-2', 'PAY'));
+    renderWorkspace();
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith(undefined);
+    });
+    setAgentDeveloperWorktreeMock.mockReturnValueOnce(false);
+
+    await selectSystem('Payments (PAY)');
+    expect(await screen.findByText('Không đổi được hệ thống khi Agent Developer đang chạy. Hãy dừng phiên rồi chọn lại.')).toBeInTheDocument();
+    const targetCalls = () => setAgentDeveloperWorktreeMock.mock.calls.filter(
+      (args) => (args as unknown as { sshConfigId?: string }[])[0]?.sshConfigId === 'ssh-2'
+    ).length;
+    expect(targetCalls()).toBe(1); // only the refused apply — no committed push
+
+    await selectSystem('Payments (PAY)');
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith({
+        sshConfigId: 'ssh-2', remoteRepoPath: '/srv/payments',
+      });
+    });
+  });
+
+  it('clears a stale override and restores ambiguity when the selected candidate disappears', async () => {
+    await linkSystem(await addSystem('Core', '/srv/repo', 'ssh-1', 'CORE'));
+    const paymentsLinkId = await linkSystem(
+      await addSystem('Payments', '/srv/payments', 'ssh-2', 'PAY')
+    );
+    renderWorkspace();
+    await selectSystem('Payments (PAY)');
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock).toHaveBeenCalledWith({
+        sshConfigId: 'ssh-2', remoteRepoPath: '/srv/payments',
+      });
+    });
+    const pushCount = setAgentDeveloperWorktreeMock.mock.calls.length;
+
+    await linkSystem(await addSystem('Billing', '/srv/billing', 'ssh-3', 'BIL'));
+    await removeTeamLink(paymentsLinkId, db);
+
+    await waitFor(() => {
+      expect(setAgentDeveloperWorktreeMock.mock.calls.length).toBeGreaterThan(pushCount);
+      expect(setAgentDeveloperWorktreeMock.mock.calls.at(-1)?.[0 as never]).toBeUndefined();
+      expect(setWorktreeAmbiguousSystemsMock).toHaveBeenCalledWith(
+        expect.arrayContaining(['Core', 'Billing'])
+      );
+    });
   });
 });
