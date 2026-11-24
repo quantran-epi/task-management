@@ -152,6 +152,28 @@ export async function readRemoteFile(
   });
 }
 
+/**
+ * Read a remote file as raw bytes for binary document parsers (docx/xlsx/pdf).
+ * Rust returns a `tauri::ipc::Response`, so invoke yields an ArrayBuffer directly —
+ * no UTF-8 decode and no Uint8Array view that could shift a nonzero byteOffset.
+ */
+export async function readRemoteFileBytes(
+  config: SshConfig,
+  remotePath: string,
+  secret?: string,
+): Promise<ArrayBuffer> {
+  if (!isTauriApp()) {
+    throw new Error('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
+  }
+  const effectiveSecret = await resolveSecret(config, secret);
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<ArrayBuffer>('ssh_read_file_bytes', {
+    config,
+    secret: effectiveSecret ?? null,
+    remotePath,
+  });
+}
+
 export async function readRemoteFileSlice(
   config: SshConfig,
   remotePath: string,

@@ -8,6 +8,7 @@ import {
   deleteSshConfig,
   execRemoteCommand,
   cancelToolCall,
+  readRemoteFileBytes,
 } from '../../src/services/sshService';
 import { type SshConfig } from '../../src/types/ssh';
 
@@ -153,6 +154,30 @@ describe('sshService', () => {
     await deleteSshConfig('ssh-1', db);
     expect(await getSshConfigs(db)).toHaveLength(0);
     expect(deleteKeyringCredential).toHaveBeenCalledWith('ssh_secret_ssh-1');
+  });
+});
+
+describe('sshService - binary document transport', () => {
+  const config: SshConfig = {
+    id: 'ssh-doc', name: 'Doc host', host: '127.0.0.1', port: 22,
+    username: 'ubuntu', authType: 'password', createdAt: '', updatedAt: '',
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('invokes ssh_read_file_bytes and returns the raw ArrayBuffer untouched', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const payload = new ArrayBuffer(8);
+    vi.mocked(invoke).mockResolvedValueOnce(payload);
+
+    const result = await readRemoteFileBytes(config, '/home/ubuntu/repo/report.docx', 'secret-pass');
+
+    expect(result).toBe(payload);
+    expect(invoke).toHaveBeenCalledWith('ssh_read_file_bytes', {
+      config,
+      secret: 'secret-pass',
+      remotePath: '/home/ubuntu/repo/report.docx',
+    });
   });
 });
 

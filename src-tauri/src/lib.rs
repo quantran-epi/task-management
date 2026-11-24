@@ -73,6 +73,7 @@ pub fn run() {
             ssh_service::ssh_list_dir,
             ssh_service::ssh_read_file_all,
             ssh_service::ssh_read_file_slice,
+            ssh_service::ssh_read_file_bytes,
             ssh_service::ssh_write_file,
             ssh_service::ssh_create_dir,
             ssh_service::ssh_delete_entry,

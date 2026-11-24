@@ -311,6 +311,49 @@ pub fn ssh_read_file_all(
         .map_err(|_| "Tệp chứa dữ liệu nhị phân hoặc không phải UTF-8 hợp lệ".to_string())
 }
 
+/// Cap for binary documents read for AI parsing. `Response` avoids serializing these
+/// bytes as a JSON number[] (which would quadruple memory on the TS side).
+const SSH_DOC_MAX_BYTES: u64 = 10 * 1024 * 1024;
+
+fn check_doc_size(size: u64) -> Result<(), String> {
+    if size > SSH_DOC_MAX_BYTES {
+        return Err("Tệp vượt quá 10 MB, tool chỉ hỗ trợ tài liệu nhỏ hơn 10 MB.".to_string());
+    }
+    Ok(())
+}
+
+/// Read a remote file as raw bytes for the JS docx/xlsx/pdf parsers.
+/// The metadata check happens before `read_to_end` so an oversized file is never buffered.
+#[tauri::command]
+pub fn ssh_read_file_bytes(
+    config: SshConfig,
+    secret: Option<String>,
+    remote_path: String,
+) -> Result<tauri::ipc::Response, String> {
+    let session = connect_and_auth(&config, secret.as_deref())?;
+    let sftp = session.sftp().map_err(|e| format!("Khởi tạo SFTP subsystem thất bại: {}", e))?;
+
+    let path = Path::new(&remote_path);
+    let mut file = sftp
+        .open(path)
+        .map_err(|e| format!("Không thể mở tệp '{}': {}", remote_path, e))?;
+
+    let stat = file
+        .stat()
+        .map_err(|e| format!("Không thể đọc thông tin tệp '{}': {}", remote_path, e))?;
+    if let Some(size) = stat.size {
+        check_doc_size(size)?;
+    }
+
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|e| format!("Không thể đọc nội dung tệp: {}", e))?;
+    // A file can grow between metadata() and read_to_end; enforce the cap again.
+    check_doc_size(bytes.len() as u64)?;
+
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[tauri::command]
 pub fn ssh_read_file_slice(
     config: SshConfig,
@@ -653,4 +696,21 @@ pub fn ssh_kill_process(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_doc_size;
+
+    #[test]
+    fn check_doc_size_accepts_files_at_or_below_the_10mb_cap() {
+        assert!(check_doc_size(0).is_ok());
+        assert!(check_doc_size(10 * 1024 * 1024).is_ok());
+    }
+
+    #[test]
+    fn check_doc_size_rejects_files_above_the_10mb_cap_with_vietnamese_error() {
+        let err = check_doc_size(10 * 1024 * 1024 + 1).unwrap_err();
+        assert!(err.contains("vượt quá 10 MB"), "unexpected error: {err}");
+    }
 }
