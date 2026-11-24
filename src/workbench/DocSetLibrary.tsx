@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Empty, List, Space, Tag, Typography, useMessage, SearchInput, EmptyImageSimple, ListItem, ListItemMeta } from '../components/ui';
 import { PlusOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -25,6 +25,19 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
   const openTab = useLayoutStore((s) => s.openTab);
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    // Center island có thể hẹp khi Docs Explorer + Tool Explorer mở: rail co theo container.
+    const observer = new ResizeObserver(([entry]) => setContainerWidth(entry?.contentRect.width ?? root.clientWidth));
+    observer.observe(root);
+    setContainerWidth(root.clientWidth);
+    return () => observer.disconnect();
+  }, []);
+  const narrow = containerWidth > 0 && containerWidth < 640;
 
   const sets = useLiveQuery(async () => {
     const rows = await db.documentSets.toArray();
@@ -86,18 +99,20 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
 
   return (
     <div
+      ref={rootRef}
       data-testid="doc-set-library"
       style={{ display: 'flex', height: '100%', minHeight: 0, overflow: 'hidden' }}
     >
       <div
         data-testid="doc-set-library-list"
         style={{
-          width: 248,
+          width: narrow ? 160 : 248,
           flexShrink: 0,
           borderRight: '1px solid var(--ant-color-border, #f0f0f0)',
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
+          minWidth: 0,
         }}
       >
         <Space direction="vertical" size="small" style={{ padding: 12 }}>
@@ -137,7 +152,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
                   }}
                 >
                   <ListItemMeta
-                    title={<Text strong={active}>{set.name}</Text>}
+                    title={<Text strong={active} ellipsis style={{ minWidth: 0 }}>{set.name}</Text>}
                     description={
                       <Space size={4} wrap>
                         <Tag>{set.documentIds.length} tài liệu</Tag>
@@ -153,7 +168,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
           />
         </div>
       </div>
-      <div data-testid="doc-set-library-detail" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', padding: 16 }}>
+      <div data-testid="doc-set-library-detail" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', padding: narrow ? 8 : 16 }}>
         {creating ? (
           <DocumentSetForm
             notes={formNotes as Note[]}
