@@ -11,4 +11,4 @@ Làm lại màn hình "Cấu hình cho người khác (Settings for Others)" c�
 
 | # | Name | Design Question | Winner | Tags |
 |---|------|----------------|--------|------|
-| 001 | config-profiles-layout | Bố cục nào giúp soạn/đọc/đổi cấu hình cho người khác rõ ràng nhất? | — | layout, settings, profiles, ant-design |
+| 001 | config-profiles-layout | Bố cục nào giúp soạn/đọc/đổi cấu hình cho người khác rõ ràng nhất? | C — Rail danh sách + editor | layout, settings, profiles, ant-design |

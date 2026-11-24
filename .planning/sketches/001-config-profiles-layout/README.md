@@ -2,7 +2,7 @@
 sketch: 001
 name: config-profiles-layout
 question: "Bố cục nào giúp soạn/đọc/đổi cấu hình cho người khác rõ ràng nhất?"
-winner: null
+winner: "C"
 tags: [layout, settings, profiles, ant-design]
 ---
 
