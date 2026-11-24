@@ -14,6 +14,8 @@ export default defineConfig({
     host: process.env.TAURI_DEV_HOST || false,
   },
   plugins: [react()],
+  // pdfjs-dist ships an ES module worker; keep the worker as ESM for the Tauri webview.
+  worker: { format: 'es' },
   test: {
     alias: {
       'aria-query': fileURLToPath(
