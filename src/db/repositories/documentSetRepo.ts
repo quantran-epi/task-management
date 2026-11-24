@@ -4,6 +4,7 @@ import type {
   DocumentSetPreset,
   DocumentSetRelation,
   DocumentSetScope,
+  Note,
   PublishPrimaryState,
 } from '../../types/models';
 import type { SetCatalogEntry } from '../../services/ai/semanticScopeRouter';
@@ -81,6 +82,30 @@ export async function computeSha256(text: string): Promise<string> {
 
   const { createHash } = await import('node:crypto');
   return createHash('sha256').update(data).digest('hex');
+}
+
+/**
+ * Hashes only the notes passed in, caching per (id, updatedAt) in the caller-owned Map.
+ * No module-level cache: different databases must never share entries.
+ */
+export async function computeNoteHashesCached(
+  notes: readonly Note[],
+  cache: Map<string, { updatedAt: string; hash: string }>
+): Promise<Record<string, string>> {
+  const hashes: Record<string, string> = {};
+  await Promise.all(
+    notes.map(async (note) => {
+      const cached = cache.get(note.id);
+      if (cached?.updatedAt === note.updatedAt) {
+        hashes[note.id] = cached.hash;
+        return;
+      }
+      const hash = await computeSha256(normalizeMarkdownForHash(note.body));
+      cache.set(note.id, { updatedAt: note.updatedAt, hash });
+      hashes[note.id] = hash;
+    })
+  );
+  return hashes;
 }
 
 /**

@@ -1,11 +1,10 @@
 import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
 import { Alert, Button, Card, Descriptions, Empty, Modal, Progress, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
-  computeSha256,
-  normalizeMarkdownForHash,
+  computeNoteHashesCached,
   updateDocumentSet,
 } from '../db/repositories/documentSetRepo';
 import { AttemptHistoryList } from '../components/knowledge/AttemptHistoryList';
@@ -183,12 +182,13 @@ export function DocumentSetDetail({
     attempts: import('../types/models').PublishAttemptCache[];
   });
 
-  const noteHashes = useLiveQuery(async () => {
-    const entries = await Promise.all(
-      formNotes.map(async (note) => [note.id, await computeSha256(normalizeMarkdownForHash(note.body))] as const)
-    );
-    return Object.fromEntries(entries) as Record<string, string>;
-  }, [formNotes], {} as Record<string, string>);
+  const hashCache = useRef(new Map<string, { updatedAt: string; hash: string }>());
+  const noteHashes = useLiveQuery(
+    async () => computeNoteHashesCached(documents, hashCache.current),
+    [db, set?.id, documentIdsKey, documents],
+    {} as Record<string, string>
+  );
+  const hashesReady = documents.length === 0 || Object.keys(noteHashes).length === documents.length;
 
   // WR-02: publishedDocuments alone is not authoritative. An attempt can be Publishing,
   // reconcile can fail mid-terminal, or a backup may predate the metadata rows. If we
@@ -216,6 +216,7 @@ export function DocumentSetDetail({
       metadata.length === set?.documentIds.length &&
       (set?.documentIds ?? []).every((documentId) => metadataById.has(documentId));
     const hashesMatch =
+      hashesReady &&
       membershipMatches &&
       (set?.documentIds ?? []).every(
         (documentId) => noteHashes[documentId] === metadataById.get(documentId)?.publishedContentHash
@@ -224,7 +225,7 @@ export function DocumentSetDetail({
       state: (hashesMatch ? 'In sync' : 'Local changes') as PublishPrimaryState,
       activeAttemptId: undefined,
     };
-  }, [publishData, noteHashes, set?.documentIds]);
+  }, [publishData, noteHashes, hashesReady, set?.documentIds, documents]);
 
   const state = publishView.state;
   const activeAttemptId = publishView.activeAttemptId;
