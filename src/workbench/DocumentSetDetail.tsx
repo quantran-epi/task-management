@@ -1,5 +1,5 @@
 import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
-import { Alert, Button, Card, CheckableTag, Descriptions, Empty, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem, SearchInput } from '../components/ui';
+import { Alert, Button, Card, Descriptions, Empty, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem, SearchInput } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -35,9 +35,6 @@ import { generateId } from '../utils/uuid';
 import { VirtualizedList } from './virtual/VirtualizedList';
 
 const { Text, Title, Paragraph } = Typography;
-
-/** Fixed page size for the bounded document list in a doc_set tab (D-08 / T-45-04). */
-export const DOC_SET_PAGE_SIZE = 10;
 
 const STATE_UI = {
   'Never published': { label: 'Chưa xuất bản', icon: <CloudOutlined />, color: 'default' },
@@ -581,7 +578,6 @@ export function DocumentSetDetail({
   const [docQuery, setDocQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PublishPrimaryState | undefined>(undefined);
   const [sortKey, setSortKey] = useState<'updated' | 'name'>('updated');
-  const [extFilter, setExtFilter] = useState<'.md' | '.docx' | undefined>(undefined);
   const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
   const formRef = useRef<DocumentSetFormHandle>(null);
 
@@ -634,13 +630,12 @@ export function DocumentSetDetail({
     return rows
       .filter((row) => {
         if (statusFilter && row.status !== statusFilter) return false;
-        if (extFilter && !row.title.toLowerCase().endsWith(extFilter)) return false;
         return !query || searchIncludes(`${row.title} ${row.path}`, query);
       })
       .sort((a, b) => sortKey === 'name'
         ? a.title.localeCompare(b.title, 'vi')
         : Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || b.no - a.no);
-  }, [rows, docQuery, statusFilter, extFilter, sortKey]);
+  }, [rows, docQuery, statusFilter, sortKey]);
 
   const selectedDoc = rows.find((row) => row.id === selectedDocId);
 
@@ -956,8 +951,6 @@ export function DocumentSetDetail({
               style={{ width: 120 }}
               options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
             />
-            <CheckableTag checked={extFilter === '.md'} onChange={(checked) => setExtFilter(checked ? '.md' : undefined)}>.md</CheckableTag>
-            <CheckableTag checked={extFilter === '.docx'} onChange={(checked) => setExtFilter(checked ? '.docx' : undefined)}>.docx</CheckableTag>
             <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
           </div>
           {rows.length === 0 ? (
