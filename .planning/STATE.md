@@ -121,7 +121,7 @@ Progress: [█████████░] 91%
 | 261122-ut4 | Verify three Rust tool-cancellation review findings | 2026-11-22 | b8def166, ab0f0882, 79fe6f95 | [261122-ut4-verify-three-rust-tool-cancellation-revi](./quick/261122-ut4-verify-three-rust-tool-cancellation-revi/) |
 | 261122-w9j | Mở rộng Tool Explorer với 8 tool dev (encoder, regex, timestamp, date, text, cron, hash/UUID, JWT), AI context-aware, fix review findings | 2026-11-22 | 7234ce4b, 89b072f9, 9b216486, 1fbed59e | [261122-w9j-developer-utility-tools-expansion](./quick/261122-w9j-developer-utility-tools-expansion/) |
 | 261123-et1 | Draft team chat theo conversation, pin/global convention thành trusted instruction, fixes diagnostics/SQLcl | 2026-11-23 | cf04a416, 4d4be556, 85020d1f, 81378439, 7ddb93e7 | [261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo](./quick/261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo/) |
-| 261124-r35 | Sửa 6 lỗi UI: doc editor 2 panel full height, select multiple overflow, dashboard forecast cards, tab Profile taskbar, primary button color, icon Tool Explorer | 2026-11-24 | 5eb2811c, 91298caa, 414d86b7, 89de9eae | [261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable](./quick/261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable/) |
+| 261124-r35 | Sửa 6 lỗi UI: doc editor 2 panel full height, select multiple overflow, dashboard forecast cards, tab Profile taskbar, primary button color, icon Tool Explorer | 2026-11-24 | 5eb2811c, 91298caa, 414d86b7, f1f443d8, 89de9eae | [261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable](./quick/261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable/) |
 
 ## Accumulated Context
 
