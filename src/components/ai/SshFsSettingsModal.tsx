@@ -152,8 +152,9 @@ export const SshFsSettingsModal: React.FC<SshFsSettingsModalProps> = ({
     >
       <Paragraph type="secondary" style={{ fontSize: 'var(--font-size-small)', marginBottom: 16 }}>
         Chọn máy chủ SSH remote để AI Chat gọi các công cụ đọc file chỉ đọc (<code>ssh_list_dir</code>,{' '}
-        <code>ssh_read_file_page</code>, <code>ssh_grep_files</code>). Kết quả được cắt phân đoạn an toàn
-        để bảo vệ Context Window.
+        <code>ssh_read_file_page</code>, <code>ssh_grep_files</code>, <code>ssh_read_document</code> cho
+        .docx/.xlsx/.pdf, không hỗ trợ PDF scan/OCR). Kết quả được cắt phân đoạn an toàn để bảo vệ Context
+        Window.
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>

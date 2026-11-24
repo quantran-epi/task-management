@@ -317,7 +317,7 @@ const SSH_DOC_MAX_BYTES: u64 = 10 * 1024 * 1024;
 
 fn check_doc_size(size: u64) -> Result<(), String> {
     if size > SSH_DOC_MAX_BYTES {
-        return Err("Tệp vượt quá 10 MB, tool chỉ hỗ trợ tài liệu nhỏ hơn 10 MB.".to_string());
+        return Err("Tệp vượt quá 10 MB, tool chỉ hỗ trợ tài liệu không vượt quá 10 MB.".to_string());
     }
     Ok(())
 }
@@ -345,10 +345,12 @@ pub fn ssh_read_file_bytes(
         check_doc_size(size)?;
     }
 
+    // Bound the read itself: stat.size may be None, and the file can grow between stat and read.
+    // Reading at most cap+1 bytes keeps memory bounded even for a 2 GB remote file.
     let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)
+    file.take(SSH_DOC_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| format!("Không thể đọc nội dung tệp: {}", e))?;
-    // A file can grow between metadata() and read_to_end; enforce the cap again.
     check_doc_size(bytes.len() as u64)?;
 
     Ok(tauri::ipc::Response::new(bytes))

@@ -128,8 +128,10 @@ export const SshFsAiToolConfigCard: React.FC<SshFsAiToolConfigCardProps> = ({
     >
       <Paragraph type="secondary" style={{ fontSize: 13 }}>
         Cung cấp các công cụ đọc file và thư mục từ xa chỉ đọc (<code>ssh_list_dir</code>,{' '}
-        <code>ssh_read_file_page</code>, <code>ssh_grep_files</code>) cho AI Chat. AI chỉ được phép đọc nội
-        dung phân đoạn và tìm kiếm văn bản trên máy chủ SSH đã cấu hình, tuyệt đối bảo vệ Context Window.
+        <code>ssh_read_file_page</code>, <code>ssh_grep_files</code>, <code>ssh_read_document</code>) cho AI
+        Chat. <code>ssh_read_document</code> đọc .docx/.xlsx/.pdf (không hỗ trợ PDF scan/OCR). AI chỉ được
+        phép đọc nội dung phân đoạn và tìm kiếm văn bản trên máy chủ SSH đã cấu hình, tuyệt đối bảo vệ
+        Context Window.
       </Paragraph>
 
       <Form form={form} layout="vertical" initialValues={DEFAULT_SSH_FS_CONFIG}>

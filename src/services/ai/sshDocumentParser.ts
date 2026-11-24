@@ -75,7 +75,7 @@ export async function parseXlsx(buffer: ArrayBuffer): Promise<ParsedDocument> {
     const rows: string[] = [];
     ws.eachRow((row) => {
       // ExcelJS row.values is 1-indexed: index 0 is a sparse hole, real cells start at 1.
-      const cells = (row.values as unknown[]).map((value) => {
+      const cells = (row.values as unknown[]).slice(1).map((value) => {
         if (value === null || value === undefined) return '';
         if (typeof value === 'object' && 'result' in value) return String((value as { result?: unknown }).result ?? '');
         return String(value);
@@ -95,15 +95,14 @@ export async function parseXlsx(buffer: ArrayBuffer): Promise<ParsedDocument> {
 
 export async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
   const bytes = toBytes(buffer);
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: bytes });
   try {
+    const pdf = await loadingTask.promise;
     const pages: string[] = [];
     for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
-      // Some pdfjs builds expose getTextContent on the document, others on the page.
-      const textSource = typeof (pdf as { getTextContent?: unknown }).getTextContent === 'function'
-        ? pdf
-        : await pdf.getPage(pageNo);
-      const content = await (textSource as { getTextContent: () => Promise<{ items: unknown[] }> }).getTextContent();
+      const page = await pdf.getPage(pageNo);
+      const content = await page.getTextContent();
+      page.cleanup();
       const text = content.items
         .map((item) => (item && typeof item === 'object' && 'str' in item ? String((item as { str?: unknown }).str ?? '') : ''))
         .join('');
@@ -118,8 +117,8 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
       metadata: hasText ? { pageCount: pdf.numPages } : { pageCount: pdf.numPages, note: SCAN_NOTE },
     };
   } finally {
-    // `clearResources` exists in pdfjs-dist 6; older builds had `destroy`.
-    await (pdf as unknown as { clearResources?: () => Promise<void> }).clearResources?.();
+    // pdfjs-dist 6 exposes loadingTask.destroy(); `clearResources` does not exist.
+    await loadingTask.destroy();
   }
 }
 

@@ -89,7 +89,7 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
     const entries = await catalog(db);
     const find = (name: string) =>
       entries.find((entry) => normalizeToolName(entry.tool.function.name) === name);
-    for (const name of ['ssh_read_file_page', 'ssh_list_dir', 'ssh_grep_files', 'oracle_query', 'oracle_describe', 'oracle_list_connections']) {
+    for (const name of ['ssh_read_file_page', 'ssh_read_document', 'ssh_list_dir', 'ssh_grep_files', 'oracle_query', 'oracle_describe', 'oracle_list_connections']) {
       const entry = find(name);
       expect(entry).toBeDefined();
       expect(entry?.usage.labels.join(' ')).toContain('gated');

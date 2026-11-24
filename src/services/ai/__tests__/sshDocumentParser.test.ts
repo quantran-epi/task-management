@@ -30,22 +30,19 @@ import {
   type ParsedDocument,
 } from '../sshDocumentParser';
 
-/** ArrayBuffer whose byteOffset is deliberately nonzero to catch view-slice bugs. */
+/** Distinct byte payloads so parser call arguments can be asserted precisely. */
 function offsetBuffer(bytes: number[]): ArrayBuffer {
   const backing = new Uint8Array(bytes.length + 5);
   backing.set(bytes, 5);
   return backing.buffer.slice(5, 5 + bytes.length);
 }
 
-function asBytes(buffer: ArrayBuffer): Uint8Array {
-  return new Uint8Array(buffer);
-}
-
 describe('sshDocumentParser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    eachRowMock.mockImplementation((cb: (row: { values: Array<{ result?: string }> }) => void) => {
-      cb({ values: [{ result: 'A1' }, { result: 'B1' }] });
+    eachRowMock.mockImplementation((cb: (row: { values: Array<null | { result?: string }> }) => void) => {
+      // ExcelJS row.values is 1-indexed: index 0 is the sparse hole.
+      cb({ values: [null, { result: 'A1' }, { result: 'B1' }] });
     });
   });
 
@@ -81,14 +78,15 @@ describe('sshDocumentParser', () => {
   });
 
   it('parses pdf text layer per page with pageCount', async () => {
+    const getTextContent = vi.fn()
+      .mockResolvedValueOnce({ items: [{ str: 'Trang 1' }] })
+      .mockResolvedValueOnce({ items: [{ str: 'Trang 2' }] });
     getDocumentMock.mockReturnValue({
       promise: Promise.resolve({
         numPages: 2,
-        getTextContent: vi.fn()
-          .mockResolvedValueOnce({ items: [{ str: 'Trang 1' }] })
-          .mockResolvedValueOnce({ items: [{ str: 'Trang 2' }] }),
-        clearResources: vi.fn().mockResolvedValue(undefined),
+        getPage: vi.fn().mockResolvedValue({ getTextContent, cleanup: vi.fn() }),
       }),
+      destroy: vi.fn().mockResolvedValue(undefined),
     });
 
     const result = await parseSshDocument(offsetBuffer([6, 7]), 'scan.pdf');
@@ -103,9 +101,12 @@ describe('sshDocumentParser', () => {
     getDocumentMock.mockReturnValue({
       promise: Promise.resolve({
         numPages: 1,
-        getTextContent: vi.fn().mockResolvedValue({ items: [] }),
-        clearResources: vi.fn().mockResolvedValue(undefined),
+        getPage: vi.fn().mockResolvedValue({
+          getTextContent: vi.fn().mockResolvedValue({ items: [] }),
+          cleanup: vi.fn(),
+        }),
       }),
+      destroy: vi.fn().mockResolvedValue(undefined),
     });
 
     const result = await parseSshDocument(new ArrayBuffer(2), 'scan.pdf');
@@ -127,15 +128,4 @@ describe('sshDocumentParser', () => {
     expect(result.text.length).toBeLessThanOrEqual(100 + 60);
   });
 
-  it('normalizes a view with nonzero byteOffset before handing bytes to parsers', async () => {
-    const backing = new Uint8Array([0, 0, 9, 8, 7, 0]);
-    const view = new Uint8Array(backing.buffer, 2, 3);
-    expect(view.byteOffset).toBe(2);
-    extractRawTextMock.mockResolvedValue({ value: 'ok' });
-
-    await parseSshDocument(view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer, 'view.docx');
-
-    const arg = extractRawTextMock.mock.calls[0]![0] as { arrayBuffer: ArrayBuffer };
-    expect(Array.from(asBytes(arg.arrayBuffer))).toEqual([9, 8, 7]);
-  });
 });
