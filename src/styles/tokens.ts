@@ -139,6 +139,7 @@ export const lightTokens = {
   ...sharedTokens,
   antd: {
     colorPrimary: '#2f62d8',
+    colorPrimaryHover: '#1e4bb8',
     colorBgBase: '#ffffff',
     colorBgContainer: '#ffffff',
     colorBgElevated: '#f7f8fa',
@@ -176,6 +177,7 @@ export const lightTokens = {
     '--fg-faint': '#94a3b8',
     '--fg-icon': '#6c707e',
     '--accent': '#2f62d8',
+    '--accent-hover': '#1e4bb8',
     '--accent-soft': '#e4ecff',
     '--accent-fg': '#ffffff',
     '--link': '#2f62d8',
@@ -213,6 +215,7 @@ export const darkTokens = {
   ...sharedTokens,
   antd: {
     colorPrimary: '#6a9bff',
+    colorPrimaryHover: '#8db2ff',
     colorBgBase: '#11151d',
     colorBgContainer: '#171d27',
     colorBgElevated: '#1c2330',
@@ -250,6 +253,7 @@ export const darkTokens = {
     '--fg-faint': '#71819a',
     '--fg-icon': '#9aa8bd',
     '--accent': '#6a9bff',
+    '--accent-hover': '#8db2ff',
     '--accent-soft': '#1e3156',
     '--accent-fg': '#071224',
     '--link': '#6a9bff',
@@ -289,6 +293,7 @@ export function getAntdTheme(mode: ThemeMode): ThemeConfig {
     algorithm: getAntdAlgorithms(mode).algorithm,
     token: {
       colorPrimary: tokens.antd.colorPrimary,
+      colorPrimaryHover: tokens.antd.colorPrimaryHover,
       colorBgBase: tokens.antd.colorBgBase,
       colorBgContainer: tokens.antd.colorBgContainer,
       colorBgElevated: tokens.antd.colorBgElevated,

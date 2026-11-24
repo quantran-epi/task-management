@@ -98,6 +98,30 @@ describe('input-family policy', () => {
     expect(container.querySelector('.ant-select-clear')).not.toBeNull();
     expect(screen.getByLabelText('Amount')).toHaveValue('2.50');
   });
+
+  it('renders multiple Select with a growable overflow rule separate from the 28px single-line rule', () => {
+    const options = Array.from({ length: 6 }, (_, i) => ({
+      value: `tag-${i}`,
+      label: `Tag ${i}`,
+    }));
+    const { container } = render(
+      <Select mode="multiple" options={options} value={options.map((o) => o.value)} onChange={() => {}} />,
+    );
+
+    const select = container.querySelector('.ant-select');
+    expect(select).toHaveClass('ant-select-multiple');
+
+    // jsdom renders tags without the overflow wrapper and never applies the
+    // workbench stylesheet; pin the source rule instead.
+    const css = readFileSync(resolve(__dirname, '../ui-tokens.css'), 'utf8');
+    const start = css.indexOf('.ant-select-multiple .ant-select-selection-overflow)');
+    expect(start).toBeGreaterThan(-1);
+    const multipleRule = css.slice(start, css.indexOf('}', start));
+    expect(multipleRule).toContain('height: auto !important');
+    expect(multipleRule).toContain('min-height: 28px');
+    expect(css).toContain('.ant-select-multiple .ant-select-selection-overflow-item');
+    expect(css).toContain('max-width: 100%');
+  });
 });
 
 describe('overlay policy', () => {

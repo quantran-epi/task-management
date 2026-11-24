@@ -82,6 +82,18 @@
   min-height: 28px;
   box-sizing: border-box;
 }
+/* Multiple/tags selects grow with their tag rows instead of pinning one 28px line. */
+.taskmate-workbench-theme :where(.ant-select-multiple, .ant-select-multiple .ant-select-selector, .ant-select-multiple .ant-select-selection-overflow) {
+  height: auto !important;
+  min-height: 28px;
+  align-items: center;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.taskmate-workbench-theme :where(.ant-select-multiple .ant-select-selection-overflow-item) {
+  max-width: 100%;
+}
 .taskmate-workbench-theme :where(.ant-btn) {
   font-size: var(--font-size-ui, 13px) !important;
   height: 28px !important;
@@ -159,8 +171,8 @@
 }
 .taskmate-workbench-theme .ui-tool-btn-primary:hover:not(:disabled),
 .taskmate-workbench-theme .ui-tool-btn-primary:active:not(:disabled) {
-  background: var(--link-hover, #1e4bb8);
-  border-color: var(--link-hover, #1e4bb8);
+  background: var(--accent-hover, #1e4bb8);
+  border-color: var(--accent-hover, #1e4bb8);
   color: var(--accent-fg, #fff);
 }
 

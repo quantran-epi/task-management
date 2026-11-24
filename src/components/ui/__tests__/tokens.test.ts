@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+// Break the pre-existing tokens.ts -> antdTheme.ts -> tokens.contract.ts -> tokens.ts
+// init cycle by loading tokens.contract first when this file runs on its own.
+import '../tokens.contract';
 import {
   applyCssVariables,
   darkTokens,
@@ -14,7 +17,7 @@ const ROOT = resolve(__dirname, '../../../..');
 const read = (rel: string) => readFileSync(resolve(ROOT, rel), 'utf8');
 
 const paletteFields = [
-  'colorPrimary', 'colorBgBase', 'colorBgContainer', 'colorBgElevated',
+  'colorPrimary', 'colorPrimaryHover', 'colorBgBase', 'colorBgContainer', 'colorBgElevated',
   'colorBorder', 'colorBorderSecondary', 'colorText', 'colorTextSecondary',
   'colorTextTertiary', 'colorInfo',
 ] as const;
@@ -36,6 +39,8 @@ describe('tokens — single source parity', () => {
     const dark = getAntdTheme('dark');
     expect(light.token?.colorPrimary).toBe('#2f62d8');
     expect(dark.token?.colorPrimary).toBe('#6a9bff');
+    expect(light.token?.colorPrimaryHover).toBe('#1e4bb8');
+    expect(dark.token?.colorPrimaryHover).toBe('#8db2ff');
     expect(light.token?.colorPrimary).not.toBe(dark.token?.colorPrimary);
     for (const field of ['borderRadius', 'controlHeight', 'fontFamily', 'fontSize'] as const) {
       expect(light.token?.[field]).toEqual(dark.token?.[field]);
@@ -81,6 +86,9 @@ describe('tokens — single source parity', () => {
     }
     expect(element.style.getPropertyValue('--accent')).toBe(
       mode === 'light' ? '#2f62d8' : '#6a9bff'
+    );
+    expect(element.style.getPropertyValue('--accent-hover')).toBe(
+      mode === 'light' ? '#1e4bb8' : '#8db2ff'
     );
   });
 });
