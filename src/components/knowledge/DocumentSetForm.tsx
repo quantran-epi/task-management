@@ -1,7 +1,7 @@
-import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined, FolderOutlined, FileTextOutlined } from '../ui/icon';
-import { Button, Checkbox, Collapse, Form, Input, List, Modal, Radio, Select, Space, Tag, Tooltip, Tree, Typography, useAntdToken, FormItem, SearchInput, ListItem, RadioGroup } from '../ui';
-import type { TreeDataNode } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined } from '../ui/icon';
+import { Button, Checkbox, Collapse, Form, Input, Modal, Radio, Select, Space, Tag, Tooltip, Typography, useAntdToken, FormItem, SearchInput, ListItem, RadioGroup } from '../ui';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { VirtualizedList } from '../../workbench/virtual/VirtualizedList';
 import type {
   DocumentSet,
   DocumentSetPreset,
@@ -66,13 +66,17 @@ const PRESET_OPTIONS: { label: string; value: DocumentSetPreset }[] = [
   { label: 'Tùy chỉnh', value: 'TuyChinh' },
 ];
 
-export function DocumentSetForm({
+export interface DocumentSetFormHandle {
+  openPicker(): void;
+}
+
+export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetFormProps>(function DocumentSetForm({
   notes,
   initialSet,
   availableSets = [],
   currentFolderId,
   onSave,
-}: DocumentSetFormProps) {
+}, ref) {
   const { token } = useAntdToken();
   const [name, setName] = useState(initialSet?.name ?? '');
   const [mode, setMode] = useState<'empty' | 'folder' | 'manual'>(initialSet ? 'manual' : 'empty');
@@ -83,160 +87,34 @@ export function DocumentSetForm({
   const documents = useMemo(() => notes.filter((note) => !note.deletedAt && note.type !== 'folder'), [notes]);
   const noteById = useMemo(() => new Map(documents.map((note) => [note.id, note])), [documents]);
 
-  // Build hierarchical tree data for document picker
-  const treeData = useMemo(() => {
-    const activeNotes = notes.filter((n) => !n.deletedAt);
-    const query = foldForSearch(searchDocQuery);
-
-    // Matching documents or folders
-    const matchesQuery = (n: Note) => {
-      if (!query) return true;
-      const titleMatch = searchIncludes(n.title || '', query);
-      const tagMatch = (n.tags || []).some((t) => searchIncludes(t, query));
-      return titleMatch || tagMatch;
-    };
-
-    // Filter documents by query
-    const matchedDocIds = new Set<string>();
-    for (const n of activeNotes) {
-      if (n.type !== 'folder' && matchesQuery(n)) {
-        matchedDocIds.add(n.id);
-      }
-    }
-
-    // Folders whose children match query or folder itself matches
-    const relevantFolderIds = new Set<string>();
-    if (query) {
-      for (const docId of matchedDocIds) {
-        const doc = activeNotes.find((n) => n.id === docId);
-        let curr = doc?.parentId;
-        while (curr) {
-          relevantFolderIds.add(curr);
-          const parent = activeNotes.find((n) => n.id === curr);
-          curr = parent?.parentId;
-        }
-      }
-    }
-
-    const folders = activeNotes.filter((n) => n.type === 'folder');
-
-    const buildFolderNode = (folder: Note): TreeDataNode | null => {
-      if (query && !relevantFolderIds.has(folder.id) && !matchesQuery(folder)) {
-        return null;
-      }
-
-      const childFolders = folders
-        .filter((f) => f.parentId === folder.id)
-        .map(buildFolderNode)
-        .filter(Boolean) as TreeDataNode[];
-
-      const childDocs = activeNotes
-        .filter((n) => n.type !== 'folder' && n.parentId === folder.id && (!query || matchedDocIds.has(n.id)))
-        .map((doc): TreeDataNode => ({
-          key: doc.id,
-          title: doc.title || 'Tài liệu không tên',
-          icon: <FileTextOutlined />,
-          isLeaf: true,
-        }));
-
-      const children = [...childFolders, ...childDocs];
-      if (query && children.length === 0 && !matchesQuery(folder)) {
-        return null;
-      }
-
-      return {
-        key: `folder-${folder.id}`,
-        title: folder.title || 'Thư mục không tên',
-        icon: <FolderOutlined />,
-        children,
-        selectable: false,
-      };
-    };
-
-    // Root level folders and documents
-    const rootFolders = folders
-      .filter((f) => !f.parentId || !folders.some((p) => p.id === f.parentId))
-      .map(buildFolderNode)
-      .filter(Boolean) as TreeDataNode[];
-
-    const rootDocs = activeNotes
-      .filter((n) => n.type !== 'folder' && !n.parentId && (!query || matchedDocIds.has(n.id)))
-      .map((doc): TreeDataNode => ({
-        key: doc.id,
-        title: doc.title || 'Tài liệu không tên',
-        icon: <FileTextOutlined />,
-        isLeaf: true,
-      }));
-
-    return [...rootFolders, ...rootDocs];
-  }, [notes, searchDocQuery]);
-
-  // Compute checked keys for Tree: folder keys are included if all their descendants are selected
-  const treeCheckedKeys = useMemo(() => {
-    const selectedDocSet = new Set(draftSelection);
-    const keys: string[] = [...draftSelection];
-
-    const activeNotes = notes.filter((n) => !n.deletedAt);
-    const folders = activeNotes.filter((n) => n.type === 'folder');
-
-    // Recursively check if all leaf documents in folder are selected
-    const areAllDocsSelected = (folderId: string): boolean => {
-      const childDocs = activeNotes.filter((n) => n.type !== 'folder' && n.parentId === folderId);
-      const childFolders = folders.filter((f) => f.parentId === folderId);
-      if (childDocs.length === 0 && childFolders.length === 0) return false;
-
-      for (const d of childDocs) {
-        if (!selectedDocSet.has(d.id)) return false;
-      }
-      for (const f of childFolders) {
-        if (!areAllDocsSelected(f.id)) return false;
-      }
-      return true;
-    };
-
-    for (const f of folders) {
-      if (areAllDocsSelected(f.id)) {
-        keys.push(`folder-${f.id}`);
-      }
-    }
-
-    return keys;
-  }, [draftSelection, notes]);
-
-  const handleTreeCheck = (
-    _checked: React.Key[] | { checked: React.Key[]; halfChecked: React.Key[] },
-    info: any
-  ) => {
-    const activeNotes = notes.filter((n) => !n.deletedAt);
-    const clickedKey = String(info.node.key);
-    const isChecked = info.checked;
-
-    if (clickedKey.startsWith('folder-')) {
-      const folderId = clickedKey.replace(/^folder-/, '');
-      // Collect all descendant doc ids under this folder
-      const descendantDocIds = snapshotFolderMembers(activeNotes, folderId);
-      setDraftSelection((prev) => {
-        const nextSet = new Set(prev);
-        if (isChecked) {
-          descendantDocIds.forEach((id) => nextSet.add(id));
-        } else {
-          descendantDocIds.forEach((id) => nextSet.delete(id));
-        }
-        return Array.from(nextSet);
-      });
-    } else {
-      // Direct document checked / unchecked
-      setDraftSelection((prev) => {
-        const nextSet = new Set(prev);
-        if (isChecked) {
-          nextSet.add(clickedKey);
-        } else {
-          nextSet.delete(clickedKey);
-        }
-        return Array.from(nextSet);
-      });
-    }
+  const openPicker = () => {
+    setDraftSelection(members);
+    setSearchDocQuery('');
+    setPickerOpen(true);
   };
+  useImperativeHandle(ref, () => ({ openPicker }), [members]);
+
+  const flatDocs = useMemo(() => {
+    const notesById = new Map(notes.map((note) => [note.id, note]));
+    const pathOf = (note: Note): string => {
+      const titles: string[] = [];
+      let parentId = note.parentId;
+      for (let depth = 0; parentId && depth < 20; depth += 1) {
+        const parent = notesById.get(parentId);
+        if (!parent) break;
+        titles.unshift(parent.title || 'Thư mục không tên');
+        parentId = parent.parentId;
+      }
+      return titles.join(' / ');
+    };
+    const query = foldForSearch(searchDocQuery);
+    return documents
+      .filter((note) => {
+        if (!query) return true;
+        return searchIncludes(note.title || '', query) || (note.tags ?? []).some((tag) => searchIncludes(tag, query));
+      })
+      .map((note) => ({ id: note.id, title: note.title || 'Tài liệu không tên', path: pathOf(note) }));
+  }, [documents, notes, searchDocQuery]);
 
   // Scope facets (D-17, D-18)
   const [preset, setPreset] = useState<DocumentSetPreset>(initialSet?.preset ?? 'Chung');
@@ -582,19 +460,20 @@ export function DocumentSetForm({
         <Button
           aria-label="Thêm tài liệu"
           icon={<PlusOutlined />}
-          onClick={() => {
-            setDraftSelection(members);
-            setSearchDocQuery('');
-            setPickerOpen(true);
-          }}
+          onClick={openPicker}
         >
           Thêm tài liệu
         </Button>
         {members.length === 0 ? (
           <Text type="secondary">Bộ tài liệu chưa có thành viên.</Text>
         ) : (
-          <List
-            dataSource={members}
+          <VirtualizedList
+            items={members}
+            height={320}
+            estimateSize={() => 38}
+            overscan={4}
+            role="group"
+            aria-label="Tài liệu trong bộ"
             renderItem={(documentId, index) => {
               const title = noteById.get(documentId)?.title || 'Tài liệu không tên';
               return (
@@ -640,7 +519,7 @@ export function DocumentSetForm({
         </Button>
       </Space>
 
-      {/* 7. Modal document picker (Tree selector with search & recursive cascading check) */}
+      {/* 7. Modal document picker (flat searchable virtual list) */}
       <Modal
         title="Chọn tài liệu"
         open={pickerOpen}
@@ -663,23 +542,35 @@ export function DocumentSetForm({
           value={searchDocQuery}
           onChange={(e) => setSearchDocQuery(e.target.value)}
         />
-        <div style={{ maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 'var(--radius-control)', padding: 8 }}>
-          {treeData.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--fg-secondary)', padding: 24 }}>
-              Không tìm thấy tài liệu phù hợp
-            </div>
-          ) : (
-            <Tree
-              checkable
-              checkStrictly={false}
-              checkedKeys={treeCheckedKeys}
-              onCheck={handleTreeCheck}
-              treeData={treeData}
-              defaultExpandAll
-            />
-          )}
-        </div>
+        {flatDocs.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--fg-secondary)', padding: 24 }}>
+            Không tìm thấy tài liệu phù hợp
+          </div>
+        ) : (
+          <VirtualizedList
+            items={flatDocs}
+            height={320}
+            estimateSize={() => 36}
+            overscan={4}
+            role="group"
+            aria-label="Danh sách tài liệu để chọn"
+            renderItem={(doc) => (
+              <Space size="small">
+                <Checkbox
+                  aria-label={doc.title}
+                  checked={draftSelection.includes(doc.id)}
+                  onChange={(event) => setDraftSelection((current) =>
+                    event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id)
+                  )}
+                >
+                  {doc.title}
+                </Checkbox>
+                <Text type="secondary">{doc.path}</Text>
+              </Space>
+            )}
+          />
+        )}
       </Modal>
     </Form>
   );
-}
+});

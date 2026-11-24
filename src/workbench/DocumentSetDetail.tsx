@@ -98,6 +98,15 @@ interface DocumentRow {
   status: PublishPrimaryState;
 }
 
+const STATUS_SHORT: Record<PublishPrimaryState, string> = {
+  'Never published': 'Chưa XB',
+  'In sync': 'Đồng bộ',
+  'Local changes': 'Có thay đổi',
+  Publishing: 'Đang XB',
+  Warning: 'Cảnh báo',
+  Failed: 'Thất bại',
+};
+
 const DOC_ROW_HEIGHT = 38;
 
 const DocumentRowView = memo(function DocumentRowView({
@@ -135,7 +144,7 @@ const DocumentRowView = memo(function DocumentRowView({
       <Text type="secondary" ellipsis style={{ flex: '1 1 30%', minWidth: 0 }}>{row.path}</Text>
       <Text type="secondary" style={{ width: 70, flexShrink: 0 }}>{formatBytes(row.sizeBytes)}</Text>
       <Text type="secondary" style={{ width: 92, flexShrink: 0 }}>{row.updatedAt.slice(0, 10)}</Text>
-      <Tag color={ui.color} icon={ui.icon}>{ui.label}</Tag>
+      <Tag color={ui.color} icon={ui.icon}>{STATUS_SHORT[row.status]}</Tag>
     </div>
   );
 });
@@ -709,7 +718,7 @@ export function DocumentSetDetail({
       {state === 'Publishing' && activeAttemptId && (
         <div style={{ flexShrink: 0, border: '1px solid var(--ant-color-border, #f0f0f0)', borderLeft: '3px solid var(--ant-color-primary, #2f62d8)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <LoadingOutlined />
-          <Text strong style={{ fontSize: 12 }}>Đang xuất bản</Text>
+          <Text strong style={{ fontSize: 12 }}>Đang kiểm tra trạng thái xuất bản</Text>
           <Text type="secondary" style={{ fontSize: 12 }}>{publishingDocIds.size} tài liệu / {set.documentIds.length} · chạy locally</Text>
           <div style={{ flex: 1, minWidth: 80 }}>
             <Progress percent={set.documentIds.length ? Math.round((publishingDocIds.size / set.documentIds.length) * 100) : 0} status="active" size="small" />
@@ -938,7 +947,7 @@ export function DocumentSetDetail({
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ width: 150 }}
-              options={Object.entries(STATE_UI).map(([value, ui]) => ({ value, label: ui.label }))}
+              options={Object.keys(STATE_UI).map((value) => ({ value, label: value }))}
             />
             <Select
               aria-label="Sắp xếp"
@@ -976,7 +985,7 @@ export function DocumentSetDetail({
               <Text type="secondary">{selectedDoc.path || '—'}</Text>
               <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
               <Text type="secondary">{selectedDoc.updatedAt}</Text>
-              <Tag color={STATE_UI[selectedDoc.status].color}>{STATE_UI[selectedDoc.status].label}</Tag>
+              <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
               <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
             </Space>
           ) : (
