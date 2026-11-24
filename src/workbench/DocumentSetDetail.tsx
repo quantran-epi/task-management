@@ -593,17 +593,16 @@ export function DocumentSetDetail({
 
   const rows = useMemo<DocumentRow[]>(() => {
     if (!set) return [];
-    const titlesById = new Map(allNotes.map((note) => [note.id, note.title || 'Không tiêu đề']));
+    const notesById = new Map(allNotes.map((note) => [note.id, note]));
     const encoder = new TextEncoder();
     return documents.map((note, index) => {
       const pathTitles: string[] = [];
       let parentId = note.parentId;
       for (let depth = 0; parentId && depth < 20; depth += 1) {
-        const title = titlesById.get(parentId);
-        if (!title) break;
-        pathTitles.unshift(title);
-        const parent = allNotes.find((candidate) => candidate.id === parentId);
-        parentId = parent?.parentId;
+        const parent = notesById.get(parentId);
+        if (!parent) break;
+        pathTitles.unshift(parent.title || 'Không tiêu đề');
+        parentId = parent.parentId;
       }
       const published = publishedById.get(note.id);
       const status: PublishPrimaryState = publishingDocIds.has(note.id)
