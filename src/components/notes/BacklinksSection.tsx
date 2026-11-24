@@ -33,7 +33,7 @@ export const BacklinksSection: React.FC<BacklinksSectionProps> = ({
       style={{
         marginTop: 24,
         paddingTop: 16,
-        borderTop: '1px solid #f0f0f0',
+        borderTop: '1px solid var(--border)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 12 }}>

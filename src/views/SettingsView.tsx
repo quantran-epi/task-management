@@ -206,7 +206,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
           <Card
             title={
-              <span style={{ color: '#ff4d4f' }}>
+              <span style={{ color: 'var(--danger)' }}>
                 <WarningOutlined style={{ marginRight: 8 }} />
                 Khu vực nguy hiểm (Danger Zone)
               </span>

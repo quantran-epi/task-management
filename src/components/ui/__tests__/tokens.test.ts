@@ -81,11 +81,30 @@ describe('tokens — single source parity', () => {
     const tokens = mode === 'light' ? lightTokens : darkTokens;
     const element = document.createElement('div');
     applyCssVariables(mode, element);
-    for (const name of ['--accent', '--bg-app', '--fg', '--success', '--danger', '--radius-control']) {
+    const names = [
+      '--accent', '--bg-app', '--fg', '--success', '--danger', '--radius-control',
+      '--diff-add-bg', '--diff-add-fg', '--diff-del-bg', '--diff-del-fg', '--info-fg',
+    ];
+    for (const name of names) {
       expect(element.style.getPropertyValue(name)).toBe(tokens.css[name as keyof typeof tokens.css]);
     }
     expect(element.style.getPropertyValue('--accent')).toBe(
       mode === 'light' ? '#2f62d8' : '#6a9bff'
+    );
+    expect(element.style.getPropertyValue('--diff-add-bg')).toBe(
+      mode === 'light' ? '#e6ffed' : 'rgba(74, 222, 128, 0.16)'
+    );
+    expect(element.style.getPropertyValue('--diff-add-fg')).toBe(
+      mode === 'light' ? '#1a6b34' : '#4ade80'
+    );
+    expect(element.style.getPropertyValue('--diff-del-bg')).toBe(
+      mode === 'light' ? '#ffeef0' : 'rgba(255, 130, 137, 0.16)'
+    );
+    expect(element.style.getPropertyValue('--diff-del-fg')).toBe(
+      mode === 'light' ? '#a3272e' : '#ff8289'
+    );
+    expect(element.style.getPropertyValue('--info-fg')).toBe(
+      mode === 'light' ? '#0e7490' : '#22d3ee'
     );
     expect(element.style.getPropertyValue('--accent-hover')).toBe(
       mode === 'light' ? '#1e4bb8' : '#8db2ff'

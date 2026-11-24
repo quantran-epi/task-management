@@ -99,7 +99,7 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
           <Badge
             count={items.length}
             overflowCount={99}
-            style={{ backgroundColor: items.length > 0 ? '#ff4d4f' : '#d9d9d9' }}
+            style={{ backgroundColor: items.length > 0 ? 'var(--danger)' : 'var(--control-off)' }}
           />
         </div>
       }

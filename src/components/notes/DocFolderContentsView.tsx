@@ -89,8 +89,8 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
       <div
         style={{
           padding: '20px 24px 16px 24px',
-          borderBottom: '1px solid #f0f0f0',
-          backgroundColor: '#fafafa',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-elev)',
         }}
       >
         {/* Breadcrumbs */}
@@ -132,12 +132,12 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
             {currentFolder ? (
-              <FolderOpenFilled style={{ fontSize: 28, color: '#d97706' }} />
+              <FolderOpenFilled style={{ fontSize: 28, color: 'var(--warning)' }} />
             ) : (
               <FolderFilled style={{ fontSize: 28, color: 'var(--accent)' }} />
             )}
             <div>
-              <Title level={4} style={{ margin: 0, color: '#1f2937' }}>
+              <Title level={4} style={{ margin: 0, color: 'var(--fg)' }}>
                 {getFilterTitle()}
               </Title>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
@@ -176,7 +176,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
         {subfolders.length > 0 && (
           <div>
             <div style={{ marginBottom: 12 }}>
-              <Text strong style={{ fontSize: 14, color: '#374151' }}>
+              <Text strong style={{ fontSize: 14, color: 'var(--fg)' }}>
                 Thư mục ({subfolders.length})
               </Text>
             </div>
@@ -189,15 +189,15 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                     onClick={() => onNavigateFolder(folder.id)}
                     style={{
                       borderRadius: 'var(--radius-control)',
-                      border: '1px solid #e5e7eb',
-                      backgroundColor: '#fefce8',
+                      border: '1px solid var(--border)',
+                      backgroundColor: 'rgba(232, 161, 58, 0.16)',
                     }}
                     bodyStyle={{ padding: '12px 14px' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)' }}>
-                      <FolderFilled style={{ fontSize: 22, color: '#d97706', flexShrink: 0 }} />
+                      <FolderFilled style={{ fontSize: 22, color: 'var(--warning)', flexShrink: 0 }} />
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <Text strong style={{ fontSize: 13, color: '#1f2937', display: 'block' }} ellipsis={{ tooltip: folder.title }}>
+                        <Text strong style={{ fontSize: 13, color: 'var(--fg)', display: 'block' }} ellipsis={{ tooltip: folder.title }}>
                           {folder.title || 'Thư mục không tên'}
                         </Text>
                         <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>
@@ -215,7 +215,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
         {/* Section 2: Documents */}
         <div style={{ flex: 1 }}>
           <div style={{ marginBottom: 12 }}>
-            <Text strong style={{ fontSize: 14, color: '#374151' }}>
+            <Text strong style={{ fontSize: 14, color: 'var(--fg)' }}>
               Tài liệu ({documents.length})
             </Text>
           </div>
@@ -259,7 +259,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         onClick={() => onSelectDoc(doc)}
                         style={{
                           borderRadius: 'var(--radius-control)',
-                          border: '1px solid #e5e7eb',
+                          border: '1px solid var(--border)',
                           height: '100%',
                           display: 'flex',
                           flexDirection: 'column',
@@ -277,7 +277,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                           ) : (
                             <FileTextOutlined style={{ color: 'var(--accent)', fontSize: 15 }} />
                           )}
-                          <Text strong style={{ fontSize: 14, color: '#111827', flex: 1 }} ellipsis={{ tooltip: doc.title }}>
+                          <Text strong style={{ fontSize: 14, color: 'var(--fg)', flex: 1 }} ellipsis={{ tooltip: doc.title }}>
                             {doc.title || 'Không có tiêu đề'}
                           </Text>
                           {doc.isPinned && <Tag color="blue">Ghim</Tag>}
@@ -296,7 +296,7 @@ export const DocFolderContentsView: React.FC<DocFolderContentsViewProps> = ({
                         <Paragraph
                           type="secondary"
                           ellipsis={{ rows: 2 }}
-                          style={{ fontSize: 'var(--font-size-small)', marginBottom: 8, flex: 1, color: '#6b7280' }}
+                          style={{ fontSize: 'var(--font-size-small)', marginBottom: 8, flex: 1, color: 'var(--fg-secondary)' }}
                         >
                           {snippet}
                         </Paragraph>

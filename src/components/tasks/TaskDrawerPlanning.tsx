@@ -281,12 +281,12 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
       </div>
 
       {/* Progress & Live Estimate Comparison */}
-      <Card size="small" style={{ marginBottom: 16, backgroundColor: '#fafafa' }}>
+      <Card size="small" style={{ marginBottom: 16, backgroundColor: 'var(--bg-elev)' }}>
         <div style={{ marginBottom: 6 }}>
           <Progress
             percent={Math.min(100, percent)}
             status={isOverEstimate ? 'exception' : percent === 100 ? 'success' : 'normal'}
-            {...(isOverEstimate ? { strokeColor: '#fa8c16' } : {})}
+            {...(isOverEstimate ? { strokeColor: 'var(--warning)' } : {})}
             aria-label="Tiến độ phân bổ"
             data-testid="planning-progress-bar"
           />
@@ -298,7 +298,7 @@ export const TaskDrawerPlanning: React.FC<TaskDrawerPlanningProps> = ({
           </Text>
           <Text
             strong
-            style={{ color: isOverEstimate ? '#fa8c16' : '#52c41a' }}
+            style={{ color: isOverEstimate ? 'var(--warning)' : 'var(--success)' }}
             data-testid="planning-metrics-balance"
           >
             {isOverEstimate

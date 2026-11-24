@@ -188,9 +188,9 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '8px 12px',
-              background: 'rgba(0, 0, 0, 0.02)',
+              background: 'var(--bg-elev)',
               borderRadius: 'var(--radius-control)',
-              border: '1px solid rgba(0, 0, 0, 0.08)',
+              border: '1px solid var(--border)',
             }}
           >
             <Space>
@@ -226,9 +226,9 @@ export const GitHubConfigCard: React.FC<GitHubConfigCardProps> = ({ db = default
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '8px 12px',
-              background: 'rgba(0, 0, 0, 0.02)',
+              background: 'var(--bg-elev)',
               borderRadius: 'var(--radius-control)',
-              border: '1px solid rgba(0, 0, 0, 0.08)',
+              border: '1px solid var(--border)',
             }}
           >
             <Space>

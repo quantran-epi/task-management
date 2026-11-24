@@ -391,7 +391,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                 size="small"
                 style={{
                   borderLeft: note.isPinned ? '3px solid var(--accent)' : undefined,
-                  background: note.isPinned ? '#fafcff' : '#fff',
+                  background: note.isPinned ? 'var(--accent-soft)' : 'var(--bg-island)',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
                 role="button"
@@ -482,7 +482,7 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
                 <div
                   style={{
                     fontSize: 'var(--font-size-small)',
-                    color: '#434343',
+                    color: 'var(--fg-secondary)',
                     maxHeight: 140,
                     overflowY: 'auto',
                     whiteSpace: 'pre-wrap',

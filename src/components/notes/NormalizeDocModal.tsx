@@ -236,7 +236,7 @@ ${originalContent}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                border: '1px solid #e5e7eb',
+                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-control)',
                 overflow: 'hidden',
               }}
@@ -244,11 +244,11 @@ ${originalContent}
               <div
                 style={{
                   padding: '6px 12px',
-                  backgroundColor: '#f3f4f6',
-                  borderBottom: '1px solid #e5e7eb',
+                  backgroundColor: 'var(--bg-elev)',
+                  borderBottom: '1px solid var(--border)',
                   fontWeight: 600,
                   fontSize: 'var(--font-size-small)',
-                  color: '#4b5563',
+                  color: 'var(--fg-secondary)',
                 }}
               >
                 Nội dung gốc
@@ -260,7 +260,7 @@ ${originalContent}
                   overflowY: 'auto',
                   fontSize: 13,
                   lineHeight: 1.6,
-                  backgroundColor: '#fafafa',
+                  backgroundColor: 'var(--bg-elev)',
                   whiteSpace: 'pre-wrap',
                   fontFamily: 'monospace',
                 }}
@@ -274,7 +274,7 @@ ${originalContent}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                border: '1px solid #bae6fd',
+                border: '1px solid rgba(34, 211, 238, 0.14)',
                 borderRadius: 'var(--radius-control)',
                 overflow: 'hidden',
               }}
@@ -282,8 +282,8 @@ ${originalContent}
               <div
                 style={{
                   padding: '6px 12px',
-                  backgroundColor: '#f0f9ff',
-                  borderBottom: '1px solid #bae6fd',
+                  backgroundColor: 'rgba(34, 211, 238, 0.14)',
+                  borderBottom: '1px solid rgba(34, 211, 238, 0.14)',
                   fontWeight: 600,
                   fontSize: 'var(--font-size-small)',
                   color: '#0369a1',
@@ -322,7 +322,7 @@ ${originalContent}
             style={{
               height: 480,
               overflowY: 'auto',
-              border: '1px solid #e5e7eb',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-control)',
               padding: 16,
               backgroundColor: 'var(--bg-island)',

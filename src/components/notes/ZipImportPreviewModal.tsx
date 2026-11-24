@@ -405,9 +405,9 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
             <div
               style={{
                 padding: '12px 14px',
-                backgroundColor: '#f8fafc',
+                backgroundColor: 'var(--bg-elev)',
                 borderRadius: 'var(--radius-control)',
-                border: '1px solid #e2e8f0',
+                border: '1px solid var(--border)',
               }}
             >
               <Text strong style={{ fontSize: 13, display: 'block', marginBottom: 8 }}>
@@ -558,7 +558,7 @@ export const ZipImportPreviewModal: React.FC<ZipImportPreviewModalProps> = ({
       >
         {previewDoc && (
           <div>
-            <div style={{ marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ marginBottom: 12, paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>
                 Đường dẫn: {previewDoc.relativePath} • {previewDoc.wordCount} từ
               </Text>

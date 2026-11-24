@@ -278,11 +278,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
               minHeight: 180,
               maxHeight: 300,
               overflowY: 'auto',
-              border: '1px solid #d9d9d9',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius-control)',
               padding: '12px 16px',
               marginBottom: 16,
-              background: '#fafafa',
+              background: 'var(--bg-elev)',
             }}
             dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(markdownBody) || '<em>(Chưa có nội dung)</em>' }}
           />

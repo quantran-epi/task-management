@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="description" content="TaskMate - Private offline-first personal task and workload planner" />
+    <script>
+      try {
+        var mode = localStorage.getItem('taskmate_theme');
+        if (mode === 'dark' || (!mode && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.style.setProperty('--bg-frame', '#11151d');
+        }
+      } catch (_) {}
+    </script>
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%pwa-192x192.png" />
     <title>TaskMate</title>
@@ -15,7 +23,10 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #e9eaee;
+        background: var(--bg-frame, #e9eaee);
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: var(--bg-frame, #11151d); }
       }
     </style>
   </head>

@@ -77,7 +77,7 @@ export const StoragePersistenceCard: React.FC = () => {
             </div>
             <Progress
               percent={percentUsed}
-              strokeColor={percentUsed > 80 ? '#faad14' : 'var(--accent)'}
+              strokeColor={percentUsed > 80 ? 'var(--warning)' : 'var(--accent)'}
               status={percentUsed > 80 ? 'exception' : 'normal'}
             />
           </div>

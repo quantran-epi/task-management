@@ -376,7 +376,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             {
               key: 'pin',
               label: doc.isPinned ? 'Bỏ ghim' : 'Ghim lên đầu',
-              icon: doc.isPinned ? <PushpinFilled style={{ color: '#d97706' }} /> : <PushpinOutlined />,
+              icon: doc.isPinned ? <PushpinFilled style={{ color: 'var(--warning)' }} /> : <PushpinOutlined />,
               onClick: () => onTogglePin(doc),
             },
           ]
@@ -438,8 +438,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             paddingLeft: depth === 0 ? 8 : 34 + (depth - 1) * 16,
             borderRadius: 4,
             cursor: 'pointer',
-            backgroundColor: isSelected ? '#e0e7ff' : 'transparent',
-            color: isSelected ? '#3730a3' : '#374151',
+            backgroundColor: isSelected ? 'var(--accent-soft)' : 'transparent',
+            color: isSelected ? 'var(--accent)' : 'var(--fg)',
             fontWeight: isSelected ? 600 : 400,
             fontSize: 'var(--font-size-small)',
             transition: 'all 0.15s ease',
@@ -448,7 +448,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           className="doc-tree-item"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
-            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? 'var(--accent)' : isDiagram ? '#10b981' : '#6b7280' }}>
+            <span style={{ fontSize: 13, flexShrink: 0, color: isSelected ? 'var(--accent)' : isDiagram ? 'var(--success)' : 'var(--fg-secondary)' }}>
               {isDiagram ? <ApartmentOutlined /> : isQuickNote ? <FormOutlined /> : <FileTextOutlined />}
             </span>
             <span
@@ -464,7 +464,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               {doc.title || (isDiagram ? 'Biểu đồ' : isQuickNote ? 'Ghi chú nhanh' : 'Không tiêu đề')}
             </span>
             {doc.isPinned && !isQuickNote && (
-              <PushpinFilled style={{ fontSize: 10, color: '#f59e0b', flexShrink: 0 }} />
+              <PushpinFilled style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0 }} />
             )}
             {doc.entityType === 'task' && (
               <Tooltip title="Thuộc về một tác vụ">
@@ -473,12 +473,12 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             )}
             {doc.entityType === 'cr' && (
               <Tooltip title="Thuộc về một Change Request">
-                <ThunderboltOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#722ed1', flexShrink: 0 }} />
+                <ThunderboltOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--accent)', flexShrink: 0 }} />
               </Tooltip>
             )}
             {doc.entityType === 'system' && (
               <Tooltip title="Thuộc về một hệ thống">
-                <BranchesOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#13c2c2', flexShrink: 0 }} />
+                <BranchesOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--info-fg)', flexShrink: 0 }} />
               </Tooltip>
             )}
           </div>
@@ -495,7 +495,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 <Button
                   type="text"
                   size="small"
-                  icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#9ca3af' }} />}
+                  icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)' }} />}
                   style={{ width: 18, height: 18, padding: 0 }}
                 />
               </Dropdown>
@@ -610,8 +610,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           padding: '5px 8px 5px 4px',
           borderRadius: 'var(--radius-control)',
           cursor: 'pointer',
-          backgroundColor: isActive ? '#f0f2ff' : 'transparent',
-          color: isActive ? 'var(--accent)' : '#262626',
+          backgroundColor: isActive ? 'var(--accent-soft)' : 'transparent',
+          color: isActive ? 'var(--accent)' : 'var(--fg)',
           fontWeight: isActive ? 600 : 400,
           fontSize: 13,
           transition: 'all 0.15s ease',
@@ -640,7 +640,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               fontSize: 'var(--font-size-xs)',
               padding: '1px 6px',
               borderRadius: 10,
-              backgroundColor: isActive ? '#e0e7ff' : '#f0f0f0',
+              backgroundColor: isActive ? 'var(--accent-soft)' : 'var(--border)',
               color: isActive ? 'var(--accent)' : 'var(--fg-secondary)',
             }}
           >
@@ -652,7 +652,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               <Button
                 type="text"
                 size="small"
-                icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#9ca3af' }} />}
+                icon={<MoreOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)' }} />}
                 style={{ width: 18, height: 18, padding: 0 }}
               />
             </Dropdown>
@@ -674,7 +674,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         {isExpanded && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-1)' }}>
             {visibleDocs.length === 0 ? (
-              <div style={{ padding: '4px 8px 4px 34px', fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
+              <div style={{ padding: '4px 8px 4px 34px', fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)', fontStyle: 'italic' }}>
                 Trống
               </div>
             ) : (
@@ -808,8 +808,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
           paddingLeft: 4 + node.depth * 16,
           borderRadius: 'var(--radius-control)',
           cursor: 'pointer',
-          backgroundColor: isActive ? '#fef3c7' : 'transparent',
-          color: isActive ? '#92400e' : '#262626',
+          backgroundColor: isActive ? 'rgba(232, 161, 58, 0.16)' : 'transparent',
+          color: isActive ? 'var(--fg-strong)' : 'var(--fg)',
           fontWeight: isActive ? 600 : 400,
           fontSize: 13,
           transition: 'all 0.15s ease',
@@ -840,9 +840,9 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
 
           <span style={{ fontSize: 14, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {isExpanded || isActive ? (
-              <FolderOpenOutlined style={{ color: '#eab308' }} />
+              <FolderOpenOutlined style={{ color: 'var(--warning)' }} />
             ) : (
-              <FolderOutlined style={{ color: '#eab308' }} />
+              <FolderOutlined style={{ color: 'var(--warning)' }} />
             )}
           </span>
           <span
@@ -850,7 +850,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              color: isActive ? '#92400e' : '#1f2937',
+              color: isActive ? 'var(--fg-strong)' : 'var(--fg)',
             }}
             title={node.title}
           >
@@ -881,8 +881,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 fontSize: 'var(--font-size-xs)',
                 padding: '1px 6px',
                 borderRadius: 10,
-                backgroundColor: isActive ? '#fde68a' : '#f0f0f0',
-                color: isActive ? '#b45309' : 'var(--fg-secondary)',
+                backgroundColor: isActive ? 'rgba(232, 161, 58, 0.16)' : 'var(--border)',
+                color: isActive ? 'var(--warning)' : 'var(--fg-secondary)',
               }}
             >
               {node.directDocCount}
@@ -893,7 +893,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<FileAddOutlined style={{ fontSize: 'var(--font-size-small)', color: isActive ? '#b45309' : '#6b7280' }} />}
+              icon={<FileAddOutlined style={{ fontSize: 'var(--font-size-small)', color: isActive ? 'var(--warning)' : 'var(--fg-secondary)' }} />}
               onClick={(e) => {
                 e.stopPropagation();
                 onCreateDoc(node.id);
@@ -906,7 +906,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<MoreOutlined style={{ fontSize: 'var(--font-size-small)', color: isActive ? '#b45309' : 'var(--fg-secondary)' }} />}
+              icon={<MoreOutlined style={{ fontSize: 'var(--font-size-small)', color: isActive ? 'var(--warning)' : 'var(--fg-secondary)' }} />}
               style={{ width: 20, height: 20, padding: 0 }}
             />
           </Dropdown>
@@ -961,8 +961,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         flexDirection: 'column',
         gap: 'var(--gap-10)',
         padding: '12px 8px',
-        backgroundColor: '#fafafa',
-        borderRight: typeof width === 'number' ? '1px solid #f0f0f0' : 'none',
+        backgroundColor: 'var(--bg-elev)',
+        borderRight: typeof width === 'number' ? '1px solid var(--border)' : 'none',
         overflowY: 'auto',
       }}
     >
@@ -1066,7 +1066,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
       {/* 3. When Searching: Render Search Result List */}
       {debouncedQuery ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)', flex: 1, overflowY: 'auto' }}>
-          <div style={{ padding: '4px 8px', fontSize: 'var(--font-size-xs)', fontWeight: 700, color: '#6b7280' }}>
+          <div style={{ padding: '4px 8px', fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--fg-secondary)' }}>
             KẾT QUẢ TÌM KIẾM ({searchResults?.length || 0})
             {searchScope === 'folder' && (
               <span style={{ fontWeight: 400, color: 'var(--accent)', marginLeft: 4 }}>
@@ -1088,18 +1088,18 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
         /* 4. Normal Mode: Unified Tree with Special Folders + User Folders + Root Documents */
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', flex: 1 }}>
           {/* Top Special System Folders */}
-          {renderSpecialFolder('pinned', 'Đã ghim', <PushpinFilled style={{ color: '#f59e0b' }} />, pinnedDocs, '#f59e0b')}
+          {renderSpecialFolder('pinned', 'Đã ghim', <PushpinFilled style={{ color: 'var(--warning)' }} />, pinnedDocs, 'var(--warning)')}
           {renderSpecialFolder(
             'quick_notes',
             'Ghi chú nhanh',
-            <FormOutlined style={{ color: '#059669' }} />,
+            <FormOutlined style={{ color: 'var(--success)' }} />,
             quickNotes,
-            '#059669',
+            'var(--success)',
             <Tooltip title="Tạo ghi chú nhanh mới">
               <Button
                 type="text"
                 size="small"
-                icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#059669' }} />}
+                icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--success)' }} />}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectFilter('quick_notes');
@@ -1115,14 +1115,14 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
             renderSpecialFolder(
               'root_docs',
               'Tài liệu chung (Chưa phân loại)',
-              <FolderOutlined style={{ color: '#eab308' }} />,
+              <FolderOutlined style={{ color: 'var(--warning)' }} />,
               rootDirectDocs,
-              '#eab308',
+              'var(--warning)',
               <Tooltip title="Tạo tài liệu mới ở cấp gốc">
                 <Button
                   type="text"
                   size="small"
-                  icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: '#eab308' }} />}
+                  icon={<PlusOutlined style={{ fontSize: 'var(--font-size-xs)', color: 'var(--warning)' }} />}
                   onClick={(e) => {
                     e.stopPropagation();
                     onCreateDoc(undefined);
@@ -1164,7 +1164,7 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                 style={{
                   padding: '8px',
                   textAlign: 'center',
-                  border: '1px dashed #e5e7eb',
+                  border: '1px dashed var(--border)',
                   borderRadius: 'var(--radius-control)',
                   margin: '2px 4px',
                 }}
@@ -1226,8 +1226,8 @@ export const DocFolderTree: React.FC<DocFolderTreeProps> = ({
                         borderRadius: 12,
                         fontSize: 'var(--font-size-small)',
                         cursor: 'pointer',
-                        backgroundColor: isTagActive ? 'var(--accent)' : '#f0f0f0',
-                        color: isTagActive ? 'var(--bg-island)' : '#4b5563',
+                        backgroundColor: isTagActive ? 'var(--accent)' : 'var(--border)',
+                        color: isTagActive ? 'var(--bg-island)' : 'var(--fg-secondary)',
                         transition: 'all 0.15s ease',
                       }}
                     >

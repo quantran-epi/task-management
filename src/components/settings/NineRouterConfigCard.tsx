@@ -555,7 +555,7 @@ export const NineRouterConfigCard: React.FC<NineRouterConfigCardProps> = ({ db =
           </div>
         )}
 
-        <div style={{ marginTop: 28, marginBottom: 16, borderTop: '1px solid #f0f0f0', paddingTop: 20 }}>
+        <div style={{ marginTop: 28, marginBottom: 16, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
           <Space align="center" style={{ marginBottom: 12 }}>
             <PictureOutlined style={{ fontSize: 18, color: 'var(--accent)' }} />
             <Text strong style={{ fontSize: 15 }}>

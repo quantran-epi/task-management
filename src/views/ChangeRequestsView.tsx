@@ -128,7 +128,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
             icon={<PlusOutlined />}
             onClick={handleOpenCreateCR}
             data-testid="btn-create-cr"
-            style={{ backgroundColor: '#3871e1' }}
+            style={{ backgroundColor: 'var(--accent)' }}
           >
             Tạo Change Request
           </Button>
@@ -143,9 +143,9 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
           flexWrap: 'wrap',
           alignItems: 'center',
           padding: '10px 14px',
-          background: '#f9f9fb',
+          background: 'var(--bg-elev)',
           borderRadius: 'var(--radius-control)',
-          border: '1px solid #e9eaee',
+          border: '1px solid var(--border)',
         }}
       >
         <SearchInput
@@ -156,7 +156,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         />
 
         <Space size={6}>
-          <span style={{ fontSize: 13, color: '#595959' }}>
+          <span style={{ fontSize: 13, color: 'var(--fg-secondary)' }}>
             <FilterOutlined style={{ marginRight: 4 }} />
             Loại CR:
           </span>
@@ -174,7 +174,7 @@ export const ChangeRequestsView: React.FC<ChangeRequestsViewProps> = ({ db = def
         </Space>
 
         <Space size={6}>
-          <span style={{ fontSize: 13, color: '#595959' }}>Target Subsystem:</span>
+          <span style={{ fontSize: 13, color: 'var(--fg-secondary)' }}>Target Subsystem:</span>
           <Select
             value={filterSystemId}
             onChange={(val) => setFilterSystemId(val)}

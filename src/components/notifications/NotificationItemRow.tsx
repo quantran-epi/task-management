@@ -51,7 +51,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
             type="text"
             shape="circle"
             size="small"
-            icon={<CheckOutlined style={{ color: '#52c41a' }} />}
+            icon={<CheckOutlined style={{ color: 'var(--success)' }} />}
             onClick={handleCompleteReminder}
             aria-label={`Đã xong nhắc nhở ${item.title}`}
             style={{ width: 22, height: 22, minWidth: 22, padding: 0 }}
@@ -69,13 +69,13 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
       );
     }
     if (item.entityType === 'capacity') {
-      return <CalendarOutlined style={{ color: '#fa8c16', fontSize: 16 }} />;
+      return <CalendarOutlined style={{ color: 'var(--warning)', fontSize: 16 }} />;
     }
     if (item.entityType === 'cr') {
       return <FolderOutlined style={{ color: 'var(--accent)', fontSize: 16 }} />;
     }
     if (item.entityType === 'system') {
-      return <FlagOutlined style={{ color: '#722ed1', fontSize: 16 }} />;
+      return <FlagOutlined style={{ color: 'var(--accent)', fontSize: 16 }} />;
     }
     return null;
   };
@@ -104,9 +104,9 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
             <Button
               type="text"
               size="small"
-              icon={<CheckOutlined style={{ color: '#52c41a' }} />}
+              icon={<CheckOutlined style={{ color: 'var(--success)' }} />}
               onClick={handleCompleteReminder}
-              style={{ padding: '0 6px', color: '#52c41a' }}
+              style={{ padding: '0 6px', color: 'var(--success)' }}
             >
               Đã xong
             </Button>
@@ -137,7 +137,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '10px 12px',
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: '1px solid var(--border)',
         gap: 'var(--gap-12)',
         width: '100%',
         boxSizing: 'border-box',
@@ -152,7 +152,7 @@ export const NotificationItemRow: React.FC<NotificationItemRowProps> = ({
               ellipsis
               style={{
                 cursor: 'pointer',
-                color: item.task?.status === 'Done' ? undefined : '#262626',
+                color: item.task?.status === 'Done' ? undefined : 'var(--fg)',
               }}
               delete={item.task?.status === 'Done'}
               onClick={() => onItemClick(item)}

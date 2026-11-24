@@ -142,7 +142,7 @@
 
 .chat-markdown-body a,
 .markdown-rendered-view a {
-  color: #1677ff;
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
   word-break: break-word;
@@ -281,7 +281,7 @@
 }
 
 .code-block-wrapper .code-diagram-btn {
-  color: #1677ff;
+  color: var(--accent);
   border-color: rgba(22, 119, 255, 0.4);
   font-weight: 500;
 }
@@ -290,14 +290,14 @@
 .markdown-rendered-view .code-copy-btn:hover,
 .code-block-wrapper .code-copy-btn:hover {
   opacity: 1;
-  border-color: #1677ff;
-  color: #1677ff;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .code-block-wrapper .code-diagram-btn:hover {
   opacity: 1;
   background-color: rgba(22, 119, 255, 0.1);
-  border-color: #1677ff;
+  border-color: var(--accent);
 }
 
 /* Wiki Link Chips in Markdown View */
@@ -307,19 +307,20 @@
   gap: 4px;
   padding: 1px 8px;
   border-radius: 12px;
-  background-color: #f3e8ff;
-  color: #7e22ce;
+  background-color: var(--accent-soft);
+  color: var(--fg);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   margin: 0 2px;
-  border: 1px solid #e9d5ff;
+  border: 1px solid var(--accent-soft);
   transition: all 0.15s ease;
 }
 
 .markdown-rendered-view .wiki-link-chip:hover {
-  background-color: #e9d5ff;
-  color: #6b21a8;
+  background-color: var(--bg-selected);
+  border-color: var(--accent);
+  color: var(--fg-strong);
 }
 
 /* Mermaid inline render: natural size, horizontal scroll instead of shrinking text */

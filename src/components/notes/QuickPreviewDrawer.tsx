@@ -106,7 +106,7 @@ function highlightTextInElement(container: HTMLElement, phrase: string): boolean
 
     const mark = document.createElement('mark');
     mark.className = 'gsd-citation-mark';
-    mark.style.cssText = 'background: #ffe58f; color: #000; padding: 2px 4px; border-radius: 3px; border: 1px solid #d48806; font-weight: 500;';
+    mark.style.cssText = 'background: var(--match);  color: var(--match-ink); padding: 2px 4px; border-radius: 3px; border: 1px solid var(--match); font-weight: 500;';
     mark.textContent = matchedText;
 
     const parent = node.parentNode;
@@ -355,8 +355,8 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
         style={{
           padding: '8px 12px',
           borderRadius: 'var(--radius-control)',
-          background: '#fafafa',
-          color: '#595959',
+          background: 'var(--bg-elev)',
+          color: 'var(--fg-secondary)',
           fontSize: 'var(--font-size-small)',
           fontWeight: 600,
         }}
@@ -365,9 +365,9 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
       </div>
       <div
         data-testid="cited-excerpt-panel"
-        style={{ borderRadius: 'var(--radius-control)', border: '1px solid #d9d9d9', backgroundColor: '#fafafa', overflow: 'hidden' }}
+        style={{ borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', backgroundColor: 'var(--bg-elev)', overflow: 'hidden' }}
       >
-        <div style={{ padding: '6px 12px', background: '#f0f0f0', borderBottom: '1px solid #d9d9d9', fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
+        <div style={{ padding: '6px 12px', background: 'var(--border)', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-small)', fontWeight: 600 }}>
           Trích dẫn từ bản chụp
           {citedSnapshotId && (
             <Text type="secondary" style={{ marginLeft: 8, fontSize: 'var(--font-size-xs)', fontFamily: 'monospace' }}>
@@ -460,8 +460,8 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
               data-testid="cited-excerpt-panel"
               style={{
                 borderRadius: 'var(--radius-control)',
-                border: '1px solid #d9d9d9',
-                backgroundColor: '#fafafa',
+                border: '1px solid var(--border)',
+                backgroundColor: 'var(--bg-elev)',
                 overflow: 'hidden',
               }}
             >
@@ -471,8 +471,8 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '6px 12px',
-                  backgroundColor: '#f0f0f0',
-                  borderBottom: '1px solid #d9d9d9',
+                  backgroundColor: 'var(--border)',
+                  borderBottom: '1px solid var(--border)',
                   fontSize: 'var(--font-size-small)',
                   fontWeight: 600,
                 }}
@@ -494,10 +494,10 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 data-testid="citation-relevance-summary"
                 style={{
                   padding: '10px 14px',
-                  backgroundColor: '#e6f4ff',
-                  borderBottom: !snapshotAvailable ? '1px solid #91caff' : 'none',
+                  backgroundColor: 'var(--accent-soft)',
+                  borderBottom: !snapshotAvailable ? '1px solid var(--border)' : 'none',
                   fontSize: 13,
-                  color: '#0958d9',
+                  color: 'var(--accent)',
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 'var(--gap-8)',
@@ -515,7 +515,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   <div
                     style={{
                       fontSize: 'var(--font-size-small)',
-                      color: '#cf1322',
+                      color: 'var(--danger)',
                       fontWeight: 600,
                       marginTop: 4,
                     }}
@@ -584,14 +584,14 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                 padding: '6px 12px',
                 borderRadius: 'var(--radius-control)',
                 backgroundColor: isHighlighted ? 'rgba(250, 173, 20, 0.15)' : 'rgba(0, 0, 0, 0.02)',
-                borderLeft: '4px solid #faad14',
+                borderLeft: '4px solid var(--warning)',
                 transition: isReducedMotion ? 'none' : 'background-color 0.4s ease',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <Text style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: '#d48806' }}>
+              <Text style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, color: 'var(--warning)' }}>
                 📍 Vị trí trích dẫn: Dòng {targetRange.start}–{targetRange.end}
               </Text>
             </div>
@@ -599,7 +599,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
 
           {/* View mode switcher */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#595959' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-secondary)' }}>
               Nội dung tài liệu ({lines.length} dòng):
             </span>
             <Segmented
@@ -620,7 +620,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
               className="quick-preview-lines-container"
               style={{
                 borderRadius: 'var(--radius-control)',
-                border: '1px solid #d9d9d9',
+                border: '1px solid var(--border)',
                 backgroundColor: 'var(--bg-island)',
                 fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                 fontSize: 13,
@@ -655,7 +655,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       display: 'flex',
                       alignItems: 'baseline',
                       backgroundColor: isLineHighlighted ? 'rgba(255, 229, 143, 0.45)' : 'transparent',
-                      borderLeft: isLineHighlighted ? '4px solid #faad14' : '4px solid transparent',
+                      borderLeft: isLineHighlighted ? '4px solid var(--warning)' : '4px solid transparent',
                     }}
                   >
                     <span
@@ -663,14 +663,14 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       className="gsd-line-number"
                       style={{
                         width: 44,
-                        color: isLineHighlighted ? '#d48806' : 'var(--fg-secondary)',
+                        color: isLineHighlighted ? 'var(--warning)' : 'var(--fg-secondary)',
                         fontWeight: isLineHighlighted ? 700 : 400,
                         textAlign: 'right',
                         paddingRight: 10,
                         userSelect: 'none',
                         flexShrink: 0,
-                        borderRight: isLineHighlighted ? '2px solid #faad14' : '1px solid #f0f0f0',
-                        background: isLineHighlighted ? 'rgba(250, 173, 20, 0.12)' : '#fafafa',
+                        borderRight: isLineHighlighted ? '2px solid var(--warning)' : '1px solid var(--border)',
+                        background: isLineHighlighted ? 'rgba(250, 173, 20, 0.12)' : 'var(--bg-elev)',
                       }}
                     >
                       {lineNum}
@@ -721,7 +721,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
             .quick-preview-markdown .gsd-citation-highlight-block,
             .quick-preview-lines-container .gsd-citation-highlight-block {
               background-color: rgba(255, 229, 143, 0.45) !important;
-              border-left: 4px solid #faad14 !important;
+              border-left: 4px solid var(--warning) !important;
               border-radius: 4px;
               padding-left: 10px !important;
               padding-right: 10px !important;
@@ -734,7 +734,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
 
           {/* Backlinks Section */}
           {hasBacklinks && (
-            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #f0f0f0' }}>
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
               <div
                 style={{
                   display: 'flex',
@@ -743,7 +743,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                   marginBottom: 10,
                   fontWeight: 600,
                   fontSize: 13,
-                  color: '#595959',
+                  color: 'var(--fg-secondary)',
                 }}
               >
                 <LinkOutlined />
@@ -767,7 +767,7 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--bg-elev)',
                       borderRadius: 4,
                       cursor: 'pointer',
                     }}
@@ -791,11 +791,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--bg-elev)',
                       borderRadius: 4,
                     }}
                   >
-                    <ProjectOutlined style={{ color: '#722ed1' }} />
+                    <ProjectOutlined style={{ color: 'var(--accent)' }} />
                     <span style={{ fontWeight: 500 }}>{cr.code || cr.name}</span>
                   </div>
                 ))}
@@ -809,11 +809,11 @@ export const QuickPreviewDrawer: React.FC<QuickPreviewDrawerProps> = ({
                       gap: 'var(--gap-6)',
                       fontSize: 'var(--font-size-small)',
                       padding: '4px 8px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--bg-elev)',
                       borderRadius: 4,
                     }}
                   >
-                    <FileTextOutlined style={{ color: '#52c41a' }} />
+                    <FileTextOutlined style={{ color: 'var(--success)' }} />
                     <span style={{ fontWeight: 500 }}>{refDoc.title || 'Untitled Note'}</span>
                   </div>
                 ))}

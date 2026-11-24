@@ -95,7 +95,7 @@ export const GlobalConventionsCard: React.FC<GlobalConventionsCardProps> = ({ db
     <Card
       title={
         <Space size={8}>
-          <BookOutlined style={{ color: '#3871e1' }} />
+          <BookOutlined style={{ color: 'var(--accent)' }} />
           <span>Quy ước tổ chức (Global Conventions)</span>
           {isConfigured ? (
             <Tag color="success">Đã cấu hình</Tag>
@@ -173,7 +173,7 @@ export const GlobalConventionsCard: React.FC<GlobalConventionsCardProps> = ({ db
         <Button
           type="primary"
           icon={<SaveOutlined />}
-          style={{ backgroundColor: '#3871e1' }}
+          style={{ backgroundColor: 'var(--accent)' }}
           onClick={handleSave}
           loading={saving}
           aria-label="Lưu quy ước tổ chức"

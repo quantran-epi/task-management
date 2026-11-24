@@ -98,7 +98,7 @@
 .cz-tab.active::after { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
 .cz-tab-title { overflow: hidden; text-overflow: ellipsis; }
 .cz-tab-close { border: 0; background: transparent; color: var(--fg-faint); font-size: 14px; padding: 0 2px; border-radius: 3px; }
-.cz-tab-close:hover { background: var(--danger); color: #fff; }
+.cz-tab-close:hover { background: var(--danger); color: var(--accent-fg); }
 .cz-tab-pin { font-size: 9px; color: var(--accent); }
 .cz-tab-icon { font-size: 11px; color: var(--fg-muted); }
 .cz-tab-icon.diff { color: var(--success); }

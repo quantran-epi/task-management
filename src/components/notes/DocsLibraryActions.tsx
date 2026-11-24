@@ -238,7 +238,7 @@ export function DocsLibraryActions({
             style={{
               fontFamily: 'monospace',
               fontSize: 'var(--font-size-small)',
-              backgroundColor: '#fafafa',
+              backgroundColor: 'var(--bg-elev)',
             }}
           />
         </Space>

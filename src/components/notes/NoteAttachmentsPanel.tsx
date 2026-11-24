@@ -209,7 +209,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                 style={{ width: 140, padding: 0 }}
                 styles={{ body: { padding: 8 } }}
               >
-                <div style={{ width: '100%', height: 72, display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: 72, display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-elev)', borderRadius: 4, overflow: 'hidden' }}>
                   {previewUrl && (
                     <Image
                       src={previewUrl}
@@ -293,7 +293,7 @@ export const NoteAttachmentsPanel: React.FC<NoteAttachmentsPanelProps> = ({
                 style={{ width: 140, padding: 0 }}
                 styles={{ body: { padding: 8 } }}
               >
-                <div style={{ width: '100%', height: 72, display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f5f5f5', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: 72, display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'var(--bg-elev)', borderRadius: 4, overflow: 'hidden' }}>
                   {previewUrl && (
                     <Image
                       src={previewUrl}

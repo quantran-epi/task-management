@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Tag, Button, Alert, Spin, Tooltip, useAntdToken, useMessage } from '../../components/ui';
+import { Tag, Button, Alert, Spin, Tooltip, useMessage } from '../../components/ui';
 import { FileTextOutlined, BranchesOutlined, CopyOutlined, CheckOutlined, WarningOutlined, ReloadOutlined, LockOutlined, ApartmentOutlined, FolderViewOutlined } from '../../components/ui/icon';
 import type { SshConfig } from '../../types/ssh';
 import { getRemoteFileContent } from '../../services/gitRemoteTreeService';
@@ -9,6 +9,7 @@ import { DiffLineCodeRenderer } from '../../components/common/DiffSyntaxHighligh
 import { deriveRemoteTargetUuid } from '../../utils/remoteTarget';
 import { useAIChat } from '../../context/AIChatContext';
 import { useLayoutStore } from '../store/layoutStore';
+import { useThemeMode } from '../../hooks/useThemeMode';
 
 export interface RemoteFileViewerProps {
   config?: SshConfig;
@@ -43,9 +44,9 @@ export function RemoteFileViewer({
   db,
 }: RemoteFileViewerProps) {
   const message = useMessage();
-  const { token } = useAntdToken();
   const { registerActiveItem } = useAIChat();
-  const isDark = token.colorBgBase === '#141414' || token.colorTextBase?.includes('255');
+  const { mode } = useThemeMode();
+  const isDark = mode === 'dark';
 
   // Phase 47 D-08 (Pitfall 5): opening/selecting this remote file auto-activates the target's
   // remote scope WITHOUT overriding a manual scope choice. registerActiveItem pushes onto the
@@ -208,7 +209,7 @@ export function RemoteFileViewer({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', minWidth: 0, overflow: 'hidden' }}>
-          <FileTextOutlined style={{ color: 'var(--accent, #3871e1)', fontSize: 14 }} />
+          <FileTextOutlined style={{ color: 'var(--accent)', fontSize: 14 }} />
           <span
             data-testid="remote-file-path"
             title={filePath}
@@ -279,7 +280,7 @@ export function RemoteFileViewer({
                 onClick={handleSaveDiagram}
                 loading={savingDiagram}
                 data-testid="save-diagram-studio-btn"
-                style={{ fontSize: 'var(--font-size-small)', background: '#10b981' }}
+                style={{ fontSize: 'var(--font-size-small)', background: 'var(--success)' }}
               >
                 Save Diagram to Studio
               </Button>
@@ -453,7 +454,7 @@ export function RemoteFileViewer({
                       ...(isHighlighted
                         ? {
                             background: 'rgba(56, 113, 225, 0.18)',
-                            boxShadow: 'inset 2px 0 0 var(--accent, #3871e1)',
+                            boxShadow: 'inset 2px 0 0 var(--accent)',
                           }
                         : {}),
                     }}

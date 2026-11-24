@@ -79,7 +79,7 @@ export const WeeklyCapacityForm: React.FC<WeeklyCapacityFormProps> = ({ db = def
               gutter={[12, 8]}
               style={{
                 padding: '6px 0',
-                borderBottom: day.dayOfWeek === 0 ? 'none' : '1px solid #f0f0f0',
+                borderBottom: day.dayOfWeek === 0 ? 'none' : '1px solid var(--border)',
               }}
               data-testid={`weekday-row-${day.dayOfWeek}`}
             >

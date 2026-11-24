@@ -6,6 +6,7 @@ import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { NoteEntityType } from '../types/models';
 import { createNote, updateNote } from '../db/repositories/noteRepo';
 import { useLayoutStore } from '../workbench/store/layoutStore';
+import { useThemeMode } from '../hooks/useThemeMode';
 import { fixMermaidWithAi } from '../services/ai/mermaidFixerService';
 import { downloadMermaidSvg, downloadMermaidPng } from '../utils/mermaidExport';
 import { searchIncludes } from '../utils/searchText';
@@ -138,10 +139,8 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
 }) => {
   const { token } = useAntdToken();
   const messageApi = useMessage();
-  const isDark = Boolean(
-    (token as any).colorBgBase === '#000000' ||
-      (token.colorBgContainer && parseInt(token.colorBgContainer.slice(1, 3) || 'ff', 16) < 128)
-  );
+  const { mode } = useThemeMode();
+  const isDark = mode === 'dark';
 
   const openTab = useLayoutStore((s) => s.openTab);
   const activeTabId = useLayoutStore((s) => s.activeTabId);
@@ -505,7 +504,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flexWrap: 'wrap' }}>
-          <ApartmentOutlined style={{ fontSize: 20, color: '#10b981' }} />
+          <ApartmentOutlined style={{ fontSize: 20, color: 'var(--success)' }} />
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -770,7 +769,7 @@ export const MermaidAssistantView: React.FC<MermaidAssistantViewProps> = ({
               padding: 0,
               position: 'relative',
               overflow: 'hidden',
-              backgroundColor: isDark ? '#141414' : '#fafafa',
+              backgroundColor: token.colorBgContainer,
             },
           }}
         >

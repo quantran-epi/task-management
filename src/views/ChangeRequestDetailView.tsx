@@ -264,7 +264,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           padding: '16px 20px',
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',
-          border: '1px solid var(--border, #e9eaee)',
+          border: '1px solid var(--border)',
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 0 }}>
@@ -324,7 +324,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         style={{
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',
-          border: '1px solid var(--border, #e9eaee)',
+          border: '1px solid var(--border)',
           padding: 12,
         }}
       >
@@ -368,7 +368,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                             ? '#52c41a'
                             : record.status === 'In Progress'
                               ? 'var(--accent)'
-                              : '#d1d3d9',
+                              : 'var(--border-strong)',
                       }}
                     />
                     {name}

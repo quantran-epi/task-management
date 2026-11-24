@@ -188,8 +188,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: '#fafafa',
-        borderRight: '1px solid #f0f0f0',
+        backgroundColor: 'var(--bg-elev)',
+        borderRight: '1px solid var(--border)',
       }}
     >
       {/* Header with Search and Sort */}
@@ -202,18 +202,18 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '6px 10px',
-              backgroundColor: '#fef3c7',
+              backgroundColor: 'rgba(232, 161, 58, 0.16)',
               borderRadius: 'var(--radius-control)',
-              border: '1px solid #fde68a',
+              border: '1px solid rgba(232, 161, 58, 0.16)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
-              <FolderFilled style={{ color: '#d97706', fontSize: 15, flexShrink: 0 }} />
+              <FolderFilled style={{ color: 'var(--warning)', fontSize: 15, flexShrink: 0 }} />
               <div
                 style={{
                   fontWeight: 600,
                   fontSize: 'var(--font-size-small)',
-                  color: '#92400e',
+                  color: 'var(--warning)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -227,7 +227,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     const isLast = idx === folderPath.length - 1;
                     return (
                       <React.Fragment key={item.id}>
-                        {idx > 0 && <span style={{ color: '#d97706', opacity: 0.6 }}>/</span>}
+                        {idx > 0 && <span style={{ color: 'var(--warning)', opacity: 0.6 }}>/</span>}
                         {isLast ? (
                           <span style={{ fontWeight: 700 }} title={item.title}>
                             {item.title}
@@ -264,8 +264,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   fontSize: 'var(--font-size-xs)',
                   height: 24,
                   padding: '0 8px',
-                  backgroundColor: '#d97706',
-                  borderColor: '#d97706',
+                  backgroundColor: 'var(--warning)',
+                  borderColor: 'var(--warning)',
                   flexShrink: 0,
                   marginLeft: 6,
                 }}
@@ -374,8 +374,8 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                   padding: '10px 12px',
                   borderRadius: 'var(--radius-control)',
                   cursor: 'pointer',
-                  backgroundColor: isSelected ? '#f0f2ff' : 'var(--bg-island)',
-                  border: isSelected ? '1px solid #c7d2fe' : '1px solid #f0f0f0',
+                  backgroundColor: isSelected ? 'var(--accent-soft)' : 'var(--bg-island)',
+                  border: '1px solid var(--border)',
                   borderLeft: isSelected ? '3px solid var(--accent)' : '3px solid transparent',
                   boxShadow: isSelected ? '0 1px 3px rgba(79, 70, 229, 0.1)' : 'none',
                   transition: 'all 0.15s ease',
@@ -394,7 +394,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                       style={{
                         fontWeight: 600,
                         fontSize: 13,
-                        color: isSelected ? 'var(--accent)' : '#262626',
+                        color: isSelected ? 'var(--accent)' : 'var(--fg)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -471,7 +471,7 @@ export const DocListPane: React.FC<DocListPaneProps> = ({
                     justifyContent: 'space-between',
                     marginTop: 8,
                     fontSize: 'var(--font-size-xs)',
-                    color: '#bfbfbf',
+                    color: 'var(--fg-faint)',
                   }}
                 >
                   <div style={{ display: 'flex', gap: 'var(--gap-4)', flexWrap: 'wrap', maxWidth: '70%' }}>

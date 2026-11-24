@@ -100,9 +100,9 @@ async function loadBranchDetails(
 }
 
 const CONNECTION_STATUS: Record<'connected' | 'unconfigured' | 'error', { color: string; label: string }> = {
-  connected: { color: '#52c41a', label: 'Đã kết nối' },
-  unconfigured: { color: '#faad14', label: 'Chưa cấu hình' },
-  error: { color: '#c54e58', label: 'Lỗi kết nối' },
+  connected: { color: 'var(--success)', label: 'Đã kết nối' },
+  unconfigured: { color: 'var(--warning)', label: 'Chưa cấu hình' },
+  error: { color: 'var(--danger)', label: 'Lỗi kết nối' },
 };
 
 const ConnectionStatus: React.FC<{ state: 'connected' | 'unconfigured' | 'error' }> = ({ state }) => {

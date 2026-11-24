@@ -339,7 +339,7 @@ export const TelegramMonitorView: React.FC = () => {
       );
     }
     if (isRunning) {
-      return <Badge status="accent" text={<Text strong style={{ color: '#10b981' }}>Đang lắng nghe (Running)</Text>} />;
+      return <Badge status="accent" text={<Text strong style={{ color: 'var(--success)' }}>Đang lắng nghe (Running)</Text>} />;
     }
     return <Badge status="info" text={<Text type="secondary">Đã dừng (Stopped)</Text>} />;
   };
@@ -478,9 +478,9 @@ export const TelegramMonitorView: React.FC = () => {
                         <div
                           style={{
                             padding: '12px 16px',
-                            background: '#f8fafc',
+                            background: 'var(--bg-elev)',
                             borderRadius: 'var(--radius-control)',
-                            border: '1px solid #e2e8f0',
+                            border: '1px solid var(--border)',
                           }}
                         >
                           <div style={{ marginBottom: 12 }}>
@@ -499,13 +499,13 @@ export const TelegramMonitorView: React.FC = () => {
                               style={{
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
-                                color: '#1e293b',
+                                color: 'var(--fg)',
                                 fontSize: 13,
                                 lineHeight: 1.6,
                                 padding: '8px 12px',
                                 background: 'var(--bg-island)',
                                 borderRadius: 'var(--radius-control)',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid var(--border)',
                               }}
                             >
                               {r.userMessage}
@@ -519,13 +519,13 @@ export const TelegramMonitorView: React.FC = () => {
                               style={{
                                 whiteSpace: 'pre-wrap',
                                 wordBreak: 'break-word',
-                                color: '#0f172a',
+                                color: 'var(--fg)',
                                 fontSize: 13,
                                 lineHeight: 1.6,
                                 background: 'var(--bg-island)',
                                 padding: '10px 14px',
                                 borderRadius: 'var(--radius-control)',
-                                border: '1px solid #e2e8f0',
+                                border: '1px solid var(--border)',
                               }}
                             >
                               {r.aiResponse}
@@ -584,7 +584,7 @@ export const TelegramMonitorView: React.FC = () => {
                           <div style={{ maxWidth: 480 }}>
                             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
                               <Tag color="cyan" style={{ marginRight: 6, flexShrink: 0 }}>User</Tag>
-                              <Text ellipsis style={{ flex: 1, color: '#334155' }}>
+                              <Text ellipsis style={{ flex: 1, color: 'var(--fg)' }}>
                                 {r.userMessage}
                               </Text>
                             </div>
@@ -677,14 +677,14 @@ export const TelegramMonitorView: React.FC = () => {
                     <Card
                       style={{
                         marginBottom: 20,
-                        borderColor: '#fed7aa',
-                        backgroundColor: '#fffbeb',
+                        borderColor: 'var(--warning)',
+                        backgroundColor: 'rgba(232, 161, 58, 0.16)',
                         borderRadius: 'var(--radius-control)',
                       }}
                       title={
                         <Space>
-                          <UserOutlined style={{ color: '#d97706' }} />
-                          <strong style={{ color: '#b45309' }}>
+                          <UserOutlined style={{ color: 'var(--warning)' }} />
+                          <strong style={{ color: 'var(--warning)' }}>
                             Hàng chờ phê duyệt ({pendingCount} người dùng mới)
                           </strong>
                         </Space>
@@ -702,7 +702,7 @@ export const TelegramMonitorView: React.FC = () => {
                               padding: '10px 12px',
                               background: 'var(--bg-island)',
                               borderRadius: 'var(--radius-control)',
-                              border: '1px solid #fde68a',
+                              border: '1px solid var(--warning)',
                               flexWrap: 'wrap',
                               gap: 'var(--gap-8)',
                             }}
@@ -724,7 +724,7 @@ export const TelegramMonitorView: React.FC = () => {
                               <Button
                                 size="small"
                                 type="primary"
-                                style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                                style={{ backgroundColor: 'var(--success)', borderColor: 'var(--success)' }}
                                 icon={<CheckCircleOutlined />}
                                 onClick={async () => {
                                   try {

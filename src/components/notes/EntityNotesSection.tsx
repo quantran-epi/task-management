@@ -143,7 +143,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                 data-ai-context-id={note.id}
                 style={{
                   borderLeft: note.isPinned ? '3px solid var(--accent)' : undefined,
-                  background: note.isPinned ? '#f0f7ff' : '#fff',
+                  background: note.isPinned ? 'var(--accent-soft)' : 'var(--bg-island)',
                 }}
                 styles={{ body: { padding: '10px 12px' } }}
                 role="button"
@@ -228,7 +228,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
                 <div
                   style={{
                     fontSize: 13,
-                    color: '#434343',
+                    color: 'var(--fg-secondary)',
                     maxHeight: 120,
                     overflowY: 'auto',
                     whiteSpace: 'pre-wrap',

@@ -88,9 +88,9 @@ export const SystemTable: React.FC<SystemTableProps> = ({
           <Space direction="vertical" size={2}>
             <Space>
               {isParent ? (
-                <FolderOutlined style={{ color: '#722ed1', fontSize: 15 }} />
+                <FolderOutlined style={{ color: 'var(--accent)', fontSize: 15 }} />
               ) : (
-                <BranchesOutlined style={{ color: '#13c2c2', fontSize: 14 }} />
+                <BranchesOutlined style={{ color: 'var(--info-fg)', fontSize: 14 }} />
               )}
               <Text strong style={{ fontSize: isParent ? 14 : 13 }}>
                 {name}
@@ -101,9 +101,9 @@ export const SystemTable: React.FC<SystemTableProps> = ({
                   fontSize: 'var(--font-size-xs)',
                   fontWeight: 600,
                   margin: 0,
-                  background: isParent ? '#f9f0ff' : '#e6fffb',
-                  color: isParent ? '#722ed1' : '#08979c',
-                  border: isParent ? '1px solid #d3adf7' : '1px solid #87e8de',
+                  background: isParent ? 'var(--accent-soft)' : 'var(--bg-elev)',
+                  color: isParent ? 'var(--accent)' : 'var(--info-fg)',
+                  border: '1px solid var(--border)',
                 }}
               >
                 {record.code}
@@ -203,7 +203,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
                 fontSize: 'var(--font-size-xs)',
                 padding: '2px 6px',
                 background: 'var(--bg-elev, #f7f8fa)',
-                border: '1px solid var(--border, #e9eaee)',
+                border: '1px solid var(--border)',
                 borderRadius: 3,
                 wordBreak: 'break-all',
               }}

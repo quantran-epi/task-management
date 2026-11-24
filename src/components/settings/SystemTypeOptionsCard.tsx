@@ -133,7 +133,7 @@ export const SystemTypeOptionsCard: React.FC<SystemTypeOptionsCardProps> = ({ db
               height: 14,
               borderRadius: 3,
               background: color,
-              border: '1px solid rgba(0,0,0,0.15)',
+              border: '1px solid var(--border-strong)',
             }}
           />
           <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>

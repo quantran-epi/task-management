@@ -51,7 +51,7 @@ export const GitHubConflictModal: React.FC<GitHubConflictModalProps> = ({
       open={open}
       title={
         <Space>
-          <WarningOutlined style={{ color: '#faad14' }} />
+          <WarningOutlined style={{ color: 'var(--warning)' }} />
           <span>Xung đột bản sao lưu từ xa</span>
         </Space>
       }

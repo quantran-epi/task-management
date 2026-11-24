@@ -65,7 +65,7 @@ export const BudgetWarnThresholdCard: React.FC<BudgetWarnThresholdCardProps> = (
     <Card
       title={
         <Space>
-          <WarningOutlined style={{ color: '#faad14' }} />
+          <WarningOutlined style={{ color: 'var(--warning)' }} />
           <span>Ngưỡng cảnh báo ngân sách token</span>
         </Space>
       }

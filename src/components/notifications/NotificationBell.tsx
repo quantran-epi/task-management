@@ -13,7 +13,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ count, onCli
       <Badge
         count={count}
         overflowCount={99}
-        color="#ff4d4f"
+        color="blue"
         offset={[-2, 4]}
       >
         <Button

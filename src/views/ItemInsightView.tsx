@@ -506,7 +506,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                     <Tag
                       key={target.systemId}
                       bordered={false}
-                      style={{ margin: 0, fontFamily: 'monospace', color: '#13c2c2' }}
+                      style={{ margin: 0, fontFamily: 'monospace', color: 'var(--info-fg)' }}
                       title={system?.name}
                     >
                       {system?.code ?? target.systemId.slice(0, 8)}
@@ -794,7 +794,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                           </Tag>
                           {itemType === 'system' && cr && <Tag color="purple">{cr.code}</Tag>}
                           {itemType === 'cr' && system && (
-                            <Tag bordered={false} style={{ fontFamily: 'monospace', color: '#13c2c2' }}>
+                            <Tag bordered={false} style={{ fontFamily: 'monospace', color: 'var(--info-fg)' }}>
                               {system.code}
                             </Tag>
                           )}
@@ -874,7 +874,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       <Card
         title={
           <Space>
-            <ApartmentOutlined style={{ color: '#10b981' }} />
+            <ApartmentOutlined style={{ color: 'var(--success)' }} />
             <span>Biểu đồ liên quan ({relatedDiagrams.length})</span>
           </Space>
         }

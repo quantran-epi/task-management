@@ -133,8 +133,8 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
         gap: 'var(--gap-6)',
         padding: '10px 12px',
         borderRadius: 'var(--radius-control)',
-        border: '1px solid #d9d9d9',
-        backgroundColor: '#fafafa',
+        border: '1px solid var(--border)',
+        backgroundColor: 'var(--bg-elev)',
       }}
     >
       <TextArea
@@ -164,7 +164,7 @@ export const QuickNoteEntry: React.FC<QuickNoteEntryProps> = ({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: 'var(--gap-8)',
-          borderTop: '1px solid #f0f0f0',
+          borderTop: '1px solid var(--border)',
           paddingTop: 6,
         }}
       >

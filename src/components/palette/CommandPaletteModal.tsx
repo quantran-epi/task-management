@@ -507,9 +507,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               maxHeight: 380,
               overflowY: 'auto',
               padding: '8px 4px',
-              backgroundColor: '#fafafa',
+              backgroundColor: 'var(--bg-elev)',
               borderRadius: 'var(--radius-control)',
-              border: '1px solid #f0f0f0',
+              border: '1px solid var(--border)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 8px' }}>
@@ -543,9 +543,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                     <kbd
                       style={{
                         padding: '2px 8px',
-                        border: '1px solid #d9d9d9',
+                        border: '1px solid var(--border)',
                         borderRadius: 4,
-                        background: '#fff',
+                        background: 'var(--bg-island)',
                         fontWeight: 600,
                         fontSize: 13,
                         color: 'var(--accent)',
@@ -588,9 +588,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                         cursor: 'pointer',
                         padding: '8px 12px',
                         borderRadius: 'var(--radius-control)',
-                        backgroundColor: isSelected ? '#e6f4ff' : 'transparent',
+                        backgroundColor: isSelected ? 'var(--accent-soft)' : 'transparent',
                         transition: 'background-color 0.15s ease',
-                        borderBottom: '1px solid #f0f0f0',
+                        borderBottom: '1px solid var(--border)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
@@ -627,29 +627,29 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             justifyContent: 'space-between',
             alignItems: 'center',
             paddingTop: 8,
-            borderTop: '1px solid #f0f0f0',
+            borderTop: '1px solid var(--border)',
             fontSize: 'var(--font-size-small)',
             color: 'var(--fg-secondary)',
           }}
         >
           <Space size="middle">
             <span>
-              <kbd style={{ padding: '2px 4px', border: '1px solid #d9d9d9', borderRadius: 4, background: '#fafafa' }}>
+              <kbd style={{ padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-elev)' }}>
                 ↑
               </kbd>{' '}
-              <kbd style={{ padding: '2px 4px', border: '1px solid #d9d9d9', borderRadius: 4, background: '#fafafa' }}>
+              <kbd style={{ padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-elev)' }}>
                 ↓
               </kbd>{' '}
               để chuyển
             </span>
             <span>
-              <kbd style={{ padding: '2px 4px', border: '1px solid #d9d9d9', borderRadius: 4, background: '#fafafa' }}>
+              <kbd style={{ padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-elev)' }}>
                 Enter
               </kbd>{' '}
               để chọn
             </span>
             <span>
-              <kbd style={{ padding: '2px 4px', border: '1px solid #d9d9d9', borderRadius: 4, background: '#fafafa' }}>
+              <kbd style={{ padding: '2px 4px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-elev)' }}>
                 Esc
               </kbd>{' '}
               để đóng

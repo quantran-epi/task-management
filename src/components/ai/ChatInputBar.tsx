@@ -36,13 +36,13 @@ export interface ChatInputBarProps {
 const COMMANDS = [
   {
     name: 'clear',
-    icon: <ClearOutlined style={{ color: '#ff4d4f' }} />,
+    icon: <ClearOutlined style={{ color: 'var(--danger)' }} />,
     title: '/clear',
     description: 'Xóa lịch sử và làm mới ngữ cảnh trò chuyện',
   },
   {
     name: 'clear-all',
-    icon: <ClearOutlined style={{ color: '#ff4d4f' }} />,
+    icon: <ClearOutlined style={{ color: 'var(--danger)' }} />,
     title: '/clear-all',
     description: 'Xóa toàn bộ lịch sử trò chuyện AI trên mọi phạm vi',
   },
@@ -54,25 +54,25 @@ const COMMANDS = [
   },
   {
     name: 'status',
-    icon: <DashboardOutlined style={{ color: '#52c41a' }} />,
+    icon: <DashboardOutlined style={{ color: 'var(--success)' }} />,
     title: '/status',
     description: 'Tóm tắt tiến độ công việc và tác vụ hiện tại',
   },
   {
     name: 'overdue',
-    icon: <WarningOutlined style={{ color: '#faad14' }} />,
+    icon: <WarningOutlined style={{ color: 'var(--warning)' }} />,
     title: '/overdue',
     description: 'Kiểm tra các tác vụ đã quá hạn hoặc sắp đến hạn',
   },
   {
     name: 'help',
-    icon: <QuestionCircleOutlined style={{ color: '#13c2c2' }} />,
+    icon: <QuestionCircleOutlined style={{ color: 'var(--info-fg)' }} />,
     title: '/help',
     description: 'Xem hướng dẫn sử dụng và danh sách công cụ AI',
   },
   {
     name: 'file',
-    icon: <PaperClipOutlined style={{ color: '#13c2c2' }} />,
+    icon: <PaperClipOutlined style={{ color: 'var(--info-fg)' }} />,
     title: '/file',
     description: 'Đính kèm tập tin từ máy tính',
   },
@@ -636,7 +636,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
-                <BranchesOutlined style={{ color: '#722ed1', flexShrink: 0 }} />
+                <BranchesOutlined style={{ color: 'var(--accent)', flexShrink: 0 }} />
                 <span
                   style={{
                     fontWeight: 500,
@@ -688,7 +688,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0 }}>
-                <ApartmentOutlined style={{ color: '#13c2c2', flexShrink: 0 }} />
+                <ApartmentOutlined style={{ color: 'var(--info-fg)', flexShrink: 0 }} />
                 <span
                   style={{
                     fontWeight: 500,
@@ -779,7 +779,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                   key={filePath}
                   closable
                   onClose={() => onRemoveFile?.(filePath)}
-                  icon={<FileTextOutlined style={{ color: '#52c41a' }} />}
+                  icon={<FileTextOutlined style={{ color: 'var(--success)' }} />}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',

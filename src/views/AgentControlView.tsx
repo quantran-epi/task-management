@@ -306,8 +306,8 @@ export const AgentControlView: React.FC = () => {
               </div>
               <pre
                 style={{
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  backgroundColor: 'var(--bg-elev)',
+                  border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-control)',
                   padding: 12,
                   fontSize: 'var(--font-size-small)',
@@ -338,15 +338,15 @@ export const AgentControlView: React.FC = () => {
                         flexDirection: 'column',
                         gap: 'var(--gap-6)',
                         padding: 10,
-                        backgroundColor: '#fafafa',
-                        border: '1px solid #f0f0f0',
+                        backgroundColor: 'var(--bg-elev)',
+                        border: '1px solid var(--border)',
                         borderRadius: 'var(--radius-control)',
                       }}
                     >
                       {/* User Feedback Bubble */}
                       <Card
                         size="small"
-                        style={{ backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }}
+                        style={{ backgroundColor: 'rgba(34, 211, 238, 0.14)', borderColor: 'var(--border)' }}
                         styles={{ body: { padding: '8px 12px' } }}
                       >
                         <div
@@ -357,8 +357,8 @@ export const AgentControlView: React.FC = () => {
                           }}
                         >
                           <Space size={4}>
-                            <UserOutlined style={{ color: '#0369a1', fontSize: 'var(--font-size-small)' }} />
-                            <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#0369a1' }}>
+                            <UserOutlined style={{ color: 'var(--info-fg)', fontSize: 'var(--font-size-small)' }} />
+                            <Text strong style={{ fontSize: 'var(--font-size-small)', color: 'var(--info-fg)' }}>
                               Chỉ đạo #{idx + 1}
                             </Text>
                           </Space>
@@ -378,8 +378,8 @@ export const AgentControlView: React.FC = () => {
                         <Card
                           size="small"
                           style={{
-                            backgroundColor: '#faf5ff',
-                            borderColor: '#e9d5ff',
+                            backgroundColor: 'var(--accent-soft)',
+                            borderColor: 'var(--border)',
                             marginLeft: 16,
                           }}
                           styles={{ body: { padding: '8px 12px' } }}
@@ -392,20 +392,20 @@ export const AgentControlView: React.FC = () => {
                             }}
                           >
                             <Space size={4}>
-                              <RobotOutlined style={{ color: '#7e22ce', fontSize: 'var(--font-size-small)' }} />
-                              <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#7e22ce' }}>
+                              <RobotOutlined style={{ color: 'var(--accent)', fontSize: 'var(--font-size-small)' }} />
+                              <Text strong style={{ fontSize: 'var(--font-size-small)', color: 'var(--accent)' }}>
                                 Phản hồi từ AI
                               </Text>
                             </Space>
                           </div>
                           <Paragraph
-                            style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', color: '#374151' }}
+                            style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap', color: 'var(--fg)' }}
                           >
                             {fb.aiResponse}
                           </Paragraph>
                         </Card>
                       ) : (
-                        <div style={{ marginLeft: 20, fontSize: 'var(--font-size-xs)', color: '#9ca3af', fontStyle: 'italic' }}>
+                        <div style={{ marginLeft: 20, fontSize: 'var(--font-size-xs)', color: 'var(--fg-secondary)', fontStyle: 'italic' }}>
                           (AI đã nhận chỉ đạo và thực hiện trực tiếp vào mã nguồn)
                         </div>
                       )}

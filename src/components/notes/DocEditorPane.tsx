@@ -578,7 +578,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           padding: 32,
         }}
       >
-        <Title level={4} style={{ color: '#595959', marginBottom: 8 }}>
+        <Title level={4} style={{ color: 'var(--fg-secondary)', marginBottom: 8 }}>
           Chưa có tài liệu nào được chọn
         </Title>
         <Text type="secondary" style={{ textAlign: 'center', maxWidth: 400 }}>
@@ -623,8 +623,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '8px 16px',
-          borderBottom: '1px solid #f0f0f0',
-          backgroundColor: '#fafafa',
+          borderBottom: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-elev)',
           gap: 'var(--gap-12)',
           flexShrink: 0,
           minWidth: 0,
@@ -850,7 +850,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
             fontSize: 22,
             fontWeight: 600,
             padding: 0,
-            color: '#1f1f1f',
+            color: 'var(--fg)',
             width: '100%',
           }}
         />
@@ -973,7 +973,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                   backgroundColor: 'var(--bg-island)',
                   boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
                   borderRadius: 'var(--radius-control)',
-                  border: '1px solid #e5e7eb',
+                  border: '1px solid var(--border)',
                   zIndex: 1050,
                   overflowY: 'auto',
                   display: 'flex',
@@ -986,8 +986,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                     padding: '6px 12px',
                     fontSize: 'var(--font-size-xs)',
                     fontWeight: 600,
-                    color: '#6b7280',
-                    borderBottom: '1px solid #f3f4f6',
+                    color: 'var(--fg-secondary)',
+                    borderBottom: '1px solid var(--bg-elev)',
                     display: 'flex',
                     justifyContent: 'space-between',
                   }}
@@ -1005,7 +1005,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                     typeLabel = 'Tác vụ';
                     tagColor = 'blue';
                   } else if (cand.type === 'cr') {
-                    icon = <FolderOutlined style={{ color: '#d97706' }} />;
+                    icon = <FolderOutlined style={{ color: 'var(--warning)' }} />;
                     typeLabel = 'Change Request';
                     tagColor = 'orange';
                   }
@@ -1043,7 +1043,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
                         <span
                           style={{
                             fontSize: 13,
-                            color: '#1f2937',
+                            color: 'var(--fg)',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1079,7 +1079,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               overflowY: 'auto',
               overflowX: 'hidden',
               padding: '8px 16px 24px 16px',
-              borderLeft: viewMode === 'split' ? '1px solid #f0f0f0' : 'none',
+              borderLeft: viewMode === 'split' ? '1px solid var(--border)' : 'none',
             }}
           >
             <div
@@ -1145,7 +1145,7 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
               maxWidth: tocWidth,
               flexShrink: 0,
               height: '100%',
-              borderLeft: '1px solid #f0f0f0',
+              borderLeft: '1px solid var(--border)',
               overflowY: 'auto',
               overflowX: 'hidden',
               padding: '4px 8px',
@@ -1182,8 +1182,8 @@ export const DocEditorPane: React.FC<DocEditorPaneProps> = ({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '4px 16px',
-          borderTop: '1px solid #f0f0f0',
-          backgroundColor: '#fafafa',
+          borderTop: '1px solid var(--border)',
+          backgroundColor: 'var(--bg-elev)',
           fontSize: 'var(--font-size-xs)',
           color: 'var(--fg-secondary)',
           flexShrink: 0,

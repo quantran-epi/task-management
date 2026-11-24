@@ -660,7 +660,7 @@ export const NotesView: React.FC<NotesViewProps> = ({
           minHeight: 0,
           height: hideFolderTree ? '100%' : undefined,
           display: 'flex',
-          border: hideFolderTree ? 'none' : '1px solid #f0f0f0',
+          border: hideFolderTree ? 'none' : '1px solid var(--border)',
           borderRadius: hideFolderTree ? 0 : 8,
           overflow: 'hidden',
           backgroundColor: 'var(--bg-island)',
@@ -752,10 +752,10 @@ export const NotesView: React.FC<NotesViewProps> = ({
               }}
             >
               <Empty
-                image={<FileTextOutlined style={{ fontSize: 48, color: '#d1d5db' }} />}
+                image={<FileTextOutlined style={{ fontSize: 48, color: 'var(--fg-faint)' }} />}
                 description={
                   <div style={{ marginTop: 8 }}>
-                    <Text strong style={{ fontSize: 16, color: '#374151', display: 'block' }}>
+                    <Text strong style={{ fontSize: 16, color: 'var(--fg)', display: 'block' }}>
                       Chưa chọn tài liệu
                     </Text>
                     <Text type="secondary" style={{ fontSize: 13, display: 'block', marginTop: 4 }}>
