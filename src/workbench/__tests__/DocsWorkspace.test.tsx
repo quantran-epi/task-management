@@ -160,8 +160,9 @@ describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
     );
     const rows = Array.from(documents.querySelectorAll('[data-testid^="doc-row-"]'));
     expect(rows.length).toBeLessThanOrEqual(25);
-    expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 1');
-    expect(documents.textContent).not.toContain('Bộ lớn tài liệu 60');
+    // WR-01: default "Mới nhất" sort is updatedAt descending; newest (last seeded) first.
+    expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 60');
+    expect(documents.textContent).not.toContain('Bộ lớn tài liệu 1');
     const count = within(documents).getByTestId('doc-set-filter-count');
     expect(count.textContent).toBe('60 / 60');
     expect(document.querySelector('.ant-pagination')).toBeNull();

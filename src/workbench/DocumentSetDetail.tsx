@@ -635,7 +635,7 @@ export function DocumentSetDetail({
       })
       .sort((a, b) => sortKey === 'name'
         ? a.title.localeCompare(b.title, 'vi')
-        : Date.parse(a.updatedAt) - Date.parse(b.updatedAt) || a.no - b.no);
+        : Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || b.no - a.no);
   }, [rows, docQuery, statusFilter, extFilter, sortKey]);
 
   const selectedDoc = rows.find((row) => row.id === selectedDocId);
