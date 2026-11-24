@@ -92,7 +92,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
       <div
         data-testid="doc-set-library-list"
         style={{
-          width: 260,
+          width: 248,
           flexShrink: 0,
           borderRight: '1px solid var(--ant-color-border, #f0f0f0)',
           display: 'flex',

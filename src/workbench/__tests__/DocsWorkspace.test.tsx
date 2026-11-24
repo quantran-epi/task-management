@@ -146,23 +146,29 @@ describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
     expect(useLayoutStore.getState().activeTabId).toBe('doc_set_library');
   });
 
-  it('renders only one bounded page plus pagination when a set has many documents', async () => {
-    await seedSet('Bộ lớn', 25);
+  it('renders a bounded virtual window with live filter count when a set has many documents', async () => {
+    await seedSet('Bộ lớn', 60);
     renderWorkspace();
     await openLibrary();
     fireEvent.click(await screen.findByRole('button', { name: 'Mở bộ tài liệu Bộ lớn' }));
     await screen.findByTestId('doc-set-detail');
 
     const detail = screen.getByTestId('doc-set-detail');
-    const documentsTable = within(detail).getByTestId('doc-set-documents');
+    const documents = within(detail).getByTestId('doc-set-documents');
     await waitFor(() =>
-      expect(documentsTable.querySelectorAll('table tbody tr')).toHaveLength(10)
+      expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeGreaterThan(0)
     );
-    const rows = Array.from(documentsTable.querySelectorAll('table tbody tr'));
-    expect(rows).toHaveLength(10);
+    const rows = Array.from(documents.querySelectorAll('[data-testid^="doc-row-"]'));
+    expect(rows.length).toBeLessThanOrEqual(25);
     expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 1');
-    expect(documentsTable.textContent).not.toContain('Bộ lớn tài liệu 25');
-    expect(document.querySelector('.ant-pagination')).not.toBeNull();
+    expect(documents.textContent).not.toContain('Bộ lớn tài liệu 60');
+    const count = within(documents).getByTestId('doc-set-filter-count');
+    expect(count.textContent).toBe('60 / 60');
+    expect(document.querySelector('.ant-pagination')).toBeNull();
+    fireEvent.change(within(documents).getByRole('textbox', { name: 'Tìm tài liệu trong bộ' }), {
+      target: { value: 'Bộ lớn tài liệu 6' },
+    });
+    await waitFor(() => expect(within(documents).getByTestId('doc-set-filter-count').textContent).not.toBe('60 / 60'));
   });
 
   it('mounts the shared DocumentSetDeleteDialog from the library detail', async () => {

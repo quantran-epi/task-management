@@ -1,7 +1,7 @@
 import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
-import { Alert, Button, Card, Descriptions, Empty, Modal, Progress, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem } from '../components/ui';
+import { Alert, Button, Card, CheckableTag, Descriptions, Empty, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem, SearchInput } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
   computeNoteHashesCached,
@@ -9,7 +9,7 @@ import {
 } from '../db/repositories/documentSetRepo';
 import { AttemptHistoryList } from '../components/knowledge/AttemptHistoryList';
 import { DocumentSetDeleteDialog } from '../components/knowledge/DocumentSetDeleteDialog';
-import { DocumentSetForm } from '../components/knowledge/DocumentSetForm';
+import { DocumentSetForm, type DocumentSetFormHandle } from '../components/knowledge/DocumentSetForm';
 import { GraphEvidenceDrawer } from '../components/knowledge/GraphEvidenceDrawer';
 import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
 import { formatOversizedAtomicBlockError } from '../components/knowledge/PublishProgressPanel';
@@ -30,7 +30,9 @@ import type {
 } from '../services/knowledge/changePreview';
 import { PublishSession } from '../services/knowledge/publishOrchestrator';
 import type { Note, PublishPrimaryState } from '../types/models';
+import { foldForSearch, searchIncludes } from '../utils/searchText';
 import { generateId } from '../utils/uuid';
+import { VirtualizedList } from './virtual/VirtualizedList';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -88,8 +90,60 @@ export interface DocumentSetDetailProps {
 interface DocumentRow {
   key: string;
   id: string;
+  no: number;
   title: string;
+  path: string;
+  sizeBytes: number;
   updatedAt: string;
+  status: PublishPrimaryState;
+}
+
+const DOC_ROW_HEIGHT = 38;
+
+const DocumentRowView = memo(function DocumentRowView({
+  row,
+  selected,
+  onSelect,
+}: {
+  row: DocumentRow;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  const ui = STATE_UI[row.status];
+  return (
+    <div
+      data-testid={`doc-row-${row.id}`}
+      role="option"
+      aria-selected={selected}
+      aria-label={row.title}
+      onClick={() => onSelect(row.id)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        height: DOC_ROW_HEIGHT,
+        padding: '0 12px',
+        cursor: 'pointer',
+        boxSizing: 'border-box',
+        borderBottom: '1px solid var(--ant-color-border, #f0f0f0)',
+        background: selected ? 'var(--ant-color-primary-bg, #e6f4ff)' : undefined,
+        fontSize: 12,
+      }}
+    >
+      <Text type="secondary" style={{ width: 28, flexShrink: 0 }}>{row.no}</Text>
+      <Text strong ellipsis style={{ flex: '1 1 30%', minWidth: 0 }}>{row.title}</Text>
+      <Text type="secondary" ellipsis style={{ flex: '1 1 30%', minWidth: 0 }}>{row.path}</Text>
+      <Text type="secondary" style={{ width: 70, flexShrink: 0 }}>{formatBytes(row.sizeBytes)}</Text>
+      <Text type="secondary" style={{ width: 92, flexShrink: 0 }}>{row.updatedAt.slice(0, 10)}</Text>
+      <Tag color={ui.color} icon={ui.icon}>{ui.label}</Tag>
+    </div>
+  );
+});
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -511,6 +565,73 @@ export function DocumentSetDetail({
   const openDeleteModal = useCallback(() => setDeleteOpen(true), []);
   const handleCloseDelete = useCallback(() => setDeleteOpen(false), []);
 
+  const [docQuery, setDocQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<PublishPrimaryState | undefined>(undefined);
+  const [sortKey, setSortKey] = useState<'updated' | 'name'>('updated');
+  const [extFilter, setExtFilter] = useState<'.md' | '.docx' | undefined>(undefined);
+  const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
+  const formRef = useRef<DocumentSetFormHandle>(null);
+
+  const publishingDocIds = useMemo(() => {
+    const attempt = publishData.attempts.find((item) => item.status === 'Publishing');
+    return new Set((attempt?.submittedDocuments ?? []).map((item) => item.documentId));
+  }, [publishData.attempts]);
+
+  const publishedById = useMemo(
+    () => new Map(publishData.publishedDocuments.map((item) => [item.documentId, item])),
+    [publishData.publishedDocuments]
+  );
+
+  const rows = useMemo<DocumentRow[]>(() => {
+    if (!set) return [];
+    const titlesById = new Map(allNotes.map((note) => [note.id, note.title || 'Không tiêu đề']));
+    const encoder = new TextEncoder();
+    return documents.map((note, index) => {
+      const pathTitles: string[] = [];
+      let parentId = note.parentId;
+      for (let depth = 0; parentId && depth < 20; depth += 1) {
+        const title = titlesById.get(parentId);
+        if (!title) break;
+        pathTitles.unshift(title);
+        const parent = allNotes.find((candidate) => candidate.id === parentId);
+        parentId = parent?.parentId;
+      }
+      const published = publishedById.get(note.id);
+      const status: PublishPrimaryState = publishingDocIds.has(note.id)
+        ? 'Publishing'
+        : !published
+          ? 'Never published'
+          : noteHashes[note.id] !== published.publishedContentHash
+            ? 'Local changes'
+            : 'In sync';
+      return {
+        key: note.id,
+        id: note.id,
+        no: index + 1,
+        title: note.title || 'Không tiêu đề',
+        path: pathTitles.join(' / '),
+        sizeBytes: encoder.encode(note.body).length,
+        updatedAt: note.updatedAt,
+        status,
+      };
+    });
+  }, [set, documents, allNotes, noteHashes, publishedById, publishingDocIds]);
+
+  const filteredRows = useMemo(() => {
+    const query = foldForSearch(docQuery);
+    return rows
+      .filter((row) => {
+        if (statusFilter && row.status !== statusFilter) return false;
+        if (extFilter && !row.title.toLowerCase().endsWith(extFilter)) return false;
+        return !query || searchIncludes(`${row.title} ${row.path}`, query);
+      })
+      .sort((a, b) => sortKey === 'name'
+        ? a.title.localeCompare(b.title, 'vi')
+        : Date.parse(a.updatedAt) - Date.parse(b.updatedAt) || a.no - b.no);
+  }, [rows, docQuery, statusFilter, extFilter, sortKey]);
+
+  const selectedDoc = rows.find((row) => row.id === selectedDocId);
+
   if (!set) {
     return (
       <div style={{ padding: 24 }}>
@@ -521,12 +642,6 @@ export function DocumentSetDetail({
     );
   }
 
-  const rows: DocumentRow[] = documents.map((note) => ({
-    key: note.id,
-    id: note.id,
-    title: note.title || 'Không tiêu đề',
-    updatedAt: note.updatedAt,
-  }));
   const documentTitles = Object.fromEntries(allNotes.map((note) => [note.id, note.title || 'Không tiêu đề']));
 
   // D-18: rebuild only when a published snapshot exists, daemon reachable, no build in progress.
@@ -592,16 +707,26 @@ export function DocumentSetDetail({
       )}
       {reconciliationError && <Alert type="error" showIcon message={reconciliationError} />}
       {state === 'Publishing' && activeAttemptId && (
-        <Button
-          loading={reconcilingAttemptId === activeAttemptId}
-          disabled={!configured || reconcilingAttemptId === activeAttemptId}
-          onClick={() => void handleReconcileAttempt()}
-        >
-          Kiểm tra trạng thái
-        </Button>
+        <div style={{ flexShrink: 0, border: '1px solid var(--ant-color-border, #f0f0f0)', borderLeft: '3px solid var(--ant-color-primary, #2f62d8)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <LoadingOutlined />
+          <Text strong style={{ fontSize: 12 }}>Đang xuất bản</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>{publishingDocIds.size} tài liệu / {set.documentIds.length} · chạy locally</Text>
+          <div style={{ flex: 1, minWidth: 80 }}>
+            <Progress percent={set.documentIds.length ? Math.round((publishingDocIds.size / set.documentIds.length) * 100) : 0} status="active" size="small" />
+          </div>
+          <Button
+            size="small"
+            loading={reconcilingAttemptId === activeAttemptId}
+            disabled={!configured || reconcilingAttemptId === activeAttemptId}
+            onClick={() => void handleReconcileAttempt()}
+          >
+            Kiểm tra trạng thái
+          </Button>
+        </div>
       )}
 
       <DocumentSetForm
+        ref={formRef}
         notes={formNotes}
         initialSet={set}
         availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
@@ -796,25 +921,68 @@ export function DocumentSetDetail({
         <AttemptHistoryList attempts={publishData.attempts} />
       </section>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }} data-testid="doc-set-documents">
-        <Table<DocumentRow>
-          rowKey="key"
-          size="small"
-          dataSource={rows}
-          pagination={{ pageSize: DOC_SET_PAGE_SIZE, showSizeChanger: false }}
-          locale={{ emptyText: 'Bộ tài liệu này chưa có tài liệu nào.' }}
-          columns={[
-            { title: 'Tài liệu', dataIndex: 'title', key: 'title', ellipsis: true },
-            {
-              title: 'Cập nhật',
-              dataIndex: 'updatedAt',
-              key: 'updatedAt',
-              width: 180,
-              ellipsis: true,
-              render: (value: string) => <Text style={{ fontSize: 'var(--font-size-small)' }}>{value}</Text>,
-            },
-          ]}
-        />
+      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: 1, minHeight: 0, gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', background: 'var(--ant-color-bg-layout, #f5f6f8)' }}>
+            <SearchInput
+              aria-label="Tìm tài liệu trong bộ"
+              placeholder="Tên hoặc đường dẫn"
+              value={docQuery}
+              onChange={(event) => setDocQuery(event.target.value)}
+              style={{ width: 200 }}
+            />
+            <Select
+              aria-label="Lọc trạng thái"
+              allowClear
+              placeholder="Trạng thái"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: 150 }}
+              options={Object.entries(STATE_UI).map(([value, ui]) => ({ value, label: ui.label }))}
+            />
+            <Select
+              aria-label="Sắp xếp"
+              value={sortKey}
+              onChange={setSortKey}
+              style={{ width: 120 }}
+              options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
+            />
+            <CheckableTag checked={extFilter === '.md'} onChange={(checked) => setExtFilter(checked ? '.md' : undefined)}>.md</CheckableTag>
+            <CheckableTag checked={extFilter === '.docx'} onChange={(checked) => setExtFilter(checked ? '.docx' : undefined)}>.docx</CheckableTag>
+            <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
+          </div>
+          {rows.length === 0 ? (
+            <Empty description="Chưa có tài liệu nào trong bộ này">
+              <Button type="primary" onClick={() => formRef.current?.openPicker()}>Thêm tài liệu</Button>
+            </Empty>
+          ) : (
+            <VirtualizedList
+              items={filteredRows}
+              estimateSize={() => DOC_ROW_HEIGHT}
+              height={440}
+              overscan={4}
+              role="listbox"
+              aria-label="Danh sách tài liệu trong bộ"
+              renderItem={(row) => (
+                <DocumentRowView row={row} selected={row.id === selectedDocId} onSelect={setSelectedDocId} />
+              )}
+            />
+          )}
+        </div>
+        <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
+          {selectedDoc ? (
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text strong>{selectedDoc.title}</Text>
+              <Text type="secondary">{selectedDoc.path || '—'}</Text>
+              <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
+              <Text type="secondary">{selectedDoc.updatedAt}</Text>
+              <Tag color={STATE_UI[selectedDoc.status].color}>{STATE_UI[selectedDoc.status].label}</Tag>
+              <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
+            </Space>
+          ) : (
+            <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
+          )}
+        </aside>
       </div>
 
       {/* Confirmation modal before rebuild per D-21 */}

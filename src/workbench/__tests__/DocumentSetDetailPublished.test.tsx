@@ -28,6 +28,23 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
     return createDocumentSet({ name: 'Bộ đã xuất bản', documentIds: [] }, db);
   }
 
+  async function seedLargeSet() {
+    const noteIds: string[] = [];
+    for (let i = 1; i <= 60; i += 1) {
+      const note = await db.notes.add({
+        id: `11111111-2222-4333-8444-${String(i).padStart(12, '0')}`,
+        title: `Tài liệu lớn ${i}`,
+        body: `# Nội dung bí mật ${i} ${'markdown dài '.repeat(40)}`,
+        type: 'document',
+        isPinned: false,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(),
+      });
+      noteIds.push(note);
+    }
+    return createDocumentSet({ name: 'Bộ lớn', documentIds: noteIds }, db);
+  }
+
   const makeAttempt = (setId: string): PublishAttemptCache => ({
     id: '11111111-1111-4111-8111-111111111111',
     setId,
@@ -39,6 +56,30 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
     removedCount: 0,
     unchangedCount: 0,
     warningCount: 0,
+  });
+
+  it('renders a bounded virtual list with metadata-only rows and a live filter count', async () => {
+    const set = await seedLargeSet();
+    await act(async () => {
+      render(<DocumentSetDetail setId={set.id} db={db} />);
+    });
+
+    const documents = await screen.findByTestId('doc-set-documents');
+    await waitFor(() =>
+      expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeGreaterThan(0)
+    );
+    const rows = documents.querySelectorAll('[data-testid^="doc-row-"]');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.length).toBeLessThanOrEqual(25);
+    expect(document.body.textContent).not.toContain('Nội dung bí mật');
+    expect(documents.querySelector('[data-testid="doc-set-filter-count"]')?.textContent).toBe('60 / 60');
+
+    fireEvent.change(documents.querySelector('input') as HTMLInputElement, {
+      target: { value: 'Tài liệu lớn 6' },
+    });
+    await waitFor(() =>
+      expect(documents.querySelector('[data-testid="doc-set-filter-count"]')?.textContent).not.toBe('60 / 60')
+    );
   });
 
   it('treats a set with only a publishAttempt (no publishedDocuments row) as published', async () => {
