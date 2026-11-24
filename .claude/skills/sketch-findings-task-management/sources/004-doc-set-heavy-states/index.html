@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 004 · Doc Set Heavy States</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:52px 16px 64px; background:var(--color-bg); color:var(--color-text); font-family:var(--font-sans); font-size:var(--text-base); }
+  #variant-nav { position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:8px 14px; display:flex; gap:8px; align-items:center; font-family:system-ui; flex-wrap:wrap; }
+  .variant-tab { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-muted); border-radius:var(--radius-md); padding:5px 10px; font-size:var(--text-sm); cursor:pointer; transition:all .15s ease; }
+  .variant-tab:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .variant-tab.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
+  .hint { margin-left:auto; color:var(--color-text-tertiary); font-size:var(--text-xs); }
+  .frame { max-width:1100px; margin:0 auto; }
+  .pane { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .pane-head { padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--color-border); display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap; }
+  .pane-head h3 { margin:0; font-size:var(--text-lg); }
+  .btn { height:var(--control-h); padding:0 9px; border-radius:var(--radius-sm); border:1px solid var(--color-border-strong); background:var(--color-surface); color:var(--color-text); font-size:var(--text-sm); font-family:inherit; cursor:pointer; transition:all .15s ease; white-space:nowrap; }
+  .btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .btn.primary { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .btn.danger { color:var(--color-danger); border-color:color-mix(in srgb,var(--color-danger) 40%,transparent); }
+  .input { height:var(--control-h); border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); background:var(--color-surface); padding:0 8px; font-size:var(--text-sm); color:var(--color-text); font-family:inherit; }
+  .input:focus { outline:none; border-color:var(--color-primary); box-shadow:0 0 0 2px var(--color-primary-soft); }
+  .states { display:flex; gap:6px; margin-left:auto; }
+  .state-btn { border:1px solid var(--color-border); background:var(--color-surface-soft); border-radius:var(--radius-full); padding:3px 9px; font-size:var(--text-xs); color:var(--color-text-muted); cursor:pointer; transition:all .15s ease; }
+  .state-btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .state-btn.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
+  .content { padding:var(--space-4); min-height:380px; }
+  .state-panel { display:none; }
+  .state-panel.active { display:block; }
+  .banner { border:1px solid var(--color-border); border-left:3px solid var(--color-primary); border-radius:var(--radius-md); background:var(--color-surface-soft); padding:10px 12px; display:flex; align-items:center; gap:var(--space-3); margin-bottom:var(--space-4); }
+  .banner .spin { width:14px; height:14px; border:2px solid var(--color-primary-soft); border-top-color:var(--color-primary); border-radius:50%; animation:spin .8s linear infinite; flex:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .banner .txt { font-size:var(--text-sm); }
+  .banner .txt b { display:block; }
+  .banner .txt span { color:var(--color-text-muted); font-size:var(--text-xs); font-family:var(--font-mono); }
+  .banner .act { margin-left:auto; }
+  .track { height:6px; background:var(--color-border); border-radius:3px; overflow:hidden; margin:6px 0 12px; }
+  .track i { display:block; height:100%; background:var(--color-primary); transition:width .3s ease; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3); }
+  .card { border:1px solid var(--color-border); border-radius:var(--radius-md); padding:10px 12px; }
+  .card .label { font-size:var(--text-xs); color:var(--color-text-muted); }
+  .card .val { font-family:var(--font-mono); font-size:var(--text-xl); margin-top:4px; }
+  .tag { font-size:var(--text-xs); border-radius:var(--radius-sm); padding:1px 5px; border:1px solid var(--color-border); white-space:nowrap; color:var(--color-text-muted); }
+  .tag.ok { color:var(--color-success); border-color:color-mix(in srgb,var(--color-success) 30%,transparent); }
+  .tag.warn { color:var(--color-warning); background:var(--color-warning-bg); border-color:transparent; }
+  .tag.err { color:var(--color-danger); border-color:color-mix(in srgb,var(--color-danger) 30%,transparent); }
+  .row { display:flex; align-items:center; gap:var(--space-3); padding:7px 4px; border-bottom:1px solid var(--color-border); font-size:var(--text-sm); }
+  .row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .path { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-tertiary); width:44%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:300px; gap:10px; text-align:center; }
+  .empty .icon { font-size:36px; color:var(--color-text-tertiary); }
+  .empty h4 { margin:0; font-size:var(--text-lg); }
+  .empty p { margin:0; color:var(--color-text-muted); font-size:var(--text-sm); max-width:420px; }
+  .errbox { border:1px solid color-mix(in srgb,var(--color-danger) 35%,transparent); background:color-mix(in srgb,var(--color-danger) 5%,var(--color-surface)); border-radius:var(--radius-md); padding:12px; margin-bottom:var(--space-3); }
+  .errbox b { color:var(--color-danger); font-size:var(--text-sm); }
+  .errbox p { margin:6px 0 10px; font-size:var(--text-sm); color:var(--color-text-muted); }
+  .errbox code { font-family:var(--font-mono); font-size:var(--text-xs); background:var(--color-surface); padding:2px 4px; border-radius:var(--radius-sm); }
+  /* Picker: flat searchable instead of tree */
+  .picker { border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
+  .picker-head { padding:var(--space-2) var(--space-3); border-bottom:1px solid var(--color-border); background:var(--color-surface-soft); display:flex; gap:var(--space-2); align-items:center; }
+  .picker-head input { flex:1; }
+  .picker-body { height:220px; overflow:auto; }
+  .pick-row { display:flex; align-items:center; gap:8px; padding:6px var(--space-3); border-bottom:1px solid var(--color-border); cursor:pointer; font-size:var(--text-sm); }
+  .pick-row:hover { background:var(--color-surface-soft); }
+  .pick-row .folder { color:var(--color-text-tertiary); font-family:var(--font-mono); font-size:var(--text-xs); }
+  .pick-row .name { flex:1; }
+  .checkbox { width:14px; height:14px; border:1px solid var(--color-border-strong); border-radius:3px; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:10px; color:transparent; }
+  .pick-row.on .checkbox { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .picker-foot { padding:var(--space-2) var(--space-3); border-top:1px solid var(--color-border); display:flex; gap:var(--space-2); align-items:center; font-size:var(--text-xs); color:var(--color-text-muted); }
+  .picker-foot .btn { margin-left:auto; }
+  .timeline { border-left:2px solid var(--color-border); padding-left:var(--space-4); margin-left:6px; }
+  .event { position:relative; padding:0 0 var(--space-4) 0; }
+  .event::before { content:''; position:absolute; left:-22px; top:4px; width:9px; height:9px; border-radius:50%; background:var(--color-surface); border:2px solid var(--color-primary); }
+  .event.err::before { border-color:var(--color-danger); }
+  .event .t { font-size:var(--text-xs); color:var(--color-text-tertiary); font-family:var(--font-mono); }
+  .event .d { font-size:var(--text-sm); margin-top:2px; }
+  #sketch-tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.7); color:white; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; display:flex; gap:8px; align-items:center; }
+  #sketch-tools:hover { opacity:1; }
+  #sketch-tools select { font-size:11px; }
+  .vp { background:#333; color:white; border:1px solid #555; border-radius:4px; cursor:pointer; }
+  .toast { position:fixed; bottom:56px; right:12px; background:var(--color-text); color:white; padding:8px 12px; border-radius:var(--radius-md); font-size:var(--text-sm); opacity:0; transform:translateY(8px); transition:all .2s; pointer-events:none; z-index:9997; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  @media (max-width:760px) { .grid3 { grid-template-columns:1fr; } .row .path { display:none; } .states { margin-left:0; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" onclick="showVariant('a',this)">A: Inline progress + action ★ Selected</button>
+  <button class="variant-tab" onclick="showVariant('b',this)">B: Toast + modal tập trung</button>
+  <button class="variant-tab" onclick="showVariant('c',this)">C: Side panel riêng</button>
+  <span class="hint">Chuyển state: Bình thường / Đang index / Lỗi / Rỗng / Chọn docs</span>
+</div>
+
+<div class="frame variant" id="variant-a">
+  <div class="pane">
+    <div class="pane-head"><h3>Tài liệu dự án Alpha</h3><div class="states">
+      <button class="state-btn active" onclick="setState('normal',this)">Bình thường</button>
+      <button class="state-btn" onclick="setState('indexing',this)">Đang index</button>
+      <button class="state-btn" onclick="setState('error',this)">Lỗi</button>
+      <button class="state-btn" onclick="setState('empty',this)">Rỗng</button>
+      <button class="state-btn" onclick="setState('picker',this)">Chọn docs</button>
+    </div></div>
+    <div class="content">
+      <div class="state-panel active" id="a-normal">
+        <div class="grid3"><div class="card"><div class="label">Tổng docs</div><div class="val">128</div></div><div class="card"><div class="label">Đã index</div><div class="val">126</div></div><div class="card"><div class="label">Cần xử lý</div><div class="val" style="color:var(--color-warning)">2</div></div></div>
+        <div style="margin-top:var(--space-4)"><div class="row"><span class="name">Kiến trúc hệ thống.md</span><span class="path">docs/arch/</span><span class="tag ok">Đã index</span></div><div class="row"><span class="name">API reference.md</span><span class="path">reference/api/</span><span class="tag warn">Có thay đổi</span></div><div class="row"><span class="name">Báo cáo tuần 47.md</span><span class="path">reports/</span><span class="tag ok">Đã index</span></div></div>
+      </div>
+      <div class="state-panel" id="a-indexing">
+        <div class="banner"><div class="spin"></div><div class="txt"><b>Đang tính hash & index tài liệu</b><span id="progress-text-a">124 / 128 docs · chạy locally, không gửi dữ liệu đi đâu</span></div><button class="btn act" onclick="toast('Đã tạm dừng index')">Tạm dừng</button></div>
+        <div class="track"><i id="progress-bar-a" style="width:97%"></i></div>
+        <div class="grid3"><div class="card"><div class="label">Đã xử lý</div><div class="val" id="pv-a">124</div></div><div class="card"><div class="label">Tổng</div><div class="val">128</div></div><div class="card"><div class="label">Ước tính</div><div class="val">2s</div></div></div>
+        <p style="color:var(--color-text-muted);font-size:var(--text-sm)">Progress nằm ngay trong detail, không chặn danh sách. Có thể vừa đọc doc cũ vừa index.</p>
+      </div>
+      <div class="state-panel" id="a-error">
+        <div class="errbox"><b>⚠ 2 docs không tính được hash</b><p><code>notes/guide.docx</code> — file trống hoặc nội dung không đọc được. <code>notes/draft.md</code> — vượt quá kích thước cho phép.</p><button class="btn" onclick="toast('Đang thử lại 2 docs…')">Thử lại</button> <button class="btn danger" onclick="toast('Đã bỏ qua 2 docs')">Bỏ qua</button></div>
+        <div class="row"><span class="name">guide.docx</span><span class="path">notes/</span><span class="tag err">Lỗi hash</span></div><div class="row"><span class="name">draft.md</span><span class="path">notes/</span><span class="tag err">Quá lớn</span></div>
+      </div>
+      <div class="state-panel" id="a-empty">
+        <div class="empty"><div class="icon">▤</div><h4>Chưa có tài liệu nào trong bộ này</h4><p>Chọn docs từ thư viện local để thêm vào bộ. Tài liệu được lưu trên máy, không cần đăng nhập.</p><button class="btn primary" onclick="setState('picker',document.querySelectorAll('.state-btn')[4])">+ Chọn tài liệu</button></div>
+      </div>
+      <div class="state-panel" id="a-picker">
+        <div class="picker"><div class="picker-head"><input class="input" id="pick-q-a" placeholder="Tìm doc để thêm…" oninput="filterPick('a')"><span class="tag">128 khớp</span></div>
+          <div class="picker-body" id="pick-a"></div>
+          <div class="picker-foot"><span>Đã chọn <b id="pick-n-a">3</b> docs</span><button class="btn" onclick="toast('Đã hủy')">Hủy</button><button class="btn primary" onclick="toast('Đã thêm 3 docs vào bộ')">Thêm vào bộ</button></div>
+        </div>
+        <p style="color:var(--color-text-muted);font-size:var(--text-xs);margin-top:8px">Flat list + search, cuộn ảo. Thay vì Tree defaultExpandAll với find tuyến tính.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="frame variant" id="variant-b" style="display:none">
+  <div class="pane">
+    <div class="pane-head"><h3>Tài liệu dự án Alpha</h3><div class="states">
+      <button class="state-btn active" onclick="setState('normal',this)">Bình thường</button>
+      <button class="state-btn" onclick="setState('indexing',this)">Đang index</button>
+      <button class="state-btn" onclick="setState('error',this)">Lỗi</button>
+      <button class="state-btn" onclick="setState('empty',this)">Rỗng</button>
+    </div></div>
+    <div class="content">
+      <div class="state-panel active" id="b-normal"><p style="color:var(--color-text-muted)">Trạng thái mặc định. Khi có sự kiện, toast hiện góc phải + modal chỉ mở khi cần quyết định.</p><div class="grid3"><div class="card"><div class="label">Tổng docs</div><div class="val">128</div></div><div class="card"><div class="label">Đã index</div><div class="val">126</div></div><div class="card"><div class="label">Cần xử lý</div><div class="val" style="color:var(--color-warning)">2</div></div></div></div>
+      <div class="state-panel" id="b-indexing"><div class="banner"><div class="spin"></div><div class="txt"><b>Đang index 124/128…</b><span>Toast nhỏ góc phải · đóng được</span></div><button class="btn act" onclick="toast('Đã ẩn toast')">Ẩn</button></div><div class="track"><i style="width:97%"></i></div><p style="color:var(--color-text-muted);font-size:var(--text-sm)">Progress không chiếm chỗ trong detail, nhưng dễ bị bỏ lỡ khi sếp đang làm việc khác.</p></div>
+      <div class="state-panel" id="b-error"><div class="errbox"><b>Modal: 2 docs lỗi hash</b><p>Cần quyết định: thử lại hay bỏ qua? Modal chặn thao tác cho đến khi chọn.</p><button class="btn" onclick="toast('Thử lại')">Thử lại</button><button class="btn danger" onclick="toast('Bỏ qua')">Bỏ qua</button></div></div>
+      <div class="state-panel" id="b-empty"><div class="empty"><div class="icon">▤</div><h4>Bộ tài liệu trống</h4><p>Toast gợi ý: “Chọn tài liệu để bắt đầu”.</p><button class="btn primary" onclick="toast('Mở picker')">+ Chọn tài liệu</button></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="frame variant" id="variant-c" style="display:none">
+  <div class="pane">
+    <div class="pane-head"><h3>Tài liệu dự án Alpha</h3><div class="states">
+      <button class="state-btn active" onclick="setState('normal',this)">Bình thường</button>
+      <button class="state-btn" onclick="setState('indexing',this)">Đang index</button>
+      <button class="state-btn" onclick="setState('error',this)">Lỗi</button>
+      <button class="state-btn" onclick="setState('empty',this)">Rỗng</button>
+    </div></div>
+    <div class="content" style="display:flex;gap:var(--space-4)">
+      <div style="flex:1"><div class="state-panel active" id="c-normal"><div class="grid3"><div class="card"><div class="label">Tổng docs</div><div class="val">128</div></div><div class="card"><div class="label">Đã index</div><div class="val">126</div></div><div class="card"><div class="label">Cần xử lý</div><div class="val" style="color:var(--color-warning)">2</div></div></div><p style="color:var(--color-text-muted);font-size:var(--text-sm)">Side panel phải (280px) luôn hiện activity + history.</p></div>
+      <div class="state-panel" id="c-indexing"></div><div class="state-panel" id="c-error"></div><div class="state-panel" id="c-empty"></div></div>
+      <aside style="width:280px;flex:none;border-left:1px solid var(--color-border);padding-left:var(--space-4)">
+        <h4 style="margin:0 0 var(--space-3);font-size:var(--text-base)">Hoạt động</h4>
+        <div class="banner" style="border-left-color:var(--color-primary)"><div class="spin"></div><div class="txt"><b>Đang index</b><span>124 / 128 docs</span></div></div>
+        <div class="track"><i style="width:97%"></i></div>
+        <h4 style="margin:var(--space-4) 0 var(--space-3);font-size:var(--text-base)">Lịch sử</h4>
+        <div class="timeline"><div class="event"><div class="t">24/11 09:41</div><div class="d">Xuất bản thành công · 128 docs</div></div><div class="event err"><div class="t">23/11 17:12</div><div class="d">2 docs lỗi hash — đã bỏ qua</div></div><div class="event"><div class="t">22/11 08:30</div><div class="d">Thêm 14 docs từ thư viện</div></div></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="sketch-tools">
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Default</option></select>
+  <button class="vp" onclick="setVp(375)">Phone</button><button class="vp" onclick="setVp(768)">Tablet</button><button class="vp" onclick="setVp(1100)">Desktop</button>
+</div>
+<script>
+const PICKS = Array.from({length:60},(_,i)=>({name:['Kiến trúc hệ thống','API reference','Ghi chú sprint','Decision log','Research notes','Hướng dẫn cài đặt'][i%6]+' #'+(i+1)+'.md',path:['docs/arch/','reference/api/','notes/','decisions/'][i%4],on:i<3}));
+function renderPick(v) {
+  const el=document.getElementById('pick-'+v); if(!el)return;
+  const q=(document.getElementById('pick-q-'+v)?.value||'').toLowerCase();
+  const list=PICKS.filter(p=>p.name.toLowerCase().includes(q)||p.path.toLowerCase().includes(q));
+  el.innerHTML=list.map(p=>{const i=PICKS.indexOf(p);return `<div class="pick-row ${p.on?'on':''}" onclick="togglePick(${i},'${v}')"><span class="checkbox">✓</span><span class="name">${p.name}</span><span class="folder">${p.path}</span></div>`}).join('')||'<div class="empty">Không khớp</div>';
+  const n=PICKS.filter(p=>p.on).length; const ne=document.getElementById('pick-n-'+v); if(ne)ne.textContent=n;
+}
+function togglePick(i,v) { PICKS[i].on=!PICKS[i].on; renderPick(v); }
+function filterPick(v) { renderPick(v); }
+function setState(s,btn) {
+  document.querySelectorAll('.variant').forEach(v=>{
+    v.querySelectorAll('.state-panel').forEach(p=>p.classList.remove('active'));
+    const target=v.querySelector('.state-panel[id$="-'+s+'"]'); if(target)target.classList.add('active');
+  });
+  if(btn) { const sibs=btn.parentElement.querySelectorAll('.state-btn'); sibs.forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+  if(s==='picker') renderPick('a');
+  if(s==='indexing') animateProgress();
+}
+function animateProgress() {
+  let n=124; clearInterval(window._pi);
+  window._pi=setInterval(()=>{ n=Math.min(128,n+1); const b=document.getElementById('progress-bar-a'), t=document.getElementById('progress-text-a'), p=document.getElementById('pv-a'); if(b)b.style.width=(n/128*100)+'%'; if(t)t.textContent=n+' / 128 docs'; if(p)p.textContent=n; if(n>=128)clearInterval(window._pi); },450);
+}
+function showVariant(id,btn) { document.querySelectorAll('.variant').forEach(v=>v.style.display='none'); document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active')); document.getElementById('variant-'+id).style.display='block'; btn.classList.add('active'); }
+function setVp(w) { document.querySelectorAll('.frame').forEach(f=>f.style.maxWidth=w+'px'); }
+let toastTimer; function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1600); }
+renderPick('a');
+</script>
+</body>
+</html>

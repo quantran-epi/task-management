@@ -306,6 +306,8 @@ Use these entry points:
 Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
 <!-- GSD:workflow-end -->
 
+- **Sketch findings for task-management** (design decisions, CSS patterns, performance direction cho màn hình bộ tài liệu) → `Skill("sketch-findings-task-management")`
+
 <!-- GSD:profile-start -->
 
 ## Developer Profile

@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 003 · Doc Set Virtual List</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing:border-box; }
+  body { margin:0; padding:52px 16px 64px; background:var(--color-bg); color:var(--color-text); font-family:var(--font-sans); font-size:var(--text-base); }
+  #variant-nav { position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:8px 14px; display:flex; gap:8px; align-items:center; font-family:system-ui; flex-wrap:wrap; }
+  .variant-tab { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-muted); border-radius:var(--radius-md); padding:5px 10px; font-size:var(--text-sm); cursor:pointer; transition:all .15s ease; }
+  .variant-tab:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .variant-tab.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
+  .hint { margin-left:auto; color:var(--color-text-tertiary); font-size:var(--text-xs); }
+  .frame { max-width:1100px; margin:0 auto; }
+  .pane { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .pane-head { padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--color-border); display:flex; align-items:center; gap:var(--space-3); }
+  .pane-head h3 { margin:0; font-size:var(--text-lg); }
+  .bench { margin-left:auto; display:flex; align-items:center; gap:var(--space-2); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .btn { height:var(--control-h); padding:0 9px; border-radius:var(--radius-sm); border:1px solid var(--color-border-strong); background:var(--color-surface); color:var(--color-text); font-size:var(--text-sm); font-family:inherit; cursor:pointer; transition:all .15s ease; white-space:nowrap; }
+  .btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .btn.primary { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .input { height:var(--control-h); border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); background:var(--color-surface); padding:0 8px; font-size:var(--text-sm); color:var(--color-text); font-family:inherit; }
+  .input:focus { outline:none; border-color:var(--color-primary); box-shadow:0 0 0 2px var(--color-primary-soft); }
+  .filters { background:var(--color-surface-soft); border-bottom:1px solid var(--color-border); padding:var(--space-2) var(--space-4); display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; position:sticky; top:0; z-index:5; }
+  .filters .search { width:300px; }
+  .select { height:var(--control-h); border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); background:var(--color-surface); font-size:var(--text-sm); font-family:inherit; padding:0 6px; color:var(--color-text); }
+  .tag { font-size:var(--text-xs); border-radius:var(--radius-sm); padding:1px 5px; border:1px solid var(--color-border); white-space:nowrap; color:var(--color-text-muted); }
+  .tag.ok { color:var(--color-success); border-color:color-mix(in srgb, var(--color-success) 30%, transparent); }
+  .tag.warn { color:var(--color-warning); background:var(--color-warning-bg); border-color:transparent; }
+  .tag.filter-chip { cursor:pointer; background:var(--color-surface); }
+  .tag.filter-chip.on { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); }
+  .count { margin-left:auto; font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .list { height:440px; overflow:auto; position:relative; }
+  .row { display:flex; align-items:center; gap:var(--space-3); padding:6px var(--space-4); border-bottom:1px solid var(--color-border); cursor:pointer; transition:background .15s ease; height:38px; }
+  .row:hover { background:var(--color-surface-soft); }
+  .row.active { background:var(--color-primary-soft); }
+  .row .no { width:42px; color:var(--color-text-tertiary); font-family:var(--font-mono); font-size:var(--text-xs); text-align:right; flex:none; }
+  .row .name { font-weight:500; width:36%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:none; }
+  .row .path { color:var(--color-text-tertiary); font-size:var(--text-xs); font-family:var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+  .row .size { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); width:60px; text-align:right; flex:none; }
+  .row .date { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); width:76px; text-align:right; flex:none; }
+  .row .status { width:84px; text-align:center; flex:none; }
+  .perf { padding:8px var(--space-4); background:var(--color-text); color:#c9d4ea; font-family:var(--font-mono); font-size:var(--text-xs); display:flex; gap:var(--space-4); flex-wrap:wrap; }
+  .perf b { color:#7ee2b8; }
+  .empty { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; gap:8px; color:var(--color-text-muted); }
+  .pager { padding:var(--space-3) var(--space-4); border-top:1px solid var(--color-border); display:flex; align-items:center; gap:var(--space-2); }
+  .pager .bar { height:4px; background:var(--color-border); border-radius:2px; flex:1; position:relative; overflow:hidden; }
+  .pager .bar i { position:absolute; top:0; bottom:0; background:var(--color-primary); }
+  /* C: chunked */
+  .chunk-hdr { padding:8px var(--space-4); background:var(--color-surface-soft); border-bottom:1px solid var(--color-border); font-size:var(--text-xs); color:var(--color-text-muted); position:sticky; top:0; z-index:1; }
+  .loadmore { display:block; margin:var(--space-4) auto; min-width:220px; }
+  #sketch-tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.7); color:white; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; display:flex; gap:8px; align-items:center; }
+  #sketch-tools:hover { opacity:1; }
+  #sketch-tools select { font-size:11px; }
+  .vp { background:#333; color:white; border:1px solid #555; border-radius:4px; cursor:pointer; }
+  .toast { position:fixed; bottom:56px; right:12px; background:var(--color-text); color:white; padding:8px 12px; border-radius:var(--radius-md); font-size:var(--text-sm); opacity:0; transform:translateY(8px); transition:all .2s; pointer-events:none; z-index:9997; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  @media (max-width:760px) { .row .path, .row .date, .row .size { display:none; } .row .name { width:auto; flex:1; } .filters .search { width:100%; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" onclick="showVariant('a',this)">A: Virtual scroll + filter dính ★ Selected</button>
+  <button class="variant-tab" onclick="showVariant('b',this)">B: Phân trang 50/trang</button>
+  <button class="variant-tab" onclick="showVariant('c',this)">C: Nhóm + load more</button>
+  <span class="hint">Gõ search để lọc · đổi 1.000 ↔ 50.000 docs ở góc phải · click row</span>
+</div>
+
+<div class="frame variant" id="variant-a">
+  <div class="pane">
+    <div class="pane-head"><h3>Danh sách docs — Tài liệu dự án Alpha</h3><div class="bench">
+      <select class="select" id="size-a" onchange="changeSize(this.value,'a')"><option value="1000">1.000 docs</option><option value="50000">50.000 docs</option></select>
+      <button class="btn" onclick="toast('Đang quét lại trạng thái index…')">Refresh index</button>
+    </div></div>
+    <div class="filters">
+      <input class="input search" id="q-a" placeholder="Tìm tên hoặc đường dẫn…" oninput="applyFilter('a')">
+      <select class="select" onchange="applyFilter('a')"><option data-f="all">Tất cả trạng thái</option><option data-f="Đã index">Đã index</option><option data-f="Có thay đổi">Có thay đổi</option><option data-f="Chưa đồng bộ">Chưa đồng bộ</option></select>
+      <select class="select" onchange="applyFilter('a')"><option>Cập nhật gần đây</option><option>Tên A–Z</option><option>Kích thước giảm dần</option></select>
+      <span class="tag filter-chip" data-tag="md" onclick="toggleTag(this,'a')">.md</span>
+      <span class="tag filter-chip" data-tag="docx" onclick="toggleTag(this,'a')">.docx</span>
+      <span class="count" id="cnt-a"></span>
+    </div>
+    <div class="list" id="list-a" onscroll="renderVirtual('a')"></div>
+    <div class="perf" id="perf-a"></div>
+  </div>
+</div>
+
+<div class="frame variant" id="variant-b" style="display:none">
+  <div class="pane">
+    <div class="pane-head"><h3>Danh sách docs — Tài liệu dự án Alpha</h3><div class="bench">
+      <select class="select" id="size-b" onchange="changeSize(this.value,'b')"><option value="1000">1.000 docs</option><option value="50000">50.000 docs</option></select>
+    </div></div>
+    <div class="filters">
+      <input class="input search" id="q-b" placeholder="Tìm tên hoặc đường dẫn…" oninput="applyFilter('b')">
+      <select class="select"><option>Tất cả trạng thái</option><option>Đã index</option><option>Có thay đổi</option></select>
+      <span class="count" id="cnt-b"></span>
+    </div>
+    <div class="list" id="list-b"></div>
+    <div class="pager"><span class="tag" id="pglabel-b"></span><div class="bar"><i id="pgbar-b"></i></div><button class="btn" onclick="page(-1,'b')">← Trước</button><button class="btn" onclick="page(1,'b')">Sau →</button></div>
+    <div class="perf" id="perf-b"></div>
+  </div>
+</div>
+
+<div class="frame variant" id="variant-c" style="display:none">
+  <div class="pane">
+    <div class="pane-head"><h3>Danh sách docs — Tài liệu dự án Alpha</h3><div class="bench">
+      <select class="select" id="size-c" onchange="changeSize(this.value,'c')"><option value="1000">1.000 docs</option><option value="50000">50.000 docs</option></select>
+    </div></div>
+    <div class="filters">
+      <input class="input search" id="q-c" placeholder="Tìm tên hoặc đường dẫn…" oninput="applyFilter('c')">
+      <span class="count" id="cnt-c"></span>
+    </div>
+    <div class="list" id="list-c"></div>
+    <div style="padding:8px var(--space-4);border-top:1px solid var(--color-border)"><button class="btn loadmore" id="more-c" onclick="loadMore()">Tải thêm 200 docs</button></div>
+    <div class="perf" id="perf-c"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="sketch-tools">
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Default</option></select>
+  <button class="vp" onclick="setVp(375)">Phone</button><button class="vp" onclick="setVp(768)">Tablet</button><button class="vp" onclick="setVp(1100)">Desktop</button>
+</div>
+<script>
+const NAMES = ['Kiến trúc hệ thống','Quy trình review','API reference','Ghi chú sprint','Hướng dẫn cài đặt','So sánh phương án','Báo cáo tuần','Decision log','Research notes','Onboarding checklist','Chính sách bảo mật','Phân tích requirements'];
+const PATHS = ['docs/arch/','notes/','reference/api/','sprints/','guides/','decisions/','research/','templates/'];
+const STATUSES = ['Đã index','Đã index','Đã index','Đã index','Có thay đổi','Đã index','Chưa đồng bộ'];
+const state = { total:1000, pages:{a:0,b:0,c:1}, filtered:{}, tags:{md:false,docx:false}, loaded:100 };
+let cache = {};
+function makeData(n) { cache[n] = Array.from({length:n},(_,i)=>({
+  i, name: NAMES[i%NAMES.length]+' #'+String(i+1).padStart(5,'0')+(i%4===0?'.docx':'.md'),
+  path: PATHS[i%PATHS.length]+'doc-'+String(i+1).padStart(5,'0')+(i%4===0?'.docx':'.md'),
+  size: (12+(i*7)%480)+' KB', date: '2026-11-'+String(1+i%28).padStart(2,'0'),
+  status: STATUSES[i%STATUSES.length], ext: i%4===0?'docx':'md'
+})); return cache[n]; }
+function getData() { return cache[state.total] || makeData(state.total); }
+function filtered(v) {
+  const q = (document.getElementById('q-'+v)?.value||'').toLowerCase();
+  let list = getData().filter(d=>d.name.toLowerCase().includes(q)||d.path.toLowerCase().includes(q));
+  const sel = document.querySelectorAll('#variant-'+v+' .filters select')[v==='a'?0:0];
+  if(v==='a' && sel) { const f=sel.selectedOptions[0]?.dataset.f; if(f&&f!=='all') list=list.filter(d=>d.status===f); }
+  if(v==='a' && state.tags.md) list=list.filter(d=>d.ext==='md');
+  if(v==='a' && state.tags.docx) list=list.filter(d=>d.ext==='docx');
+  state.filtered[v]=list;
+  const cnt=document.getElementById('cnt-'+v); if(cnt) cnt.textContent=list.length.toLocaleString('vi-VN')+' / '+state.total.toLocaleString('vi-VN')+' docs';
+  return list;
+}
+function rowHtml(d) { return `<div class="row" onclick="toast('Mở doc: '+this.querySelector('.name').textContent)"><span class="no">${String(d.i+1).padStart(5,'0')}</span><span class="name">${d.name}</span><span class="path">${d.path}</span><span class="size">${d.size}</span><span class="date">${d.date}</span><span class="status tag ${d.status==='Đã index'?'ok':'warn'}">${d.status}</span></div>`; }
+function changeSize(n,v) { state.total=+n; state.pages={a:0,b:0,c:1}; state.loaded=100; ['a','b','c'].forEach(x=>applyFilter(x)); toast('Dataset: '+(+n).toLocaleString('vi-VN')+' docs'); }
+function applyFilter(v) { filtered(v); if(v==='a') renderVirtual('a'); if(v==='b'){state.pages.b=0;renderPage('b');} if(v==='c'){state.loaded=100;renderChunk('c');} }
+function toggleTag(el,v) { const t=el.dataset.tag; state.tags[t]=!state.tags[t]; el.classList.toggle('on',state.tags[t]); applyFilter(v); }
+function renderVirtual(v) {
+  const list=state.filtered[v]||[], el=document.getElementById('list-'+v); if(!el) return;
+  const ROW=38, VIEWPORT=440, overscan=4;
+  const start=Math.max(0,Math.floor(el.scrollTop/ROW)-overscan);
+  const end=Math.min(list.length,start+Math.ceil(VIEWPORT/ROW)+overscan*2);
+  const padTop=start*ROW, padBottom=(list.length-end)*ROW;
+  el.innerHTML = list.length ? `<div style="height:${padTop}px"></div>${list.slice(start,end).map(rowHtml).join('')}<div style="height:${padBottom}px"></div>` : `<div class="empty">Không tìm thấy doc nào · <button class="btn" onclick="document.getElementById('q-${v}').value='';applyFilter('${v}')">Xóa tìm kiếm</button></div>`;
+  document.getElementById('perf-'+v).innerHTML = `<span>rows in DOM: <b>${Math.min(list.length,end-start)}</b></span><span>filter: <b>${list.length.toLocaleString('vi-VN')}</b></span><span>total dataset: <b>${state.total.toLocaleString('vi-VN')}</b></span><span>re-render on scroll: <b>${Math.ceil(VIEWPORT/ROW)+overscan*2} rows</b></span>`;
+}
+function renderPage(v) {
+  const list=state.filtered[v]||[], size=50, p=state.pages[v], max=Math.max(1,Math.ceil(list.length/size));
+  state.pages[v]=Math.min(p,max-1);
+  const p2=state.pages[v];
+  document.getElementById('list-'+v).innerHTML = list.length ? list.slice(p2*size,(p2+1)*size).map(rowHtml).join('') : '<div class="empty">Không tìm thấy doc nào</div>';
+  document.getElementById('pglabel-b').textContent='Trang '+(p2+1)+' / '+max;
+  document.getElementById('pgbar-b').style.width=((p2+1)/max*100)+'%';
+  document.getElementById('perf-'+v).innerHTML=`<span>rows in DOM: <b>${Math.min(size,list.length)}</b></span><span>page: <b>${p2+1}/${max}</b></span><span>total dataset: <b>${state.total.toLocaleString('vi-VN')}</b></span>`;
+}
+function page(d,v) { state.pages[v]+=d; renderPage(v); }
+function renderChunk(v) {
+  const list=state.filtered[v]||[];
+  document.getElementById('list-'+v).innerHTML = list.length ? list.slice(0,state.loaded).map(rowHtml).join('') : '<div class="empty">Không tìm thấy doc nào</div>';
+  const btn=document.getElementById('more-c'); if(btn) btn.style.display=state.loaded<list.length?'block':'none';
+  document.getElementById('perf-'+v).innerHTML=`<span>rows in DOM: <b>${Math.min(state.loaded,list.length)}</b></span><span>loaded: <b>${state.loaded.toLocaleString('vi-VN')}</b></span><span>total dataset: <b>${state.total.toLocaleString('vi-VN')}</b></span>`;
+}
+function loadMore() { state.loaded+=200; renderChunk('c'); }
+function showVariant(id,btn) { document.querySelectorAll('.variant').forEach(v=>v.style.display='none'); document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active')); document.getElementById('variant-'+id).style.display='block'; btn.classList.add('active'); if(state.filtered[id]) { if(id==='a')renderVirtual('a'); if(id==='b')renderPage('b'); if(id==='c')renderChunk('c'); } }
+function setVp(w) { document.querySelectorAll('.frame').forEach(f=>f.style.maxWidth=w+'px'); }
+let toastTimer; function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1600); }
+makeData(1000); ['a','b','c'].forEach(applyFilter);
+</script>
+</body>
+</html>
