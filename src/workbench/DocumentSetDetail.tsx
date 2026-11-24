@@ -722,10 +722,7 @@ export function DocumentSetDetail({
         <div style={{ flexShrink: 0, border: '1px solid var(--ant-color-border, #f0f0f0)', borderLeft: '3px solid var(--ant-color-primary, #2f62d8)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <LoadingOutlined />
           <Text strong style={{ fontSize: 12 }}>Đang kiểm tra trạng thái xuất bản</Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>{publishingDocIds.size} tài liệu / {set.documentIds.length} · chạy locally</Text>
-          <div style={{ flex: 1, minWidth: 80 }}>
-            <Progress percent={set.documentIds.length ? Math.round((publishingDocIds.size / set.documentIds.length) * 100) : 0} status="active" size="small" />
-          </div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Đã gửi {publishingDocIds.size} tài liệu · đang chờ Knowledge Server xác nhận</Text>
           <Button
             size="small"
             loading={reconcilingAttemptId === activeAttemptId}
