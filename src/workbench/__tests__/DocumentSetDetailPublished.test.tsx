@@ -3,8 +3,8 @@ import 'fake-indexeddb/auto';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../db';
-import { createDocumentSet } from '../../db/repositories/documentSetRepo';
-import type { PublishAttemptCache } from '../../types/models';
+import { computeSha256, createDocumentSet, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
+import type { Note, PublishAttemptCache } from '../../types/models';
 import { DocumentSetDetail } from '../DocumentSetDetail';
 
 /**
@@ -80,6 +80,36 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
     await waitFor(() =>
       expect(documents.querySelector('[data-testid="doc-set-filter-count"]')?.textContent).not.toBe('60 / 60')
     );
+  });
+
+  it('does not flash "Có thay đổi cục bộ" on first render of an in-sync published set', async () => {
+    const noteId = '11111111-2222-4333-8444-000000000001';
+    const note: Note = {
+      id: noteId,
+      type: 'document',
+      title: 'Tài liệu đã đồng bộ',
+      body: '# đã đồng bộ',
+      isPinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const set = await createDocumentSet({ name: 'Bộ đồng bộ', documentIds: [noteId] }, db);
+    await db.notes.add(note);
+    await db.publishedDocuments.add({
+      setId: set.id,
+      documentId: noteId,
+      lastKnownRemoteAt: '2026-01-02T00:00:00.000Z',
+      publishedContentHash: await computeSha256(normalizeMarkdownForHash(note.body)),
+      lastPrimaryState: 'In sync',
+    });
+
+    await act(async () => {
+      render(<DocumentSetDetail setId={set.id} db={db} />);
+    });
+
+    expect(screen.queryByText('Có thay đổi cục bộ')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Đã đồng bộ')).toBeInTheDocument());
+    expect(screen.queryByText('Có thay đổi cục bộ')).not.toBeInTheDocument();
   });
 
   it('treats a set with only a publishAttempt (no publishedDocuments row) as published', async () => {

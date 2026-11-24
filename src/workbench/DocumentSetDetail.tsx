@@ -274,12 +274,16 @@ export function DocumentSetDetail({
     if (metadata.length === 0) {
       return { state: 'Never published' as PublishPrimaryState, activeAttemptId: undefined };
     }
+    // WR-02: while the live hash query is still initializing, hashes are unknown — not stale.
+    // Falling through would classify every published set as "Local changes" for a few ticks.
+    if (!hashesReady) {
+      return { state: 'In sync' as PublishPrimaryState, activeAttemptId: undefined };
+    }
     const metadataById = new Map(metadata.map((item) => [item.documentId, item]));
     const membershipMatches =
       metadata.length === set?.documentIds.length &&
       (set?.documentIds ?? []).every((documentId) => metadataById.has(documentId));
     const hashesMatch =
-      hashesReady &&
       membershipMatches &&
       (set?.documentIds ?? []).every(
         (documentId) => noteHashes[documentId] === metadataById.get(documentId)?.publishedContentHash
