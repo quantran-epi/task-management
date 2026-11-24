@@ -245,7 +245,7 @@ export function DocumentSetDetail({
     attempts: import('../types/models').PublishAttemptCache[];
   });
 
-  const hashCache = useRef(new Map<string, { updatedAt: string; hash: string }>());
+  const hashCache = useRef(new Map<string, { updatedAt: string; length: number; hash: string }>());
   const noteHashes = useLiveQuery(
     async () => computeNoteHashesCached(documents, hashCache.current),
     [db, set?.id, documentIdsKey, documents],

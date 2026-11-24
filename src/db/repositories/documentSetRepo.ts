@@ -85,23 +85,25 @@ export async function computeSha256(text: string): Promise<string> {
 }
 
 /**
- * Hashes only the notes passed in, caching per (id, updatedAt) in the caller-owned Map.
+ * Hashes only the notes passed in, caching per (id, updatedAt, body.length) in the caller-owned Map.
+ * WR-03: body.length is a content proxy — a backup restore or SQLite hydration can replace the
+ * body while keeping updatedAt, and a key of (id, updatedAt) alone would reuse the stale hash.
  * No module-level cache: different databases must never share entries.
  */
 export async function computeNoteHashesCached(
   notes: readonly Note[],
-  cache: Map<string, { updatedAt: string; hash: string }>
+  cache: Map<string, { updatedAt: string; length: number; hash: string }>
 ): Promise<Record<string, string>> {
   const hashes: Record<string, string> = {};
   await Promise.all(
     notes.map(async (note) => {
       const cached = cache.get(note.id);
-      if (cached?.updatedAt === note.updatedAt) {
+      if (cached?.updatedAt === note.updatedAt && cached.length === note.body.length) {
         hashes[note.id] = cached.hash;
         return;
       }
       const hash = await computeSha256(normalizeMarkdownForHash(note.body));
-      cache.set(note.id, { updatedAt: note.updatedAt, hash });
+      cache.set(note.id, { updatedAt: note.updatedAt, length: note.body.length, hash });
       hashes[note.id] = hash;
     })
   );

@@ -20,8 +20,8 @@ async function expectedHash(body: string): Promise<string> {
 }
 
 describe('computeNoteHashesCached', () => {
-  it('hashes only passed notes and reuses cache for unchanged (id, updatedAt)', async () => {
-    const cache = new Map<string, { updatedAt: string; hash: string }>();
+  it('hashes only passed notes and reuses cache for unchanged (id, updatedAt, body.length)', async () => {
+    const cache = new Map<string, { updatedAt: string; length: number; hash: string }>();
     const first = note('doc-1', '# one', '2026-01-02T00:00:00.000Z');
     const second = note('doc-2', '# two', '2026-01-03T00:00:00.000Z');
 
@@ -38,7 +38,7 @@ describe('computeNoteHashesCached', () => {
   });
 
   it('invalidates only the changed note when updatedAt changes', async () => {
-    const cache = new Map<string, { updatedAt: string; hash: string }>();
+    const cache = new Map<string, { updatedAt: string; length: number; hash: string }>();
     const first = note('doc-1', '# one', '2026-01-02T00:00:00.000Z');
     const second = note('doc-2', '# two', '2026-01-03T00:00:00.000Z');
     const before = await computeNoteHashesCached([first, second], cache);
@@ -52,11 +52,24 @@ describe('computeNoteHashesCached', () => {
     expect(cache.size).toBe(2);
   });
 
+  it('recomputes hash when body changes but updatedAt stays the same (WR-03)', async () => {
+    const cache = new Map<string, { updatedAt: string; length: number; hash: string }>();
+    const updatedAt = '2026-01-02T00:00:00.000Z';
+    const before = await computeNoteHashesCached([note('doc-1', '# one', updatedAt)], cache);
+
+    const edited = note('doc-1', '# one with more content', updatedAt);
+    const after = await computeNoteHashesCached([edited], cache);
+
+    expect(after['doc-1']).toBe(await expectedHash('# one with more content'));
+    expect(after['doc-1']).not.toBe(before['doc-1']);
+    expect(cache.get('doc-1')?.length).toBe(edited.body.length);
+  });
+
   it('keeps caches from different callers isolated and never returns foreign ids', async () => {
     const doc = note('doc-1', '# one', '2026-01-02T00:00:00.000Z');
-    const cacheA = new Map<string, { updatedAt: string; hash: string }>();
-    const cacheB = new Map<string, { updatedAt: string; hash: string }>();
-    cacheB.set('doc-9', { updatedAt: doc.updatedAt, hash: 'foreign' });
+    const cacheA = new Map<string, { updatedAt: string; length: number; hash: string }>();
+    const cacheB = new Map<string, { updatedAt: string; length: number; hash: string }>();
+    cacheB.set('doc-9', { updatedAt: doc.updatedAt, length: doc.body.length, hash: 'foreign' });
 
     expect(await computeNoteHashesCached([doc], cacheA)).toEqual({
       'doc-1': await expectedHash('# one'),
@@ -65,7 +78,7 @@ describe('computeNoteHashesCached', () => {
       'doc-1': await expectedHash('# one'),
     });
     expect(cacheA.size).toBe(1);
-    expect(cacheB.get('doc-9')).toEqual({ updatedAt: doc.updatedAt, hash: 'foreign' });
+    expect(cacheB.get('doc-9')).toEqual({ updatedAt: doc.updatedAt, length: doc.body.length, hash: 'foreign' });
     expect(await computeNoteHashesCached([], cacheA)).toEqual({});
   });
 });
