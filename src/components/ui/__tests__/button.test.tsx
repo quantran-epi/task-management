@@ -19,6 +19,23 @@ describe('Button wrapper', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toHaveClass('ant-btn-dangerous');
   });
 
+  it('gives caller type="primary" the same ui-tool-btn-primary class as variant="primary"', () => {
+    const { unmount } = render(<Button type="primary" size="small">Tạo hệ thống</Button>);
+    expect(screen.getByRole('button', { name: 'Tạo hệ thống' })).toHaveClass(
+      'ant-btn-primary',
+      'ui-tool-btn-primary',
+    );
+    unmount();
+
+    render(<Button variant="primary">Extract Diagrams</Button>);
+    expect(screen.getByRole('button', { name: 'Extract Diagrams' })).toHaveClass('ui-tool-btn-primary');
+  });
+
+  it('keeps text/link buttons out of the primary class even when danger is false', () => {
+    render(<Button type="link">Link</Button>);
+    expect(screen.getByRole('button', { name: 'Link' })).not.toHaveClass('ui-tool-btn-primary');
+  });
+
   it('lets explicit caller type, danger and style win over the variant (WR-03)', () => {
     render(<Button type="link" danger={false} style={{ padding: 0 }}>Link</Button>);
     const button = screen.getByRole('button', { name: 'Link' });

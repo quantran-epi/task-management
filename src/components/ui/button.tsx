@@ -52,6 +52,7 @@ function controlStyle(): CSSProperties {
 export function Button({ variant = 'default', style, type, danger, className, ...rest }: ButtonProps) {
   const variantProps = VARIANT_PROPS[variant];
   const isTextButton = type === 'text' || type === 'link';
+  const isPrimary = !isTextButton && (variant === 'primary' || variant === 'danger' || type === 'primary');
   const merged = withoutUndefined({
     ...rest,
     type: type ?? variantProps.type,
@@ -59,7 +60,7 @@ export function Button({ variant = 'default', style, type, danger, className, ..
     className: [
       TOOL_BUTTON_CLASS,
       isTextButton ? `${TOOL_BUTTON_CLASS}-text` : '',
-      !isTextButton && (variant === 'primary' || variant === 'danger') ? `${TOOL_BUTTON_CLASS}-primary` : '',
+      isPrimary ? `${TOOL_BUTTON_CLASS}-primary` : '',
       className,
     ].filter(Boolean).join(' '),
     style: isTextButton

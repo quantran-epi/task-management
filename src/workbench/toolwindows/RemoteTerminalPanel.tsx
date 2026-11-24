@@ -390,7 +390,7 @@ export function RemoteTerminalPanel({
               onClick={handleExtractDiagrams}
               loading={extracting}
               data-testid="extract-diagrams-btn"
-              style={{ fontSize: 'var(--font-size-small)', background: '#3871e1' }}
+              style={{ fontSize: 'var(--font-size-small)', background: 'var(--accent, #2f62d8)' }}
             >
               Extract Diagrams
             </Button>
