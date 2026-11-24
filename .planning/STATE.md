@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-24 - Completed quick task 261124-sav: refactor màn hình bộ tài liệu (rail+inspector, virtual list, flat picker), review findings đã fix
+Last activity: 2026-11-24 - Completed quick task 261124-u84: strip dòng TASKMATE_PGID khỏi stdout trong exec_remote, fix lỗi xác thực worktree remote
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -123,6 +123,7 @@ Progress: [█████████░] 91%
 | 261123-et1 | Draft team chat theo conversation, pin/global convention thành trusted instruction, fixes diagnostics/SQLcl | 2026-11-23 | cf04a416, 4d4be556, 85020d1f, 81378439, 7ddb93e7 |  | [261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo](./quick/261123-et1-s-a-ai-chat-team-l-u-draft-tin-nh-n-theo/) |
 | 261124-r35 | Sửa 6 lỗi UI: doc editor 2 panel full height, select multiple overflow, dashboard forecast cards, tab Profile taskbar, primary button color, icon Tool Explorer | 2026-11-24 | 5eb2811c, 91298caa, 414d86b7, f1f443d8, 89de9eae |  | [261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable](./quick/261124-r35-s-a-3-l-i-ui-doc-editor-2-panel-editable/) |
 | 261124-sav | Refactor màn hình bộ tài liệu theo 3 sketch winner: rail+inspector, virtual scroll+filter dính, inline progress+flat picker; tách hash khỏi full note scan | 2026-11-24 | 57c58272 | Needs Review | [261124-sav-refactor-m-n-h-nh-b-t-i-li-u-theo-3-sket](./quick/261124-sav-refactor-m-n-h-nh-b-t-i-li-u-theo-3-sket/) |
+| 261124-u84 | Strip dòng TASKMATE_PGID khỏi stdout trong exec_remote, fix lỗi "Không xác thực được worktree remote" | 2026-11-24 | pending | Verified | [261124-u84-fix-rust-ssh-worktree-provision-strip-d-](./quick/261124-u84-fix-rust-ssh-worktree-provision-strip-d-/) |
 
 ## Accumulated Context
 

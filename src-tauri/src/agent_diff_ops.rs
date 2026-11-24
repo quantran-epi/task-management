@@ -159,6 +159,15 @@ struct RemoteOutput {
     exit_status: i32,
 }
 
+/// Remove only the wrapper's PGID metadata line from remote stdout. `split_inclusive`
+/// preserves every other line byte-for-byte, including trailing newlines.
+fn strip_pgid_lines(stdout: &str) -> String {
+    stdout
+        .split_inclusive('\n')
+        .filter(|line| !line.trim().starts_with(crate::tool_cancel::PGID_LINE_PREFIX))
+        .collect()
+}
+
 /// Blocking SSH command. `build_remote_command` carries the payload as base64 so quoted
 /// arguments and `$()` survive intact. Never called with a local path.
 fn exec_remote(
@@ -183,6 +192,7 @@ fn exec_remote(
         .stderr()
         .read_to_string(&mut stderr)
         .map_err(|e| format!("Đọc stderr thất bại: {}", e))?;
+    let stdout = strip_pgid_lines(&stdout);
     let exit_status = channel.exit_status().unwrap_or(1) as i32;
     Ok(RemoteOutput { stdout, stderr, exit_status })
 }
@@ -272,3 +282,37 @@ pub async fn ssh_worktree_provision(
 // root, giving any webview a path-traversal / arbitrary-write primitive. The confined verbs
 // live in the TS layer (sshWorktreeService.ts) over `ssh_exec_command`; provisioning remains
 // server-side deterministic in `ssh_worktree_provision`.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strips_pgid_line_and_keeps_trailing_newline() {
+        let input = "TASKMATE_PGID:4242\nworktree /repo/.taskmate-worktrees/agent-developer-abc\n";
+        assert_eq!(strip_pgid_lines(input), "worktree /repo/.taskmate-worktrees/agent-developer-abc\n");
+    }
+
+    #[test]
+    fn strips_pgid_line_in_the_middle_without_reordering() {
+        assert_eq!(strip_pgid_lines("first\nTASKMATE_PGID:7\nsecond\n"), "first\nsecond\n");
+    }
+
+    #[test]
+    fn keeps_plain_numeric_lines_that_are_not_pgid() {
+        assert_eq!(strip_pgid_lines("12345\nTASKMATE_PGID:9\n"), "12345\n");
+    }
+
+    #[test]
+    fn keeps_non_pgid_output_byte_for_byte() {
+        let input = "worktree /x\n";
+        assert_eq!(strip_pgid_lines(input), input);
+        assert_eq!(strip_pgid_lines(""), "");
+    }
+
+    #[test]
+    fn remote_wrapper_still_emits_the_pgid_prefix() {
+        let command = crate::tool_cancel::build_remote_command("echo hi");
+        assert!(command.contains(crate::tool_cancel::PGID_LINE_PREFIX));
+    }
+}

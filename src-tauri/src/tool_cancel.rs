@@ -311,7 +311,7 @@ pub fn build_remote_command(command: &str) -> String {
 
 /// Unique marker on the PGID line. SSH login banners and command output can contain arbitrary
 /// numeric lines; only a line with this exact prefix is the `setsid` leader id.
-const PGID_LINE_PREFIX: &str = "TASKMATE_PGID:";
+pub(crate) const PGID_LINE_PREFIX: &str = "TASKMATE_PGID:";
 
 /// Read a PGID from one output chunk. Only the sentinel-prefixed line is accepted; arbitrary
 /// numeric banner lines can no longer be mistaken for the process-group leader.
