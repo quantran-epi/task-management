@@ -15,7 +15,7 @@ import {
   type TeamRunCoordinator,
   type TurnRoster,
 } from '../../../../src/services/ai/office/teamRunCoordinator';
-import { EMPLOYEE_ONLY_TEAM_TOOLS, TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
+import { AGENT_DEVELOPER_ONLY_TEAM_TOOLS, EMPLOYEE_ONLY_TEAM_TOOLS, TEAM_TOOL_DEFINITIONS } from '../../../../src/services/ai/office/teamTools';
 import { WORKTREE_AMBIGUITY_LINE } from '../../../../src/services/ai/office/teamPrompts';
 import { makeTeamRunSnapshot } from '../../../helpers/teamRunSnapshot';
 import {
@@ -616,10 +616,12 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await harness.coordinator.send('Xin chào');
 
       const names = captured.map((tool) => normalizeToolName(tool.function.name));
-      // Phase 41 D-06/T-41-33: `write_doc` is employee-only, so the lead payload must NOT
-      // advertise it. A future edit that widens the lead payload fails on this loop.
+      // Phase 41 D-06/T-41-33: `write_doc` is employee-only; phase 48-01: `code_edit` is
+      // developer-only. Neither may appear in the lead payload. This loop pins both filters.
       for (const definition of TEAM_TOOL_DEFINITIONS.filter(
-        (t) => !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(t.function.name))
+        (t) =>
+          !EMPLOYEE_ONLY_TEAM_TOOLS.has(normalizeToolName(t.function.name)) &&
+          !AGENT_DEVELOPER_ONLY_TEAM_TOOLS.has(normalizeToolName(t.function.name))
       )) {
         expect(names).toContain(normalizeToolName(definition.function.name));
       }
@@ -8315,6 +8317,13 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       await harness2.coordinator.dispose('app-exit');
       gate2.release();
       await sent2;
+      // The running attempt finalizes asynchronously after dispose; the ledger must reach
+      // its terminal state before asserting the batch-level app-exit invariant.
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const rows = await harness2.db.aiTeamAssignments.toArray();
+        if (rows.every((row) => row.runStatus === 'stopped')) break;
+        await sleep(5);
+      }
       expect(
         telemetryEmits.some((row) => row.phase === 'abort' && row.abortSource === 'app-exit')
       ).toBe(true);
