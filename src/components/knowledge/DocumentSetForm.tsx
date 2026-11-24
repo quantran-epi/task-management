@@ -253,7 +253,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
   };
 
   return (
-    <Form layout="vertical">
+    <Form layout="vertical" style={{ width: '100%', minWidth: 0 }}>
       {/* 1. Friendly Presets Radio (D-18) */}
       <FormItem label="Mẫu thiết lập phạm vi (Preset)">
         <RadioGroup

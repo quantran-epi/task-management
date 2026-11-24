@@ -580,6 +580,19 @@ export function DocumentSetDetail({
   const [sortKey, setSortKey] = useState<'updated' | 'name'>('updated');
   const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
   const formRef = useRef<DocumentSetFormHandle>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [detailWidth, setDetailWidth] = useState(0);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new ResizeObserver(() => setDetailWidth(root.clientWidth));
+    observer.observe(root);
+    setDetailWidth(root.clientWidth);
+    return () => observer.disconnect();
+  // `set` arrives from a live query: the first render hits `if (!set)` before rootRef is attached,
+  // so re-run once the id appears (otherwise ResizeObserver is never registered).
+  }, [set?.id]);
 
   const publishingDocIds = useMemo(() => {
     const attempt = publishData.attempts.find((item) => item.status === 'Publishing');
@@ -660,8 +673,9 @@ export function DocumentSetDetail({
 
   return (
     <div
+      ref={rootRef}
       data-testid="doc-set-detail"
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 'var(--gap-12)', overflow: 'auto' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, minHeight: 0, gap: 'var(--gap-12)', overflow: 'auto' }}
     >
       <div style={{ flexShrink: 0 }}>
         <Title level={4} style={{ margin: 0, fontSize: 20 }}>
@@ -933,7 +947,7 @@ export function DocumentSetDetail({
               placeholder="Tên hoặc đường dẫn"
               value={docQuery}
               onChange={(event) => setDocQuery(event.target.value)}
-              style={{ width: 200 }}
+              style={{ flex: '1 1 160px', minWidth: 100, width: detailWidth >= 560 ? 200 : 'auto' }}
             />
             <Select
               aria-label="Lọc trạng thái"
@@ -941,18 +955,24 @@ export function DocumentSetDetail({
               placeholder="Trạng thái"
               value={statusFilter}
               onChange={setStatusFilter}
-              style={{ width: 150 }}
+              style={{ flex: '1 1 110px', minWidth: 90, width: detailWidth >= 560 ? 150 : 'auto' }}
               options={Object.keys(STATE_UI).map((value) => ({ value, label: value }))}
             />
             <Select
               aria-label="Sắp xếp"
               value={sortKey}
               onChange={setSortKey}
-              style={{ width: 120 }}
+              style={{ flex: '1 1 90px', minWidth: 80, width: detailWidth >= 560 ? 120 : 'auto' }}
               options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
             />
             <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
           </div>
+          {detailWidth < 560 && selectedDoc ? (
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', overflow: 'hidden' }}>
+              <Text strong ellipsis style={{ fontSize: 12 }}>{selectedDoc.title}</Text>
+              <Text type="secondary" ellipsis style={{ fontSize: 11, display: 'block' }}>{selectedDoc.path || '—'}</Text>
+            </div>
+          ) : null}
           {rows.length === 0 ? (
             <Empty description="Chưa có tài liệu nào trong bộ này">
               <Button type="primary" onClick={() => formRef.current?.openPicker()}>Thêm tài liệu</Button>
@@ -971,20 +991,22 @@ export function DocumentSetDetail({
             />
           )}
         </div>
-        <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
-          {selectedDoc ? (
-            <Space direction="vertical" size="small" style={{ width: '100%' }}>
-              <Text strong>{selectedDoc.title}</Text>
-              <Text type="secondary">{selectedDoc.path || '—'}</Text>
-              <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
-              <Text type="secondary">{selectedDoc.updatedAt}</Text>
-              <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
-              <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
-            </Space>
-          ) : (
-            <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
-          )}
-        </aside>
+        {detailWidth >= 560 ? (
+          <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
+            {selectedDoc ? (
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Text strong>{selectedDoc.title}</Text>
+                <Text type="secondary">{selectedDoc.path || '—'}</Text>
+                <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
+                <Text type="secondary">{selectedDoc.updatedAt}</Text>
+                <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
+                <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
+              </Space>
+            ) : (
+              <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
+            )}
+          </aside>
+        ) : null}
       </div>
 
       {/* Confirmation modal before rebuild per D-21 */}
