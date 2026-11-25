@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-25 - Completed quick task 261125-t5q: Chỉnh list ghi chú nhanh theo quick note + filter entity đã link; trước đó 261125-s92: Thêm tính năng ghi chú nhanh qua stripe phải, panel tạo note và search entity để gắn note
+Last activity: 2026-11-25 - Completed quick task 261125-svm: Dynamic MCP tool list cho mọi AI surface; trước đó 261125-t5q: Chỉnh list ghi chú nhanh theo quick note + filter entity đã link
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -141,6 +141,7 @@ Progress: [█████░░░░░] 50%
 | 261125-s92 | Thêm tính năng ghi chú nhanh qua stripe phải, panel tạo note và search entity để gắn note | 2026-11-25 | 6117c556, 86cabf1c, d01d180e, 7ca26e15 | — | [261125-s92-th-m-t-nh-n-ng-ghi-ch-nhanh-trigger-b-ng](./quick/261125-s92-th-m-t-nh-n-ng-ghi-ch-nhanh-trigger-b-ng/) |
 | 261125-rwu | Fix AI chat panel và team dùng trọn 2 MCP Graphiti/SQL: sửa tên tool source, allowlist JS/Rust, prompt và discovery | 2026-11-25 | 7a6447f2, cfdb5038, da6bdb63, 106d6fea | Needs UAT | [261125-rwu-fix-ai-chat-panel-v-team-with-2-graphiti](./quick/261125-rwu-fix-ai-chat-panel-v-team-with-2-graphiti/) |
 | 261125-t5q | Chỉnh giao diện ghi chú nhanh: list dưới chỉ quick note, hiện entity đang linked + tiêu đề + 2 dòng nội dung mờ, bỏ box scroll, thêm filter theo entity đã link | 2026-11-25 | 893bf414 | — | [261125-t5q-ch-nh-giao-di-n-ghi-ch-nhanh-strip-b-n-p](./quick/261125-t5q-ch-nh-giao-di-n-ghi-ch-nhanh-strip-b-n-p/) |
+| 261125-svm | Dynamic MCP tool list cho mọi AI surface: advertise mọi tool server, auto reload theo turn, 2 server ngầm luôn bật, mutation vẫn chặn | 2026-11-25 | d0943604, d1a49648, a096fb87 | Needs UAT | [261125-svm-dynamic-mcp-tool-list-cho-m-i-ai-surface](./quick/261125-svm-dynamic-mcp-tool-list-cho-m-i-ai-surface/) |
 
 ## Accumulated Context
 
