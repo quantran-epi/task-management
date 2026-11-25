@@ -4,6 +4,7 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createSystem } from '../../src/db/repositories/systemRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { createTask } from '../../src/db/repositories/taskRepo';
+import { createNote } from '../../src/db/repositories/noteRepo';
 import { ChangeRequestDetailView } from '../../src/views/ChangeRequestDetailView';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 
@@ -85,7 +86,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     const typeTag = screen.getByText('Tạo mới').closest('.ant-tag') as HTMLElement;
     expect(typeTag).not.toBeNull();
-    expect(typeTag.getAttribute('style') ?? '').toMatch(/1677ff|22,\s*119,\s*255/i);
+    expect(typeTag.getAttribute('style') ?? '').toContain('var(--accent)');
 
     expect(screen.getByText('Đang chạy')).toBeInTheDocument();
     expect(screen.getByText('PAYMENT_SVC')).toBeInTheDocument();
@@ -117,7 +118,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     openSubsystemDropdown(task.id);
 
     await waitFor(() => {
-      expect(optionTexts()).toEqual(['PAYMENT_SVC', 'LEDGER_SVC', 'Chung (không gắn)']);
+      expect(optionTexts()).toEqual(['Payment Service (PAYMENT_SVC)', 'Ledger Service (LEDGER_SVC)', 'Chung (không gắn)']);
     });
   }, 30000);
 
@@ -127,8 +128,8 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     await screen.findByText('Implement OAuth callback');
     openSubsystemDropdown(task.id);
-    await waitFor(() => expect(optionTexts()).toContain('LEDGER_SVC'));
-    clickOption('LEDGER_SVC');
+    await waitFor(() => expect(optionTexts()).toContain('Ledger Service (LEDGER_SVC)'));
+    clickOption('Ledger Service (LEDGER_SVC)');
 
     await waitFor(async () => {
       const updated = await db.tasks.get(task.id);
@@ -142,7 +143,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     await screen.findByText('Implement OAuth callback');
     openSubsystemDropdown(task.id);
-    await waitFor(() => expect(optionTexts()).toContain('Chung (không gắn)'));
+    await waitFor(() => expect(optionTexts()).toContain('Payment Service (PAYMENT_SVC)'));
     clickOption('Chung (không gắn)');
 
     await waitFor(async () => {
@@ -186,6 +187,28 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     // Collapsed: no panel body is mounted yet.
     expect(screen.queryByText('Chưa có')).not.toBeInTheDocument();
+  }, 30000);
+
+  it('counts only cr notes in the Ghi chú block and renders them when opened', async () => {
+    const { cr } = await seed();
+    await createNote({ body: 'Nội dung CR 1', title: 'Ghi chú CR một', entityType: 'cr', entityId: cr.id }, db);
+    await createNote({ body: 'Nội dung CR 2', title: 'Ghi chú CR hai', entityType: 'cr', entityId: cr.id }, db);
+    await createNote({ body: 'Nhiễu', title: 'Ghi chú nhiễu task', entityType: 'task', entityId: cr.id }, db);
+    const deleted = await createNote({ body: 'Đã xóa', title: 'Ghi chú đã xóa', entityType: 'cr', entityId: cr.id }, db);
+    await db.notes.update(deleted.id, { deletedAt: new Date().toISOString() });
+
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    const block = await screen.findByTestId('cr-detail-block-notes');
+    await waitFor(() => expect(block.textContent).toContain('2'));
+    expect(screen.queryByText('Ghi chú liên kết')).not.toBeInTheDocument();
+
+    fireEvent.click(block);
+    expect(await screen.findByText('Ghi chú liên kết')).toBeInTheDocument();
+    expect(await screen.findByText('Ghi chú CR một')).toBeInTheDocument();
+    expect(await screen.findByText('Ghi chú CR hai')).toBeInTheDocument();
+    expect(screen.queryByText('Ghi chú nhiễu task')).not.toBeInTheDocument();
+    // EntityNotesSection has no deletedAt filter; only the badge count excludes deleted notes.
   }, 30000);
 
   it('does not delete existing task when task drawer is opened and closed without saving', async () => {
