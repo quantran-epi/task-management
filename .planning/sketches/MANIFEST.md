@@ -15,3 +15,4 @@ Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench g�
 | 002 | doc-set-workbench-layout | Bố cục nào cho màn hình bộ tài liệu gọn trong workbench mà vẫn đủ thông tin? | A — Rail cố định + inspector | layout, doc-set, workbench, ant-design |
 | 003 | doc-set-virtual-list | Danh sách docs lớn nên quét/tìm/chọn thế nào mà không lag? | A — Virtual scroll + filter dính | virtualization, search, list, performance |
 | 004 | doc-set-heavy-states | Trạng thái nặng (hash/index/publish/empty/error/picker) nên hiển thị ra sao? | A — Inline progress + action | states, progress, picker, performance |
+| 005 | profile-management-ui | Quản lý nhiều profile và luồng chọn → sửa → lưu → xuất bố trí ra sao? | null | layout, settings, profiles, management, ant-design |

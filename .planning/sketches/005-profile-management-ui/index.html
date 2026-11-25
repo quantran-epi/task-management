@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 005 — Quản lý profile</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 44px 0 64px; background: var(--color-bg); color: var(--color-text); font: var(--text-base)/1.45 var(--font-sans); }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; display: flex; gap: 8px; align-items: center; padding: 7px 14px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  .variant-tab { height: 28px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-muted); }
+  .variant-tab.active { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-hover); font-weight: 600; }
+  #stage { margin: 0 auto; min-height: calc(100vh - 108px); transition: max-width .2s ease; }
+  .variant { display: none; padding: 16px; }
+  .variant.active { display: block; }
+  .panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .page-head h1 { font-size: var(--text-xl); margin: 0; }
+  .sub { color: var(--color-text-muted); font-size: var(--text-sm); margin: 2px 0 0; }
+  .btn { height: 28px; padding: 0 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .btn.primary { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .btn.primary:hover { background: var(--color-primary-hover); }
+  .btn.danger { color: var(--color-danger); border-color: #e8b9bd; }
+  .btn.text { border-color: transparent; background: transparent; color: var(--color-primary); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: var(--text-xs); }
+  input[type=text], input[type=search], select { height: 28px; padding: 0 8px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); min-width: 0; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .search { width: 100%; }
+  .field { margin-bottom: 10px; }
+  .field > label, .lbl { display: block; font-weight: 600; font-size: var(--text-sm); margin-bottom: 3px; }
+  .field input, .field select { width: 100%; }
+  .hint { color: var(--color-text-muted); font-size: var(--text-xs); }
+  .badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--radius-full); font-size: var(--text-xs); background: var(--color-surface-soft); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .badge.warn { background: var(--color-warning-bg); color: var(--color-warning); border-color: #f0d59b; }
+  .badge.ok { background: #e8f6f0; color: var(--color-success); border-color: #b8dfcd; }
+  .row { display: flex; align-items: center; gap: var(--space-2); }
+  .muted { color: var(--color-text-muted); }
+  .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+  .warn-strip { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-left: 3px solid var(--color-warning); background: var(--color-warning-bg); color: #6f4b08; font-size: var(--text-sm); border-radius: var(--radius-sm); margin-bottom: 10px; }
+  .section-title { font-weight: 700; font-size: var(--text-sm); margin: 12px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-border); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .grid2 .field { margin-bottom: 6px; }
+  /* Variant A — table + drawer */
+  .atable { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+  .atable th { text-align: left; padding: 8px 10px; background: var(--color-surface-soft); border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); font-weight: 600; }
+  .atable td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); }
+  .atable tr:hover td { background: var(--color-primary-soft); cursor: pointer; }
+  .drawer-back { position: fixed; inset: 0; background: rgba(17,19,24,.28); z-index: 90; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 92vw); z-index: 91; background: var(--color-surface); border-left: 1px solid var(--color-border); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+  .drawer header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+  .drawer .body { flex: 1; overflow: auto; padding: 12px 16px; }
+  .drawer footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--color-border); }
+  /* Variant B — rail + editor */
+  .b-shell { display: grid; grid-template-columns: 268px minmax(0,1fr); min-height: 620px; overflow: hidden; }
+  .rail { border-right: 1px solid var(--color-border); display: flex; flex-direction: column; min-height: 0; }
+  .rail-head { padding: 10px; border-bottom: 1px solid var(--color-border); }
+  .rail-head .row { margin-top: 8px; }
+  .plist { flex: 1; overflow: auto; padding: 6px; }
+  .pitem { padding: 7px 8px; border-radius: var(--radius-sm); border-left: 2px solid transparent; cursor: pointer; }
+  .pitem:hover { background: var(--color-surface-soft); }
+  .pitem.active { background: var(--color-primary-soft); border-left-color: var(--color-primary); }
+  .pitem .name { font-weight: 600; font-size: var(--text-sm); }
+  .pitem .meta { color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 2px; }
+  .rail-foot { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--color-border); }
+  .editor { display: flex; flex-direction: column; min-width: 0; }
+  .editor-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+  .editor-head .grid2 { grid-template-columns: 1fr 1fr; }
+  .tabs { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--color-border); }
+  .tab { height: 30px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-text-muted); font-size: var(--text-sm); }
+  .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+  .editor-body { padding: 10px 14px; overflow: auto; flex: 1; }
+  .editor-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 9px 14px; border-top: 1px solid var(--color-border); background: var(--color-surface-soft); position: sticky; bottom: 0; }
+  /* Variant C — list / detail / preview */
+  .c-shell { display: grid; grid-template-columns: 220px minmax(0,1fr) 286px; min-height: 620px; overflow: hidden; }
+  .c-shell .rail { border-right: 1px solid var(--color-border); }
+  .preview { border-left: 1px solid var(--color-border); background: var(--color-surface-soft); padding: 10px 12px; overflow: auto; }
+  .preview h3 { font-size: var(--text-sm); margin: 0 0 8px; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; font-size: var(--text-xs); padding: 5px 0; border-bottom: 1px dashed var(--color-border); }
+  .check { display: flex; gap: 6px; font-size: var(--text-xs); color: var(--color-text-muted); margin: 6px 0; }
+  .check.done { color: var(--color-success); }
+  .code { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px; font: var(--text-xs)/1.5 var(--font-mono); white-space: pre-wrap; color: var(--color-text-muted); }
+  /* toolbar + toast */
+  #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-size: var(--text-xs); background: rgba(0,0,0,.78); color: #fff; padding: 7px 10px; border-radius: var(--radius-md); opacity: .45; transition: opacity .2s; display: flex; gap: 8px; align-items: center; }
+  #sketch-tools:hover { opacity: 1; }
+  #sketch-tools select, #sketch-tools button { height: 22px; font-size: 11px; }
+  #toast { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%) translateY(12px); z-index: 9997; background: #1f2937; color: #fff; padding: 9px 14px; border-radius: var(--radius-md); font-size: var(--text-sm); opacity: 0; pointer-events: none; transition: all .2s; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  body.annotate [data-note] { position: relative; outline: 1px dashed var(--color-primary); }
+  body.annotate [data-note]::after { content: attr(data-note); position: absolute; top: -14px; left: 0; z-index: 5; background: var(--color-primary); color: #fff; font-size: 9px; padding: 1px 4px; border-radius: 2px; white-space: nowrap; }
+  @media (max-width: 700px) { .b-shell, .c-shell { grid-template-columns: 1fr; } .rail { border-right: 0; border-bottom: 1px solid var(--color-border); max-height: 220px; } .preview { border-left: 0; border-top: 1px solid var(--color-border); } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <strong style="font-size:12px;margin-right:4px">Sketch 005</strong>
+  <button class="variant-tab active" onclick="showVariant('a',event)">A: Bảng + drawer</button>
+  <button class="variant-tab" onclick="showVariant('b',event)">B: Rail + editor tabs</button>
+  <button class="variant-tab" onclick="showVariant('c',event)">C: List + detail + preview</button>
+</div>
+<div id="stage">
+  <div id="variant-a" class="variant active"></div>
+  <div id="variant-b" class="variant"></div>
+  <div id="variant-c" class="variant"></div>
+</div>
+<div id="sketch-tools">
+  <select id="theme-switcher" onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Theme</option></select>
+  <button onclick="setWidth(375)">375</button><button onclick="setWidth(768)">768</button><button onclick="setWidth(0)">Full</button>
+  <button onclick="document.body.classList.toggle('annotate')">Annotate</button>
+</div>
+<div id="toast"></div>
+<script>
+const PROFILES = [
+  { id:'p1', name:'Anh Nam — Dev', recipient:'Nam Nguyen', updated:'25 Nov 2026', status:'ready', owner:'nam-nguyen', repo:'taskmate-dev', model:'claude-opus-5-5', endpoint:'http://127.0.0.1:3001' },
+  { id:'p2', name:'Chị Lan — PM', recipient:'Lan Tran', updated:'24 Nov 2026', status:'review', owner:'lan-pm', repo:'planning-workspace', model:'claude-sonnet-5-5', endpoint:'http://127.0.0.1:3001' },
+  { id:'p3', name:'Team AI sandbox', recipient:'Duc Quan', updated:'22 Nov 2026', status:'draft', owner:'sandbox-org', repo:'ai-sandbox', model:'claude-fable-5-2', endpoint:'http://10.0.0.8:3001' },
+];
+const state = { variant:'a', selected:'p1', tab:'co-ban', search:'', drawer:false, width:0 };
+const $ = (s, root=document) => root.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const current = () => PROFILES.find(p => p.id === state.selected) || PROFILES[0];
+const statusBadge = (p) => p.status === 'ready' ? '<span class="badge ok">Sẵn sàng xuất</span>' : p.status === 'review' ? '<span class="badge warn">Cần rà soát</span>' : '<span class="badge">Bản nháp</span>';
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 2200); }
+function showVariant(id, ev) {
+  state.variant = id;
+  document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+  $('#variant-' + id).classList.add('active');
+  document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+  (ev.target || document.querySelector('[onclick*="'+id+'"]')).classList.add('active');
+  renderAll();
+}
+function setWidth(w) { state.width = w; $('#stage').style.maxWidth = w ? w + 'px' : 'none'; }
+function filtered() { const q = state.search.toLowerCase(); return PROFILES.filter(p => (p.name + p.recipient + p.repo).toLowerCase().includes(q)); }
+function listItems(compact=false) {
+  const rows = filtered();
+  if (!rows.length) return '<div style="padding:16px;color:var(--color-text-muted);font-size:12px">Không có profile khớp. Bấm + Mới để tạo.</div>';
+  return rows.map(p => `<div class="pitem ${p.id===state.selected?'active':''}" data-pick="${p.id}" tabindex="0">
+    <div class="name">${esc(p.name)}</div>
+    <div class="meta">${esc(p.recipient)} · ${esc(p.updated)}</div>
+    ${compact ? '' : `<div style="margin-top:4px">${statusBadge(p)}</div>`}
+  </div>`).join('');
+}
+function rail(title, foot) {
+  return `<aside class="rail" data-note="268px · rail cố định">
+    <div class="rail-head"><div class="lbl">${title}</div>
+      <input class="search" type="search" placeholder="Tìm tên, người nhận, repo" value="${esc(state.search)}" data-search>
+      <div class="row"><button class="btn sm primary" data-act="new">+ Mới</button><button class="btn sm" data-act="duplicate">Nhân bản</button></div>
+    </div>
+    <div class="plist" data-list>${listItems()}</div>
+    <div class="rail-foot">${foot}</div>
+  </aside>`;
+}
+function editorHead(p) {
+  return `<div class="editor-head">
+    <div class="grid2">
+      <div class="field"><label>Tên profile</label><input type="text" value="${esc(p.name)}" data-name></div>
+      <div class="field"><label>Người nhận</label><input type="text" value="${esc(p.recipient)}" data-recipient><div class="hint">Chỉ là metadata — không xuất vào file JSON</div></div>
+    </div>
+  </div>`;
+}
+function sectionFor(p, tab) {
+  if (tab === 'co-ban') return `
+    <div class="warn-strip"><span>⚠</span><div>Giá trị <strong>theo máy</strong> (owner/repo/endpoint) được giữ trong file export. Hãy rà soát trước khi gửi cho người khác.</div></div>
+    <div class="section-title">GitHub</div>
+    <div class="grid2">
+      <div class="field"><label>GitHub owner <span class="badge warn">theo máy</span></label><input type="text" value="${esc(p.owner)}"></div>
+      <div class="field"><label>GitHub repo <span class="badge warn">theo máy</span></label><input type="text" value="${esc(p.repo)}"></div>
+      <div class="field"><label>GitHub branch</label><input type="text" value="main"></div>
+      <div class="field"><label>Auto sync</label><select><option>Manual</option><option>Daily</option></select></div>
+    </div>
+    <div class="section-title">Jira</div>
+    <div class="grid2">
+      <div class="field"><label>Jira domain</label><input type="text" value="jira.example.com"></div>
+      <div class="field"><label>Jira email</label><input type="text" value="team@example.com"></div>
+      <div class="field"><label>Project mặc định</label><input type="text" value="TASK"></div>
+      <div class="field"><label>Jira API token <span class="badge">secret — để trống</span></label><input type="text" placeholder="Không export"></div>
+    </div>`;
+  if (tab === 'ket-noi') return `
+    <div class="section-title">AI & Knowledge</div>
+    <div class="grid2">
+      <div class="field"><label>9Router endpoint <span class="badge warn">theo máy</span></label><input type="text" value="http://127.0.0.1:8317"></div>
+      <div class="field"><label>Model mặc định</label><input type="text" value="${esc(p.model)}"></div>
+      <div class="field"><label>Graphiti MCP endpoint <span class="badge warn">theo máy</span></label><input type="text" value="${esc(p.endpoint)}"></div>
+      <div class="field"><label>Knowledge base URL</label><input type="text" value="http://127.0.0.1:3001"></div>
+      <div class="field"><label>API key <span class="badge">secret — để trống</span></label><input type="text" placeholder="Không export"></div>
+      <div class="field"><label>Graphiti MCP</label><select><option>Bật</option><option>Tắt</option></select></div>
+    </div>
+    <div class="section-title">Secrets được khai báo</div>
+    <div class="code">github_pat: ""\njira_api_token: ""\nknowledge_server_token: ""\nmcp_servers: ""</div>`;
+  if (tab === 'team') return `
+    <div class="section-title">Ghost Dev</div>
+    <div class="grid2">
+      <div class="field"><label>Master model</label><input type="text" value="${esc(p.model)}"></div>
+      <div class="field"><label>Worker model</label><input type="text" value="claude-haiku-5-5"></div>
+      <div class="field"><label>Concurrency cap</label><input type="text" value="6"></div>
+      <div class="field"><label>claudePath <span class="badge warn">theo máy</span></label><input type="text" value="/usr/local/bin/claude"></div>
+    </div>
+    <div class="section-title">AI-team defaults</div>
+    <div class="grid2">
+      <div class="field"><label>Token budget</label><input type="text" value="120000"></div>
+      <div class="field"><label>Concurrency limit</label><input type="text" value="3"></div>
+      <div class="field"><label>Budget warn threshold</label><select><option>Kế thừa global (80%)</option><option>70%</option><option>90%</option></select></div>
+      <div class="field"><label>MCP / SSH / Oracle tools</label><select><option>Bật</option><option>Tắt</option></select></div>
+    </div>`;
+  return `
+    <div class="section-title">Công suất làm việc</div>
+    <table class="atable" style="max-width:440px"><thead><tr><th>Ngày</th><th>Phút</th></tr></thead><tbody>
+      ${[['Thứ Hai',480],['Thứ Ba',480],['Thứ Tư',480],['Thứ Năm',480],['Thứ Sáu',420],['Thứ Bảy',0],['Chủ Nhật',0]].map(([d,m]) => `<tr><td>${d}</td><td><input type="text" value="${m}" style="width:80px"></td></tr>`).join('')}
+    </tbody></table>
+    <div class="section-title">Ngoại lệ theo ngày</div>
+    <div class="row"><input type="text" value="2026-11-28" style="width:120px"><input type="text" value="240" style="width:70px"><input type="text" value="Làm nửa ngày" style="width:180px"><button class="btn sm">Xóa</button></div>
+    <div style="margin-top:8px"><button class="btn sm">+ Thêm ngoại lệ</button></div>`;
+}
+function tabs() {
+  const defs = [['co-ban','Cơ bản'],['ket-noi','Kết nối'],['team','AI & Team'],['capacity','Công suất']];
+  return `<div class="tabs">${defs.map(([k,l]) => `<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</div>`;
+}
+function foot(p) {
+  return `<div class="editor-foot">
+    <button class="btn danger" data-act="delete">Xóa</button>
+    <button class="btn" data-act="duplicate">Nhân bản</button>
+    <button class="btn primary" data-act="export">Xuất JSON</button>
+    <button class="btn primary" data-act="save">Lưu profile</button>
+  </div>`;
+}
+function preview(p) {
+  return `<aside class="preview" data-note="286px · review trước khi xuất">
+    <h3>Bản xem trước export</h3>
+    <div class="kv"><span>Tên tệp</span><span class="mono">${esc(p.name.toLowerCase().replace(/\s+/g,'-'))}.json</span></div>
+    <div class="kv"><span>Profile ID</span><span class="mono">${p.id}-a91f</span></div>
+    <div class="kv"><span>Schema</span><span class="mono">v1</span></div>
+    <div class="kv"><span>Fields</span><span class="mono">24 portable</span></div>
+    <div class="section-title">Danh sách rà soát</div>
+    <div class="check done">✓ 11 secret fields để trống</div>
+    <div class="check">○ GitHub owner/repo: ${esc(p.owner)}/${esc(p.repo)}</div>
+    <div class="check">○ 9Router endpoint: http://127.0.0.1:8317</div>
+    <div class="check">○ Graphiti endpoint: ${esc(p.endpoint)}</div>
+    <div class="code">"settings": {
+  "github_owner": "${esc(p.owner)}",
+  "github_repo": "${esc(p.repo)}",
+  "github_pat": "",
+  "jira_api_token": ""
+}</div>
+    <div class="hint" style="margin-top:10px">Preview không đọc cấu hình hiện tại của bạn.</div>
+  </aside>`;
+}
+function renderA() {
+  const p = current();
+  $('#variant-a').innerHTML = `<div class="page-head"><div><h1>Cấu hình cho người khác</h1><p class="sub">Quản lý nhiều profile · chọn một dòng để sửa và xuất</p></div>
+    <div class="row"><input class="search" style="width:240px" type="search" placeholder="Tìm profile" value="${esc(state.search)}" data-search><button class="btn primary" data-act="new">+ Mới</button></div></div>
+    <div class="panel" style="overflow:hidden" data-note="table · mật độ cao">
+      <table class="atable"><thead><tr><th style="width:28%">Tên profile</th><th>Người nhận</th><th>Cập nhật</th><th>Trạng thái</th><th style="text-align:right">Thao tác</th></tr></thead><tbody>
+      ${filtered().map(x => `<tr data-pick="${x.id}"><td><strong>${esc(x.name)}</strong></td><td>${esc(x.recipient)}</td><td class="mono">${esc(x.updated)}</td><td>${statusBadge(x)}</td><td style="text-align:right" onclick="event.stopPropagation()"><button class="btn sm text" data-act="open">Sửa</button><button class="btn sm text" data-act="export">Xuất</button><button class="btn sm text" data-act="duplicate">Nhân bản</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có profile nào.</td></tr>'}
+      </tbody></table>
+    </div>
+    ${state.drawer ? `<div class="drawer-back" data-act="close"></div><div class="drawer"><header><div><strong>${esc(p.name)}</strong><div class="hint">${esc(p.recipient)} · cập nhật ${esc(p.updated)}</div></div><button class="btn sm" data-act="close">Đóng</button></header>
+      <div class="body">${editorHead(p)}${tabs()}${sectionFor(p,state.tab)}</div><footer>${foot(p)}</footer></div>` : ''}`;
+}
+function renderB() {
+  const p = current();
+  $('#variant-b').innerHTML = `<div class="page-head"><div><h1>Cấu hình cho người khác</h1><p class="sub">CB — chọn profile bên trái, sửa bên phải, lưu và xuất</p></div><span class="badge">${PROFILES.length} profile đã lưu</span></div>
+    <div class="panel b-shell">${rail('Profile đã lưu')}
+      <section class="editor">${editorHead(p)}${tabs()}<div class="editor-body" data-note="nội dung theo tab">${sectionFor(p,state.tab)}</div>${foot(p)}</section>
+    </div>`;
+}
+function renderC() {
+  const p = current();
+  $('#variant-c').innerHTML = `<div class="page-head"><div><h1>Cấu hình cho người khác</h1><p class="sub">C — sửa giữa, review bản export ngay bên phải</p></div></div>
+    <div class="panel c-shell">${rail('Profile đã lưu', '<span class="hint">ID ổn định · đổi tên không đổi ID</span>')}
+      <section class="editor">${editorHead(p)}${tabs()}<div class="editor-body">${sectionFor(p,state.tab)}</div>${foot(p)}</section>
+      ${preview(p)}
+    </div>`;
+}
+function renderAll() { renderA(); renderB(); renderC(); }
+document.addEventListener('click', (e) => {
+  const pick = e.target.closest('[data-pick]');
+  if (pick) { state.selected = pick.dataset.pick; state.drawer = state.variant === 'a'; renderAll(); return; }
+  const tab = e.target.closest('[data-tab]');
+  if (tab) { state.tab = tab.dataset.tab; renderAll(); return; }
+  const act = e.target.closest('[data-act]');
+  if (!act) return;
+  const p = current();
+  switch (act.dataset.act) {
+    case 'new': case 'duplicate': {
+      const base = act.dataset.act === 'duplicate' ? p : { name:'', recipient:'', owner:'', repo:'', model:'claude-sonnet-5-5', endpoint:'', updated:'hôm nay', status:'draft' };
+      const copy = { ...base, id:'p' + (PROFILES.length+1), name: act.dataset.act === 'duplicate' ? p.name + ' (copy)' : 'Profile mới', updated:'hôm nay', status:'draft' };
+      PROFILES.push(copy); state.selected = copy.id; state.drawer = state.variant === 'a'; renderAll(); toast(act.dataset.act === 'duplicate' ? 'Đã nhân bản profile' : 'Đã tạo profile mới'); break;
+    }
+    case 'open': state.drawer = true; renderA(); break;
+    case 'close': state.drawer = false; renderA(); break;
+    case 'save': toast('Đã lưu ' + p.name); break;
+    case 'export': toast('Đã xuất ' + p.name + '.json — secrets để trống'); break;
+    case 'delete': {
+      const i = PROFILES.findIndex(x => x.id === p.id);
+      if (i >= 0) { PROFILES.splice(i,1); state.selected = PROFILES[0]?.id || ''; state.drawer = false; renderAll(); toast('Đã xóa profile'); }
+      break;
+    }
+  }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.matches('[data-search]')) {
+    state.search = e.target.value;
+    document.querySelectorAll('[data-list]').forEach(el => el.innerHTML = listItems());
+    // Table in variant A is rebuilt from its own rows.
+    const table = $('#variant-a tbody');
+    if (table) table.innerHTML = filtered().map(x => `<tr data-pick="${x.id}"><td><strong>${esc(x.name)}</strong></td><td>${esc(x.recipient)}</td><td class="mono">${esc(x.updated)}</td><td>${statusBadge(x)}</td><td style="text-align:right" onclick="event.stopPropagation()"><button class="btn sm text" data-act="open">Sửa</button><button class="btn sm text" data-act="export">Xuất</button><button class="btn sm text" data-act="duplicate">Nhân bản</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Chưa có profile khớp.</td></tr>';
+    document.querySelectorAll('[data-search]').forEach(el => { if (el !== e.target && el.value !== state.search) el.value = state.search; });
+  }
+  if (e.target.matches('[data-name]')) current().name = e.target.value;
+  if (e.target.matches('[data-recipient]')) current().recipient = e.target.value;
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-pick]')) e.target.click(); });
+renderAll();
+</script>
+</body>
+</html>
