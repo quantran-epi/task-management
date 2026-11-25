@@ -352,6 +352,29 @@ describe('UtilityToolPanel content persistence', () => {
     expect((screen.getByLabelText('JSON input') as HTMLTextAreaElement).value).toBe('');
     expect(screen.getByLabelText('JSON output').textContent).toBe('');
   });
+
+  it('keeps content separate per instanceKey and survives unmount/remount', () => {
+    const first = render(<UtilityToolPanel viewType="json_formatter" instanceKey="a" />);
+    const second = render(<UtilityToolPanel viewType="json_formatter" instanceKey="b" />);
+    const inputs = screen.getAllByLabelText('JSON input') as HTMLTextAreaElement[];
+    expect(inputs).toHaveLength(2);
+
+    fireEvent.change(inputs[0]!, { target: { value: 'alpha' } });
+    expect((screen.getAllByLabelText('JSON input')[1] as HTMLTextAreaElement).value).toBe('');
+
+    first.unmount();
+    second.unmount();
+    render(<UtilityToolPanel viewType="json_formatter" instanceKey="a" />);
+    expect((screen.getByLabelText('JSON input') as HTMLTextAreaElement).value).toBe('alpha');
+    render(<UtilityToolPanel viewType="json_formatter" instanceKey="b" />);
+    expect((screen.getAllByLabelText('JSON input')[1] as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('falls back to the original viewType buffer for legacy tabs without instanceKey', () => {
+    useUtilityToolContent.getState().patch('json_formatter', { input: 'legacy' });
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    expect((screen.getByLabelText('JSON input') as HTMLTextAreaElement).value).toBe('legacy');
+  });
 });
 
 describe('UtilityToolPanel Save as', () => {

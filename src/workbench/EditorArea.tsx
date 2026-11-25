@@ -691,7 +691,7 @@ export function EditorArea({ db }: EditorAreaProps) {
       case 'cron_expression':
       case 'hash_uuid':
       case 'jwt_decoder':
-        return <UtilityToolPanel viewType={tab.viewType} />;
+        return <UtilityToolPanel viewType={tab.viewType} instanceKey={tab.id} />;
       default:
         return <TasksView {...dbProp} />;
     }

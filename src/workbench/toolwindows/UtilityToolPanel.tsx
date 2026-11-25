@@ -470,17 +470,17 @@ function FoldingCodeView({ text, kind, rightRef, onRightScroll, label, error }: 
   );
 }
 
-function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
+function JsonFormatter({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
   const message = useMessage();
   const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [content, patchContent, clearContent] = useUtilityContent('json_formatter');
+  const [content, patchContent, clearContent] = useUtilityContent('json_formatter', instanceKey);
   const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
-    const { input: current, indent: currentIndent } = getUtilityContent('json_formatter');
+    const { input: current, indent: currentIndent } = getUtilityContent('json_formatter', instanceKey);
     if (!current.trim()) {
       patchContent({ output: '', error: null });
       return;
@@ -491,7 +491,7 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
     } catch (e) {
       patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [patchContent]);
+  }, [patchContent, instanceKey]);
 
   const onInput = (value: string) => {
     patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
@@ -554,17 +554,17 @@ function JsonFormatter({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
+function XmlFormatter({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
   const message = useMessage();
   const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [content, patchContent, clearContent] = useUtilityContent('xml_formatter');
+  const [content, patchContent, clearContent] = useUtilityContent('xml_formatter', instanceKey);
   const { input, output, error, formatted, indent } = content;
   const [aiOpen, setAiOpen] = useState(false);
   const { leftRef, rightRef, onLeftScroll, onRightScroll } = useSyncedScroll<HTMLTextAreaElement, HTMLPreElement>();
 
   const run = useCallback((minify: boolean) => {
-    const { input: current, indent: currentIndent } = getUtilityContent('xml_formatter');
+    const { input: current, indent: currentIndent } = getUtilityContent('xml_formatter', instanceKey);
     if (!current.trim()) {
       patchContent({ output: '', error: null });
       return;
@@ -574,7 +574,7 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
     } catch (e) {
       patchContent({ error: e instanceof Error ? e.message : String(e) });
     }
-  }, [patchContent]);
+  }, [patchContent, instanceKey]);
 
   const onInput = (value: string) => {
     patchContent({ input: value, error: null, formatted: false, ...(!value.trim() ? { output: '' } : {}) });
@@ -637,9 +637,9 @@ function XmlFormatter({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function TextCompare({ db }: { db: TaskPlannerDatabase }) {
+function TextCompare({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
   const [saveOpen, setSaveOpen] = useState(false);
-  const [content, patchContent, clearContent] = useUtilityContent('text_compare');
+  const [content, patchContent, clearContent] = useUtilityContent('text_compare', instanceKey);
   const { a, b, mode, ignoreCase, ignoreSpace } = content;
   const setA = (a: string) => patchContent({ a });
   const setB = (b: string) => patchContent({ b });
@@ -747,11 +747,11 @@ function TextCompare({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function MarkdownViewer({ db }: { db: TaskPlannerDatabase }) {
+function MarkdownViewer({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
   const message = useMessage();
   const notify = (kind: 'success' | 'error', text: string) => message[kind](text);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [content, patchContent, clearContent] = useUtilityContent('markdown_viewer');
+  const [content, patchContent, clearContent] = useUtilityContent('markdown_viewer', instanceKey);
   const { source } = content;
   const setSource = (source: string) => patchContent({ source });
   const [aiOpen, setAiOpen] = useState(false);
@@ -886,8 +886,8 @@ const TOOL_LABELS: Record<string, string> = {
   hash_uuid: 'Hash & UUID', jwt_decoder: 'JWT Decoder',
 };
 
-function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('encoder_decoder');
+function EncoderPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('encoder_decoder', instanceKey);
   const { input, option, option2, output, error } = content;
   const run = useCallback(() => {
     if (!input) { patchContent({ output: '', error: null }); return; }
@@ -920,8 +920,8 @@ function EncoderPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('regex_tester');
+function RegexTesterPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('regex_tester', instanceKey);
   const { input, aux, option2 } = content;
   const [result, setResult] = useState<RegexResult>({ matches: [], count: 0, truncated: false, error: null });
   const [running, setRunning] = useState(false);
@@ -968,8 +968,8 @@ function RegexTesterPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('timestamp_converter');
+function TimestampPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('timestamp_converter', instanceKey);
   const { input, option, option2, output, error } = content;
   const run = useCallback(() => {
     if (!input.trim()) { patchContent({ output: '', error: null }); return; }
@@ -1006,8 +1006,8 @@ function TimestampPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function DateCalcPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('date_calculation');
+function DateCalcPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('date_calculation', instanceKey);
   const { input, aux, option, option2, output, error } = content;
   const [amount, setAmount] = useState(1);
   const op = (option || 'add') as 'add' | 'subtract' | 'diff';
@@ -1050,8 +1050,8 @@ const TEXT_OPS: { value: TextOp; label: string }[] = [
   { value: 'reverse-lines', label: 'Đảo dòng' }, { value: 'remove-blank', label: 'Bỏ dòng trống' }, { value: 'count', label: 'Thống kê' },
 ];
 
-function TextUtilitiesPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('text_utilities');
+function TextUtilitiesPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('text_utilities', instanceKey);
   const { input, option, output } = content;
   const run = useCallback(() => patchContent({ output: transformText(input, (option || 'upper') as TextOp) }), [input, option, patchContent]);
   const toolbar = useCommonToolbar('text_utilities', content, patchContent, clearContent, db, undefined, output);
@@ -1073,8 +1073,8 @@ function TextUtilitiesPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function CronPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('cron_expression');
+function CronPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('cron_expression', instanceKey);
   const { input, output, error } = content;
   const toolbar = useCommonToolbar('cron_expression', content, patchContent, clearContent, db);
   const parsed = useMemo(() => (input.trim() ? parseCron(input.trim()) : null), [input]);
@@ -1097,8 +1097,8 @@ function CronPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('hash_uuid');
+function HashUuidPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('hash_uuid', instanceKey);
   const { input, output, error, option, option2 } = content;
   const toolbar = useCommonToolbar('hash_uuid', content, patchContent, clearContent, db);
   const seqRef = useRef(0);
@@ -1142,8 +1142,8 @@ function HashUuidPanel({ db }: { db: TaskPlannerDatabase }) {
   );
 }
 
-function JwtPanel({ db }: { db: TaskPlannerDatabase }) {
-  const [content, patchContent, clearContent] = useUtilityContent('jwt_decoder');
+function JwtPanel({ db, instanceKey }: { db: TaskPlannerDatabase; instanceKey: string }) {
+  const [content, patchContent, clearContent] = useUtilityContent('jwt_decoder', instanceKey);
   const { input, output, error } = content;
   const [statusText, setStatusText] = useState('Chưa chạy');
   const run = useCallback(() => {
@@ -1177,35 +1177,38 @@ function JwtPanel({ db }: { db: TaskPlannerDatabase }) {
 export function UtilityToolPanel({
   viewType,
   db = defaultDb,
+  instanceKey,
 }: {
   viewType: EditorViewType;
   db?: TaskPlannerDatabase;
+  instanceKey?: string;
 }) {
+  const key = instanceKey ?? viewType;
   switch (viewType) {
     case 'json_formatter':
-      return <JsonFormatter db={db} />;
+      return <JsonFormatter db={db} instanceKey={key} />;
     case 'xml_formatter':
-      return <XmlFormatter db={db} />;
+      return <XmlFormatter db={db} instanceKey={key} />;
     case 'text_compare':
-      return <TextCompare db={db} />;
+      return <TextCompare db={db} instanceKey={key} />;
     case 'markdown_viewer':
-      return <MarkdownViewer db={db} />;
+      return <MarkdownViewer db={db} instanceKey={key} />;
     case 'encoder_decoder':
-      return <EncoderPanel db={db} />;
+      return <EncoderPanel db={db} instanceKey={key} />;
     case 'regex_tester':
-      return <RegexTesterPanel db={db} />;
+      return <RegexTesterPanel db={db} instanceKey={key} />;
     case 'timestamp_converter':
-      return <TimestampPanel db={db} />;
+      return <TimestampPanel db={db} instanceKey={key} />;
     case 'date_calculation':
-      return <DateCalcPanel db={db} />;
+      return <DateCalcPanel db={db} instanceKey={key} />;
     case 'text_utilities':
-      return <TextUtilitiesPanel db={db} />;
+      return <TextUtilitiesPanel db={db} instanceKey={key} />;
     case 'cron_expression':
-      return <CronPanel db={db} />;
+      return <CronPanel db={db} instanceKey={key} />;
     case 'hash_uuid':
-      return <HashUuidPanel db={db} />;
+      return <HashUuidPanel db={db} instanceKey={key} />;
     case 'jwt_decoder':
-      return <JwtPanel db={db} />;
+      return <JwtPanel db={db} instanceKey={key} />;
     default:
       return null;
   }

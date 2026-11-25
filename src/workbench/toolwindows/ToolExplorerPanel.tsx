@@ -20,8 +20,9 @@ export function ToolExplorerPanel() {
       .filter((group) => group.tools.length > 0);
   }, [query]);
 
-  const openTool = (id: string, title: string, viewType: (typeof UTILITY_TOOLS)[number]['viewType']) => {
-    openTab({ id, title, viewType, closable: true });
+  const openTool = (title: string, viewType: (typeof UTILITY_TOOLS)[number]['viewType']) => {
+    // Mỗi click là một phiên bản riêng — id duy nhất làm instanceKey cho buffer nội dung.
+    openTab({ id: `utility-${crypto.randomUUID()}`, title, viewType, closable: true });
   };
 
   return (
@@ -43,7 +44,7 @@ export function ToolExplorerPanel() {
               <Tooltip key={tool.id} title={tool.description} placement="left">
                 <button
                   type="button"
-                  onClick={() => openTool(tool.id, tool.title, tool.viewType)}
+                  onClick={() => openTool(tool.title, tool.viewType)}
                   aria-label={`Open ${tool.title}`}
                   style={{
                     display: 'flex',

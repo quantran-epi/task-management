@@ -1,6 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { ToolExplorerPanel } from '../toolwindows/ToolExplorerPanel';
+import { useLayoutStore } from '../store/layoutStore';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  useLayoutStore.getState().resetLayout();
+});
 
 describe('ToolExplorerPanel', () => {
   it('keeps the search box inside a narrow container and still filters tools', () => {
@@ -53,5 +59,22 @@ describe('ToolExplorerPanel', () => {
     expect(screen.getByRole('button', { name: 'Open JWT Decoder' })).toBeDefined();
     expect(screen.queryByRole('button', { name: 'Open JSON Formatter' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open Regex Tester' })).toBeNull();
+  });
+
+  it('opens two independent tabs when the same utility tool is clicked twice', () => {
+    const uuids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    const randomUUID = vi.fn().mockReturnValueOnce(uuids[0]).mockReturnValueOnce(uuids[1]);
+    vi.stubGlobal('crypto', { ...globalThis.crypto, randomUUID });
+
+    render(<ToolExplorerPanel />);
+    const button = screen.getByRole('button', { name: 'Open JSON Formatter' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    const tabs = useLayoutStore.getState().openTabs.filter((t) => t.viewType === 'json_formatter');
+    expect(tabs).toHaveLength(2);
+    expect(tabs.map((t) => t.id)).toEqual([`utility-${uuids[0]}`, `utility-${uuids[1]}`]);
+    expect(randomUUID).toHaveBeenCalledTimes(2);
+    expect(useLayoutStore.getState().activeTabId).toBe(`utility-${uuids[1]}`);
   });
 });
