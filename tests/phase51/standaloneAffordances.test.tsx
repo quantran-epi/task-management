@@ -143,8 +143,20 @@ vi.mock('../../src/db/repositories/chatRepo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/db/repositories/chatRepo')>();
   return { ...actual, clearThreadMessages: calls.clearThreadMessages };
 });
-
-const lastGroundedQuery = (): string | undefined => calls.captured.at(-1);
+vi.mock('../../src/components/ui/modal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/components/ui/modal')>();
+  return {
+    ...actual,
+    useTaskMateModal: () => ({
+      modal: {
+        confirm: (options: { onOk?: () => void | Promise<void> }) => {
+          void options.onOk?.();
+          return { destroy: vi.fn() };
+        },
+      },
+    }),
+  };
+});
 
 async function sendTurn(db: TaskPlannerDatabase, text: string, standalone: boolean): Promise<void> {
   render(
@@ -202,16 +214,18 @@ describe('phase 51 standalone affordances (WR-02, WR-04)', () => {
   it('standalone gửi nguyên văn slash alias, legacy vẫn rewrite đúng chuỗi cũ', async () => {
     for (const [alias] of LEGACY_ALIASES) {
       await sendTurn(db, alias, true);
-      expect(lastGroundedQuery()).toBe(alias);
+      expect(calls.captured.at(-1)).toBe(alias);
       cleanup();
       vi.clearAllMocks();
+      calls.captured.length = 0;
     }
 
     for (const [alias, rewritten] of LEGACY_ALIASES) {
       await sendTurn(db, alias, false);
-      expect(lastGroundedQuery()).toBe(rewritten);
+      expect(calls.captured.at(-1)).toBe(rewritten);
       cleanup();
       vi.clearAllMocks();
+      calls.captured.length = 0;
     }
   });
 

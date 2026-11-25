@@ -12,6 +12,7 @@ export interface RoutedScopeInfo {
 export interface ScopeChipsBarProps {
   routedScope: RoutedScopeInfo;
   onEditScope: () => void;
+  readOnly?: boolean | undefined;
 }
 
 /**
@@ -40,6 +41,7 @@ export function hasMeaningfulRoutedScope(
 export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
   routedScope,
   onEditScope,
+  readOnly = false,
 }) => {
   const { token } = useAntdToken();
 
@@ -78,12 +80,11 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
       </span>
 
       <Tag
-        role="button"
-        tabIndex={0}
-        onClick={onEditScope}
-        onKeyDown={handleKeyDown}
+        {...(readOnly
+          ? {}
+          : { role: 'button', tabIndex: 0, onClick: onEditScope, onKeyDown: handleKeyDown })}
         style={{
-          cursor: 'pointer',
+          cursor: readOnly ? 'default' : 'pointer',
           margin: 0,
           fontSize: 'var(--font-size-xs)',
           fontWeight: 600,
@@ -96,12 +97,11 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
 
       {environment && (
         <Tag
-          role="button"
-          tabIndex={0}
-          onClick={onEditScope}
-          onKeyDown={handleKeyDown}
+          {...(readOnly
+            ? {}
+            : { role: 'button', tabIndex: 0, onClick: onEditScope, onKeyDown: handleKeyDown })}
           style={{
-            cursor: 'pointer',
+            cursor: readOnly ? 'default' : 'pointer',
             margin: 0,
             fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
@@ -115,12 +115,11 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
 
       {version && (
         <Tag
-          role="button"
-          tabIndex={0}
-          onClick={onEditScope}
-          onKeyDown={handleKeyDown}
+          {...(readOnly
+            ? {}
+            : { role: 'button', tabIndex: 0, onClick: onEditScope, onKeyDown: handleKeyDown })}
           style={{
-            cursor: 'pointer',
+            cursor: readOnly ? 'default' : 'pointer',
             margin: 0,
             fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
@@ -134,13 +133,12 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
 
       {isComparison && (
         <Tag
-          role="button"
-          tabIndex={0}
-          onClick={onEditScope}
-          onKeyDown={handleKeyDown}
+          {...(readOnly
+            ? {}
+            : { role: 'button', tabIndex: 0, onClick: onEditScope, onKeyDown: handleKeyDown })}
           color="warning"
           style={{
-            cursor: 'pointer',
+            cursor: readOnly ? 'default' : 'pointer',
             margin: 0,
             fontSize: 'var(--font-size-xs)',
             fontWeight: 600,
@@ -150,24 +148,26 @@ export const ScopeChipsBar: React.FC<ScopeChipsBarProps> = ({
         </Tag>
       )}
 
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={onEditScope}
-        onKeyDown={handleKeyDown}
-        style={{
-          cursor: 'pointer',
-          fontSize: 'var(--font-size-small)',
-          color: token.colorPrimary,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 'var(--gap-2)',
-          marginLeft: 4,
-        }}
-        aria-label="Chỉnh sửa phạm vi tra cứu"
-      >
-        <EditOutlined style={{ fontSize: 'var(--font-size-xs)' }} />
-      </span>
+      {!readOnly && (
+        <span
+          role="button"
+          tabIndex={0}
+          onClick={onEditScope}
+          onKeyDown={handleKeyDown}
+          style={{
+            cursor: 'pointer',
+            fontSize: 'var(--font-size-small)',
+            color: token.colorPrimary,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--gap-2)',
+            marginLeft: 4,
+          }}
+          aria-label="Chỉnh sửa phạm vi tra cứu"
+        >
+          <EditOutlined style={{ fontSize: 'var(--font-size-xs)' }} />
+        </span>
+      )}
     </div>
   );
 };

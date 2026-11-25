@@ -1449,21 +1449,27 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       effectiveQuery = `${clarifyState.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
     }
 
-    // Slash command aliases stay a Drawer affordance.
+    // Slash command aliases stay a Drawer affordance; standalone sends the literal command.
     let effectivePrompt = trimmed;
-    if (trimmed.startsWith('/plan')) {
-      const extra = trimmed.replace(/^\/plan\s*/, '').trim();
-      effectivePrompt = extra ? `Lập kế hoạch: ${extra}` : 'Lập kế hoạch công việc hôm nay';
-    } else if (trimmed.startsWith('/status')) {
-      const extra = trimmed.replace(/^\/status\s*/, '').trim();
-      effectivePrompt = extra ? `Báo cáo tiến độ: ${extra}` : 'Báo cáo tiến độ hiện tại';
-    } else if (trimmed.startsWith('/overdue')) {
-      const extra = trimmed.replace(/^\/overdue\s*/, '').trim();
-      effectivePrompt = extra ? `Kiểm tra tác vụ quá hạn: ${extra}` : 'Kiểm tra các tác vụ quá hạn';
-    } else if (trimmed.startsWith('/help')) {
-      const extra = trimmed.replace(/^\/help\s*/, '').trim();
-      effectivePrompt = extra ? `Hướng dẫn: ${extra}` : 'Hướng dẫn sử dụng trợ lý AI và các lệnh';
+    if (!isStandaloneChat) {
+      if (trimmed.startsWith('/plan')) {
+        const extra = trimmed.replace(/^\/plan\s*/, '').trim();
+        effectivePrompt = extra ? `Lập kế hoạch: ${extra}` : 'Lập kế hoạch công việc hôm nay';
+      } else if (trimmed.startsWith('/status')) {
+        const extra = trimmed.replace(/^\/status\s*/, '').trim();
+        effectivePrompt = extra ? `Báo cáo tiến độ: ${extra}` : 'Báo cáo tiến độ hiện tại';
+      } else if (trimmed.startsWith('/overdue')) {
+        const extra = trimmed.replace(/^\/overdue\s*/, '').trim();
+        effectivePrompt = extra ? `Kiểm tra tác vụ quá hạn: ${extra}` : 'Kiểm tra các tác vụ quá hạn';
+      } else if (trimmed.startsWith('/help')) {
+        const extra = trimmed.replace(/^\/help\s*/, '').trim();
+        effectivePrompt = extra ? `Hướng dẫn: ${extra}` : 'Hướng dẫn sử dụng trợ lý AI và các lệnh';
+      }
     }
+
+    // Grounded routing reads the same prompt the user sent; a clarification continuation keeps
+    // its composite query so the extra answer is not lost.
+    if (!clarifyState) effectiveQuery = effectivePrompt;
 
     // Each send gets its own prelude token; the stale one may not touch the tab afterwards.
     const preludeToken = (preludeSeqRef.current += 1);
@@ -2613,23 +2619,25 @@ Rules:
         />
       )}
 
-      <ScopePickerModal
-        open={scopeModalOpen}
-        onClose={() => setScopeModalOpen(false)}
-        currentScope={currentScope}
-        onSelectScope={(newScope) => {
-          if (newScope.type === 'global') {
-            setIsDetached(true);
-            setInternalScope({ type: 'global' });
-            setCustomScope({ type: 'global' });
-          } else {
-            setIsDetached(false);
-            setInternalScope(newScope);
-            setCustomScope(newScope);
-          }
-        }}
-        db={db}
-      />
+      {!isStandaloneChat && (
+        <ScopePickerModal
+          open={scopeModalOpen}
+          onClose={() => setScopeModalOpen(false)}
+          currentScope={currentScope}
+          onSelectScope={(newScope) => {
+            if (newScope.type === 'global') {
+              setIsDetached(true);
+              setInternalScope({ type: 'global' });
+              setCustomScope({ type: 'global' });
+            } else {
+              setIsDetached(false);
+              setInternalScope(newScope);
+              setCustomScope(newScope);
+            }
+          }}
+          db={db}
+        />
+      )}
 
       <AIDebugModal
         open={isDebugModalOpen}
@@ -2668,6 +2676,7 @@ Rules:
           <ScopeChipsBar
             routedScope={activeRoutedScope.routedScope!}
             onEditScope={() => setScopeModalOpen(true)}
+            readOnly={isStandaloneChat}
           />
         </div>
       )}
