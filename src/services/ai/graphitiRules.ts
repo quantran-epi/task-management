@@ -9,6 +9,7 @@ import {
   type McpServerConfig,
 } from './mcpClient';
 
+// Prompt-facing re-export; the constant lives in mcpClient to break the aiTools import cycle.
 export { SOURCE_TOOL_NAMES } from './mcpClient';
 
 const BASE = import.meta.env.BASE_URL.endsWith('/')

@@ -1597,8 +1597,9 @@ export function createTeamRunCoordinator(
     });
     try {
       mcpTools = await Promise.race([discover(), timeout]);
-    } catch {
+    } catch (err) {
       // Keep the cached list: a transient failure must not strip tools the last turn had.
+      console.error('[teamRunCoordinator] MCP discovery failed; keeping cached tools:', err);
     } finally {
       if (timer !== undefined) clearTimeout(timer);
     }
