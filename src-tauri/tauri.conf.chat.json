@@ -4,8 +4,8 @@
   "version": "0.1.1",
   "identifier": "com.personal.taskmate.chat",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev:chat",
+    "beforeBuildCommand": "npm run build:chat",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },

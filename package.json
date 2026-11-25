@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:chat": "tsc && vite build --config vite.chat.config.ts",
+    "dev:chat": "vite --config vite.chat.config.ts",
     "test": "vitest run",
     "test:knowledge": "npm --prefix knowledge-server test",
     "test:knowledge:live": "node scripts/test-knowledge-live.mjs",

@@ -124,4 +124,42 @@ describe('phase 51 chat bundle contract', () => {
     expect(capabilities.windows).toEqual(['*']);
     expect(capabilities.permissions).toEqual(ORIGINAL_PERMISSIONS);
   });
+
+  test('chat Vite config defines the standalone marker without changing base behavior', () => {
+    const chatViteSource = readText('vite.chat.config.ts');
+    const baseViteSource = readText('vite.config.ts');
+
+    // Marker is committed source, compiled into the bundle (never a gitignored .env file).
+    expect(chatViteSource).toMatch(/['"]import\.meta\.env\.VITE_CHAT_STANDALONE['"]\s*:\s*['"]"1"['"]/);
+    expect(chatViteSource).toMatch(/mergeConfig\(|baseConfig/);
+    expect(chatViteSource).toContain("./vite.config");
+    expect(chatViteSource).not.toMatch(/loadEnv|envDir|\.env\.(?:local|production|development)|\.env['"]/);
+
+    // Chat config only overrides define; all other Vite behavior comes from base config.
+    expect(chatViteSource).not.toContain("plugins:");
+    expect(chatViteSource).not.toContain("worker:");
+    expect(chatViteSource).not.toContain('base:');
+    expect(chatViteSource).not.toContain('test:');
+    expect(baseViteSource).toContain("plugins: [react()]");
+    expect(baseViteSource).toContain("worker: { format: 'es' }");
+    expect(baseViteSource).not.toContain('define:');
+  });
+
+  test('chat scripts build with the committed chat Vite config and no .env file', () => {
+    const { scripts } = readJson<PackageJson>('package.json');
+    const chatConfig = readJson<TauriConfig>('src-tauri/tauri.conf.chat.json');
+
+    expect(scripts['build:chat']).toContain('vite build --config vite.chat.config.ts');
+    expect(scripts['dev:chat']).toBe('vite --config vite.chat.config.ts');
+    expect(chatConfig.build.beforeBuildCommand).toBe('npm run build:chat');
+    expect(chatConfig.build.beforeDevCommand).toBe('npm run dev:chat');
+    expect(scripts['tauri:build:chat']).toContain('-c src-tauri/tauri.conf.chat.json');
+    expect(scripts['tauri:dev:chat']).toContain('-c src-tauri/tauri.conf.chat.json');
+    for (const [name, script] of Object.entries(scripts)) {
+      expect(script, `script ${name}`).not.toMatch(/\.env/);
+    }
+    const chatViteSource = readText('vite.chat.config.ts');
+    expect(chatViteSource).toContain('VITE_CHAT_STANDALONE');
+    expect(chatViteSource).not.toMatch(/loadEnv|envDir|\.env\.(?:local|production|development)|\.env['"]/);
+  });
 });
