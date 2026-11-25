@@ -1,7 +1,8 @@
 ---
 phase: 51
 slug: taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat
-status: draft
+status: approved
+reviewed_at: 2026-11-25
 shadcn_initialized: false
 preset: none
 created: 2026-11-25
