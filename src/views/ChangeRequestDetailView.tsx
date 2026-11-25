@@ -13,6 +13,7 @@ import { createTask, getTasksByCr, updateTask } from '../db/repositories/taskRep
 import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
+import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
@@ -82,6 +83,18 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     [changeRequestId, db]
   ) ?? [];
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
+  const crNotesCount =
+    useLiveQuery(
+      async () => {
+        if (!changeRequestId || !db?.notes) return 0;
+        return await db.notes
+          .where('entityId')
+          .equals(changeRequestId)
+          .filter((n) => n.entityType === 'cr' && n.type !== 'diagram' && !n.deletedAt)
+          .count();
+      },
+      [changeRequestId, db]
+    ) ?? 0;
 
   const systemMap = useMemo(() => {
     const map = new Map<string, System>();
@@ -187,6 +200,13 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   ];
 
   const secondaryBlocks = [
+    {
+      key: 'notes',
+      testId: 'cr-detail-block-notes',
+      header: 'Ghi chú',
+      count: crNotesCount,
+      body: <EntityNotesSection entityType="cr" entityId={cr.id} db={db} />,
+    },
     {
       key: 'jira',
       testId: 'cr-detail-block-jira',
