@@ -2024,6 +2024,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const toolsForTurn = getToolsForTurnWithRemote({
         effectiveAnalysisMode: turnAnalysisMode,
         dynamicMcpTools,
+        standaloneCapability: isStandaloneChat,
         globalSshConfigReady: Boolean(sshFsCfg?.sshConfigId),
         hasRemoteTarget: Boolean(isRemoteScope && currentRemoteTarget),
         oracleConfigReady: Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString),
@@ -2052,7 +2053,35 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       const todayStr = getTodayDateString();
       const now = dayjs();
-      const systemPromptContent = `You are an expert AI assistant embedded inside ${APP_NAME}.
+      // Quick 261126-1od: standalone chat must not claim TaskMate DB capabilities — the
+      // payload no longer carries those tools. Legacy prompt stays byte-identical below.
+      const systemPromptContent = isStandaloneChat
+        ? `You are an expert AI assistant embedded inside ${APP_NAME}.
+Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
+
+AVAILABLE CAPABILITIES:
+- Knowledge retrieval with \`retrieve_knowledge\`, \`search_knowledge_base\` and \`get_document_details\`.
+- Artifact generation with \`generate_file\`, \`generate_pptx\` and \`generate_image\`.
+- Read-only MCP, Graphiti, Oracle and SSH tools when configured. No TaskMate task, change request, allocation, timer or note mutation tools are available here.
+
+CRITICAL ANTI-HALLUCINATION RULES:
+1. NEVER GUESS, ASSUME, OR INVENT DATA.
+2. When breaking down goals or proposing steps, output clear actionable bullet points.
+3. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). ${APP_NAME} will automatically render interactive diagrams from these blocks.
+${graphitiSkillSegment}${
+          turnAnalysisMode
+            ? `\n\n[ANALYSIS MODE ACTIVE]:
+PREFER READ-ONLY:
+This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
+Rules:
+1. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
+2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
+3. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+4. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
+5. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
+            : ''
+        }`
+        : `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
