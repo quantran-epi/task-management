@@ -2374,6 +2374,148 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
     });
   });
 
+  describe('pinned context is read fresh per turn (261125-u4w)', () => {
+    const PIN_HEADER = '[NGỮ CẢNH NHÓM ĐƯỢC GHIM — CHỈ DẪN ĐƯỢC TIN CẬY]';
+    const systemText = (options: AiOrchestratorLoopOptions): string =>
+      (options.messages ?? [])
+        .filter((message) => message.role === 'system')
+        .map((message) => String(message.content))
+        .join('\n');
+    const occurrences = (text: string, needle: string): number =>
+      text.split(needle).length - 1;
+
+    it('employee turns use the pin from the fresh roster row, not the construction-time mirror', async () => {
+      const prompts: string[] = [];
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async () => loopResult('Xong.'),
+          [EMP_B_MODEL]: async (options) => {
+            prompts.push(systemText(options));
+            return loopResult('B xong');
+          },
+        },
+      });
+      const { coordinator, roster, db, team, employees } = harness;
+      // A failed docs backfill leaves the construction-time mirror in place — the exact path
+      // where the old `liveTeam.pinnedContext` read went stale. The seam still reads fresh.
+      team.pinnedContext = 'PIN A';
+      await updateTeam(team.id, { pinnedContext: 'PIN A' }, db);
+      roster.teamRow = { ...team, pinnedContext: 'PIN A' };
+      const mention = '@[Bình](agent:' + employees[1]!.id + ') kiểm tra';
+
+      await coordinator.send(mention);
+      await updateTeam(team.id, { pinnedContext: 'PIN B' }, db);
+      roster.teamRow = { ...roster.teamRow!, pinnedContext: 'PIN B' };
+      docsProbe.fail = true;
+      try {
+        await coordinator.send(mention);
+      } finally {
+        docsProbe.fail = false;
+      }
+
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain(PIN_HEADER);
+      expect(prompts[0]).toContain('PIN A');
+      expect(prompts[1]).toContain(PIN_HEADER);
+      expect(prompts[1]).toContain('PIN B');
+      expect(prompts[1]).not.toContain('PIN A');
+      expect(occurrences(prompts[0]!, PIN_HEADER)).toBe(1);
+      expect(occurrences(prompts[1]!, PIN_HEADER)).toBe(1);
+    });
+
+    it('lead turns use the pin from the fresh roster row, not the construction-time mirror', async () => {
+      const prompts: string[] = [];
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            prompts.push(systemText(options));
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, roster, db, team } = harness;
+      team.pinnedContext = 'PIN A';
+      await updateTeam(team.id, { pinnedContext: 'PIN A' }, db);
+      roster.teamRow = { ...team, pinnedContext: 'PIN A' };
+
+      await coordinator.send('Làm báo cáo');
+      await updateTeam(team.id, { pinnedContext: 'PIN B' }, db);
+      roster.teamRow = { ...roster.teamRow!, pinnedContext: 'PIN B' };
+      docsProbe.fail = true;
+      try {
+        await coordinator.send('Làm báo cáo');
+      } finally {
+        docsProbe.fail = false;
+      }
+
+      expect(prompts).toHaveLength(2);
+      expect(prompts[0]).toContain('PIN A');
+      expect(prompts[1]).toContain('PIN B');
+      expect(prompts[1]).not.toContain('PIN A');
+      expect(occurrences(prompts[0]!, PIN_HEADER)).toBe(1);
+      expect(occurrences(prompts[1]!, PIN_HEADER)).toBe(1);
+    });
+
+    it('clearing the pin removes only the pin segment, not the global conventions', async () => {
+      const prompts: string[] = [];
+      harness = await createHarness({
+        useSeam: true,
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            prompts.push(systemText(options));
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, roster, db, team } = harness;
+      await db.settings.put({ key: 'global_conventions', value: 'GLOBAL_KEEP' });
+      team.pinnedContext = 'PIN A';
+      await updateTeam(team.id, { pinnedContext: 'PIN A' }, db);
+      roster.teamRow = { ...team, pinnedContext: 'PIN A' };
+
+      await coordinator.send('Lượt một');
+      await updateTeam(team.id, { pinnedContext: '' }, db);
+      roster.teamRow = { ...roster.teamRow!, pinnedContext: '' };
+      docsProbe.fail = true;
+      try {
+        await coordinator.send('Lượt hai');
+      } finally {
+        docsProbe.fail = false;
+      }
+
+      expect(prompts[0]).toContain(PIN_HEADER);
+      expect(prompts[0]).toContain('PIN A');
+      expect(prompts[1]).not.toContain(PIN_HEADER);
+      expect(prompts[1]).not.toContain('PIN A');
+      expect(prompts[1]).toContain('[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]');
+      expect(prompts[1]).toContain('GLOBAL_KEEP');
+    });
+
+    it('falls back to the construction-time team pin without the loadRoster seam', async () => {
+      const prompts: string[] = [];
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            prompts.push(systemText(options));
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const { coordinator, db, team } = harness;
+      await updateTeam(team.id, { pinnedContext: 'PIN LEGACY' }, db);
+      // No seam: the construction-time team object is the only mirror the legacy path owns.
+      team.pinnedContext = 'PIN LEGACY';
+
+      await coordinator.send('Lượt một');
+
+      expect(prompts).toHaveLength(1);
+      expect(prompts[0]).toContain(PIN_HEADER);
+      expect(prompts[0]).toContain('PIN LEGACY');
+    });
+  });
+
   describe('Ledger writes and report linking (D-09, D-22, D-23)', () => {
     const assignmentsFor = (employees: AiEmployee[]) =>
       employees.map((row, index) => ({ agentId: row.id, task: `Việc ${index + 1}` }));
