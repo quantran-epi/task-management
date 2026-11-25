@@ -154,6 +154,12 @@ completed: 2026-11-25
 | L3 race db.delete() sau boot | `page.addInitScript` seed trước navigation, marker `__workbenchSeeded`, không delete sau boot; 4 spec chạy 4 lần liên tiếp đều pass. |
 | L4 config anchor cwd | `testDir`/`webServer.cwd` dùng `import.meta.url`; `reuseExistingServer: false` và port riêng 5174 để không tái dùng Vite của repo gốc. |
 
+## Review Round 2 Fix
+
+| Finding | Fix |
+|--------|-----|
+| Fixture path phụ thuộc `process.cwd()` | `change-pack.e2e.ts`, `grounded-knowledge.e2e.ts`, `detectChanges.test.mjs`, `runnerAggregate.test.mjs` anchor path bằng `import.meta.url` → repoRoot/workbenchRoot; chạy được từ repo root lẫn `cd workbench`. |
+
 ## Issues Encountered
 - `03_evidence_pack.json` không phải response HTTP của app (app tự pack evidence từ 02), nên dùng làm nguồn authority để đối chiếu citation id thay vì inject trực tiếp; `04_llm_request_payload.json` dùng làm request-shape reference.
 - `--full` không chạy trong phiên này vì project rule cấm full suite (>1 giờ); exit 2 BLOCKED chỉ được kiểm tra bằng mã hóa trong runner, chưa có live evidence.
@@ -163,10 +169,10 @@ None — Chrome channel có sẵn, không cần token thật (mock sinh token ng
 
 ## Verify Commands Đã Chạy
 - `bash -n workbench/run.sh` → OK
-- `node --test workbench/unit/detectChanges.test.mjs` → exit 0 (6/6)
-- `node --test workbench/unit/runnerAggregate.test.mjs` → exit 0 (3/3)
+- `node --test workbench/unit/*.test.mjs` → exit 0 (9/9); từ `cd workbench`: `node --test unit/*.test.mjs` → exit 0 (9/9)
 - `npx vitest run workbench/unit/v28Seed.test.ts --bail=1` → exit 0 (5/5)
 - `npx playwright test --config workbench/playwright.workbench.config.ts e2e/smoke.e2e.ts e2e/grounded-knowledge.e2e.ts e2e/backup-roundtrip.e2e.ts e2e/change-pack.e2e.ts` → exit 0 (4/4), lặp 4 lần đều 4/4
+- Từ `cd workbench`: `npx playwright test --config playwright.workbench.config.ts e2e/change-pack.e2e.ts e2e/grounded-knowledge.e2e.ts` → exit 0 (2/2), không ENOENT
 - `bash workbench/run.sh` → exit 0, `scope=changed rules=workbench`, evidence exit 0
 
 ## Self-Check: PASSED

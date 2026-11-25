@@ -1,6 +1,9 @@
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
 import { seedV28InBrowser } from './helpers';
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** Only the known-good fixture is uploaded; assert preview, no import/traversal path. */
 test('valid change-pack zip opens real Docs preview via setInputFiles', async ({ page }) => {
@@ -10,7 +13,7 @@ test('valid change-pack zip opens real Docs preview via setInputFiles', async ({
   await expect(actions).toBeVisible();
   await expect(actions.getByRole('button', { name: 'Nhập Zip' })).toBeVisible();
 
-  const zipPath = resolve(process.cwd(), 'tests/fixtures/ai/change-packs/valid.zip');
+  const zipPath = resolve(repoRoot, 'tests/fixtures/ai/change-packs/valid.zip');
   const zipInput = actions.locator('input[type="file"][accept=".zip"]');
   await zipInput.setInputFiles(zipPath);
 

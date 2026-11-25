@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { globToRegExp, matchesPath, resolveScope } from '../scripts/detect-changes.mjs';
 
+const workbenchRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(
-  readFileSync(resolve('workbench/gate-map.json'), 'utf8')
+  readFileSync(resolve(workbenchRoot, 'gate-map.json'), 'utf8')
 );
 
 test('knowledge path maps to knowledge unit + grounded E2E', () => {

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-const runner = readFileSync(resolve('workbench/run.sh'), 'utf8');
+const workbenchRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const runner = readFileSync(resolve(workbenchRoot, 'run.sh'), 'utf8');
 
 test('aggregate ch escalation path: no || OVERALL=1 overwrite', () => {
   assert.equal(/\|\|\s*OVERALL=1/.test(runner), false);

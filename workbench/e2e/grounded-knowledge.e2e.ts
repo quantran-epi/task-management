@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { openAiAssistant, seedV28InBrowser } from './helpers';
 
-const SAMPLES = resolve(process.cwd(), 'sample_ai_chat_turn');
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+const SAMPLES = resolve(repoRoot, 'sample_ai_chat_turn');
 const retrieveSample = JSON.parse(
   readFileSync(resolve(SAMPLES, '02_retrieve_response.json'), 'utf8')
 );
