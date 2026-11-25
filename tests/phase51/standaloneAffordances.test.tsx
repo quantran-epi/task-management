@@ -150,11 +150,18 @@ vi.mock('../../src/components/ui/modal', async (importOriginal) => {
     useTaskMateModal: () => ({
       modal: {
         confirm: (options: { onOk?: () => void | Promise<void> }) => {
-          void options.onOk?.();
+          void Promise.resolve(options.onOk?.()).catch(() => undefined);
           return { destroy: vi.fn() };
         },
       },
     }),
+  };
+});
+vi.mock('../../src/components/ui/message', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/components/ui/message')>();
+  return {
+    ...actual,
+    useMessage: () => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }),
   };
 });
 
@@ -206,6 +213,9 @@ describe('phase 51 standalone affordances (WR-02, WR-04)', () => {
   afterEach(async () => {
     cleanup();
     clearGroundedTurnTestHooks();
+    // AIChatDrawer bootstraps a durable tab/async model seeding on mount; let queued
+    // IndexedDB work settle before closing the test database.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     vi.restoreAllMocks();
     db.close();
     await Dexie.delete(dbName);
@@ -245,6 +255,9 @@ describe('phase 51 standalone affordances (WR-02, WR-04)', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => expect(calls.clearThreadMessages).toHaveBeenCalled());
+    // Confirmation onOk is async; await its completion before db teardown in afterEach.
+    await waitFor(() => expect(calls.clearThreadMessages.mock.results[0]?.value).toBeDefined());
+    await calls.clearThreadMessages.mock.results[0]?.value;
     expect(calls.runGroundedTurn).not.toHaveBeenCalled();
     expect(calls.startTurn).not.toHaveBeenCalled();
   });
