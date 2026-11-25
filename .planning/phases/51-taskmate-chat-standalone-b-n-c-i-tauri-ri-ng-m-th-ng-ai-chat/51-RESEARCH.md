@@ -431,22 +431,19 @@ No REQ IDs mapped. Checks keyed to D-numbers.
 | A3 | macOS signing/notarization reuses existing TaskMate process | Environment Availability | Build may fail at codesign; gate with human-verify |
 | A4 | Build-time env flag is the cleanest standalone marker | Pattern 2 | If Vite env injection interferes with existing build, fallback to separate Tauri `identifier` check at runtime |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Standalone marker mechanism**
-   - What we know: single `dist`, single Vite entry, two Tauri configs. No build flag exists today.
-   - What's unclear: env var (`VITE_CHAT_STANDALONE`) vs runtime identifier detection vs hash-only detection. Hash-only cannot distinguish TaskMate's own `#ai-popout`.
-   - Recommendation: env var set only in `tauri:build:chat`/`tauri:dev:chat`; defaults false; zero TaskMate behavior change.
+1. **Standalone marker mechanism — RESOLVED**
+   - Decision: build-time `VITE_CHAT_STANDALONE` via `vite.chat.config.ts` `define` (`import.meta.env.VITE_CHAT_STANDALONE = "1"`), wired through the `tauri:build:chat`/`tauri:dev:chat` scripts exactly as specified in `51-01-PLAN.md` Task 2. Not an env file (gitignored), not runtime identifier detection, not hash-only detection.
+   - Rationale: deterministic committed source, defaults false in TaskMate's normal build, zero TaskMate behavior change. Rejected hash-only because it cannot distinguish TaskMate's own `#ai-popout`.
 
-2. **Real dual-app install on macOS**
-   - What we know: different `identifier`, different `productName`, shared Rust crate.
-   - What's unclear: codesign/notarization and whether App Data directories collide.
-   - Recommendation: run `npm run tauri:build:chat`, install alongside TaskMate, verify both launch and keyring read. Add `checkpoint:human-verify` if build requires credentials.
+2. **Real dual-app install on macOS — RESOLVED**
+   - Decision: converted to a `checkpoint:human-verify` task in `51-04-PLAN.md` (Task 3). Automated gate stays the scoped Vitest suite + typecheck; real `npm run tauri:build:chat` + install alongside TaskMate is a blocking human checkpoint with explicit fallback.
+   - Fallback: if Xcode command-line tools / codesign env are unavailable, record the exact error and have the checkpoint confirm the documented blocker instead of blocking the automated gate; re-run the checkpoint when toolchain is available.
 
-3. **Global conventions in standalone**
-   - What we know: D-08 says no TaskMate context; D-10 says Provider group includes "global conventions" field; `getGlobalConventions` reads `db.settings['global_conventions']`.
-   - What's unclear: "no TaskMate context" likely means no CR/task grounding, not no global standing instructions the user typed.
-   - Recommendation: suppress `<global_context>` and entity grounding; keep user-authored global conventions only if D-10 interpreted as field present. Confirm with owner if ambiguous — planner should treat as decision point.
+3. **Global conventions in standalone — RESOLVED**
+   - Decision: resolved by `51-UI-SPEC.md` §Interaction Contract item 8 — the global conventions field stays visible and editable in Provider (D-10) but is NOT injected into standalone prompts (D-08 wins). Suppress `getGlobalConventions`/`buildConventionsSegment({ global })` only at turn assembly; keep the field in `NineRouterConfigCard` and share the stored value via Dexie/keyring.
+   - Rationale: D-08 "no TaskMate context" governs prompt assembly; D-10 governs the settings surface. Both hold without conflict.
 
 ## Metadata
 
