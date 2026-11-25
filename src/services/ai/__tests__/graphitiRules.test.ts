@@ -118,7 +118,7 @@ describe('graphitiRules service', () => {
   it('throws on a bad manifest hash and leaves mcp_servers byte-identical', async () => {
     await getMcpServers(db);
     const before = await db.settings.get('mcp_servers');
-    const badManifest = `deadbeef  graphiti/graphiti-mcp-rules.md\n${digest(RULE_BODY_B)}  graphiti-sql/sql-agent-memory-prompt.md\n`;
+    const badManifest = `${'0'.repeat(64)}  graphiti/graphiti-mcp-rules.md\n${digest(RULE_BODY_B)}  graphiti-sql/sql-agent-memory-prompt.md\n`;
     mockBundle(RULE_BODY_A, RULE_BODY_B, badManifest);
     await expect(applyGraphitiRules(db)).rejects.toThrow(/SHA-256|khớp/i);
     expect(await db.settings.get('mcp_servers')).toEqual(before);
