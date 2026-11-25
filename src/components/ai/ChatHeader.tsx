@@ -18,6 +18,7 @@ export interface ChatHeaderProps {
   onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
   onOpenSettings?: (() => void) | undefined;
+  connectionStatus?: string | undefined;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -33,6 +34,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onOpenInstructions,
   onClose,
   onOpenSettings,
+  connectionStatus,
 }) => {
   const { token } = useAntdToken();
   const isStandalone = Boolean(onOpenSettings);
@@ -67,6 +69,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           >
             Global · không có ngữ cảnh TaskMate
           </span>
+          {connectionStatus && (
+            <span
+              role="status"
+              aria-live="polite"
+              data-testid="chat-connection-status"
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--fg-muted, #6b7280)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {connectionStatus}
+            </span>
+          )}
         </div>
         <Tooltip title="AI settings">
           <IconButton

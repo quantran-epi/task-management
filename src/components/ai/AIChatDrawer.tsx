@@ -2533,6 +2533,14 @@ Rules:
     }
   };
 
+  const knowledgeReady = knowledgeConfig.ready && knowledgeConfig.enabled && Boolean(knowledgeConfig.baseUrl);
+  const mcpReady = mcpServers.some((server) => server.enabled);
+  const standaloneConnectionStatus = knowledgeReady && mcpReady
+    ? 'Knowledge · MCP sẵn sàng'
+    : !knowledgeReady
+      ? 'Knowledge Server chưa kết nối — mở Cài đặt AI'
+      : 'MCP chưa có máy chủ nào được bật — mở Cài đặt AI';
+
   if (!open) return null;
 
   const handlePopoutAction = () => {
@@ -2602,6 +2610,7 @@ Rules:
         onOpenInstructions={isStandaloneChat ? undefined : () => setIsInstructionsOpen(true)}
         onClose={onClose}
         onOpenSettings={isStandaloneChat ? onOpenSettings : undefined}
+        connectionStatus={isStandaloneChat ? standaloneConnectionStatus : undefined}
       />
 
       {/* Chrome-like Multi-Tab Bar for All Scopes */}
