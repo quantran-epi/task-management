@@ -58,10 +58,10 @@ export interface BuildEmployeeTurnRequestInput {
    */
   pinnedContextSegment?: string | undefined;
   /**
-   * Coordinator-built from `getEnabledMcpInstructions(db)`. Already framed by that helper, so
-   * teamPrompts appends it verbatim after the pin and stays a pure function.
+   * Coordinator-built from `getGraphitiSkillSegment(db, text)`. Already framed by that service,
+   * so teamPrompts appends it verbatim after the pin and stays a pure function.
    */
-  mcpInstructionsSegment?: string | undefined;
+  graphitiSkillSegment?: string | undefined;
   /** Newest-first from `listAssignmentHistory`. */
   assignmentHistory: readonly ChatMessage[];
   /** Bounded recent window from `listRecentTurns`. */
@@ -132,7 +132,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     batchResults,
     conventionsSegment,
     pinnedContextSegment,
-    mcpInstructionsSegment,
+    graphitiSkillSegment,
     assignmentHistory,
     recentTurns,
     folderId,
@@ -169,7 +169,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
     // 261123-et1: the team pin follows conventions as a trusted instruction (read-only
     // enforcement stays in the tool handlers, never in this prompt).
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
-    ...(mcpInstructionsSegment ? [mcpInstructionsSegment] : []),
+    ...(graphitiSkillSegment ? [graphitiSkillSegment] : []),
   ];
 
   // D-16: the folder id is a fixed fact for the turn. A UUID from the context, not model- or
@@ -281,8 +281,8 @@ export interface BuildLeadTurnRequestInput {
   conventionsSegment?: string | undefined;
   /** Phase 45 D-16/D-17: coordinator-framed untrusted pinned-context segment. */
   pinnedContextSegment?: string | undefined;
-  /** Coordinator-built from `getEnabledMcpInstructions(db)`; see the employee input above. */
-  mcpInstructionsSegment?: string | undefined;
+  /** Coordinator-built from `getGraphitiSkillSegment(db, text)`; see the employee input above. */
+  graphitiSkillSegment?: string | undefined;
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
@@ -358,7 +358,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     batchResults,
     conventionsSegment,
     pinnedContextSegment,
-    mcpInstructionsSegment,
+    graphitiSkillSegment,
     ledger,
     docsFolderId,
     memberFolders,
@@ -393,7 +393,7 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     ...(conventionsSegment ? [conventionsSegment] : []),
     // 261123-et1: the team pin follows conventions as a trusted instruction.
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
-    ...(mcpInstructionsSegment ? [mcpInstructionsSegment] : []),
+    ...(graphitiSkillSegment ? [graphitiSkillSegment] : []),
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),

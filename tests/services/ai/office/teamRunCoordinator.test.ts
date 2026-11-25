@@ -159,6 +159,12 @@ const mcpProbe = vi.hoisted(() => ({
   hang: false,
 }));
 
+// 261125-hn9: the dedicated segment service fetches verified rules; keep the existing harness
+// offline by returning no segment unless a test explicitly opts in.
+vi.mock('../../../../src/services/ai/graphitiRules', () => ({
+  getGraphitiSkillSegment: async () => '',
+}));
+
 vi.mock('../../../../src/services/ai/mcpClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/services/ai/mcpClient')>();
   return {

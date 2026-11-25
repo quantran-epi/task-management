@@ -98,6 +98,18 @@ function toolMetaKey(serverId: string, toolName: string): string {
   return `${serverId}::${toolName}`;
 }
 
+/** Invalidate all per-server caches after a URL change so a stale session never reaches a new endpoint. */
+export function resetMcpServerCache(serverId: string): void {
+  sessionIds.delete(serverId);
+  serverGroupCaches.delete(serverId);
+  for (const [toolName, owner] of toolToServerMap) {
+    if (owner === serverId) {
+      toolToServerMap.delete(toolName);
+      toolMetaCache.delete(toolMetaKey(serverId, toolName));
+    }
+  }
+}
+
 export function sanitizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(trimmed)) {
