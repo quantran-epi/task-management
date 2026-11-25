@@ -4,9 +4,21 @@ import type { MenuProps } from 'antd';
 import { SyncOutlined, StopOutlined, CloseCircleOutlined, TeamOutlined } from '../ui/icon';
 import { aiTurnManager, useActiveAiTurns, type ActiveAiTurn } from '../../services/ai/aiTurnManager';
 import { formatElapsedTicker } from '../../utils/time';
-import { useAIChat } from '../../context/AIChatContext';
+import { useAIChat, type ActiveScope } from '../../context/AIChatContext';
 import { useLayoutStore } from '../../workbench/store/layoutStore';
 import { getTeam } from '../../db/repositories/aiTeamRepo';
+import { threadScopeParts } from '../../db/repositories/chatTabRepo';
+
+/**
+ * Rebuild the chat scope a turn actually ran in. `turn.scopeKey` is a key
+ * (`task:<id>`, `global`, ...), not an entity id — passing it as `id` with a
+ * hardcoded `type: 'global'` used to point the drawer at a different scope
+ * and hide the running conversation.
+ */
+function scopeFromTurnKey(scopeKey: string, title: string): ActiveScope {
+  const { scopeType, entityId } = threadScopeParts(scopeKey);
+  return entityId ? { type: scopeType, id: entityId, title } : { type: scopeType };
+}
 
 export interface ActiveAiTurnIndicatorProps {
   compact?: boolean;
@@ -15,7 +27,7 @@ export interface ActiveAiTurnIndicatorProps {
 export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ compact = false }) => {
   const { token } = useAntdToken();
   const activeTurns = useActiveAiTurns();
-  const { openChat } = useAIChat();
+  const { openChat, openChatAtTab } = useAIChat();
 
   // Tick elapsed time every second while at least one turn is active
   const [, setTick] = useState(0);
@@ -74,7 +86,11 @@ export const ActiveAiTurnIndicator: React.FC<ActiveAiTurnIndicatorProps> = ({ co
     } catch {}
 
     if (turn?.scopeKey) {
-      openChat({ type: 'global', id: turn.scopeKey, title: turn.title });
+      const scope = scopeFromTurnKey(turn.scopeKey, turn.title);
+      // A drawer turn's id IS its chat tab id. Focus that exact tab so a scope with several
+      // tabs lands on the running conversation and leaves every other session untouched.
+      const tabId = turn.meta?.tabId ?? turn.id;
+      openChatAtTab(scope, tabId);
     } else {
       openChat();
     }
