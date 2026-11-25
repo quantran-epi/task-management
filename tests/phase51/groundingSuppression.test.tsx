@@ -29,7 +29,14 @@ const calls = vi.hoisted(() => ({
   fetchSetCatalog: vi.fn(async () => []),
   createDefaultGroundedTurnDeps: vi.fn(() => ({ marker: 'grounded-deps' })),
   discoverGraphitiSqlMcpTools: vi.fn(async () => []),
-  discoverGatedMcpTools: vi.fn(async () => []),
+  discoverGatedMcpTools: vi.fn(async () => [{
+    type: 'function' as const,
+    function: {
+      name: 'mcp_sample_read',
+      description: 'Sample dynamic MCP tool for standalone capture',
+      parameters: { type: 'object' as const, properties: {} },
+    },
+  }]),
   getGraphitiSkillSegment: vi.fn(async () => ''),
   getOracleToolConfig: vi.fn(async () => null),
   getSshFsToolConfig: vi.fn(async () => null),
@@ -135,7 +142,11 @@ vi.mock('../../src/db/repositories/noteRepo', async (importOriginal) => {
 
 type PromptCapture = {
   systemPrompt?: string | undefined;
+  toolsSent?: Array<{ function: { name: string } }> | undefined;
 };
+
+const capturedToolNames = (): string[] =>
+  (currentCapture()?.toolsSent ?? []).map((tool) => tool.function.name);
 
 const currentCapture = (): PromptCapture | undefined => {
   const last = calls.startTurn.mock.calls.at(-1)?.[0];
@@ -262,6 +273,43 @@ describe('phase 51 standalone grounding suppression', () => {
     expect(calls.getGraphitiSkillSegment).toHaveBeenCalled();
     expect(calls.getOracleToolConfig).toHaveBeenCalled();
     expect(calls.getSshFsToolConfig).toHaveBeenCalled();
+  });
+
+  const mutationToolNames = [
+    'create_task',
+    'update_task',
+    'delete_task',
+    'plan_allocation',
+    'log_work_session',
+    'delete_note',
+  ];
+
+  it('Test 6: standalone toolsSent keeps knowledge/dynamic tools and drops TaskMate DB mutations', async () => {
+    await sendTurn(db, 'Câu hỏi công cụ', true);
+    const names = capturedToolNames();
+    expect(names).toContain('retrieve_knowledge');
+    expect(names).toContain('mcp_sample_read');
+    for (const name of mutationToolNames) expect(names).not.toContain(name);
+
+    cleanup();
+    vi.clearAllMocks();
+    await sendTurn(db, 'Câu hỏi công cụ', false);
+    const legacyNames = capturedToolNames();
+    expect(legacyNames).toContain('retrieve_knowledge');
+    expect(legacyNames).toContain('mcp_sample_read');
+    expect(legacyNames).toContain('query_tasks');
+    for (const name of mutationToolNames) expect(legacyNames).toContain(name);
+  });
+
+  it('Test 7: standalone systemPrompt drops mutation capability claim; legacy keeps it', async () => {
+    await sendTurn(db, 'Câu hỏi năng lực', true);
+    expect(currentCapture()?.systemPrompt).not.toContain('FULL DATABASE MUTATION CAPABILITIES');
+    expect(currentCapture()?.systemPrompt).toContain('NEVER GUESS, ASSUME, OR INVENT DATA.');
+
+    cleanup();
+    vi.clearAllMocks();
+    await sendTurn(db, 'Câu hỏi năng lực', false);
+    expect(currentCapture()?.systemPrompt).toContain('FULL DATABASE MUTATION CAPABILITIES');
   });
 
   it('Test 5: standalone drops task actions and callbacks; legacy keeps them', async () => {
