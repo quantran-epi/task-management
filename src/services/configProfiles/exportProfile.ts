@@ -61,11 +61,14 @@ export function buildProfileExportPayload(
     ...(profile.config.teamDefaults !== undefined ? { teamDefaults: { ...profile.config.teamDefaults } } : {}),
     secretFields,
   };
+  // `recipient` là metadata local-only: tách trước khi đóng gói, schema strictObject không nhận key này.
+  const { recipient: _recipient, ...profileFields } = profile;
+  void _recipient;
   return {
     app: CONFIG_PROFILE_APP_MARKER,
     profileSchemaVersion: CONFIG_PROFILE_SCHEMA_VERSION,
     exportedAt: now(),
-    profile: { ...profile, config },
+    profile: { ...profileFields, config },
   };
 }
 

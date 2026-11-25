@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Collapse, Col, Input, Row, Select, Space, Switch, Tooltip, Typography, useAntdToken, useNotification, useTaskMateModal, TextArea } from '../components/ui';
-import { ArrowLeftOutlined, DeleteOutlined, ExclamationCircleOutlined, PlusOutlined, SaveOutlined, WarningOutlined } from '../components/ui/icon';
+import { Alert, Button, Card, Checkbox, Input, Select, Space, Switch, Tabs, Tooltip, Typography, useAntdToken, useNotification, useTaskMateModal, TextArea } from '../components/ui';
+import { ArrowLeftOutlined, CopyOutlined, DeleteOutlined, ExclamationCircleOutlined, PlusOutlined, SaveOutlined, WarningOutlined } from '../components/ui/icon';
 import { PageHeader } from '../components/common/PageHeader';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { AppRoute } from '../types/navigation';
@@ -11,7 +11,13 @@ import {
   CONFIG_PROFILE_SCHEMA_VERSION,
   ConfigProfileEnvelopeSchema,
 } from '../validation/configProfileSchemas';
-import { getMachineSpecificFields, getSecretFields } from '../services/configProfiles/catalog';
+import {
+  getDeclaredProfileMachineFields,
+  getDeclaredProfileSecretFields,
+  getMachineSpecificFields,
+  getSecretFields,
+} from '../services/configProfiles/catalog';
+import { buildProfileExportPayload } from '../services/configProfiles/exportProfile';
 import { getProfiles, saveProfiles } from '../services/configProfiles/importProfile';
 import type { ConfigurationProfile, ProfileConfig } from '../services/configProfiles/types';
 import { ConfigProfileExportButton } from '../components/settings/ConfigProfileExportButton';
@@ -107,6 +113,22 @@ function structuredTextFor(config: ProfileConfig): Record<string, string> {
   return result;
 }
 
+/** Dùng chung cho lưu và preview: structured text phải thành object/array trước khi clamp. */
+function normalisedDraftFor(
+  config: ProfileConfig,
+  structuredText: Record<string, string>
+): { normalised: ProfileConfig | null; error: string | null } {
+  const normalised = normaliseDraft(config);
+  for (const key of Object.keys(JSON_SETTINGS)) {
+    try {
+      normalised.settings[key] = parseStructuredValue(key, structuredText[key] ?? '');
+    } catch {
+      return { normalised: null, error: STRUCTURED_SAVE_ERROR };
+    }
+  }
+  return { normalised, error: null };
+}
+
 const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: 'GitHub', keys: ['github_owner', 'github_repo', 'github_branch', 'github_auto_sync_enabled', 'github_auto_sync_mode', 'github_auto_sync_interval_minutes', 'github_auto_sync_daily_time'] },
   { title: 'Jira', keys: ['jira_domain', 'jira_email', 'jira_cors_proxy', 'jira_default_project', 'jira_default_issue_type'] },
@@ -141,16 +163,6 @@ function newDraftFromDefaults(): ProfileConfig {
 
 function fieldValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value);
-}
-
-/** Slug for stable Collapse keys; Vietnamese diacritics fold to plain ASCII. */
-function slugify(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
 }
 
 const clampInt = (text: string, min: number, max: number, blankValue: number): number => {
@@ -261,6 +273,9 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   const [profiles, setProfiles] = useState<ConfigurationProfile[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [recipient, setRecipient] = useState('');
+  const [search, setSearch] = useState('');
+  const [reviewChecks, setReviewChecks] = useState({ machine: false, secret: false, preview: false });
   const [draft, setDraft] = useState<ProfileConfig>(newDraftFromDefaults);
   const [structuredText, setStructuredText] = useState<Record<string, string>>(() =>
     structuredTextFor(draft)
@@ -293,10 +308,19 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
   }, [db]);
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedId) ?? null;
+  const visibleProfiles = profiles.filter((profile) => {
+    const query = search.trim().toLowerCase();
+    return (
+      !query ||
+      String(profile.name ?? '').toLowerCase().includes(query) ||
+      String(profile.recipient ?? '').toLowerCase().includes(query)
+    );
+  });
 
   const resetDraft = () => {
     setSelectedId(null);
     setName('');
+    setRecipient('');
     setDraftError(null);
     const fresh = newDraftFromDefaults();
     setDraft(fresh);
@@ -314,6 +338,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     if (!profile) return;
     setSelectedId(profile.id);
     setName(profile.name);
+    setRecipient(profile.recipient ?? '');
     setDraftError(null);
     const config = cloneConfig(profile.config);
     setDraft(config);
@@ -328,25 +353,17 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
       return;
     }
     // Structured fields must never reach the envelope as strings (T-quick-01).
-    const structuredValues: Record<string, unknown> = {};
-    for (const key of Object.keys(JSON_SETTINGS)) {
-      try {
-        structuredValues[key] = parseStructuredValue(key, structuredText[key] ?? '');
-      } catch {
-        setDraftError(STRUCTURED_SAVE_ERROR);
-        return;
-      }
-    }
     if (Object.values(structuredErrors).some(Boolean)) {
       setDraftError(STRUCTURED_SAVE_ERROR);
       return;
     }
+    const { normalised, error } = normalisedDraftFor(draft, structuredText);
+    if (!normalised || error) {
+      setDraftError(error ?? STRUCTURED_SAVE_ERROR);
+      return;
+    }
     const now = new Date().toISOString();
     const existing = profiles.find((profile) => profile.id === selectedId);
-    const normalised = normaliseDraft(draft);
-    for (const key of Object.keys(JSON_SETTINGS)) {
-      normalised.settings[key] = structuredValues[key];
-    }
     const validation = ConfigProfileEnvelopeSchema.safeParse(
       envelopeForDraft(trimmed, normalised, existing?.id ?? 'draft', now)
     );
@@ -360,6 +377,7 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
     const saved: ConfigurationProfile = {
       id: existing?.id ?? generateId(),
       name: trimmed,
+      ...(recipient.trim() ? { recipient: recipient.trim() } : {}),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       config: normalised,
@@ -406,6 +424,63 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
       },
     });
   };
+
+  const handleDuplicate = async () => {
+    if (!selectedProfile) return;
+    const now = new Date().toISOString();
+    const copy: ConfigurationProfile = {
+      id: generateId(),
+      name: `${selectedProfile.name} (copy)`,
+      ...(selectedProfile.recipient ? { recipient: selectedProfile.recipient } : {}),
+      createdAt: now,
+      updatedAt: now,
+      config: cloneConfig(selectedProfile.config),
+    };
+    const next = [...profiles, copy];
+    try {
+      await saveProfiles(next, db);
+      setProfiles(next);
+      setSelectedId(copy.id);
+      setName(copy.name);
+      setRecipient(copy.recipient ?? '');
+      setDraft(cloneConfig(copy.config));
+      setStructuredText(structuredTextFor(copy.config));
+      setStructuredErrors({});
+      setDraftError(null);
+      notification.success({ message: 'Đã nhân bản profile', description: copy.name });
+    } catch (error) {
+      notification.error({
+        message: 'Nhân bản thất bại',
+        description: error instanceof Error ? error.message : 'Đã xảy ra lỗi không xác định',
+      });
+    }
+  };
+
+  const machineFieldValue = (key: string): unknown =>
+    key === 'ghostDevConfig.claudePath'
+      ? draft.ghostDevConfig?.claudePath
+      : draft.settings[key];
+  const filledMachineFields = getDeclaredProfileMachineFields({
+    settings: draft.settings,
+    ghostDevConfig: draft.ghostDevConfig ? { ...draft.ghostDevConfig } : undefined,
+  }).filter((key) =>
+    Boolean(String(machineFieldValue(key) ?? '').trim())
+  );
+  const declaredSecrets = getDeclaredProfileSecretFields(draft.secretFields);
+
+  const { normalised: previewConfig } = normalisedDraftFor(draft, structuredText);
+  const previewProfile: ConfigurationProfile = {
+    id: selectedId ?? 'draft',
+    name,
+    createdAt: selectedProfile?.createdAt ?? new Date().toISOString(),
+    updatedAt: selectedProfile?.updatedAt ?? new Date().toISOString(),
+    config: previewConfig ?? normaliseDraft(draft),
+  };
+  const previewJson = JSON.stringify(
+    buildProfileExportPayload(previewProfile, () => previewProfile.updatedAt),
+    null,
+    2
+  );
 
   const setSetting = (key: string, value: unknown) => {
     setDraft((current) => ({ ...current, settings: { ...current.settings, [key]: value } }));
@@ -517,13 +592,21 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           }
         />
 
-        <Row gutter={16} align="top">
-      <Col xs={24} md={7} lg={6}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '220px minmax(0, 1fr) 296px',
+            minHeight: 620,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadiusLG,
+            overflow: 'hidden',
+          }}
+        >
       <div
         style={{
           borderRight: `1px solid ${token.colorBorderSecondary}`,
-          paddingRight: 12,
-          minHeight: 360,
+          padding: 12,
+          minWidth: 0,
         }}
       >
         <div
@@ -537,23 +620,43 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
           <Text strong style={{ fontSize: token.fontSizeSM, textTransform: 'uppercase' }}>
             Profile đã lưu
           </Text>
-          <Tooltip title="Tạo profile mới từ cấu hình mặc định">
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              aria-label="Mới (từ mặc định)"
-              onClick={handleNew}
-            />
-          </Tooltip>
+          <Space size={4}>
+            <Tooltip title="Tạo profile mới từ cấu hình mặc định">
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined />}
+                aria-label="Mới (từ mặc định)"
+                onClick={handleNew}
+              />
+            </Tooltip>
+            <Tooltip title="Nhân bản profile đang chọn">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                aria-label="Nhân bản profile"
+                disabled={!selectedProfile}
+                onClick={handleDuplicate}
+              />
+            </Tooltip>
+          </Space>
         </div>
-        {profiles.length === 0 && !loading ? (
+        <Input
+          aria-label="Tìm profile"
+          data-testid="profile-search"
+          placeholder="Tìm profile"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          style={{ marginBottom: 8 }}
+        />
+        {visibleProfiles.length === 0 && !loading ? (
           <Text type="secondary" style={{ display: 'block', padding: '12px 8px', fontSize: token.fontSizeSM }}>
-            Chưa có profile nào. Bấm + để tạo.
+            {profiles.length === 0 ? 'Chưa có profile nào. Bấm + để tạo.' : 'Không có profile khớp.'}
           </Text>
         ) : (
-          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-            {profiles.map((profile) => {
+          <div style={{ maxHeight: 480, overflowY: 'auto' }}>
+            {visibleProfiles.map((profile) => {
               const active = selectedId === profile.id;
               return (
                 <div
@@ -579,69 +682,83 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
                   }}
                 >
                   <Text style={{ fontWeight: active ? 600 : 400 }}>{profile.name}</Text>
+                  <Text type="secondary" style={{ display: 'block', fontSize: token.fontSizeSM }}>
+                    {`${profile.recipient ?? 'Chưa rõ người nhận'} · ${profile.updatedAt.slice(0, 10)}`}
+                  </Text>
                 </div>
               );
             })}
           </div>
         )}
       </div>
-      </Col>
 
-      <Col xs={24} md={17} lg={18}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--gap-8)',
-          flexWrap: 'nowrap',
-          marginBottom: 12,
-        }}
-      >
-        <Input
-          aria-label="Tên profile"
-          placeholder="Tên profile"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          style={{ flex: 1, minWidth: 140 }}
-        />
-        <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
-          Lưu profile
-        </Button>
-        <ConfigProfileExportButton profile={selectedProfile} />
-        <Button danger icon={<DeleteOutlined />} disabled={!selectedProfile} onClick={handleDelete}>
-          Xóa profile
-        </Button>
-      </div>
-      {draftError && (
-        <Alert type="error" showIcon message="Profile chưa hợp lệ" description={draftError} style={{ marginBottom: 12 }} />
-      )}
-      <Collapse
-        ghost
-        defaultActiveKey={[]}
-        items={[
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, padding: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 'var(--gap-12)',
+            marginBottom: 12,
+          }}
+        >
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>Tên profile</Text>
+            <Input
+              aria-label="Tên profile"
+              placeholder="Tên profile"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 4 }}>Người nhận</Text>
+            <Input
+              aria-label="Người nhận"
+              placeholder="Người nhận"
+              value={recipient}
+              onChange={(event) => setRecipient(event.target.value)}
+            />
+            <Text type="secondary" style={{ fontSize: token.fontSizeSM }}>
+              Chỉ là metadata — không xuất vào file JSON
+            </Text>
+          </div>
+        </div>
+        {draftError && (
+          <Alert type="error" showIcon message="Profile chưa hợp lệ" description={draftError} style={{ marginBottom: 12 }} />
+        )}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <Tabs
+          defaultActiveKey="co-ban"
+          items={[
           {
-            key: 'thong-bao-he-thong',
-            label: 'Thông báo & hệ thống',
+            key: 'co-ban',
+            label: 'Cơ bản',
             forceRender: true,
             children: (
               <Card size="small">
                 {renderSetting('notification_settings')}
                 {renderSetting('system_type_options')}
+                {SETTING_GROUPS.slice(0, 2).flatMap((group) => group.keys.map(renderSetting))}
               </Card>
             ),
           },
-          ...SETTING_GROUPS.map((group) => ({
-            key: slugify(group.title),
-            label: group.title,
-            forceRender: true,
-            children: <Card size="small">{group.keys.map(renderSetting)}</Card>,
-          })),
           {
-            key: 'capacity',
-            label: 'Công suất làm việc (capacity)',
+            key: 'ket-noi',
+            label: 'Kết nối',
+            forceRender: true,
+            children: (
+              <Card size="small">
+                {SETTING_GROUPS.slice(2).flatMap((group) => group.keys.map(renderSetting))}
+              </Card>
+            ),
+          },
+          {
+            key: 'cong-suat',
+            label: 'Công suất',
             forceRender: true,
             children: (
               <Card size="small" data-testid="profile-capacity-section">
+          <Text strong>Công suất làm việc (capacity)</Text>
           {draft.capacityRules.map((rule) => (
             <Space key={rule.dayOfWeek} style={{ marginBottom: 8 }} wrap>
               <Text style={{ width: 100 }}>{DAY_LABELS[rule.dayOfWeek] ?? `Ngày ${rule.dayOfWeek}`}</Text>
@@ -738,11 +855,13 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
             ),
           },
           {
-            key: 'ghost-dev',
-            label: 'Ghost Dev config',
+            key: 'ai-team',
+            label: 'AI & Team',
             forceRender: true,
             children: (
+              <>
               <Card size="small" data-testid="profile-ghost-dev-section">
+          <Text strong>Ghost Dev config</Text>
           <div style={{ marginBottom: 12 }}>
             <Text strong>Model chính (master)</Text>
             <div>
@@ -832,14 +951,8 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
             </div>
           </div>
               </Card>
-            ),
-          },
-          {
-            key: 'ai-team',
-            label: 'Mẫu defaults cho đội AI (AI-team template)',
-            forceRender: true,
-            children: (
               <Card size="small" data-testid="profile-ai-team-section">
+              <Text strong>Mẫu defaults cho đội AI (AI-team template)</Text>
           <div style={{ marginBottom: 12 }}>
             <Text strong>Token budget mỗi team</Text>
             <div>
@@ -929,12 +1042,99 @@ export const ConfigProfilesView: React.FC<ConfigProfilesViewProps> = ({
             </div>
           ))}
               </Card>
+              </>
             ),
           },
         ]}
-      />
-        </Col>
-        </Row>
+        />
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 'var(--gap-8)',
+            flexWrap: 'wrap',
+            paddingTop: 12,
+            borderTop: `1px solid ${token.colorBorderSecondary}`,
+          }}
+        >
+          <Button danger icon={<DeleteOutlined />} disabled={!selectedProfile} onClick={handleDelete}>
+            Xóa profile
+          </Button>
+          <Button icon={<CopyOutlined />} disabled={!selectedProfile} onClick={handleDuplicate}>
+            Nhân bản profile
+          </Button>
+          <ConfigProfileExportButton profile={selectedProfile} />
+          <Button type="primary" icon={<SaveOutlined />} onClick={handleSave}>
+            Lưu profile
+          </Button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          borderLeft: `1px solid ${token.colorBorderSecondary}`,
+          background: token.colorFillQuaternary,
+          padding: 16,
+          minWidth: 0,
+          overflowY: 'auto',
+        }}
+      >
+        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+          Rà soát trước khi xuất
+        </Text>
+        {filledMachineFields.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={`Đã đổi ${filledMachineFields.length} giá trị theo máy. Người nhận sẽ cần tự chỉnh lại sau import.`}
+          />
+        )}
+        <Checkbox
+          data-testid="review-check-machine"
+          checked={reviewChecks.machine}
+          aria-label="Đã rà soát giá trị theo máy"
+          onChange={(event) => setReviewChecks((current) => ({ ...current, machine: event.target.checked }))}
+        >
+          Đã rà soát giá trị theo máy{filledMachineFields.length > 0 ? ` (${filledMachineFields.length})` : ''}
+        </Checkbox>
+        <Checkbox
+          data-testid="review-check-secret"
+          checked={reviewChecks.secret}
+          aria-label="Đã rà soát secret để trống"
+          onChange={(event) => setReviewChecks((current) => ({ ...current, secret: event.target.checked }))}
+        >
+          Secret để trống ({declaredSecrets.length})
+        </Checkbox>
+        <Checkbox
+          data-testid="review-check-preview"
+          checked={reviewChecks.preview}
+          aria-label="Đã xem trước JSON"
+          onChange={(event) => setReviewChecks((current) => ({ ...current, preview: event.target.checked }))}
+        >
+          Đã xem trước nội dung JSON
+        </Checkbox>
+        <Text type="secondary" style={{ display: 'block', margin: '12px 0 4px' }}>
+          Bản xem trước đang soạn — checkbox chỉ là nhắc nhở, không chặn Xuất.
+        </Text>
+        <pre
+          data-testid="profile-export-preview"
+          style={{
+            margin: 0,
+            padding: 12,
+            background: token.colorBgContainer,
+            border: `1px solid ${token.colorBorderSecondary}`,
+            borderRadius: token.borderRadius,
+            fontSize: token.fontSizeSM,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          {previewJson}
+        </pre>
+      </div>
+        </div>
       </div>
     </div>
   );

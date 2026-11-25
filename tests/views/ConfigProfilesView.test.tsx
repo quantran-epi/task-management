@@ -326,4 +326,102 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
       expect(stored?.value).toEqual([]);
     });
   });
+
+  it('lưu nhiều profile có người nhận; đổi tên giữ nguyên id và không sửa profile khác', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cấu hình A' } });
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'Nam' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      expect((stored?.value as Array<{ name: string }> | undefined)?.[0]?.name).toBe('Cấu hình A');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Mới \(từ mặc định\)/i }));
+    expect(screen.getByLabelText('Người nhận')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cấu hình B' } });
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'Lan' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let rows: Array<{ id: string; name: string; recipient?: string }> = [];
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      rows = (stored?.value ?? []) as typeof rows;
+      expect(rows).toHaveLength(2);
+    });
+    expect(rows.map((row) => [row.name, row.recipient])).toEqual([
+      ['Cấu hình A', 'Nam'],
+      ['Cấu hình B', 'Lan'],
+    ]);
+    expect(screen.getByTestId(`profile-list-item-${rows[0]!.id}`).textContent).toContain('Nam');
+    expect(screen.getByTestId(`profile-list-item-${rows[1]!.id}`).textContent).toContain('Lan');
+
+    fireEvent.click(screen.getByTestId(`profile-list-item-${rows[0]!.id}`));
+    expect(screen.getByLabelText('Người nhận')).toHaveValue('Nam');
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cấu hình A mới' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      const saved = (stored?.value ?? []) as typeof rows;
+      expect(saved[0]).toMatchObject({ id: rows[0]!.id, name: 'Cấu hình A mới', recipient: 'Nam' });
+      expect(saved[1]).toMatchObject({ id: rows[1]!.id, name: 'Cấu hình B', recipient: 'Lan' });
+    });
+  });
+
+  it('tìm kiếm rail theo tên hoặc người nhận và nhân bản profile đang chọn', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cấu hình A' } });
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'Nam' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      expect(Array.isArray(stored?.value)).toBe(true);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Mới \(từ mặc định\)/i }));
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cấu hình B' } });
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'Lan' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+
+    let rows: Array<{ id: string; name: string; recipient?: string; config: unknown }> = [];
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      rows = (stored?.value ?? []) as typeof rows;
+      expect(rows).toHaveLength(2);
+    });
+
+    const search = screen.getByLabelText('Tìm profile');
+    fireEvent.change(search, { target: { value: 'LAN' } });
+    expect(screen.queryByTestId(`profile-list-item-${rows[0]!.id}`)).toBeNull();
+    expect(screen.getByTestId(`profile-list-item-${rows[1]!.id}`)).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'a' } });
+    expect(screen.getByTestId(`profile-list-item-${rows[0]!.id}`)).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: '' } });
+
+    fireEvent.click(screen.getByTestId(`profile-list-item-${rows[0]!.id}`));
+    fireEvent.click(screen.getByRole('button', { name: /Nhân bản profile/i }));
+
+    await waitFor(async () => {
+      const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+      expect(((stored?.value ?? []) as unknown[])).toHaveLength(3);
+    });
+    const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
+    const copied = ((stored?.value ?? []) as typeof rows)[2]!;
+    expect(copied.id).not.toBe(rows[0]!.id);
+    expect(copied.name).toBe('Cấu hình A (copy)');
+    expect(copied.recipient).toBe('Nam');
+    expect(copied.config).toEqual(rows[0]!.config);
+    expect(screen.getByLabelText('Tên profile')).toHaveValue('Cấu hình A (copy)');
+  });
+
+  it('không đọc cấu hình máy chủ dù db.settings có giá trị trái ngược', async () => {
+    await db.settings.put({ key: 'ninerouter_endpoint', value: 'http://evil' });
+    render(<ConfigProfilesView db={db} />);
+
+    expect(screen.getByLabelText('9Router endpoint')).toHaveValue(DEFAULT_NINEROUTER_ENDPOINT);
+    expect(screen.getByLabelText('9Router endpoint')).not.toHaveValue('http://evil');
+  });
 });

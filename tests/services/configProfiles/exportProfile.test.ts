@@ -8,6 +8,7 @@ import {
 } from '../../../src/services/configProfiles/exportProfile';
 import { getSecretFields } from '../../../src/services/configProfiles/catalog';
 import { isSafeBackupSetting } from '../../../src/services/backup/exportBackup';
+import { ConfigProfileEnvelopeSchema } from '../../../src/validation/configProfileSchemas';
 
 const SECRET = 'sk-live-export-secret-9999';
 const TELEGRAM = 'telegram-token-must-not-appear';
@@ -85,6 +86,23 @@ describe('exportProfile hardening', () => {
     const text = await blob.text();
     expect(text).not.toContain(SECRET);
     expect(JSON.parse(text).profile.name).toBe('Cấu hình / thử nghiệm');
+  });
+
+  it('bỏ recipient khỏi payload export nhưng vẫn giữ envelope hợp lệ và secret trống', () => {
+    const input = { ...profile(), recipient: 'Nam — đồng nghiệp' };
+    const payload = buildProfileExportPayload(input, () => '2026-11-19T00:00:00.000Z');
+
+    expect('recipient' in payload.profile).toBe(false);
+    expect(JSON.stringify(payload)).not.toContain('Nam — đồng nghiệp');
+    expect(
+      ConfigProfileEnvelopeSchema.safeParse(payload).success
+    ).toBe(true);
+    expect(payload.profile.config.settings.github_owner).toBe('acme-owner');
+    for (const key of getSecretFields()) {
+      if (key in payload.profile.config.settings) {
+        expect(payload.profile.config.settings[key]).toBe('');
+      }
+    }
   });
 
   it('denylists the profile list from plaintext backups', () => {

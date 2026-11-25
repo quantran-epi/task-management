@@ -45,6 +45,8 @@ export interface ProfileConfig {
 export interface ConfigurationProfile {
   id: string;
   name: string;
+  /** Metadata nội bộ của người soạn — lưu cùng profile nhưng KHÔNG bao giờ xuất ra JSON. */
+  recipient?: string;
   createdAt: string;
   updatedAt: string;
   config: ProfileConfig;
