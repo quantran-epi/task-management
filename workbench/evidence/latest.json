@@ -1,41 +1,50 @@
 {
-  "timestamp": "2026-11-25T15:53:15.673Z",
+  "timestamp": "2026-11-25T16:05:07.125Z",
   "mode": "change-scoped",
-  "scope": "explicit",
-  "explicitPath": "workbench/gate-map.json",
+  "scope": "changed",
+  "explicitPath": null,
   "rules": [
     "workbench"
   ],
   "changed": [
+    "workbench/e2e/backup-roundtrip.e2e.ts",
+    "workbench/e2e/change-pack.e2e.ts",
+    "workbench/e2e/grounded-knowledge.e2e.ts",
+    "workbench/e2e/helpers.ts",
+    "workbench/e2e/smoke.e2e.ts",
     "workbench/evidence/latest.json",
     "workbench/gate-map.json",
+    "workbench/playwright.workbench.config.ts",
     "workbench/run.sh",
     "workbench/scripts/detect-changes.mjs",
-    "workbench/unit/detectChanges.test.mjs"
+    "workbench/seed/v28Seed.ts",
+    "workbench/unit/detectChanges.test.mjs",
+    "workbench/unit/v28Seed.test.ts"
   ],
   "unit": [
     "workbench/unit"
   ],
   "unitFiles": [
-    "workbench/unit/detectChanges.test.mjs"
+    "workbench/unit/detectChanges.test.mjs",
+    "workbench/unit/v28Seed.test.ts"
   ],
   "e2e": [
-    "workbench/e2e/smoke.e2e.ts"
+    "e2e/smoke.e2e.ts"
   ],
   "gates": [
     {
-      "name": "unit-scoped",
+      "name": "unit-node-scoped",
       "command": "node --test workbench/unit/detectChanges.test.mjs",
       "exitCode": 0
     },
     {
-      "name": "spec-missing:workbench/e2e/smoke.e2e.ts",
-      "command": "playwright spec",
+      "name": "unit-vitest-scoped",
+      "command": "npx vitest run workbench/unit/v28Seed.test.ts --bail=1",
       "exitCode": 0
     },
     {
       "name": "e2e-scoped",
-      "command": "playwright (config missing)",
+      "command": "npx playwright test --config workbench/playwright.workbench.config.ts e2e/smoke.e2e.ts",
       "exitCode": 0
     }
   ],

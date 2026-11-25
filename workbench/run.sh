@@ -165,7 +165,7 @@ if [[ "$MODE" == "full" ]]; then
 fi
 
 echo "[MODE] change-scoped — mặc định, không gọi full suite"
-node workbench/scripts/detect-changes.mjs "${SCOPE_ARG[@]}" > "$SCOPE_FILE" || exit 2
+node workbench/scripts/detect-changes.mjs "${SCOPE_ARG[@]:-}" > "$SCOPE_FILE" || exit 2
 
 # Expand rule unit paths to concrete test files and persist back into scope JSON.
 node --input-type=module -e '
@@ -197,11 +197,23 @@ while IFS= read -r line; do
 done <<< "$E2E_SPECS"
 
 OVERALL=0
-if [[ ${#UNIT_ARGS[@]} -gt 0 ]]; then
-  run_gate "unit-scoped" node --test "${UNIT_ARGS[@]}" || OVERALL=1
-else
+NODE_UNIT=()
+VITEST_UNIT=()
+for file in "${UNIT_ARGS[@]}"; do
+  case "$file" in
+    *.mjs) NODE_UNIT+=("$file") ;;
+    *.ts|*.tsx) VITEST_UNIT+=("$file") ;;
+  esac
+done
+if [[ ${#NODE_UNIT[@]} -gt 0 ]]; then
+  run_gate "unit-node-scoped" node --test "${NODE_UNIT[@]}" || OVERALL=1
+fi
+if [[ ${#VITEST_UNIT[@]} -gt 0 ]]; then
+  run_gate "unit-vitest-scoped" npx vitest run "${VITEST_UNIT[@]}" --bail=1 || OVERALL=1
+fi
+if [[ ${#NODE_UNIT[@]} -eq 0 && ${#VITEST_UNIT[@]} -eq 0 ]]; then
   echo "[SKIP] unit-scoped (không có file unit nào map)"
-  record_gate "unit-scoped" "vitest (no unit files)" 0
+  record_gate "unit-scoped" "no unit files" 0
 fi
 run_playwright "e2e-scoped" "${E2E_ARGS[@]}" || OVERALL=1
 

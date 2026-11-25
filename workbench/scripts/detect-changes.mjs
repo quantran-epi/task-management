@@ -103,6 +103,10 @@ export function expandUnitPaths(paths, exists, readdir, suffixes) {
   for (const path of paths) {
     const absolute = resolve(repoRoot, path);
     if (!exists(absolute)) continue;
+    if (suffixes.some((suffix) => path.endsWith(suffix))) {
+      result.push(path);
+      continue;
+    }
     if (exists(join(absolute, 'package.json'))) {
       result.push(path);
       continue;

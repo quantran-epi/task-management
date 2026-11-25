@@ -3,7 +3,9 @@ import { expect, type Page } from '@playwright/test';
 /** Seed V28 through the app's real Vite-served modules; no setContent, no raw IDB writes. */
 export async function seedV28InBrowser(page: Page): Promise<{
   crCode: string;
+  crId: string;
   taskNames: string[];
+  taskIds: string[];
   systemCode: string;
 }> {
   await page.goto('/task-management/');
@@ -18,7 +20,9 @@ export async function seedV28InBrowser(page: Page): Promise<{
     const fixture = await seedV28(fresh);
     return {
       crCode: fixture.changeRequests[0]!.code,
+      crId: fixture.changeRequests[0]!.id,
       taskNames: fixture.tasks.map((task) => task.name),
+      taskIds: fixture.tasks.map((task) => task.id).sort(),
       systemCode: fixture.systems[0]!.code,
     };
   });

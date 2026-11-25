@@ -12,7 +12,7 @@ test('knowledge path maps to knowledge unit + grounded E2E', () => {
   const result = resolveScope(['src/services/knowledge/knowledgeClient.ts'], manifest);
   assert.equal(result.scope, 'changed');
   assert.ok(result.unit.includes('tests/knowledge'));
-  assert.deepEqual(result.e2e, ['workbench/e2e/grounded-knowledge.e2e.ts']);
+  assert.deepEqual(result.e2e, ['e2e/grounded-knowledge.e2e.ts']);
 });
 
 test('db and backup paths map to backup unit + backup E2E', () => {
@@ -23,7 +23,7 @@ test('db and backup paths map to backup unit + backup E2E', () => {
   assert.equal(result.scope, 'changed');
   assert.ok(result.unit.includes('tests/backup'));
   assert.ok(result.unit.includes('tests/migrations.test.tsx'));
-  assert.deepEqual(result.e2e, ['workbench/e2e/backup-roundtrip.e2e.ts']);
+  assert.deepEqual(result.e2e, ['e2e/backup-roundtrip.e2e.ts']);
 });
 
 test('Docs actions + change-pack fixture map to change-pack E2E with dedupe', () => {
@@ -35,7 +35,7 @@ test('Docs actions + change-pack fixture map to change-pack E2E with dedupe', ()
     ],
     manifest
   );
-  assert.deepEqual(result.e2e, ['workbench/e2e/change-pack.e2e.ts']);
+  assert.deepEqual(result.e2e, ['e2e/change-pack.e2e.ts']);
   assert.equal(result.changed.length, 2);
 });
 
@@ -43,7 +43,7 @@ test('unmapped path falls back to nearest unit + smoke, never full suite', () =>
   const result = resolveScope(['docs/README.md'], manifest);
   assert.equal(result.scope, 'fallback');
   assert.deepEqual(result.unit, ['workbench/unit/detectChanges.test.mjs']);
-  assert.deepEqual(result.e2e, ['workbench/e2e/smoke.e2e.ts']);
+  assert.deepEqual(result.e2e, ['e2e/smoke.e2e.ts']);
 });
 
 test('multiple matching rules union and dedupe', () => {
@@ -57,9 +57,9 @@ test('multiple matching rules union and dedupe', () => {
   );
   assert.equal(result.scope, 'changed');
   assert.deepEqual(result.e2e.sort(), [
-    'workbench/e2e/backup-roundtrip.e2e.ts',
-    'workbench/e2e/grounded-knowledge.e2e.ts',
-    'workbench/e2e/smoke.e2e.ts',
+    'e2e/backup-roundtrip.e2e.ts',
+    'e2e/grounded-knowledge.e2e.ts',
+    'e2e/smoke.e2e.ts',
   ]);
 });
 

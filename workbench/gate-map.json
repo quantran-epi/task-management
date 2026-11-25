@@ -12,8 +12,7 @@
       "match": [
         "src/services/knowledge/**",
         "src/services/ai/**",
-        "tests/knowledge/**",
-        "workbench/e2e/grounded-knowledge.e2e.ts"
+        "tests/knowledge/**"
       ],
       "unit": [
         "tests/knowledge",
@@ -30,8 +29,7 @@
         "src/services/backup/**",
         "src/services/crypto/**",
         "tests/backup/**",
-        "tests/migrations.test.tsx",
-        "workbench/e2e/backup-roundtrip.e2e.ts"
+        "tests/migrations.test.tsx"
       ],
       "unit": [
         "tests/backup",
@@ -47,8 +45,7 @@
       "match": [
         "src/components/notes/DocsLibraryActions.tsx",
         "src/components/notes/ZipImportPreviewModal.tsx",
-        "tests/fixtures/ai/change-packs/**",
-        "workbench/e2e/change-pack.e2e.ts"
+        "tests/fixtures/ai/change-packs/**"
       ],
       "unit": [
         "src/workbench/__tests__/DocsExplorerZip.test.tsx"
