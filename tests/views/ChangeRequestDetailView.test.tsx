@@ -208,7 +208,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await screen.findByText('Ghi chú CR một')).toBeInTheDocument();
     expect(await screen.findByText('Ghi chú CR hai')).toBeInTheDocument();
     expect(screen.queryByText('Ghi chú nhiễu task')).not.toBeInTheDocument();
-    // EntityNotesSection has no deletedAt filter; only the badge count excludes deleted notes.
+    expect(screen.queryByText('Ghi chú đã xóa')).not.toBeInTheDocument();
   }, 30000);
 
   it('does not delete existing task when task drawer is opened and closed without saving', async () => {

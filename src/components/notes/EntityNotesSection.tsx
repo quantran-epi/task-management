@@ -34,7 +34,7 @@ export const EntityNotesSection: React.FC<EntityNotesSectionProps> = ({
       const records = await db.notes
         .where('entityId')
         .equals(entityId)
-        .filter((n) => n.entityType === entityType)
+        .filter((n) => n.entityType === entityType && !n.deletedAt)
         .toArray();
 
       return records.sort((a, b) => {
