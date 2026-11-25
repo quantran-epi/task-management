@@ -1292,7 +1292,7 @@ Plans:
 **Goal:** Bản cài Tauri riêng "TaskMate Chat" mở thẳng AI chat full-window, không task UI hay ngữ cảnh TaskMate, kèm drawer AI settings side-nav 7 nhóm; chạy độc lập và cùng tồn tại với TaskMate.
 **Requirements**: D-01–D-15 (locked decisions in 51-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 50
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -1305,7 +1305,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 51-03-PLAN.md — Drawer side-nav đúng 7 nhóm, 7 card thật trên chung Dexie/keyring, knowledge provider (D-06/09/10/11/12)
+- [x] 51-03-PLAN.md — Drawer side-nav đúng 7 nhóm, 7 card thật trên chung Dexie/keyring, knowledge provider (D-06/09/10/11/12)
 
 **Wave 4** *(blocked on Wave 3)*
 
