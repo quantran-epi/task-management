@@ -1292,7 +1292,7 @@ Plans:
 **Goal:** Bản cài Tauri riêng "TaskMate Chat" mở thẳng AI chat full-window, không task UI hay ngữ cảnh TaskMate, kèm drawer AI settings side-nav 7 nhóm; chạy độc lập và cùng tồn tại với TaskMate.
 **Requirements**: D-01–D-15 (locked decisions in 51-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 50
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -1309,7 +1309,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 51-04-PLAN.md — Chặn mọi grounding TaskMate + task action, giữ knowledge/MCP/Graphiti/Oracle/SSH, cổng focused gate (D-08/10/13/01)
+- [x] 51-04-PLAN.md — Chặn mọi grounding TaskMate + task action, giữ knowledge/MCP/Graphiti/Oracle/SSH, cổng focused gate (D-08/10/13/01)
 
 ---
 
