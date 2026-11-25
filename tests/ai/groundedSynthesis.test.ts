@@ -119,6 +119,33 @@ describe('groundedSynthesis', () => {
     expect(completeJsonSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('261125-u4w: instructions enter the system prompt once, after the turn constraint', async () => {
+    completeJsonSpy.mockResolvedValueOnce(validAnswer);
+
+    await synthesizeGroundedAnswer(
+      createInput({
+        instructions: '[GLOBAL CONVENTIONS - QUY ƯỚC CHUNG TỔ CHỨC]\nSYNTH_MARKER',
+      })
+    );
+
+    const systemPrompt = String(completeJsonSpy.mock.calls[0]![0].messages[0]!.content);
+    expect(systemPrompt).toContain('TURN-SPECIFIC CONSTRAINT');
+    expect(systemPrompt.indexOf('TURN-SPECIFIC CONSTRAINT')).toBeLessThan(
+      systemPrompt.indexOf('SYNTH_MARKER')
+    );
+    expect(systemPrompt.split('SYNTH_MARKER').length - 1).toBe(1);
+  });
+
+  it('261125-u4w: no instructions keeps the base system prompt', async () => {
+    completeJsonSpy.mockResolvedValueOnce(validAnswer);
+
+    await synthesizeGroundedAnswer(createInput());
+
+    const systemPrompt = String(completeJsonSpy.mock.calls[0]![0].messages[0]!.content);
+    expect(systemPrompt).not.toContain('TURN-SPECIFIC CONSTRAINT');
+    expect(systemPrompt).not.toContain('SYNTH_MARKER');
+  });
+
   it('2. Repair-once-passes: first attempt has unrepairable schema error, second passes', async () => {
     const invalidFirst = {
       ...validAnswer,

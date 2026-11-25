@@ -20,6 +20,7 @@ import {
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as mcpClient from '../../src/services/ai/mcpClient';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
+import * as conventionService from '../../src/services/conventionService';
 
 vi.mock('../../src/utils/pptxExport', () => ({
   exportPresentationAsFile: vi.fn(),
@@ -627,6 +628,29 @@ describe('AIChatDrawer Grounded Turn Wiring (Plan 19-14)', () => {
     // GroundedAnswerCard should not be rendered
     expect(screen.queryByTestId('grounded-bubble')).toBeNull();
   });
+
+  const GLOBAL_MARKER = 'GLOBAL_CONVENTIONS_TEST_MARKER';
+  const globalHeader = '[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]';
+
+  for (const kind of ['grounded_answer', 'evidence_only'] as const) {
+    it(`261125-u4w: ${kind} turn carries the framed global conventions`, async () => {
+      await conventionService.saveGlobalConventions(GLOBAL_MARKER, testDb);
+      const calls: GroundedTurnInput[] = [];
+      const runMock = vi.fn().mockImplementation((input: GroundedTurnInput) => {
+        calls.push(input);
+        return Promise.resolve({ kind, grounding: validGroundedAnswer } as GroundedTurnResult);
+      });
+      setGroundedTurnTestHooks({ runGroundedTurn: runMock });
+
+      render(<AIChatDrawer open={true} onClose={() => {}} db={testDb} />);
+      submitMessage('CYTP1002 là gì?');
+
+      await waitFor(() => expect(calls.length).toBe(1));
+      expect(runMock).toHaveBeenCalledTimes(1);
+      expect(calls[0]!.instructions).toContain(GLOBAL_MARKER);
+      expect(calls[0]!.instructions).toContain(globalHeader);
+    });
+  }
 
   it('14. Persisted grounded message after reload renders GroundedAnswerCard with interactive citations', async () => {
     const thread = await createOrGetThread({ scopeType: 'global' }, testDb);
