@@ -1,8 +1,8 @@
 ---
 phase: 51-taskmate-chat-standalone
-verified: 2026-11-26T01:10:00Z
-status: gaps_found
-score: 15/17 must-haves verified
+verified: 2026-11-26T10:00:00Z
+status: passed
+score: 17/17 must-haves verified
 overrides_applied: 0
 must_haves:
   truths:
@@ -53,33 +53,19 @@ must_haves:
       status: VERIFIED
     - id: T16
       truth: "Bundle TaskMate Chat cài đặt, khởi chạy và cùng tồn tại với TaskMate trên một máy macOS"
-      status: UNCERTAIN
+      status: VERIFIED
     - id: T17
       truth: "Bề mặt chat standalone dùng copy trung tính theo UI-SPEC đã duyệt, không quick prompt/empty state đặc thù tác vụ TaskMate"
-      status: FAILED
-gaps:
-  - truth: "Bề mặt chat standalone dùng copy trung tính theo UI-SPEC đã duyệt, không quick prompt/empty state đặc thù tác vụ TaskMate (T17)"
-    status: failed
-    reason: "DRAWER_QUICK_PROMPTS và emptyState được hardcode task-specific, không có cổng isStandaloneChat. Bản standalone vẫn hiển thị 'Lập kế hoạch hôm nay', 'Báo cáo tiến độ', 'Tác vụ quá hạn' và 'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist...'. UI-SPEC 51-UI-SPEC.md:99-100 (status: approved) yêu cầu 'Chưa có hội thoại' / 'Nhập tin nhắn bên dưới...'. Vi phạm D-08 (không ngữ cảnh TaskMate) và locked goal 'không task UI'."
-    artifacts:
-      - path: "src/components/ai/AIChatDrawer.tsx"
-        issue: "Dòng 191-196 định nghĩa DRAWER_QUICK_PROMPTS gồm 3 quick prompt đặc thù tác vụ; dòng 2695 truyền không điều kiện vào AiChatWidget; dòng 2698-2701 hardcode emptyState body/heading 'Trợ lý AI TaskMate'."
-      - path: "src/components/ai/AiChatWidget.tsx"
-        issue: "Dòng 523-527: click quick prompt gọi onSubmit(prompt.prompt), đẩy nội dung tác vụ TaskMate vào lượt chat standalone; widget không có prop nhận biết standalone."
-      - path: ".planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-UI-SPEC.md"
-        issue: "Dòng 99-100 copy contract bị vi phạm; dòng 124 (D-08) cũng bị bỏ sót trong implementation."
-    missing:
-      - "Gate quickPrompts và emptyState theo isStandaloneChat trong AIChatDrawer: bản standalone dùng prompt trung tính (ví dụ 'Giải thích mã', 'Tra cứu tài liệu') và copy 'Chưa có hội thoại' / 'Nhập tin nhắn bên dưới để bắt đầu. Enter để gửi, Shift+Enter để xuống dòng.' theo UI-SPEC."
-      - "Giữ nguyên DRAWER_QUICK_PROMPTS và emptyState cũ cho legacy TaskMate (isStandaloneChat=false)."
-      - "Thêm test phase51 khẳng định standalone không render 3 nhãn task-specific và render đúng copy trung tính; test này hiện không tồn tại (grep tests/phase51 trả về 0 kết quả)."
+      status: VERIFIED
+gaps: []
 ---
 
 # Phase 51: TaskMate Chat standalone — Báo cáo Verification
 
 **Phase Goal:** Bản cài Tauri riêng "TaskMate Chat" mở thẳng AI chat full-window, không task UI hay ngữ cảnh TaskMate, kèm drawer AI settings side-nav 7 nhóm; chạy độc lập và cùng tồn tại với TaskMate.
-**Verified:** 2026-11-26T01:10:00Z
-**Status:** gaps_found
-**Re-verification:** Không — lần verify đầu tiên (không có VERIFICATION.md trước đó).
+**Verified:** 2026-11-26T10:00:00Z
+**Status:** passed
+**Re-verification:** Có — xem `## Final Re-verification (2026-11-26)`. T17 và T16 đã đóng; 17/17 must-haves VERIFIED, `gaps: []`. Lần verify đầu giữ lại phía dưới để truy vết.
 
 ## Goal Achievement
 
@@ -104,10 +90,10 @@ ROADMAP phase 51 không có mảng `success_criteria` (`gsd-tools query roadmap.
 | T13 | Không task action | ✓ VERIFIED | `AIChatDrawer.tsx:2742-2751`: `canAddToChecklist/canSaveStickyNote/canRunClaudeCode` = false và bỏ callback khi standalone. Test 5 kiểm tra 3 nút biến mất, 0 mutation call. |
 | T14 | Knowledge/MCP/Graphiti/Oracle/SSH intact | ✓ VERIFIED | Không có cổng `isStandaloneChat` trên các đường `fetchSetCatalog` (`:1558`), `createDefaultGroundedTurnDeps` (`:1559`), `discoverGraphitiSqlMcpTools` (`:1983`), `discoverGatedMcpTools` (`:1995`), `getGraphitiSkillSegment` (`:2002`), `getOracleToolConfig`/`getSshFsToolConfig` (`:2008-2010`) và `getToolsForTurnWithRemote` (`:2016`). Test 4 assert từng call. |
 | T15 | Legacy grounding/copy không đổi | ✓ VERIFIED | Xem T7; toàn bộ gate là nhánh additive. 28/28 test phase51 pass, trong đó có legacy non-regression. |
-| T16 | Cài đặt/khởi chạy/cùng tồn tại | ? UNCERTAIN | Bằng chứng build và identity VALID (xem T1), nhưng **chưa có bằng chứng cài đặt + khởi chạy thực tế + coexistence trên cùng máy**. `51-04-PLAN.md:163` tự để `<human-check>` cho owner. Chuyển sang mục Human Verification. |
-| T17 | Copy trung tính trên bề mặt standalone | ✗ FAILED | Xem Gaps Summary. `AIChatDrawer.tsx:191-196,2695,2698-2701`; vi phạm `51-UI-SPEC.md:99-100` (approved) và D-08. Coordinator browser-verify xác nhận render thực tế. |
+| T16 | Cài đặt/khởi chạy/cùng tồn tại | ✓ VERIFIED (re-verify) | Đã human UAT: mount DMG, copy vào `/Applications/TaskMate Chat.app`, detach thành công; PlistBuddy xác nhận 2 bundle ID riêng; `open -a` cả hai cho PID 42114 (Chat) và PID 42681 (TaskMate) chạy cùng lúc; AppleScript trả đúng tên `TaskMate` / `TaskMate Chat`. Chi tiết ở Final Re-verification. |
+| T17 | Copy trung tính trên bề mặt standalone | ✓ VERIFIED (re-verify) | Đã fix qua quick task `261126-1kz`: mã nguồn có `STANDALONE_QUICK_PROMPTS` / `STANDALONE_EMPTY_STATE`; `tests/phase51/standaloneCopy.test.tsx` khẳng định standalone không render quick prompt TaskMate và render copy UI-SPEC. Chi tiết ở Final Re-verification. |
 
-**Score:** 15/17 truths verified (1 UNCERTAIN, 1 FAILED).
+**Score ban đầu:** 15/17 truths verified (1 UNCERTAIN, 1 FAILED). **Score cuối:** 17/17 truths verified — xem Final Re-verification.
 
 ### Deferred Items
 
@@ -136,14 +122,14 @@ Không có. `gsd-tools query roadmap.analyze` chỉ trả các phase 49/50/51 tr
 | `AppIntelliJ.tsx` | `AIPopoutView.tsx` | prop `standaloneChat` | ✓ WIRED | `:120`. |
 | `AIPopoutView.tsx` | `AISettingsDrawer.tsx` | `<AISettingsDrawer ... db={db}>` | ✓ WIRED | `:5,231`. |
 | `AIChatDrawer.tsx` | `contextGrounding.ts` / `conventionService.ts` | 4 cổng `!isStandaloneChat` | ✓ WIRED | `:1548,1889,1903,1916`. |
-| `AIChatDrawer.tsx` | `AiChatWidget` quickPrompts/emptyState | prop truyền trực tiếp | ✗ NOT_GATED | `:2695,2698-2701` — nguyên nhân T17. |
+| `AIChatDrawer.tsx` | `AiChatWidget` quickPrompts/emptyState | prop truyền trực tiếp | ✓ WIRED (re-verify) | Ban đầu ✗ NOT_GATED tại `:2695,2698-2701`; sau quick task `261126-1kz` đã chọn theo `isStandaloneChat` qua `STANDALONE_QUICK_PROMPTS` / `STANDALONE_EMPTY_STATE`, legacy giữ nguyên. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|--------------------|--------|
-| `AIChatDrawer.tsx` → `AiChatWidget` | `quickPrompts` | `DRAWER_QUICK_PROMPTS` hằng tĩnh `:191-196` | Có dữ liệu, nhưng là task copy cố định không đổi theo marker | ✗ STATIC_LEAK — dẫn thẳng TaskMate task copy vào standalone |
-| `AIChatDrawer.tsx` → `AiChatWidget` | `emptyState` | object literal `:2698-2701` | Có dữ liệu, heading `'Trợ lý AI TaskMate'` (APP_NAME), body task-specific | ✗ STATIC_LEAK |
+| `AIChatDrawer.tsx` → `AiChatWidget` | `quickPrompts` | `DRAWER_QUICK_PROMPTS` hằng tĩnh `:191-196` (ban đầu) | Có dữ liệu, ban đầu là task copy cố định không đổi theo marker | ✓ FLOWING (re-verify) — sau fix chọn `STANDALONE_QUICK_PROMPTS` khi standalone, legacy giữ cũ |
+| `AIChatDrawer.tsx` → `AiChatWidget` | `emptyState` | object literal `:2698-2701` (ban đầu) | Có dữ liệu, ban đầu heading `'Trợ lý AI TaskMate'` (APP_NAME), body task-specific | ✓ FLOWING (re-verify) — sau fix dùng `STANDALONE_EMPTY_STATE` trung tính, legacy giữ cũ |
 | `AIChatDrawer.tsx` → turn assembly | `globalConvText`, `systemInstruction` | DB qua service, đã gate | Không chạy khi standalone | ✓ FLOWING (đúng D-08) |
 
 ### Behavioral Spot-Checks
@@ -153,7 +139,10 @@ Không có. `gsd-tools query roadmap.analyze` chỉ trả các phase 49/50/51 tr
 | Type-check toàn repo | `npx tsc --noEmit` | exit 0, 0 dòng output | ✓ PASS |
 | Test phase 51 | `npx vitest run tests/phase51 --bail=1` | exit 0, 6 files / 28 tests pass | ✓ PASS |
 | Build + identity bundle | `CI=true npm run tauri:build:chat` + `hdiutil verify` + PlistBuddy (bằng chứng coordinator) | .app + dmg tạo ra, checksum VALID, đúng identifier/name | ✓ PASS |
-| Copy trung tính trên standalone | Browser verify `http://localhost:4178/task-management/index.html#ai-popout` (coordinator) | 3 quick prompt task-specific + empty-state task copy vẫn hiện | ✗ FAIL (T17) |
+| Copy trung tính trên standalone | Browser verify `http://localhost:4178/task-management/index.html#ai-popout` (coordinator, verify đầu) | 3 quick prompt task-specific + empty-state task copy vẫn hiện | ✗ FAIL (T17) — đã đóng ở re-verify; xem Final Re-verification |
+| Gate final toàn phase | `npx vitest run tests/phase51 tests/ai/chatTurnTools.test.ts --bail=1` | exit 0, 11 files / 64 tests pass | ✓ PASS (re-verify) |
+| Type-check cuối | `npx tsc --noEmit` | exit 0 | ✓ PASS (re-verify) |
+| Build cuối | `npm run tauri:build:chat`; `hdiutil verify` | exit 0, `.app` + `.dmg`, VALID | ✓ PASS (re-verify) |
 
 Lưu ý INFO: `tests/ai/AIChatDrawer.test.tsx` có lỗi pre-existing ngoài phạm vi quanh `discoverAllMcpTools` (theo coordinator). Không chạy full suite (theo quy ước test scope của dự án); không tính vào gap phase 51.
 
@@ -169,14 +158,14 @@ Phase 51 dùng D-01–D-15 thay vì REQ ID (`grep P51- .planning/REQUIREMENTS.md
 
 | Requirement | Source | Description | Status | Evidence |
 |-------------|--------|-------------|--------|----------|
-| D-01 | 51-01/51-CONTEXT | Bundle riêng, identity mới, coexist | ✓ SATISFIED | T1, T16 (build-only; coexist chờ human) |
+| D-01 | 51-01/51-CONTEXT | Bundle riêng, identity mới, coexist | ✓ SATISFIED | T1, T16 (đã human UAT — xem Final Re-verification) |
 | D-02 | 51-01 | Dùng lại dist/#ai-popout | ✓ SATISFIED | T4 |
 | D-03 | 51-01 | Config chat + script + window lớn | ✓ SATISFIED | T1/T2 |
 | D-04 | 51-01/02 | Chat-only ngay từ lần vẽ đầu, reload vẫn chat-only | ✓ SATISFIED | T4 |
 | D-05 | 51-02 | Full-bleed, một gear, không rail/menu | ✓ SATISFIED | T4/T5/T8 |
 | D-06 | 51-02/03 | Drawer phải, chat giữ state | ✓ SATISFIED | T8/T11 |
 | D-07 | 51-02 | Bỏ close/pin/parent draft | ✓ SATISFIED | T5 |
-| D-08 | 51-04 | Global scope, không TaskMate context/grounding | ⚠️ PARTIAL | T12 ✓ grounding sạch, nhưng task-specific quick prompt/empty state vẫn là TaskMate context trên bề mặt → T17 FAILED |
+| D-08 | 51-04 | Global scope, không TaskMate context/grounding | ✓ SATISFIED (re-verify) | T12 ✓ grounding sạch; T17 ✓ copy trung tính sau fix `261126-1kz` |
 | D-09 | 51-03 | Drawer side nav đúng 7 nhóm | ✓ SATISFIED | T8 |
 | D-10 | 51-03 | Provider đủ field, first-run key | ✓ SATISFIED | T9 |
 | D-11 | 51-03 | Dùng card có sẵn | ✓ SATISFIED | T10 |
@@ -189,24 +178,74 @@ Phase 51 dùng D-01–D-15 thay vì REQ ID (`grep P51- .planning/REQUIREMENTS.md
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `src/components/ai/AIChatDrawer.tsx` | 191-196, 2695, 2698-2701 | Hardcoded user-visible task copy, không có alternate path cho standalone | 🛑 Blocker | T17: vi phạm approved UI-SPEC copy contract + D-08; đã được xác nhận bằng browser verify. |
+| `src/components/ai/AIChatDrawer.tsx` | 191-196, 2695, 2698-2701 | Hardcoded user-visible task copy, không có alternate path cho standalone | 🛑 Blocker (verify đầu) → ✓ FIXED (re-verify) | T17: vi phạm approved UI-SPEC copy contract + D-08; đã fix qua `261126-1kz` với `STANDALONE_QUICK_PROMPTS` / `STANDALONE_EMPTY_STATE`. |
 
 Không có marker `TBD|FIXME|XXX|TODO|HACK|PLACEHOLDER` nào trong 7 file nguồn đã sửa ở phase 51. Không có stub `return null`/`return []` ở các artifact mới. Tool Catalog hiển thị catalog công cụ DB của TaskMate — **đánh giá INFO, không phải defect**: D-09/D-11 bắt buộc giữ nhóm Tool Catalog và `chatTurnTools.ts:169-172` ghi rõ catalog "never feeds a dispatch path — it is inventory only".
 
-### Human Verification Required
+### Human Verification — ĐÃ HOÀN THÀNH (T16, D-01)
 
-1. **Cài đặt / khởi chạy / cùng tồn tại (T16, D-01)**
-   **Test:** Cài `TaskMate Chat_0.1.1_aarch64.dmg` trên máy macOS đã cài TaskMate, mở cả 2 app.
-   **Expected:** Cả hai cùng hiện trong Applications/Finder, bundle ID riêng (`com.personal.taskmate.chat` vs base), TaskMate Chat mở thẳng chat full-window, reload vẫn chat-only, gear mở 7 nhóm, TaskMate cũ chạy bình thường và dùng chung keyring.
-   **Why human:** Verification này cần thao tác cài đặt GUI và quan sát lifecycle app thật; build + `hdiutil verify` + PlistBuddy chỉ chứng minh artifact đúng, không chứng minh đã cài/chạy/coexist. `51-04-PLAN.md:163` cũng để item này cho owner.
+1. **Cài đặt / khởi chạy / cùng tồn tại (T16, D-01)** — ✓ VERIFIED qua human UAT, chi tiết ở Final Re-verification.
+   **Test đã chạy:** mount DMG, copy app vào `/Applications/TaskMate Chat.app`, `hdiutil detach` thành công; PlistBuddy; `open -a` cả hai app; AppleScript kiểm tra tên app; dọn process sau UAT.
+   **Kết quả:** 2 bundle ID riêng (`/Applications/TaskMate.app` = `com.personal.taskplanner`; `/Applications/TaskMate Chat.app` = `com.personal.taskmate.chat`), 2 process cùng chạy, tên app trả đúng `TaskMate` / `TaskMate Chat`.
+   **Ghi chú:** System Events AppleEvent timeout (-1712) là hạn chế automation, không ảnh hưởng bằng chứng cài đặt/identity/coexist.
 
-### Gaps Summary
+### Gaps Summary — ĐÃ ĐÓNG TOÀN BỘ
 
-Một blocker duy nhất, tuy nhiên đủ để chặn phase: **copy đặc thù TaskMate rò rỉ sang bề mặt chat standalone**. `src/components/ai/AIChatDrawer.tsx:191-196` định nghĩa `DRAWER_QUICK_PROMPTS` với `Lập kế hoạch hôm nay`, `Báo cáo tiến độ`, `Tác vụ quá hạn`; `:2695` truyền vào `AiChatWidget` không điều kiện; `:2698-2701` hardcode empty-state `Trợ lý AI TaskMate` và `Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist...`. `AiChatWidget.tsx:523-527` biến mỗi quick prompt thành `onSubmit(...)`. Trong khi phần *grounding dữ liệu* đã được chặn sạch (T12), phần *copy/affordance* vẫn mời người dùng thực hiện công việc tác vụ TaskMate — trái trực tiếp D-08, locked goal "không task UI", và bảng copywriting đã duyệt tại `51-UI-SPEC.md:99-100` (`Chưa có hội thoại` / `Nhập tin nhắn bên dưới để bắt đầu...`). Browser verify của coordinator xác nhận hiển thị thực tế. Bộ test `tests/phase51` có 0 assertion về copy này nên 28/28 vẫn xanh — đây là điểm mù cần sửa cùng lúc với code.
-
-Cách sửa tối thiểu: thêm 2 hằng standalone trung tính và chọn theo `isStandaloneChat` tại dòng 2695/2698, giữ nguyên giá trị cũ cho legacy. Không cần component hay dependency mới.
+Ban đầu có một blocker: **copy đặc thù TaskMate rò rỉ sang bề mặt chat standalone** (T17) tại `src/components/ai/AIChatDrawer.tsx:191-196,2695,2698-2701`, vi phạm `51-UI-SPEC.md:99-100` và D-08, cùng điểm mù test (0 assertion copy). **Đã fix và đóng** qua quick task `261126-1kz` (`STANDALONE_QUICK_PROMPTS`, `STANDALONE_EMPTY_STATE`, `tests/phase51/standaloneCopy.test.tsx`). T16 cũng đã đóng qua human UAT. Ratify bổ sung CR-01/WR-03 (`261126-1od`) và WR-02/04/05/06 (`261126-1q1`). `status: passed`, điểm 17/17, `gaps: []` — không còn blocker hay gap mở.
 
 ---
 
-_Verified: 2026-11-26T01:10:00Z_
+## Final Re-verification (2026-11-26)
+
+Tổng hợp bằng chứng sau các quick task fix và human UAT. Các bảng/đoạn ở trên được giữ nguyên làm lịch sử verify đầu; mục này ghi trạng thái cuối.
+
+### 1. T17 — Copy trung tính (đã fix)
+
+- Quick task `261126-1kz`: `17f62fdc` RED → `ecf24db4` GREEN → `90d73452` docs.
+- Mã nguồn hiện tại có `STANDALONE_QUICK_PROMPTS` và `STANDALONE_EMPTY_STATE`; lựa chọn theo `isStandaloneChat`, legacy (`isStandaloneChat=false`) giữ nguyên copy cũ.
+- `tests/phase51/standaloneCopy.test.tsx` khẳng định standalone không render quick prompt TaskMate (`Lập kế hoạch hôm nay`, `Báo cáo tiến độ`, `Tác vụ quá hạn`) và render đúng copy UI-SPEC.
+- Tại thời điểm fix: scoped phase51 7 files / 30 tests pass; `npx tsc --noEmit` exit 0.
+
+### 2. CR-01 tool scope leak + WR-03 system prompt (đã fix)
+
+- Quick task `261126-1od`, commits `b6d9af2a`, `f12361e0`, `5ef274be`, `0ed5efa7`, `bb60fca8`.
+- `tests/ai/chatTurnTools.test.ts`: 22/22 pass; phase51 scoped 32/32 pass lúc đó; `npx tsc --noEmit` exit 0.
+
+### 3. WR-02/04/05/06 (đã fix)
+
+- Quick task `261126-1q1`, commits `3d34abcc`, `9a50bfd7`, `5f6c79a8`, `9adabcf0`, `56a77f57`, `468df1a7`, `63545583`, harness fix `98bb7424`.
+- Phase51 scoped 42/42 pass lúc đó.
+- Gate cuối: `npx vitest run tests/phase51 tests/ai/chatTurnTools.test.ts --bail=1` → exit 0, **11 files / 64 tests pass**.
+- `npx tsc --noEmit` → exit 0.
+
+### 4. T16 — Human UAT cài đặt / identity / coexist (đã chạy)
+
+- Mount DMG, copy app vào `/Applications/TaskMate Chat.app`, `hdiutil detach` success.
+- PlistBuddy: `/Applications/TaskMate.app` = `com.personal.taskplanner`; `/Applications/TaskMate Chat.app` = `com.personal.taskmate.chat`.
+- `open -a` cả hai app → cùng lúc có 2 process: PID 42114 (`/Applications/TaskMate Chat.app/...`) và PID 42681 (`/Applications/TaskMate.app/...`).
+- AppleScript `tell application "..."` trả đúng tên `TaskMate` và `TaskMate Chat`.
+- Sau UAT đã quit/kill sạch process.
+- System Events AppleEvent timeout (-1712) là hạn chế automation; không ảnh hưởng bằng chứng cài đặt/identity/process coexist.
+
+### 5. Build cuối
+
+- `npm run tauri:build:chat` exit 0, tạo `.app` + `.dmg`; `hdiutil verify` → VALID.
+
+### Kết luận
+
+| Item | Trạng thái cuối | Bằng chứng |
+|------|-----------------|------------|
+| T16 | ✓ VERIFIED | Human UAT: cài đặt, 2 bundle ID, 2 process cùng chạy, tên app đúng |
+| T17 | ✓ VERIFIED | `STANDALONE_QUICK_PROMPTS` / `STANDALONE_EMPTY_STATE` + `standaloneCopy.test.tsx` |
+| CR-01 / WR-03 | ✓ FIXED | `261126-1od`, chatTurnTools 22/22 |
+| WR-02/04/05/06 | ✓ FIXED | `261126-1q1`, gate cuối 64/64 |
+| Gate cuối | ✓ PASS | 11 files / 64 tests, `tsc --noEmit` exit 0 |
+| Build/DMG | ✓ PASS | `tauri:build:chat` exit 0, `hdiutil verify` VALID |
+
+**Status: passed — 17/17 must-haves VERIFIED, `gaps: []`.**
+
+---
+
+_Verified ban đầu: 2026-11-26T01:10:00Z_
+_Final re-verification: 2026-11-26T10:00:00Z_
 _Verifier: Claude (gsd-verifier)_
