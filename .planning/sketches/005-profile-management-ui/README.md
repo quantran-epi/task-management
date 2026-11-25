@@ -2,7 +2,7 @@
 sketch: 005
 name: profile-management-ui
 question: "Quản lý nhiều profile và luồng chọn → sửa → lưu → xuất nên bố trí ra sao trong workbench?"
-winner: null
+winner: "C"
 tags: [layout, settings, profiles, management, ant-design]
 ---
 

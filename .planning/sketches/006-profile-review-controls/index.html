@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 006 — Rà soát profile trước khi xuất</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 44px 0 64px; background: var(--color-bg); color: var(--color-text); font: var(--text-base)/1.45 var(--font-sans); }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+  #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; display: flex; gap: 8px; align-items: center; padding: 7px 14px; background: var(--color-surface); border-bottom: 1px solid var(--color-border); }
+  .variant-tab { height: 28px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-muted); }
+  .variant-tab.active { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-primary-hover); font-weight: 600; }
+  #stage { margin: 0 auto; min-height: calc(100vh - 108px); transition: max-width .2s ease; }
+  .variant { display: none; padding: 16px; }
+  .variant.active { display: block; }
+  .panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); }
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+  .page-head h1 { font-size: var(--text-xl); margin: 0; }
+  .sub { color: var(--color-text-muted); font-size: var(--text-sm); margin: 2px 0 0; }
+  .btn { height: 28px; padding: 0 10px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .btn.primary { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .btn.primary:hover { background: var(--color-primary-hover); }
+  .btn.danger { color: var(--color-danger); border-color: #e8b9bd; }
+  .btn.sm { height: 24px; padding: 0 8px; font-size: var(--text-xs); }
+  input[type=text], input[type=search], select { height: 28px; padding: 0 8px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); min-width: 0; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+  .search { width: 100%; }
+  .field { margin-bottom: 9px; }
+  .field > label, .lbl { display: block; font-weight: 600; font-size: var(--text-sm); margin-bottom: 3px; }
+  .field input, .field select { width: 100%; }
+  .hint { color: var(--color-text-muted); font-size: var(--text-xs); }
+  .badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--radius-full); font-size: var(--text-xs); background: var(--color-surface-soft); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .badge.warn { background: var(--color-warning-bg); color: var(--color-warning); border-color: #f0d59b; }
+  .badge.ok { background: #e8f6f0; color: var(--color-success); border-color: #b8dfcd; }
+  .badge.secret { background: #f2edff; color: #6d45b5; border-color: #d9c9fa; }
+  .row { display: flex; align-items: center; gap: var(--space-2); }
+  .muted { color: var(--color-text-muted); }
+  .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+  .section-title { font-weight: 700; font-size: var(--text-sm); margin: 12px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--color-border); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .shell { display: grid; grid-template-columns: 220px minmax(0,1fr) 296px; min-height: 620px; overflow: hidden; }
+  .rail { border-right: 1px solid var(--color-border); padding: 10px; }
+  .pitem { padding: 7px 8px; border-radius: var(--radius-sm); border-left: 2px solid transparent; cursor: pointer; }
+  .pitem.active { background: var(--color-primary-soft); border-left-color: var(--color-primary); }
+  .pitem .name { font-weight: 600; font-size: var(--text-sm); }
+  .pitem .meta { color: var(--color-text-muted); font-size: var(--text-xs); }
+  .editor { display: flex; flex-direction: column; min-width: 0; }
+  .editor-head { padding: 10px 14px; border-bottom: 1px solid var(--color-border); }
+  .tabs { display: flex; gap: 4px; padding: 0 14px; border-bottom: 1px solid var(--color-border); }
+  .tab { height: 30px; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-text-muted); font-size: var(--text-sm); }
+  .tab.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+  .editor-body { padding: 10px 14px; overflow: auto; flex: 1; }
+  .editor-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 9px 14px; border-top: 1px solid var(--color-border); background: var(--color-surface-soft); position: sticky; bottom: 0; }
+  .side { border-left: 1px solid var(--color-border); background: var(--color-surface-soft); padding: 10px 12px; overflow: auto; }
+  .side h3 { font-size: var(--text-sm); margin: 0 0 8px; }
+  .alert { border-radius: var(--radius-sm); padding: 9px 10px; font-size: var(--text-sm); margin-bottom: 10px; }
+  .alert.warn { background: var(--color-warning-bg); border: 1px solid #f0d59b; color: #6f4b08; }
+  .alert.info { background: var(--color-primary-soft); border: 1px solid #c6d7fb; color: #25458f; }
+  .check { display: flex; gap: 7px; align-items: flex-start; padding: 6px 4px; border-bottom: 1px dashed var(--color-border); font-size: var(--text-xs); cursor: pointer; }
+  .check input { margin-top: 2px; }
+  .check.done { color: var(--color-success); }
+  .check .val { font-family: var(--font-mono); color: var(--color-text-muted); }
+  .code { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px; font: var(--text-xs)/1.5 var(--font-mono); white-space: pre-wrap; color: var(--color-text-muted); }
+  .field.machine input { border-color: var(--color-warning); background: #fffdf7; }
+  .field.secret input { border-style: dashed; background: #faf8ff; color: var(--color-text-tertiary); }
+  .counter { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--radius-full); background: var(--color-warning-bg); color: var(--color-warning); font-size: var(--text-xs); }
+  .modal-back { position: fixed; inset: 0; background: rgba(17,19,24,.3); z-index: 90; }
+  .modal { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(620px,92vw); max-height: 84vh; overflow: auto; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+  .modal header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+  .modal .body { padding: 12px 16px; }
+  .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--color-border); }
+  #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-size: var(--text-xs); background: rgba(0,0,0,.78); color: #fff; padding: 7px 10px; border-radius: var(--radius-md); opacity: .45; transition: opacity .2s; display: flex; gap: 8px; align-items: center; }
+  #sketch-tools:hover { opacity: 1; }
+  #sketch-tools select, #sketch-tools button { height: 22px; font-size: 11px; }
+  #toast { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%) translateY(12px); z-index: 9997; background: #1f2937; color: #fff; padding: 9px 14px; border-radius: var(--radius-md); font-size: var(--text-sm); opacity: 0; pointer-events: none; transition: all .2s; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .rail { border-right: 0; border-bottom: 1px solid var(--color-border); } .side { border-left: 0; border-top: 1px solid var(--color-border); } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <strong style="font-size:12px;margin-right:4px">Sketch 006</strong>
+  <button class="variant-tab active" onclick="showVariant('a',event)">A: Inline field hints</button>
+  <button class="variant-tab" onclick="showVariant('b',event)">B: Review panel dính</button>
+  <button class="variant-tab" onclick="showVariant('c',event)">C: Gate trước khi xuất</button>
+</div>
+<div id="stage">
+  <div id="variant-a" class="variant active"></div>
+  <div id="variant-b" class="variant"></div>
+  <div id="variant-c" class="variant"></div>
+</div>
+<div id="sketch-tools">
+  <select id="theme-switcher" onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Theme</option></select>
+  <button onclick="setWidth(375)">375</button><button onclick="setWidth(768)">768</button><button onclick="setWidth(0)">Full</button>
+</div>
+<div id="toast"></div>
+<script>
+const P = { name:'Anh Nam — Dev', recipient:'Nam Nguyen', owner:'nam-nguyen', repo:'taskmate-dev', endpoint:'http://127.0.0.1:3001', pat:'' };
+const state = { v:'a', tab:'co-ban', modal:false, checked:{ machine:false, secret:true, preview:false } };
+const $ = (s, r=document) => r.querySelector(s);
+function toast(m) { const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._timer); t._timer=setTimeout(()=>t.classList.remove('show'),2200); }
+function showVariant(id, ev) {
+  state.v=id;
+  document.querySelectorAll('.variant').forEach(x=>x.classList.remove('active'));
+  $('#variant-'+id).classList.add('active');
+  document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));
+  (ev.target||document.querySelector('[onclick*="'+id+'"]')).classList.add('active');
+  renderAll();
+}
+function setWidth(w){ $('#stage').style.maxWidth = w ? w+'px' : 'none'; }
+function tabs(){ return `<div class="tabs">${[['co-ban','Cơ bản'],['ket-noi','Kết nối'],['team','AI & Team'],['capacity','Công suất']].map(([k,l])=>`<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</div>`; }
+function machineField(label, val, variant) {
+  const cls = variant==='a' ? 'machine' : '';
+  return `<div class="field ${cls}"><label>${label} ${variant==='a'?'<span class="badge warn">⚠ theo máy</span>':'<span class="badge warn">theo máy</span>'}</label>
+    <input type="text" value="${val}">${variant==='a'?'<div class="hint">Giữ lại trong export — người nhận phải tự đổi</div>':''}</div>`;
+}
+function secretField(label, val, placeholder, variant) {
+  const cls = variant==='a' ? 'secret' : '';
+  return `<div class="field ${cls}"><label>${label} ${variant==='a'?'<span class="badge secret">secret — luôn trống</span>':'<span class="badge secret">secret</span>'}</label>
+    <input type="text" value="${val}" placeholder="${placeholder}">${variant==='a'?'<div class="hint">Không bao giờ ghi vào file export</div>':''}</div>`;
+}
+function form(variant) {
+  if (state.tab==='ket-noi') return `
+    <div class="section-title">AI & Knowledge</div>
+    <div class="grid2">${machineField('9Router endpoint','http://127.0.0.1:8317',variant)}
+      <div class="field"><label>Model mặc định</label><input type="text" value="claude-opus-5-5"></div>
+      ${machineField('Graphiti MCP endpoint',P.endpoint,variant)}
+      ${machineField('Knowledge base URL','http://127.0.0.1:3001',variant)}
+      ${secretField('9Router API key','','Không export',variant)}
+      ${secretField('Knowledge server token','','Không export',variant)}
+    </div>`;
+  return `<div class="section-title">GitHub</div>
+    <div class="grid2">${machineField('GitHub owner',P.owner,variant)}${machineField('GitHub repo',P.repo,variant)}
+      <div class="field"><label>GitHub branch</label><input type="text" value="main"></div>
+      <div class="field"><label>Auto sync mode</label><select><option>Manual</option><option>Daily</option></select></div>
+    </div>
+    <div class="section-title">Jira</div>
+    <div class="grid2"><div class="field"><label>Jira domain</label><input type="text" value="jira.example.com"></div>
+      <div class="field"><label>Jira email</label><input type="text" value="team@example.com"></div>
+      ${secretField('Jira API token','','Không export',variant)}
+    </div>
+    ${secretField('GitHub PAT',P.pat,'Không export',variant)}`;
+}
+function head(note) {
+  return `<div class="page-head"><div><h1>Cấu hình cho người khác</h1><p class="sub">${note}</p></div>
+    <div class="row"><span class="counter">4 giá trị theo máy</span><button class="btn primary" data-act="export">Xuất JSON</button></div></div>`;
+}
+function rail(){ return `<aside class="rail"><div class="lbl">Profile đã lưu</div>
+  <div class="pitem active"><div class="name">Anh Nam — Dev</div><div class="meta">Nam Nguyen · 25 Nov</div></div>
+  <div class="pitem"><div class="name">Chị Lan — PM</div><div class="meta">Lan Tran · 24 Nov</div></div>
+  <div class="pitem"><div class="name">Team AI sandbox</div><div class="meta">Duc Quan · 22 Nov</div></div></aside>`; }
+function editor(variant){ return `<section class="editor"><div class="editor-head"><div class="grid2">
+  <div class="field"><label>Tên profile</label><input type="text" value="${P.name}"></div>
+  <div class="field"><label>Người nhận</label><input type="text" value="${P.recipient}"><div class="hint">Metadata nội bộ — không xuất</div></div>
+</div></div>${tabs()}<div class="editor-body">${form(variant)}</div>
+<div class="editor-foot"><button class="btn" data-act="save">Lưu</button></div></section>`; }
+function checkRow(key, label, val, done) {
+  return `<label class="check ${done?'done':''}"><input type="checkbox" data-check="${key}" ${done?'checked':''}><span><div>${label}</div><div class="val">${val}</div></span></label>`;
+}
+function sidePanel(variant) {
+  return `<aside class="side"><h3>${variant==='b'?'Rà soát trước khi xuất':'Tóm tắt export'}</h3>
+    ${variant==='b' ? `<div class="alert warn">Đã đổi 3 giá trị theo máy. Người nhận sẽ cần tự chỉnh lại sau khi import.</div>` : `<div class="alert info">Chưa rà soát. Nhấn "Xuất JSON" để mở checklist.</div>`}
+    ${checkRow('machine','GitHub owner / repo',`${P.owner} / ${P.repo}`,state.checked.machine)}
+    ${checkRow('secret','11 secret fields để trống','github_pat, jira_api_token, …',state.checked.secret)}
+    ${checkRow('preview','Xem trước nội dung file','schema v1 · 24 portable fields',state.checked.preview)}
+    <div class="section-title">Xem trước JSON</div>
+    <div class="code">"settings": {
+  "github_owner": "${P.owner}",
+  "github_repo": "${P.repo}",
+  "github_pat": "",
+  "jira_api_token": ""
+}</div></aside>`;
+}
+function modal() {
+  if (!state.modal) return '';
+  return `<div class="modal-back" data-act="close"></div><div class="modal"><header><strong>Rà soát trước khi xuất</strong><button class="btn sm" data-act="close">Đóng</button></header>
+    <div class="body"><div class="alert warn">Profile chứa <strong>4 giá trị theo máy</strong> sẽ được giữ lại trong file JSON. Đổi những giá trị này trước khi gửi cho người nhận nếu cần.</div>
+      ${checkRow('machine','Tôi đã rà soát owner / repo / endpoint','nam-nguyen / taskmate-dev / 127.0.0.1',state.checked.machine)}
+      ${checkRow('secret','Secret fields để trống','github_pat, jira_api_token, knowledge_server_token',state.checked.secret)}
+      ${checkRow('preview','Tôi đã xem nội dung file','24 portable fields · schema v1',state.checked.preview)}
+      <div class="section-title">Nội dung sẽ xuất</div><div class="code">"github_owner": "${P.owner}"\n"github_repo": "${P.repo}"\n"github_pat": ""\n"jira_api_token": ""</div>
+    </div><footer><button class="btn" data-act="close">Hủy</button><button class="btn primary" data-act="confirm-export" ${state.checked.machine&&state.checked.secret&&state.checked.preview?'':'disabled'}>Xác nhận xuất</button></footer></div>`;
+}
+function renderA(){
+  $('#variant-a').innerHTML = head('A — mọi cảnh báo nằm ngay tại field; không cần bước rà soát riêng') + `<div class="panel shell">${rail()}${editor('a')}${sidePanel('a')}</div>`;
+}
+function renderB(){
+  $('#variant-b').innerHTML = head('B — panel rà soát dính bên phải, cập nhật theo checkbox') + `<div class="panel shell">${rail()}${editor('b')}${sidePanel('b')}</div>`;
+}
+function renderC(){
+  $('#variant-c').innerHTML = head('C — nút Xuất mở modal checklist; xuất bị chặn đến khi tick đủ') + `<div class="panel shell">${rail()}${editor('c')}${sidePanel('c')}</div>` + modal();
+}
+function renderAll(){ renderA(); renderB(); renderC(); }
+document.addEventListener('click', e=>{
+  const tab=e.target.closest('[data-tab]'); if(tab){ state.tab=tab.dataset.tab; renderAll(); return; }
+  const act=e.target.closest('[data-act]'); if(!act) return;
+  if(act.dataset.act==='export'){ if(state.v==='c'){ state.modal=true; renderC(); } else toast('Đã xuất profile — secrets để trống'); }
+  if(act.dataset.act==='close'){ state.modal=false; renderC(); }
+  if(act.dataset.act==='confirm-export'){ state.modal=false; renderC(); toast('Đã xuất sau rà soát'); }
+  if(act.dataset.act==='save') toast('Đã lưu profile');
+});
+document.addEventListener('change', e=>{
+  if(e.target.matches('[data-check]')){ state.checked[e.target.dataset.check]=e.target.checked; renderAll(); }
+});
+renderAll();
+</script>
+</body>
+</html>
