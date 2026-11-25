@@ -6,7 +6,7 @@ import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../
 import { getTodayDateString } from '../../utils/date';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 import { wrapField } from './untrustedData';
-import { SOURCE_TOOL_NAMES } from './graphitiRules';
+import { SOURCE_TOOL_NAMES } from './mcpClient';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';

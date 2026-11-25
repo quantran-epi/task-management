@@ -7,6 +7,14 @@ import type { McpServerCapabilitySummary } from './intentRouter';
 
 export const MCP_SERVERS_SETTINGS_KEY = 'mcp_servers';
 
+export const SOURCE_TOOL_NAMES = [
+  'search_source',
+  'explore_source',
+  'source_callers',
+  'source_callees',
+  'read_source',
+] as const;
+
 export interface McpServerConfig {
   id: string;
   name: string;
@@ -82,6 +90,7 @@ export const READ_ONLY_TOOL_ALLOWLIST: ReadonlySet<string> = new Set([
   'get_episodes',
   'get_episode_entities',
   'get_entity_edge',
+  ...SOURCE_TOOL_NAMES,
 ]);
 
 interface CachedToolMeta {
@@ -418,12 +427,7 @@ export async function fetchServerTools(server: McpServerConfig): Promise<AiToolD
     if (!Array.isArray(result?.tools)) break;
 
     for (const tool of result.tools) {
-      if (
-        tool &&
-        typeof tool.name === 'string' &&
-        typeof tool.description === 'string' &&
-        isInputSchema(tool.inputSchema)
-      ) {
+      if (tool && typeof tool.name === 'string' && isInputSchema(tool.inputSchema)) {
         toolToServerMap.set(tool.name, server.id);
         toolMetaCache.set(toolMetaKey(server.id, tool.name), {
           serverId: server.id,
@@ -435,7 +439,7 @@ export async function fetchServerTools(server: McpServerConfig): Promise<AiToolD
           type: 'function',
           function: {
             name: tool.name,
-            description: `[${server.name}] ${tool.description}`,
+            description: `[${server.name}] ${typeof tool.description === 'string' ? tool.description : ''}`,
             parameters: tool.inputSchema,
           },
         });
@@ -462,7 +466,7 @@ async function discoverToolsFrom(
       const tools = await fetchServerTools(server);
       allTools.push(...tools);
     } catch (err) {
-      console.warn(`[mcpClient] Failed to discover tools from MCP server "${server.name}" (${server.url}):`, err);
+      console.error(`[mcpClient] Failed to discover tools from MCP server "${server.id}" (${server.name}):`, err);
     }
   }
   return allTools;
@@ -563,7 +567,13 @@ export async function executeDynamicMcpTool(
   const servers = await getMcpServers(db);
   const isTauri = isTauriApp();
 
-  const serverId = options.serverId ?? toolToServerMap.get(toolName);
+  const serverId =
+    options.serverId ??
+    toolToServerMap.get(toolName) ??
+    ((SOURCE_TOOL_NAMES as readonly string[]).includes(toolName) &&
+    servers.some((s) => s.id === 'svng-source')
+      ? 'svng-source'
+      : undefined);
   if (!serverId) {
     const disabledServer = servers.find((s) => !s.enabled);
     if (disabledServer) {

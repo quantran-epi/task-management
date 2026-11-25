@@ -39,6 +39,14 @@ function mockFetch(handler: (call: RpcCall) => unknown) {
   });
 }
 
+const sourceServer: McpServerConfig = {
+  id: 'svng-source',
+  name: 'SVNG Source MCP',
+  url: 'http://127.0.0.1:9102/mcp',
+  enabled: true,
+  instruction: '',
+};
+
 const readTool = {
   name: 'search_nodes',
   description: 'Search graph nodes',
@@ -124,6 +132,59 @@ describe('mcpClient transport hardening', () => {
     await expect(executeDynamicMcpTool('search_nodes', { query: 'x' }, db)).rejects.toThrow(
       /Không rõ máy chủ MCP/
     );
+  });
+
+  it('discovers source tools without a description and resolves svng-source without a serverId option', async () => {
+    await saveMcpServers([SERVER, sourceServer], db);
+    mockFetch((call) => {
+      if (call.method === 'tools/list') {
+        return {
+          tools: [
+            {
+              name: 'search_source',
+              inputSchema: {
+                type: 'object',
+                properties: { query: { type: 'string' } },
+                required: ['query'],
+                additionalProperties: false,
+              },
+              annotations: { readOnlyHint: true },
+            },
+            { ...readTool, name: 'delete_episode', annotations: { readOnlyHint: false } },
+          ],
+        };
+      }
+      if (call.method === 'tools/call') {
+        return { content: [{ type: 'text', text: '{"evidence":true}' }] };
+      }
+      return {};
+    });
+
+    const discovered = await fetchServerTools(sourceServer);
+    expect(discovered.map((tool) => tool.function.name)).toContain('search_source');
+    expect(discovered.find((tool) => tool.function.name === 'search_source')?.function.description).toBe(
+      '[SVNG Source MCP] '
+    );
+
+    const result = await executeDynamicMcpTool('search_source', { query: 'flow' }, db);
+    expect(result).toBe('{"evidence":true}');
+    const call = calls.find((entry) => entry.method === 'tools/call');
+    expect(call?.params?.name).toBe('search_source');
+  });
+
+  it('refuses a source mutation tool before any tools/call', async () => {
+    await saveMcpServers([SERVER, sourceServer], db);
+    mockFetch((call) => {
+      if (call.method === 'tools/list') {
+        return { tools: [{ ...readTool, name: 'delete_episode', annotations: { readOnlyHint: false } }] };
+      }
+      return {};
+    });
+
+    await expect(
+      executeDynamicMcpTool('delete_episode', {}, db, { serverId: sourceServer.id })
+    ).rejects.toThrow(/chỉ cho phép thao tác đọc/);
+    expect(calls.some((call) => call.method === 'tools/call')).toBe(false);
   });
 
   it('rejects arguments that violate the tool JSON schema before calling the server', async () => {

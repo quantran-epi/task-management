@@ -21,11 +21,16 @@ const AI_PROXY_TIMEOUT_SECS: u64 = 90;
  * JS-side signal, so this Rust bound is the only one.
  */
 const GRAPHITI_MCP_TIMEOUT_SECS: u64 = 30;
-const GRAPHITI_ALLOWED_TOOLS: [&str; 4] = [
+const GRAPHITI_ALLOWED_TOOLS: [&str; 9] = [
     "list_advertised_groups",
     "search_nodes",
     "search_memory_facts",
     "get_catalog_object_context",
+    "search_source",
+    "explore_source",
+    "source_callers",
+    "source_callees",
+    "read_source",
 ];
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -338,6 +343,11 @@ mod tests {
             "search_nodes",
             "search_memory_facts",
             "get_catalog_object_context",
+            "search_source",
+            "explore_source",
+            "source_callers",
+            "source_callees",
+            "read_source",
         ] {
             let body = format!(
                 r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}","arguments":{{}}}}}}"#,
@@ -354,6 +364,10 @@ mod tests {
             "update_node",
             "delete_memory",
             "search_everything",
+            "add_memory",
+            "upsert_catalog_batch",
+            "clear_graph",
+            "svng source",
         ] {
             let body = format!(
                 r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}"}}}}"#,

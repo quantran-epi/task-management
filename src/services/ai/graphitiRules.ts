@@ -5,8 +5,11 @@ import {
   resetMcpServerCache,
   sanitizeUrl,
   saveMcpServers,
+  SOURCE_TOOL_NAMES,
   type McpServerConfig,
 } from './mcpClient';
+
+export { SOURCE_TOOL_NAMES } from './mcpClient';
 
 const BASE = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -39,14 +42,6 @@ export const GRAPHITI_SQL_SERVER_IDS = {
   memory: 'graphiti-banking',
   source: 'svng-source',
 } as const;
-
-export const SOURCE_TOOL_NAMES = [
-  'search_source',
-  'explore_source',
-  'source_callers',
-  'source_callees',
-  'read_source',
-] as const;
 
 // Short capability descriptions for the intent router and retrieval planner. Rule text lives
 // only in the verified asset segment, never in the MCP `instruction` field.
