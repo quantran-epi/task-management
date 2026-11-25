@@ -30,6 +30,11 @@ vi.mock('../../views/ChangeRequestDetailView', () => ({
   ),
 }));
 
+vi.mock('../toolwindows/UtilityToolPanel', () => ({
+  UtilityToolPanel: () => <div data-testid="mock-utility-panel" />,
+  utilityToolIcon: () => null,
+}));
+
 describe('EditorArea', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -154,5 +159,47 @@ describe('EditorArea', () => {
     expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBeUndefined();
     fireEvent.click(reloadBtn);
     expect(useLayoutStore.getState().tabReloadKeys['tasks']).toBe(1);
+  });
+
+  it('renames a utility tab on double-click and Enter', () => {
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'utility-json-1', title: 'JSON Formatter', viewType: 'json_formatter', closable: true,
+      });
+    });
+    render(<EditorArea />);
+
+    fireEvent.doubleClick(screen.getByText('JSON Formatter'));
+    const input = screen.getByLabelText('Rename JSON Formatter') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'JSON so sánh' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'utility-json-1')?.title).toBe('JSON so sánh');
+    expect(screen.getByText('JSON so sánh')).toBeDefined();
+    expect(screen.queryByLabelText('Rename JSON Formatter')).toBeNull();
+  });
+
+  it('cancels a utility tab rename on Escape', () => {
+    act(() => {
+      useLayoutStore.getState().openTab({
+        id: 'utility-json-1', title: 'JSON Formatter', viewType: 'json_formatter', closable: true,
+      });
+    });
+    render(<EditorArea />);
+
+    fireEvent.doubleClick(screen.getByText('JSON Formatter'));
+    const input = screen.getByLabelText('Rename JSON Formatter') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Không lưu' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'utility-json-1')?.title).toBe('JSON Formatter');
+    expect(screen.queryByLabelText('Rename JSON Formatter')).toBeNull();
+  });
+
+  it('does not offer inline rename on a non-utility tab', () => {
+    render(<EditorArea />);
+
+    fireEvent.doubleClick(screen.getByText('Tasks'));
+    expect(screen.queryByLabelText('Rename Tasks')).toBeNull();
   });
 });

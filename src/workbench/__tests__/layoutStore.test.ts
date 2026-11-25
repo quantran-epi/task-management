@@ -305,4 +305,34 @@ describe('useLayoutStore', () => {
     expect(tabs.map((t) => t.id)).toEqual(['planner']);
     expect(useLayoutStore.getState().activeTabId).toBe('planner');
   });
+
+  it('renames a utility tab and keeps the title across reopen and persist', async () => {
+    const tabId = 'utility-json-1';
+    useLayoutStore.getState().openTab({ id: tabId, title: 'JSON Formatter', viewType: 'json_formatter', closable: true });
+
+    useLayoutStore.getState().renameTab(tabId, '  JSON chính  ');
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.title).toBe('JSON chính');
+
+    useLayoutStore.getState().openTab({ id: tabId, title: 'JSON Formatter', viewType: 'json_formatter', closable: true });
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.title).toBe('JSON chính');
+
+    await useLayoutStore.persist.rehydrate();
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === tabId)?.title).toBe('JSON chính');
+  });
+
+  it('ignores blank titles and unknown tab ids on rename', () => {
+    useLayoutStore.getState().openTab({ id: 'utility-json-1', title: 'JSON Formatter', viewType: 'json_formatter', closable: true });
+    useLayoutStore.getState().renameTab('utility-json-1', '   ');
+    useLayoutStore.getState().renameTab('missing-tab', 'Khác');
+
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'utility-json-1')?.title).toBe('JSON Formatter');
+  });
+
+  it('still overwrites the title of a non-utility tab on reopen', () => {
+    useLayoutStore.getState().openTab({ id: 'tasks', title: 'Tasks', viewType: 'tasks', closable: true });
+    useLayoutStore.getState().renameTab('tasks', 'Tên mới');
+
+    useLayoutStore.getState().openTab({ id: 'tasks', title: 'Tasks', viewType: 'tasks', closable: true });
+    expect(useLayoutStore.getState().openTabs.find((t) => t.id === 'tasks')?.title).toBe('Tasks');
+  });
 });

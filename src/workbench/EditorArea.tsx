@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CloseOutlined, InboxOutlined, PushpinOutlined, PushpinFilled, DownOutlined, ReloadOutlined, FundProjectionScreenOutlined, FileTextOutlined, UserOutlined, TeamOutlined, DatabaseOutlined, CodeOutlined } from '../components/ui/icon';
 import { Dropdown, Tooltip } from '../components/ui';
 import type { MenuProps } from 'antd';
@@ -17,7 +17,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { AntdThemeAdapter } from './AntdThemeAdapter';
-import { useLayoutStore, type EditorTab, type EditorViewType } from './store/layoutStore';
+import { UTILITY_VIEW_TYPES, useLayoutStore, type EditorTab, type EditorViewType } from './store/layoutStore';
 import {
   JetBrainsTasksIcon,
   JetBrainsDocsIcon,
@@ -126,6 +126,7 @@ interface SortableEditorTabItemProps {
   onReloadAll: () => void;
   onCloseOthers: () => void;
   onCloseAll: () => void;
+  onRename?: (title: string) => void;
   tabRef: (el: HTMLDivElement | null) => void;
 }
 
@@ -139,6 +140,7 @@ function SortableEditorTabItem({
   onReloadAll,
   onCloseOthers,
   onCloseAll,
+  onRename,
   tabRef,
 }: SortableEditorTabItemProps) {
   const {
@@ -151,6 +153,27 @@ function SortableEditorTabItem({
   } = useSortable({ id: tab.id });
 
   const isPinned = Boolean(tab.pinned);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(tab.title);
+  const cancelRef = useRef(false);
+
+  const startEditing = () => {
+    if (!onRename) return;
+    cancelRef.current = false;
+    setDraft(tab.title);
+    setEditing(true);
+  };
+  const commit = () => {
+    if (cancelRef.current) return;
+    const next = draft.trim();
+    if (next && next !== tab.title) onRename?.(next);
+    setEditing(false);
+  };
+  const cancel = () => {
+    cancelRef.current = true;
+    setDraft(tab.title);
+    setEditing(false);
+  };
 
   const contextMenuItems: MenuProps['items'] = [
     {
@@ -306,20 +329,56 @@ function SortableEditorTabItem({
           {getEditorTabIcon(tab.viewType, 13)}
         </span>
 
-        <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            marginRight: 6,
-            pointerEvents: 'none',
-          }}
-          title={tab.title}
-        >
-          {tab.title}
-        </span>
+        {editing ? (
+          <input
+            autoFocus
+            aria-label={`Rename ${tab.title}`}
+            value={draft}
+            title={tab.title}
+            onChange={(e) => setDraft(e.target.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              marginRight: 6,
+              background: 'var(--bg-island, #fff)',
+              border: '1px solid var(--accent, #3871e1)',
+              borderRadius: 3,
+              color: 'inherit',
+              font: 'inherit',
+              padding: '0 4px',
+            }}
+          />
+        ) : (
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              marginRight: 6,
+              pointerEvents: onRename ? 'auto' : 'none',
+            }}
+            title={tab.title}
+            onDoubleClick={onRename ? startEditing : undefined}
+            onPointerDown={onRename ? (e) => e.stopPropagation() : undefined}
+          >
+            {tab.title}
+          </span>
+        )}
 
         <button
           type="button"
@@ -360,6 +419,7 @@ export function EditorArea({ db }: EditorAreaProps) {
   const closeOtherTabs = useLayoutStore((state) => state.closeOtherTabs);
   const closeAllTabs = useLayoutStore((state) => state.closeAllTabs);
   const openTab = useLayoutStore((state) => state.openTab);
+  const renameTab = useLayoutStore((state) => state.renameTab);
   const reorderTabs = useLayoutStore((state) => state.reorderTabs);
   const togglePinTab = useLayoutStore((state) => state.togglePinTab);
   const tabReloadKeys = useLayoutStore((state) => state.tabReloadKeys);
@@ -762,6 +822,9 @@ export function EditorArea({ db }: EditorAreaProps) {
                     onReloadAll={() => reloadAllTabs()}
                     onCloseOthers={() => closeOtherTabs(tab.id)}
                     onCloseAll={() => closeAllTabs()}
+                    {...(UTILITY_VIEW_TYPES.has(tab.viewType)
+                      ? { onRename: (title: string) => renameTab(tab.id, title) }
+                      : {})}
                     tabRef={(el) => {
                       tabElementsRef.current[tab.id] = el;
                     }}

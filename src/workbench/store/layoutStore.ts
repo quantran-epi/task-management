@@ -95,6 +95,7 @@ export interface LayoutActions {
   toggleBottomMaximize: () => void;
   setBottomMaximized: (maximized: boolean) => void;
   openTab: (tab: EditorTab) => void;
+  renameTab: (tabId: string, title: string) => void;
   closeTab: (tabId: string) => void;
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
@@ -140,6 +141,22 @@ export const DEFAULT_LAYOUT_STATE: LayoutStateValues = {
 
 export const LAYOUT_STORAGE_KEY = 'taskmate_workbench_layout_v3';
 export const MAX_OPEN_TABS = 20;
+
+/** Utility tabs can be renamed inline; editor tabs keep their title-overwrite behaviour. */
+export const UTILITY_VIEW_TYPES: ReadonlySet<EditorViewType> = new Set<EditorViewType>([
+  'json_formatter',
+  'xml_formatter',
+  'text_compare',
+  'markdown_viewer',
+  'encoder_decoder',
+  'regex_tester',
+  'timestamp_converter',
+  'date_calculation',
+  'text_utilities',
+  'cron_expression',
+  'hash_uuid',
+  'jwt_decoder',
+]);
 
 /**
  * Tab params that are one-shot deeplink hints, not durable tab state. A plain reopen of an
@@ -227,7 +244,10 @@ export const useLayoutStore = create<LayoutState>()(
                     delete mergedParams[key];
                   }
                 }
-                return { ...t, title: tab.title || t.title, params: mergedParams };
+                // Utility tabs keep their user-renamed title; every other view type
+                // keeps the previous overwrite-on-reopen behaviour.
+                const title = UTILITY_VIEW_TYPES.has(t.viewType) ? t.title : (tab.title || t.title);
+                return { ...t, title, params: mergedParams };
               }),
             };
           }
@@ -245,6 +265,17 @@ export const useLayoutStore = create<LayoutState>()(
           return {
             openTabs: updatedTabs,
             activeTabId: tab.id,
+          };
+        });
+      },
+
+      renameTab: (tabId: string, title: string) => {
+        const trimmed = title.trim();
+        if (!trimmed) return;
+        set((state) => {
+          if (!state.openTabs.some((t) => t.id === tabId)) return state;
+          return {
+            openTabs: state.openTabs.map((t) => (t.id === tabId ? { ...t, title: trimmed } : t)),
           };
         });
       },
