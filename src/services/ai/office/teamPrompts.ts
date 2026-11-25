@@ -82,8 +82,8 @@ export interface BuildEmployeeTurnRequestInput {
 export type EmployeeTurnMode = 'assignment' | 'chat';
 
 /** Exported so the test pins the exact third exception instead of a paraphrase. */
-export const CODE_EDIT_EXCEPTION_LINE =
-  'Ngoại lệ 3: công cụ code_edit chỉ sửa code trong worktree SSH riêng được cấp phát cho bạn (Agent Developer), apply/revert từng hunk; không merge vào nhánh chính, không đụng repo/worktree khác, filePath là đường dẫn tương đối trong worktree.';
+export const FILE_GENERATION_EXCEPTION_LINE =
+  'Ngoại lệ 3: công cụ generate_code_file chỉ tạo tệp từ nội dung bạn soạn và đưa người dùng tải về (Agent Developer); không ghi vào repo, worktree hay hệ thống nào, và không thực thi mã.';
 
 /** Exported so the tests assert this exact text instead of a paraphrase. */
 export const ASSIGNMENT_MODE_BLOCK = [
@@ -151,7 +151,7 @@ export function buildEmployeeTurnRequest(input: BuildEmployeeTurnRequestInput): 
         : 'Bạn chỉ được đọc dữ liệu. Mọi thao tác ghi đều bị từ chối tự động, trừ hai ngoại lệ bên dưới.',
       'Ngoại lệ 1: công cụ propose_skill_version được phép tạo một đề xuất kỹ năng ở trạng thái chờ duyệt. Đề xuất đó không thay đổi kỹ năng — chỉ người dùng duyệt mới tạo ra phiên bản mới.',
       'Ngoại lệ 2: công cụ write_doc được phép ghi tài liệu vào chính thư mục tài liệu của bạn; tài liệu hiện ngay trong Docs, không có thẻ phê duyệt. Công cụ này không ghi được ra ngoài thư mục của bạn, không tạo được thư mục, và không xoá được gì.',
-      ...(codeEditAllowed ? [CODE_EDIT_EXCEPTION_LINE] : []),
+      ...(codeEditAllowed ? [FILE_GENERATION_EXCEPTION_LINE] : []),
       'Nếu cần thay đổi dữ liệu khác, hãy nêu rõ trong báo cáo để trưởng nhóm thực hiện.',
       'Bạn có thể nhắn trực tiếp cho trưởng nhóm, nhân viên khác hoặc người dùng bằng công cụ send_message khi cần hỏi lại hoặc trao đổi.',
     ].join('\n'),
@@ -274,8 +274,6 @@ export interface BuildLeadTurnRequestInput {
   conventionsSegment?: string | undefined;
   /** Phase 45 D-16/D-17: coordinator-framed untrusted pinned-context segment. */
   pinnedContextSegment?: string | undefined;
-  /** 261121-qpp: coordinator-framed worktree ambiguity; builder stays pure. */
-  worktreeAmbiguitySegment?: string | undefined;
   recentTurns: readonly ChatMessage[];
   /** D-12: the batch's current reports, resolved from the ledger on a re-synthesis pass. */
   batchResults?: readonly BatchResult[] | undefined;
@@ -307,16 +305,16 @@ export const LEAD_NO_WRITE_DOC_LINE =
 export const EMPLOYEE_WRITE_DOC_LINE =
   'Mỗi nhân viên tự ghi tài liệu của mình bằng công cụ nhóm write_doc (list/create/update) trong folder riêng của họ, không qua thẻ phê duyệt; khi giao việc tài liệu, ghi rõ trong nội dung việc là nhân viên dùng write_doc; create_note là đường ghi của LEADER nên không được giao cho nhân viên.';
 
-/** Exported so the test pins the exact delegation rule instead of a paraphrase. */
-export const LEAD_CODE_DELEGATION_LINE =
-  '14. Việc cần sửa code (code_edit trong worktree) thì giao cho Agent Developer qua delegate_batch, dùng agentId từ [DANH SÁCH NHÂN VIÊN]; nếu nhóm không có Agent Developer thì báo người dùng. Bạn không tự sửa code và không giao việc sửa code cho nhân viên khác.';
-
 /**
- * 261121-qpp: shown only when multiple linked systems carry a usable worktree. The model
- * never picks a repo path — it asks the user to name the system first, then delegates.
+ * @deprecated No longer rendered in any prompt. Kept only until Task 3 drops the coordinator's
+ * last import; no employee or lead prompt uses it after this task.
  */
 export const WORKTREE_AMBIGUITY_LINE =
   'Có nhiều hệ thống trong nhóm đều có cấu hình worktree đầy đủ. Bạn KHÔNG tự chọn repo hay hệ thống. Hãy hỏi người dùng tên hệ thống cần làm việc, nhận câu trả lời, rồi mới ủy thác sửa code cho Agent Developer.';
+
+/** Exported so the test pins the exact delegation rule instead of a paraphrase. */
+export const LEAD_CODE_GENERATION_LINE =
+  '14. Việc cần tạo code thì giao cho Agent Developer qua delegate_batch, dùng agentId từ [DANH SÁCH NHÂN VIÊN]; nếu nhóm không có Agent Developer thì báo người dùng. Agent Developer trả code trong báo cáo và đưa người dùng một tệp có thể tải về; bạn không tự tạo code và không giao việc này cho nhân viên khác.';
 
 /**
  * Phase 42 D-12 / Phase 43 D-05: the reviewer's read order over a remote repository.
@@ -358,7 +356,6 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
     batchResults,
     conventionsSegment,
     pinnedContextSegment,
-    worktreeAmbiguitySegment,
     ledger,
     docsFolderId,
     memberFolders,
@@ -386,15 +383,13 @@ export function buildLeadTurnRequest(input: BuildLeadTurnRequestInput): PromptTu
       '11. Khi người dùng nhắc tới một nhân viên đã xong việc, nói thẳng là đã xong và đề nghị chạy lại hoặc giao việc mới — không tự chạy lại.',
       '12. Khi cần trao đổi trực tiếp thay vì giao việc (hỏi lại, nhắc nhở, cảnh báo), dùng công cụ send_message thay vì delegate_batch.',
       '13. Cần chi tiết cũ hơn phần ngữ cảnh này: search_team_history để tìm, read_team_turn để đọc toàn văn. Không đoán lại việc đã làm.',
-      LEAD_CODE_DELEGATION_LINE,
+      LEAD_CODE_GENERATION_LINE,
     ].join('\n'),
     ANTI_FABRICATION_BLOCK,
     // Same single-source-of-truth convention segment the employees receive (see above).
     ...(conventionsSegment ? [conventionsSegment] : []),
     // 261123-et1: the team pin follows conventions as a trusted instruction.
     ...(pinnedContextSegment ? [pinnedContextSegment] : []),
-    // 261121-qpp: only present when the coordinator detected >1 usable worktree.
-    ...(worktreeAmbiguitySegment ? [worktreeAmbiguitySegment] : []),
     [
       '[DANH SÁCH NHÂN VIÊN]',
       ...roster.map((e) => `- ${e.name} — ${e.role}: ${e.capability} (agentId: ${e.id})`),
