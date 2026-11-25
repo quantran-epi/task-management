@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem, useTaskMateModal } from '../components/ui';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
 import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -398,10 +398,10 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Space>
       </div>
 
-      {/* Main Header Card */}
+      {/* Unified header: identity + actions + metrics strip (task) */}
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
-          <div>
+          <div style={{ flex: 1, minWidth: 280 }}>
             <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
               {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}
               {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
@@ -566,8 +566,32 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           </Space>
         </div>
 
-        {/* Detailed Item Metadata Badges & Links */}
-        <Divider style={{ margin: '16px 0' }} />
+        {/* Task focus strip: one compact line replaces four separate Statistic cards */}
+        {itemType === 'task' && taskAnalysis && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
+            marginTop: 16, padding: '10px 12px',
+            border: '1px solid var(--border, #e9eaee)', borderRadius: 'var(--radius-control, 6px)',
+            background: 'var(--bg-island-soft, #f7f8fa)',
+          }}>
+            <div>
+              <Text strong style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 22, display: 'block', lineHeight: 1.1 }}>
+                {formatMinutes(taskAnalysis.metrics.estimateMinutes)}
+              </Text>
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)' }}>Ước tính</Text>
+            </div>
+            <Divider type="vertical" style={{ height: 26, margin: 0 }} />
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Đã thực hiện</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{formatMinutes(taskAnalysis.metrics.actualSpentMinutes)}</Text></div>
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Đã phân bổ</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{formatMinutes(taskAnalysis.metrics.plannedMinutes)}</Text></div>
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Checklist</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{taskAnalysis.metrics.subtaskPercent}%</Text></div>
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Hạn chót</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{currentTask?.deadline || 'Không có'}</Text></div>
+            <div style={{ flexBasis: '100%' }}>
+              <Progress percent={taskAnalysis.metrics.subtaskPercent} size="small" showInfo={false} />
+            </div>
+          </div>
+        )}
+
+        <Divider style={{ margin: '12px 0' }} />
         <Row gutter={[16, 8]}>
           <Col xs={24} sm={12} md={8}>
             <Text type="secondary">Hạn chót: </Text>
@@ -635,49 +659,6 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         )}
       </Card>
 
-      {/* Metrics Row */}
-      {itemType === 'task' && taskAnalysis && (
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Ước tính"
-                value={formatMinutes(taskAnalysis.metrics.estimateMinutes)}
-                prefix={<ClockCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Đã thực hiện"
-                value={formatMinutes(taskAnalysis.metrics.actualSpentMinutes)}
-                prefix={<PlayCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Đã phân bổ"
-                value={formatMinutes(taskAnalysis.metrics.plannedMinutes)}
-                prefix={<CalendarOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col xs={12} sm={6}>
-            <Card>
-              <Statistic
-                title="Tiến độ checklist"
-                value={taskAnalysis.metrics.subtaskPercent}
-                suffix="%"
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-        </Row>
-      )}
-
       {itemType !== 'task' && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={6}>
@@ -735,25 +716,77 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Card>
       )}
 
-      {/* Subtasks / Checklist (Task view only) */}
-      {itemType === 'task' && currentTask?.checklist && currentTask.checklist.length > 0 && (
-        <Card title="Checklist / Tiêu chí nghiệm thu" style={{ marginBottom: 16 }}>
-          <List
-            dataSource={currentTask.checklist}
-            renderItem={(item, index) => (
-              <ListItem key={item.id}>
-                <Checkbox
-                  checked={item.done}
-                  onChange={() => void handleToggleChecklistItem(index)}
+      {/* Checklist (task) + linked notes side by side — keeps the main column focused */}
+      {itemType === 'task' && (currentTask?.checklist?.length ?? 0) > 0 && (
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={24} md={12}>
+            <Card title="Checklist / Tiêu chí nghiệm thu" style={{ height: '100%' }}>
+              <List
+                dataSource={currentTask?.checklist ?? []}
+                renderItem={(item, index) => (
+                  <ListItem key={item.id}>
+                    <Checkbox
+                      checked={item.done}
+                      onChange={() => void handleToggleChecklistItem(index)}
+                    >
+                      <span style={{ textDecoration: item.done ? 'line-through' : 'none' }}>
+                        {item.text}
+                      </span>
+                    </Checkbox>
+                  </ListItem>
+                )}
+              />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card
+              title={<Space><FileTextOutlined /><span>Ghi chú liên quan ({relatedNotes.length})</span></Space>}
+              extra={
+                <Button
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setEditingNote({
+                      id: '',
+                      title: '',
+                      body: '',
+                      entityType: itemType,
+                      entityId: itemId,
+                      isPinned: false,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    });
+                  }}
                 >
-                  <span style={{ textDecoration: item.done ? 'line-through' : 'none' }}>
-                    {item.text}
-                  </span>
-                </Checkbox>
-              </ListItem>
-            )}
-          />
-        </Card>
+                  Thêm ghi chú
+                </Button>
+              }
+              style={{ height: '100%' }}
+            >
+              {relatedNotes.length === 0 ? (
+                <Empty description="Chưa có ghi chú nào" image={EmptyImageSimple} />
+              ) : (
+                <List
+                  dataSource={relatedNotes}
+                  renderItem={(note) => (
+                    <ListItem
+                      key={note.id}
+                      actions={[
+                        <Button key="view" type="link" onClick={() => setInspectingNote(note)}>Xem</Button>,
+                        <Button key="edit" type="link" onClick={() => setEditingNote(note)}>Sửa</Button>,
+                      ]}
+                    >
+                      <ListItem.Meta
+                        title={note.title || 'Ghi chú không tiêu đề'}
+                        description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`}
+                      />
+                    </ListItem>
+                  )}
+                />
+              )}
+            </Card>
+          </Col>
+        </Row>
       )}
 
       {/* Child Tasks (CR & System views) */}
@@ -813,8 +846,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Card>
       )}
 
-      {/* Linked Notes Section */}
-      <Card
+      {/* Linked Notes Section (CR/system — task version sits beside checklist above) */}
+      {itemType !== 'task' && <Card
         title={
           <Space>
             <FileTextOutlined />
@@ -868,7 +901,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             )}
           />
         )}
-      </Card>
+      </Card>}
 
       {/* Linked Diagrams Section */}
       <Card

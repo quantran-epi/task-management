@@ -58,6 +58,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('UtilityToolPanel', () => {
+  it('labels copy/clear action buttons with icon plus text', () => {
+    render(<UtilityToolPanel viewType="json_formatter" />);
+    expect(screen.getByRole('button', { name: 'Copy input' }).textContent).toContain('Copy input');
+    expect(screen.getByRole('button', { name: 'Copy output' }).textContent).toContain('Copy output');
+    expect(screen.getByRole('button', { name: 'Clear' }).textContent).toContain('Clear');
+  });
+
   it.each(['json_formatter', 'xml_formatter', 'text_compare', 'markdown_viewer'] as const)(
     'shows a divider between panes in %s',
     (viewType) => {

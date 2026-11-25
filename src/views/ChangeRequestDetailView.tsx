@@ -32,7 +32,7 @@ export const CR_TYPE_LABEL: Record<CrType, { label: string; color: string; icon:
 };
 
 const CR_STATUS_LABEL: Record<CrStatus, { label: string; color: string }> = {
-  Open: { label: 'Đã lập', color: 'default' },
+  Open: { label: 'Mở', color: 'default' },
   Pending: { label: 'Chờ xử lý', color: 'gold' },
   'In Progress': { label: 'Đang chạy', color: 'processing' },
   Done: { label: 'Hoàn tất', color: 'success' },
