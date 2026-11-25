@@ -1011,4 +1011,32 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       expect(leadSystem).not.toContain('[NGỮ CẢNH NHÓM ĐƯỢC GHIM');
     });
   });
+
+  describe('dynamic MCP instructions segment', () => {
+    const MCP_SEGMENT = '\n[MCP SERVER INSTRUCTION: GRAPHITI BANKING MCP]\nQuy tac MCP dang duoc tiet them.';
+    const PIN_SEGMENT = '[NGỮ CẢNH NHÓM ĐƯỢC GHIM — CHỈ DẪN ĐƯỢC TIN CẬY]\nGhim pin.';
+
+    it('embeds the exact segment once, after the pinned-context segment, in both builders', () => {
+      for (const system of [
+        buildEmployee({ pinnedContextSegment: PIN_SEGMENT, mcpInstructionsSegment: MCP_SEGMENT })
+          .systemMessages.map((m) => m.content).join('\n'),
+        buildLead({ pinnedContextSegment: PIN_SEGMENT, mcpInstructionsSegment: MCP_SEGMENT })
+          .systemMessages.map((m) => m.content).join('\n'),
+      ]) {
+        expect(system.split(MCP_SEGMENT)).toHaveLength(2);
+        expect(system.indexOf(PIN_SEGMENT)).toBeGreaterThanOrEqual(0);
+        expect(system.indexOf(MCP_SEGMENT)).toBeGreaterThan(system.indexOf(PIN_SEGMENT));
+      }
+    });
+
+    it('emits no MCP block when the segment is absent', () => {
+      for (const system of [
+        buildEmployee({ pinnedContextSegment: PIN_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
+        buildLead({ pinnedContextSegment: PIN_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
+      ]) {
+        expect(system).not.toContain(MCP_SEGMENT);
+        expect(system).not.toContain('[MCP SERVER INSTRUCTION');
+      }
+    });
+  });
 });
