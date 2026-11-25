@@ -34,6 +34,9 @@ const calls = vi.hoisted(() => ({
   getOracleToolConfig: vi.fn(async () => null),
   getSshFsToolConfig: vi.fn(async () => null),
   getMcpServers: vi.fn(async () => []),
+  updateTask: vi.fn(async () => undefined),
+  createNote: vi.fn(async () => undefined),
+  launchClaudeTerminal: vi.fn(async () => undefined),
   getNineRouterApiKey: vi.fn(async () => 'test-key'),
   getNineRouterConfig: vi.fn(async () => ({
     endpoint: 'https://example.invalid',
@@ -62,7 +65,7 @@ vi.mock('../../src/services/ai/conventionsSegment', async (importOriginal) => {
 });
 vi.mock('../../src/db/repositories/taskRepo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/db/repositories/taskRepo')>();
-  return { ...actual, getTask: calls.getTask };
+  return { ...actual, getTask: calls.getTask, updateTask: calls.updateTask };
 });
 vi.mock('../../src/db/repositories/changeRequestRepo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../src/db/repositories/changeRequestRepo')>();
@@ -121,6 +124,14 @@ vi.mock('../../src/services/ai/aiOrchestratorLoop', () => ({
     loopLimitReached: false,
   })),
 }));
+vi.mock('../../src/services/ai/claudeCliService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/claudeCliService')>();
+  return { ...actual, launchClaudeTerminal: calls.launchClaudeTerminal };
+});
+vi.mock('../../src/db/repositories/noteRepo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/db/repositories/noteRepo')>();
+  return { ...actual, createNote: calls.createNote };
+});
 
 type PromptCapture = {
   systemPrompt?: string | undefined;
@@ -131,13 +142,20 @@ const currentCapture = (): PromptCapture | undefined => {
   return last as PromptCapture | undefined;
 };
 
-async function sendTurn(db: TaskPlannerDatabase, text: string, standalone: boolean): Promise<void> {
+async function sendTurn(
+  db: TaskPlannerDatabase,
+  text: string,
+  standalone: boolean,
+  scope: { type: 'global'; id?: undefined; title?: undefined } | { type: 'task'; id: string; title?: string | undefined } = {
+    type: 'global',
+  }
+): Promise<void> {
   render(
     <AIChatDrawer
       open
       onClose={vi.fn()}
       db={db}
-      activeScope={{ type: 'global' }}
+      activeScope={scope}
       isStandaloneChat={standalone}
     />
   );
@@ -244,6 +262,29 @@ describe('phase 51 standalone grounding suppression', () => {
     expect(calls.getGraphitiSkillSegment).toHaveBeenCalled();
     expect(calls.getOracleToolConfig).toHaveBeenCalled();
     expect(calls.getSshFsToolConfig).toHaveBeenCalled();
+  });
+
+  it('Test 5: standalone drops task actions and callbacks; legacy keeps them', async () => {
+    const taskScope = {
+      type: 'task' as const,
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Nhiệm vụ kiểm tra',
+    };
+
+    await sendTurn(db, 'Câu hỏi không có mention', true, taskScope);
+    expect(screen.queryByRole('button', { name: /Lưu vào Sticky Notes/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Thêm vào Checklist/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Chạy với Claude Code/ })).not.toBeInTheDocument();
+    expect(calls.updateTask).not.toHaveBeenCalled();
+    expect(calls.createNote).not.toHaveBeenCalled();
+    expect(calls.launchClaudeTerminal).not.toHaveBeenCalled();
+
+    cleanup();
+    vi.clearAllMocks();
+    await sendTurn(db, 'Câu hỏi không có mention', false, taskScope);
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Lưu vào Sticky Notes/ }).length).toBeGreaterThan(0);
+    });
   });
 
 });

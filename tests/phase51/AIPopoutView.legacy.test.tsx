@@ -79,7 +79,7 @@ describe('legacy AI popout behaviour', () => {
     render(
       <AIChatProvider>
         <DraftProbe />
-        <AIPopoutView />
+        <AIPopoutView standaloneChat={false} />
       </AIChatProvider>
     );
 
