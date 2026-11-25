@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sketch 007 — Chat-only shell</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:42px 0 0; background:var(--color-bg); color:var(--color-text); font-family:var(--font-sans); font-size:var(--text-base); }
+  #variant-nav { position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:8px 16px; display:flex; gap:8px; align-items:center; font-family:system-ui; }
+  .variant-tab { border:1px solid var(--color-border); background:var(--color-surface-soft); color:var(--color-text); padding:6px 12px; border-radius:var(--radius-sm); cursor:pointer; font-size:var(--text-sm); transition:all .15s ease; }
+  .variant-tab:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .variant-tab.active { background:var(--color-primary); color:#fff; border-color:var(--color-primary); }
+  .variant { display:none; }
+  .variant.active { display:block; }
+  .stage { max-width:1280px; margin:0 auto; padding:20px; }
+  .app-window { background:var(--color-surface); border:1px solid var(--color-border-strong); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); height:640px; display:flex; flex-direction:column; overflow:hidden; }
+  .titlebar { height:36px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid var(--color-border); background:var(--color-surface-soft); }
+  .dots { display:flex; gap:6px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--color-border-strong); }
+  .app-name { font-size:var(--text-sm); font-weight:600; margin-left:8px; }
+  .app-sub { font-size:var(--text-xs); color:var(--color-text-muted); }
+  .titlebar-spacer { flex:1; }
+  .icon-btn { width:28px; height:28px; display:grid; place-items:center; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); cursor:pointer; color:var(--color-text-muted); transition:all .15s ease; font-size:15px; }
+  .icon-btn:hover { background:var(--color-primary-soft); color:var(--color-primary); border-color:var(--color-border); }
+  .chat-header { height:50px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid var(--color-border); }
+  .chat-title { font-size:var(--text-lg); font-weight:600; }
+  .tab-pill { border:1px solid var(--color-border); border-radius:var(--radius-full); padding:4px 10px; font-size:var(--text-xs); background:var(--color-surface-soft); cursor:pointer; }
+  .tab-pill.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); }
+  .scope-chip { font-size:var(--text-xs); color:var(--color-text-muted); background:var(--color-surface-soft); padding:4px 8px; border-radius:var(--radius-sm); }
+  .messages { flex:1; padding:20px 24px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+  .msg { max-width:74%; padding:12px 14px; border-radius:var(--radius-md); line-height:1.55; }
+  .msg.user { align-self:flex-end; background:var(--color-primary-soft); border:1px solid #cbd9ff; }
+  .msg.ai { align-self:flex-start; background:var(--color-surface-soft); border:1px solid var(--color-border); }
+  .msg .meta { font-size:var(--text-xs); color:var(--color-text-muted); margin-bottom:6px; }
+  .tool-line { display:flex; align-items:center; gap:8px; font-size:var(--text-xs); color:var(--color-success); background:#eefaf4; border:1px solid #c9eadb; padding:6px 10px; border-radius:var(--radius-sm); margin-top:8px; }
+  .composer { border-top:1px solid var(--color-border); padding:14px 16px; display:flex; gap:10px; align-items:flex-end; }
+  .composer textarea { flex:1; min-height:52px; resize:none; border:1px solid var(--color-border-strong); border-radius:var(--radius-md); padding:10px 12px; font:inherit; background:var(--color-surface); color:var(--color-text); }
+  .composer textarea:focus { outline:2px solid var(--color-primary-soft); border-color:var(--color-primary); }
+  .btn { border:1px solid var(--color-border-strong); background:var(--color-surface); color:var(--color-text); border-radius:var(--radius-sm); padding:7px 12px; cursor:pointer; font:inherit; transition:all .15s ease; }
+  .btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .btn.primary { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .btn.primary:hover { background:var(--color-primary-hover); color:#fff; }
+  .rail { width:56px; border-right:1px solid var(--color-border); display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 0; background:var(--color-surface-soft); }
+  .rail-btn { width:38px; height:38px; display:grid; place-items:center; border-radius:var(--radius-md); cursor:pointer; color:var(--color-text-muted); font-size:16px; transition:all .15s ease; border:1px solid transparent; }
+  .rail-btn:hover,.rail-btn.active { background:var(--color-primary-soft); color:var(--color-primary); border-color:#cbd9ff; }
+  .topbar { height:40px; display:flex; align-items:center; gap:12px; padding:0 16px; border-bottom:1px solid var(--color-border); background:var(--color-surface-soft); font-size:var(--text-sm); }
+  .topbar-item { padding:5px 10px; border-radius:var(--radius-sm); cursor:pointer; color:var(--color-text-muted); }
+  .topbar-item:hover { background:var(--color-primary-soft); color:var(--color-primary); }
+  .status { font-size:var(--text-xs); color:var(--color-success); display:flex; align-items:center; gap:5px; }
+  .status-dot { width:7px; height:7px; border-radius:50%; background:var(--color-success); }
+  .settings-drawer { position:absolute; top:0; right:0; bottom:0; width:460px; background:var(--color-surface); border-left:1px solid var(--color-border-strong); box-shadow:var(--shadow-lg); transform:translateX(105%); transition:transform .2s ease; z-index:20; display:flex; flex-direction:column; }
+  .settings-drawer.open { transform:translateX(0); }
+  .drawer-head { padding:16px; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; align-items:center; }
+  .drawer-body { padding:16px; overflow-y:auto; font-size:var(--text-sm); color:var(--color-text-muted); }
+  .setting-row { padding:10px 0; border-bottom:1px solid var(--color-border); display:flex; justify-content:space-between; }
+  .host { position:relative; }
+  .caption { max-width:1280px; margin:8px auto 0; color:var(--color-text-muted); font-size:var(--text-sm); }
+  .kbd { font-family:var(--font-mono); font-size:var(--text-xs); background:var(--color-surface-soft); border:1px solid var(--color-border); padding:2px 6px; border-radius:var(--radius-sm); }
+  #sketch-tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.7); color:white; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; display:flex; gap:8px; align-items:center; }
+  #sketch-tools:hover { opacity:1; }
+  #sketch-tools select,#sketch-tools button { font-size:12px; }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" onclick="showVariant('a',event)">A: Chat full-bleed + gear ★ Selected</button>
+  <button class="variant-tab" onclick="showVariant('b',event)">B: Chat + tool rail</button>
+  <button class="variant-tab" onclick="showVariant('c',event)">C: Chat + top bar</button>
+</div>
+
+<div id="variant-a" class="variant active">
+<!-- WINNER: chat full-bleed + gear mở settings drawer. Shell tối giản, chỉ giữ chat. -->
+  <div class="stage">
+    <div class="app-window host">
+      <div class="titlebar">
+        <div class="dots"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+        <span class="app-name">TaskMate Chat</span>
+        <span class="app-sub">chat-only</span>
+        <span class="titlebar-spacer"></span>
+        <span class="status"><i class="status-dot"></i>Knowledge · MCP sẵn sàng</span>
+        <button class="icon-btn" onclick="toggleDrawer('drawer-a')" title="AI settings">⚙</button>
+      </div>
+      <div class="chat-header">
+        <span class="chat-title">AI Chat</span>
+        <span class="tab-pill active">Research</span>
+        <span class="tab-pill">Ops</span>
+        <span class="tab-pill">+ Tab</span>
+        <span class="titlebar-spacer"></span>
+        <span class="scope-chip">Global · không task context</span>
+      </div>
+      <div class="messages">
+        <div class="msg user">Kiểm tra schema Oracle ở môi trường UAT rồi tóm tắt khác biệt với prod.</div>
+        <div class="msg ai"><div class="meta">claude-opus-5-5 · grounded</div>Đã tìm thấy 3 khác biệt. Dùng MCP query và SSH FS để đọc migration trước khi kết luận…<div class="tool-line">✓ mcp:oracle.query · ✓ ssh-fs:read /deployments/uat</div></div>
+      </div>
+      <div class="composer"><textarea placeholder="Nhắn tin… (Enter gửi, Shift+Enter xuống dòng)"></textarea><button class="btn primary">Gửi</button></div>
+      <div id="drawer-a" class="settings-drawer">
+        <div class="drawer-head"><strong>AI Settings · tất cả</strong><button class="icon-btn" onclick="toggleDrawer('drawer-a')">✕</button></div>
+        <div class="drawer-body">
+          <div class="setting-row"><span>Provider / API key</span><span>NineRouter · đã lưu</span></div>
+          <div class="setting-row"><span>Endpoint / Model / Context</span><span>claude-opus-5-5 · 1M</span></div>
+          <div class="setting-row"><span>Knowledge Server</span><span>127.0.0.1:3001</span></div>
+          <div class="setting-row"><span>MCP / Graphiti</span><span>2 servers · bật</span></div>
+          <div class="setting-row"><span>Oracle SQLcl / SSH FS</span><span>đã cấu hình</span></div>
+          <div class="setting-row"><span>AI tool catalog</span><span>12 tools</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="caption">Gọn nhất: chỉ chat + một nút gear. Không có shell quản lý. Drawer trượt từ phải, toàn bộ setting AI nằm trong một chỗ.</p>
+  </div>
+</div>
+
+<div id="variant-b" class="variant">
+  <div class="stage">
+    <div class="app-window" style="flex-direction:row">
+      <div class="rail">
+        <div class="rail-btn active" title="Chat">💬</div>
+        <div class="rail-btn" title="Knowledge" onclick="toast('Knowledge')">📚</div>
+        <div class="rail-btn" title="MCP" onclick="toast('MCP')">🔌</div>
+        <div class="rail-btn" title="Oracle" onclick="toast('Oracle')">🏛</div>
+        <div class="rail-btn" title="SSH" onclick="toast('SSH FS')">🖥</div>
+        <div class="titlebar-spacer"></div>
+        <div class="rail-btn" title="AI settings" onclick="toast('Mở AI Settings')">⚙</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div class="chat-header"><span class="chat-title">AI Chat</span><span class="tab-pill active">Research</span><span class="titlebar-spacer"></span><span class="scope-chip">Global</span></div>
+        <div class="messages">
+          <div class="msg user">So sánh cấu hình Knowledge Server giữa local và UAT.</div>
+          <div class="msg ai"><div class="meta">claude-opus-5-5 · tools</div>Rail cho phép chuyển nhanh giữa chat, knowledge, MCP, Oracle, SSH mà không cần mở settings…<div class="tool-line">✓ knowledge.search · ✓ mcp:list_tools</div></div>
+        </div>
+        <div class="composer"><textarea placeholder="Nhắn tin…"></textarea><button class="btn primary">Gửi</button></div>
+      </div>
+    </div>
+    <p class="caption">Rail icon dọc: mỗi nhóm setting có chỗ riêng, nhưng làm app nặng hơn và dễ nhầm là task navigation.</p>
+  </div>
+</div>
+
+<div id="variant-c" class="variant">
+  <div class="stage">
+    <div class="app-window">
+      <div class="topbar"><strong>TaskMate Chat</strong><span class="topbar-item" onclick="toast('Provider')">Provider ▾</span><span class="topbar-item" onclick="toast('Knowledge')">Knowledge</span><span class="topbar-item" onclick="toast('Tools')">Tools</span><span class="topbar-item" onclick="toast('Settings')">⚙ Settings</span><span class="titlebar-spacer"></span><span class="status"><i class="status-dot"></i>Đã kết nối</span></div>
+      <div class="chat-header"><span class="chat-title">AI Chat</span><span class="tab-pill active">Research</span><span class="titlebar-spacer"></span><span class="scope-chip">Global · không task context</span></div>
+      <div class="messages">
+        <div class="msg user">Giải thích tại sao oracle tool không thấy profile UAT.</div>
+        <div class="msg ai"><div class="meta">claude-opus-5-5 · diagnostic</div>Kiểm tra settings → Tools → Oracle SQLcl. Menu trên cùng giúp sửa cấu hình ngay giữa lúc chat…<div class="tool-line">✓ ssh-fs:read ~/.oracle/profiles</div></div>
+      </div>
+      <div class="composer"><textarea placeholder="Nhắn tin…"></textarea><button class="btn primary">Gửi</button></div>
+    </div>
+    <p class="caption">Top menu kiểu desktop truyền thống: dễ đoán, nhưng chiếm chiều cao và làm chat cảm giác như app quản lý.</p>
+  </div>
+</div>
+
+<div id="sketch-tools">
+  <select id="theme-switcher" onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Default</option></select>
+  <button onclick="setWidth(375)">375</button><button onclick="setWidth(768)">768</button><button onclick="setWidth(1280)">1280</button>
+</div>
+<div id="toast" style="position:fixed;bottom:52px;right:12px;z-index:9999;background:#111;color:#fff;padding:8px 12px;border-radius:6px;font:12px system-ui;opacity:0;transition:opacity .15s"></div>
+<script>
+function showVariant(id,e){document.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));document.getElementById('variant-'+id).classList.add('active');e.target.classList.add('active');}
+function toggleDrawer(id){document.getElementById(id).classList.toggle('open');}
+function setWidth(w){document.querySelectorAll('.stage').forEach(s=>s.style.maxWidth=w+'px');}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.opacity='1';setTimeout(()=>el.style.opacity='0',1400);}
+</script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sketch 008 — Full AI settings</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:42px 0 0;background:var(--color-bg);color:var(--color-text);font-family:var(--font-sans);font-size:var(--text-base)}
+  #variant-nav{position:fixed;top:0;left:0;right:0;z-index:9998;background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:8px 16px;display:flex;gap:8px;font-family:system-ui}
+  .variant-tab{border:1px solid var(--color-border);background:var(--color-surface-soft);color:var(--color-text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:var(--text-sm);transition:all .15s ease}
+  .variant-tab:hover{border-color:var(--color-primary);color:var(--color-primary)}
+  .variant-tab.active{background:var(--color-primary);color:#fff;border-color:var(--color-primary)}
+  .variant{display:none}.variant.active{display:block}
+  .stage{max-width:1140px;margin:0 auto;padding:20px}
+  .panel{background:var(--color-surface);border:1px solid var(--color-border-strong);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);height:650px;display:flex;flex-direction:column;overflow:hidden}
+  .head{padding:14px 18px;border-bottom:1px solid var(--color-border);display:flex;align-items:center;gap:12px}
+  .head strong{font-size:var(--text-lg)}
+  .muted{color:var(--color-text-muted);font-size:var(--text-xs)}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--color-border-strong);background:var(--color-surface);color:var(--color-text);border-radius:var(--radius-sm);padding:6px 12px;cursor:pointer;font:inherit;font-size:var(--text-sm);transition:all .15s ease}
+  .btn:hover{border-color:var(--color-primary);color:var(--color-primary)}
+  .btn.primary{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+  .btn.primary:hover{background:var(--color-primary-hover);color:#fff}
+  .body{flex:1;overflow-y:auto;padding:18px}
+  .section{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:14px}
+  .section h4{margin:0 0 10px;font-size:var(--text-base)}
+  .row{display:grid;grid-template-columns:180px 1fr;gap:10px;align-items:center;margin:8px 0;font-size:var(--text-sm)}
+  .row label{color:var(--color-text-muted)}
+  input,select{border:1px solid var(--color-border-strong);border-radius:var(--radius-sm);padding:7px 10px;font:inherit;font-size:var(--text-sm);background:var(--color-surface);color:var(--color-text);width:100%}
+  input:focus,select:focus{outline:2px solid var(--color-primary-soft);border-color:var(--color-primary)}
+  .pill{display:inline-flex;align-items:center;gap:5px;background:#eefaf4;color:var(--color-success);border:1px solid #c9eadb;border-radius:var(--radius-full);padding:3px 9px;font-size:var(--text-xs)}
+  .pill.warn{background:var(--color-warning-bg);color:var(--color-warning);border-color:#f0d9a8}
+  .tabs{display:flex;gap:2px;padding:10px 14px 0;border-bottom:1px solid var(--color-border);background:var(--color-surface-soft)}
+  .tab{border:1px solid transparent;border-bottom:none;background:transparent;padding:8px 14px;border-radius:var(--radius-sm) var(--radius-sm) 0 0;cursor:pointer;color:var(--color-text-muted);font-size:var(--text-sm);transition:all .15s ease}
+  .tab:hover{color:var(--color-primary)}
+  .tab.active{background:var(--color-surface);border-color:var(--color-border);color:var(--color-primary);font-weight:600}
+  .tab-pane{display:none}.tab-pane.active{display:block}
+  .side-nav{width:190px;border-right:1px solid var(--color-border);background:var(--color-surface-soft);padding:10px 0;display:flex;flex-direction:column;gap:2px}
+  .side-item{padding:9px 16px;cursor:pointer;font-size:var(--text-sm);color:var(--color-text-muted);border-left:3px solid transparent;transition:all .15s ease}
+  .side-item:hover{background:var(--color-primary-soft);color:var(--color-primary)}
+  .side-item.active{background:var(--color-primary-soft);color:var(--color-primary);border-left-color:var(--color-primary);font-weight:600}
+  .split{display:flex;flex:1;min-height:0}
+  .scroll{flex:1;overflow-y:auto;padding:18px}
+  .accordion{border:1px solid var(--color-border);border-radius:var(--radius-md);margin-bottom:8px;overflow:hidden}
+  .acc-head{padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;background:var(--color-surface-soft);font-weight:600;font-size:var(--text-sm)}
+  .acc-head:hover{background:var(--color-primary-soft)}
+  .acc-body{display:none;padding:12px 14px;border-top:1px solid var(--color-border)}
+  .accordion.open .acc-body{display:block}
+  .caption{max-width:1140px;margin:8px auto 0;color:var(--color-text-muted);font-size:var(--text-sm)}
+  #sketch-tools{position:fixed;bottom:12px;right:12px;z-index:9999;font-family:system-ui;font-size:12px;background:rgba(0,0,0,.7);color:#fff;padding:8px 12px;border-radius:8px;opacity:.4;transition:opacity .2s;display:flex;gap:8px;align-items:center}
+  #sketch-tools:hover{opacity:1}
+  #sketch-tools select,#sketch-tools button{font-size:12px}
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab" onclick="showVariant('a',event)">A: Một cột cuộn</button>
+  <button class="variant-tab" onclick="showVariant('b',event)">B: Tabs nhóm</button>
+  <button class="variant-tab active" onclick="showVariant('c',event)">C: Side nav + accordion ★ Selected</button>
+</div>
+
+<div id="variant-a" class="variant">
+<div class="stage"><div class="panel">
+  <div class="head"><strong>AI Settings</strong><span class="muted">Tất cả cấu hình AI · lưu tự động</span><span class="spacer"></span><button class="btn primary" onclick="saved('A')">Lưu</button><button class="btn" onclick="toast('Đã đóng')">Đóng</button></div>
+  <div class="body">
+    <div class="section"><h4>1. Provider · NineRouter</h4>
+      <div class="row"><label>API Endpoint</label><input value="https://api.ninerouter.com/v1"></div>
+      <div class="row"><label>API Key</label><input type="password" value="••••••••••••"><span class="pill">✓ keyring</span></div>
+      <div class="row"><label>Default Model</label><select><option>claude-opus-5-5</option><option>claude-sonnet-5-5</option></select></div>
+      <div class="row"><label>Context window</label><input value="1000000"></div>
+      <div class="row"><label>Global conventions</label><select><option>Đã bật · dùng cho mọi turn</option></select></div>
+    </div>
+    <div class="section"><h4>2. Knowledge Server</h4>
+      <div class="row"><label>Bật Knowledge Server</label><select><option>Bật</option><option>Tắt</option></select></div>
+      <div class="row"><label>URL gốc</label><input value="http://127.0.0.1:3001"></div>
+      <div class="row"><label>Bearer token</label><input type="password" value="••••••••"><span class="pill">✓ kết nối</span></div>
+    </div>
+    <div class="section"><h4>3. MCP</h4>
+      <div class="row"><label>Máy chủ MCP</label><input value="docs-server · graphiti-memory"><button class="btn" onclick="toast('Mở editor MCP')">Sửa</button></div>
+      <div class="row"><label>MCP discovery</label><span class="pill">✓ 2 servers</span></div>
+    </div>
+    <div class="section"><h4>4. Graphiti</h4>
+      <div class="row"><label>URL Graphiti Memory</label><input value="http://127.0.0.1:8000/mcp"></div>
+      <div class="row"><label>URL SVNG Source</label><input value="http://127.0.0.1:8010/mcp"></div>
+    </div>
+    <div class="section"><h4>5. Oracle SQLcl AI Tool</h4>
+      <div class="row"><label>Bật tool loop</label><select><option>Bật</option><option>Tắt</option></select></div>
+      <div class="row"><label>Profile môi trường</label><input value="UAT, PROD"><button class="btn" onclick="toast('Quản lý profile Oracle')">Quản lý</button></div>
+    </div>
+    <div class="section"><h4>6. SSH File System AI Tool</h4>
+      <div class="row"><label>Cấu hình SSH</label><input value="uat-deploy · /srv/app"><button class="btn" onclick="toast('Chọn cấu hình SSH')">Chọn</button></div>
+      <div class="row"><label>Base Path cố định</label><input value="/srv/app"></div>
+    </div>
+    <div class="section"><h4>7. AI Tool Catalog</h4>
+      <div class="row"><label>Nguồn</label><input value="MCP động · Graphiti · Oracle · SSH FS"><span class="pill warn">12 tools</span></div>
+    </div>
+  </div>
+</div><p class="caption">Một cột duy nhất: thấy hết mọi setting bằng cuộn. Đơn giản nhất để implement, nhưng danh sách dài — user phải nhớ vị trí.</p></div>
+</div>
+
+<div id="variant-b" class="variant">
+<div class="stage"><div class="panel">
+  <div class="head"><strong>AI Settings</strong><span class="muted">Full cấu hình cho bản chat-only</span><span class="spacer"></span><button class="btn primary" onclick="saved('B')">Lưu</button></div>
+  <div class="tabs">
+    <button class="tab active" onclick="tab(this,'b1')">Provider</button>
+    <button class="tab" onclick="tab(this,'b2')">Knowledge</button>
+    <button class="tab" onclick="tab(this,'b3')">Tools</button>
+    <button class="tab" onclick="tab(this,'b4')">Catalog</button>
+  </div>
+  <div class="body">
+    <div id="b1" class="tab-pane active">
+      <div class="section"><h4>NineRouter</h4>
+        <div class="row"><label>API Endpoint</label><input value="https://api.ninerouter.com/v1"></div>
+        <div class="row"><label>API Key</label><input type="password" value="••••••••••••"><span class="pill">✓ keyring</span></div>
+        <div class="row"><label>Default Model</label><select><option>claude-opus-5-5</option></select></div>
+        <div class="row"><label>Context window</label><input value="1000000"></div>
+        <div class="row"><label>Global conventions</label><select><option>Bật</option></select></div>
+      </div>
+    </div>
+    <div id="b2" class="tab-pane">
+      <div class="section"><h4>Knowledge Server</h4>
+        <div class="row"><label>Bật</label><select><option>Bật</option></select></div>
+        <div class="row"><label>URL gốc</label><input value="http://127.0.0.1:3001"></div>
+        <div class="row"><label>Token</label><input type="password" value="••••••••"><span class="pill">✓ kết nối</span></div>
+      </div>
+      <div class="section"><h4>Graphiti</h4>
+        <div class="row"><label>URL Memory</label><input value="http://127.0.0.1:8000/mcp"></div>
+        <div class="row"><label>URL SVNG</label><input value="http://127.0.0.1:8010/mcp"></div>
+      </div>
+    </div>
+    <div id="b3" class="tab-pane">
+      <div class="section"><h4>MCP</h4><div class="row"><label>Máy chủ</label><input value="docs-server · graphiti-memory"><button class="btn" onclick="toast('Sửa MCP')">Sửa</button></div></div>
+      <div class="section"><h4>Oracle SQLcl</h4><div class="row"><label>Bật tool loop</label><select><option>Bật</option></select></div><div class="row"><label>Profiles</label><input value="UAT, PROD"></div></div>
+      <div class="section"><h4>SSH File System</h4><div class="row"><label>Cấu hình</label><input value="uat-deploy"><button class="btn" onclick="toast('Chọn SSH')">Chọn</button></div><div class="row"><label>Base Path</label><input value="/srv/app"></div></div>
+    </div>
+    <div id="b4" class="tab-pane"><div class="section"><h4>AI Tool Catalog</h4><div class="row"><label>Nguồn</label><input value="MCP động · Graphiti · Oracle · SSH FS"></div><div class="row"><label>Tools khả dụng</label><span class="pill">12 tools</span></div></div></div>
+  </div>
+</div><p class="caption">Tabs theo nhóm: người dùng biết ngay cần sửa provider hay tool. Rủi ro: setting ít dùng nằm sâu, dễ sót.</p></div>
+</div>
+
+<div id="variant-c" class="variant active">
+<!-- WINNER: side nav 7 nhóm + accordion. Đủ mọi AI setting, rõ nhóm, không cuộn dài. -->
+<div class="stage"><div class="panel">
+  <div class="head"><strong>AI Settings</strong><span class="muted">Mọi thứ trong một drawer · click group để mở</span><span class="spacer"></span><button class="btn primary" onclick="saved('C')">Lưu</button></div>
+  <div class="split">
+    <div class="side-nav">
+      <div class="side-item active" onclick="side(this,'c1')">Provider</div>
+      <div class="side-item" onclick="side(this,'c2')">Knowledge Server</div>
+      <div class="side-item" onclick="side(this,'c3')">MCP</div>
+      <div class="side-item" onclick="side(this,'c4')">Graphiti</div>
+      <div class="side-item" onclick="side(this,'c5')">Oracle SQLcl</div>
+      <div class="side-item" onclick="side(this,'c6')">SSH File System</div>
+      <div class="side-item" onclick="side(this,'c7')">Tool Catalog</div>
+    </div>
+    <div class="scroll">
+      <div id="c1" class="tab-pane active"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ NineRouter</div><div class="acc-body"><div class="row"><label>API Endpoint</label><input value="https://api.ninerouter.com/v1"></div><div class="row"><label>API Key</label><input type="password" value="••••••••"><span class="pill">✓ keyring</span></div><div class="row"><label>Default Model</label><select><option>claude-opus-5-5</option></select></div><div class="row"><label>Context window</label><input value="1000000"></div></div></div></div>
+      <div id="c2" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ Knowledge Server</div><div class="acc-body"><div class="row"><label>Bật</label><select><option>Bật</option></select></div><div class="row"><label>URL gốc</label><input value="http://127.0.0.1:3001"></div><div class="row"><label>Token</label><input type="password" value="••••••••"></div></div></div></div>
+      <div id="c3" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ MCP servers</div><div class="acc-body"><div class="row"><label>Máy chủ</label><input value="docs-server · graphiti-memory"></div></div></div></div>
+      <div id="c4" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ Graphiti</div><div class="acc-body"><div class="row"><label>URL Memory</label><input value="http://127.0.0.1:8000/mcp"></div><div class="row"><label>URL SVNG</label><input value="http://127.0.0.1:8010/mcp"></div></div></div></div>
+      <div id="c5" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ Oracle SQLcl</div><div class="acc-body"><div class="row"><label>Bật tool loop</label><select><option>Bật</option></select></div><div class="row"><label>Profiles</label><input value="UAT, PROD"></div></div></div></div>
+      <div id="c6" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ SSH File System</div><div class="acc-body"><div class="row"><label>Cấu hình</label><input value="uat-deploy"></div><div class="row"><label>Base Path</label><input value="/srv/app"></div></div></div></div>
+      <div id="c7" class="tab-pane"><div class="accordion open"><div class="acc-head" onclick="acc(this)">▾ Tool Catalog</div><div class="acc-body"><div class="row"><label>Nguồn</label><input value="MCP · Graphiti · Oracle · SSH FS"></div></div></div></div>
+    </div>
+  </div>
+</div><p class="caption">Side nav + accordion: rõ từng nhóm, nhưng tốn diện tích hơn và hơi nặng so với app chỉ có chat.</p></div>
+</div>
+
+<div id="sketch-tools">
+  <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Default</option></select>
+  <button onclick="setWidth(375)">375</button><button onclick="setWidth(768)">768</button><button onclick="setWidth(1140)">1140</button>
+</div>
+<div id="toast" style="position:fixed;bottom:52px;right:12px;z-index:9999;background:#111;color:#fff;padding:8px 12px;border-radius:6px;font:12px system-ui;opacity:0;transition:opacity .15s"></div>
+<script>
+function showVariant(id,e){document.querySelectorAll('.variant').forEach(v=>v.classList.remove('active'));document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));document.getElementById('variant-'+id).classList.add('active');e.target.classList.add('active');}
+function tab(el,id){const pane=el.closest('.body');pane.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));pane.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));el.classList.add('active');document.getElementById(id).classList.add('active');}
+function side(el,id){el.parentElement.querySelectorAll('.side-item').forEach(i=>i.classList.remove('active'));el.parentElement.parentElement.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));el.classList.add('active');document.getElementById(id).classList.add('active');}
+function acc(el){el.parentElement.classList.toggle('open');el.textContent=el.parentElement.classList.contains('open')?'▾ '+el.textContent.replace(/^[▸▾] /,''):'▸ '+el.textContent.replace(/^[▸▾] /,'');}
+function setWidth(w){document.querySelectorAll('.stage').forEach(s=>s.style.maxWidth=w+'px');}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.opacity='1';setTimeout(()=>el.style.opacity='0',1400);}
+function saved(v){toast('Variant '+v+': đã lưu cấu hình (mock)');}
+</script>
+</body>
+</html>
