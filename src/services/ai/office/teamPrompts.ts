@@ -75,7 +75,7 @@ export interface BuildEmployeeTurnRequestInput {
    * produces the document. The mode only decides what happens when the turn is just talk.
    */
   mode?: EmployeeTurnMode | undefined;
-  /** Only the developer with an allocated worktree gets the third (code_edit) exception. */
+  /** Legacy flag name; now gates the developer-only file-generation exception. */
   codeEditAllowed?: boolean | undefined;
 }
 
@@ -304,13 +304,6 @@ export const LEAD_NO_WRITE_DOC_LINE =
  */
 export const EMPLOYEE_WRITE_DOC_LINE =
   'Mỗi nhân viên tự ghi tài liệu của mình bằng công cụ nhóm write_doc (list/create/update) trong folder riêng của họ, không qua thẻ phê duyệt; khi giao việc tài liệu, ghi rõ trong nội dung việc là nhân viên dùng write_doc; create_note là đường ghi của LEADER nên không được giao cho nhân viên.';
-
-/**
- * @deprecated No longer rendered in any prompt. Kept only until Task 3 drops the coordinator's
- * last import; no employee or lead prompt uses it after this task.
- */
-export const WORKTREE_AMBIGUITY_LINE =
-  'Có nhiều hệ thống trong nhóm đều có cấu hình worktree đầy đủ. Bạn KHÔNG tự chọn repo hay hệ thống. Hãy hỏi người dùng tên hệ thống cần làm việc, nhận câu trả lời, rồi mới ủy thác sửa code cho Agent Developer.';
 
 /** Exported so the test pins the exact delegation rule instead of a paraphrase. */
 export const LEAD_CODE_GENERATION_LINE =

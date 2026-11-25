@@ -62,15 +62,11 @@ import { dispatchBudgetWarning, resetBudgetWarnings } from './budgetWarning';
 import { estimateTokens } from './tokenEstimate';
 import { getGlobalBudgetWarnThresholdPct } from '../budgetWarnSettings';
 import { getGlobalConventions } from '../../conventionService';
-import { cancelToolCall, getSshConfigById, getSshSecret } from '../../sshService';
-import { LocalWorktreeError, provisionWorktree, requireProvisionedWorktree } from '../../sshWorktreeService';
-import type { WorktreeDescriptor } from '../../../types/codingZone';
+import { cancelToolCall } from '../../sshService';
 import { buildConventionsSegment, buildPinnedContextSegment } from '../conventionsSegment';
 import {
   buildEmployeeTurnRequest,
   buildLeadTurnRequest,
-  wrapUntrusted,
-  WORKTREE_AMBIGUITY_LINE,
   type BatchResult,
   type LinkedItemIndexEntry,
 } from './teamPrompts';
@@ -82,8 +78,6 @@ import {
   TEAM_TOOL_DEFINITIONS,
   executeTeamTool,
   extractRepoHintsFromText,
-  listLinkedSystems,
-  repoPathTail,
   type TeamToolContext,
 } from './teamTools';
 import {
@@ -242,12 +236,6 @@ export interface TurnRoster {
   memberAgentIds: string[];
 }
 
-export interface AgentDeveloperWorktreeTarget {
-  sshConfigId: string;
-  remoteRepoPath: string;
-  baseRef?: string | undefined;
-}
-
 export interface TeamRunCoordinatorOptions {
   db: TaskPlannerDatabase;
   team: AiTeam;
@@ -280,17 +268,6 @@ export interface TeamRunCoordinatorOptions {
    */
   mcpDiscoveryTimeoutMs?: number | undefined;
   /**
-   * Phase 48 D-08: request-bound Agent Developer worktree target. Identity only; session start
-   * provisions the real worktree from it and no verb runs without the descriptor.
-   */
-  agentDeveloperWorktree?: AgentDeveloperWorktreeTarget | undefined;
-  /** 261121-qpp: candidate system names when >1 linked system is worktree-capable. */
-  worktreeAmbiguousSystems?: readonly string[] | undefined;
-  /** Test seam (261121-s4k): observe live setter calls that `send()` makes internally. */
-  onAgentDeveloperWorktreeSet?: ((target?: AgentDeveloperWorktreeTarget) => void) | undefined;
-  /** Test seam (261121-s4k): observe ambiguity clearing after a catalog-backed match. */
-  onWorktreeAmbiguousSystemsSet?: ((names: readonly string[]) => void) | undefined;
-  /**
    * Production seam (D-03): resolve a fresh roster from persisted rows at every turn start.
    * When supplied, no construction-time `lead`/`employees`/`skills` value reaches a turn.
    */
@@ -305,14 +282,6 @@ export interface TeamRunCoordinator {
    * leader answers instead); `'blocked'` means the coordinator is disposed.
    */
   send(text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
-  /**
-   * 261121-s4k: push a live resolver result into a coordinator that is ALREADY alive. A running
-   * developer turn refuses the swap; a changed target on an idle developer drops its stale
-   * descriptor so the next turn provisions from the new system.
-   */
-  setAgentDeveloperWorktree(target?: AgentDeveloperWorktreeTarget): boolean;
-  /** 261121-s4k: candidate names for the lead's ambiguity question; empty clears the prompt. */
-  setWorktreeAmbiguousSystems(names: readonly string[]): void;
   /**
    * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
    * and `abortAll` call it; exported so the "exactly one report row under concurrency"
@@ -523,20 +492,6 @@ function jsonStringifySafe(value: unknown): string {
   }
 }
 
-/**
- * 261121-s4k / T-s4k-01: classification is TYPE-based, not text-based. Only `LocalWorktreeError`
- * thrown by our own provisioning sites is truthful; matching provider text by marker would let
- * untrusted provider copy reach `content`.
- */
-export function truthfulLocalReport(err: unknown): string | undefined {
-  // PROVENANCE, not shape: only our own typed error may reach the bubble. A provider/MCP
-  // rejection that happens to carry the same code/text must stay sanitized.
-  if (err instanceof LocalWorktreeError) {
-    return `Không thể chuẩn bị môi trường làm việc: ${err.message}`.slice(0, 300);
-  }
-  return undefined;
-}
-
 const PLAN_REJECTED = JSON.stringify({
   cancelled: true,
   message: 'Người dùng đã từ chối kế hoạch phân việc. Không nhân viên nào được giao việc.',
@@ -648,14 +603,6 @@ export function createTeamRunCoordinator(
   let memberFolderIds = new Map<string, string>();
   /** Phase 39: read-only MCP tools for the CURRENT turn; refreshed at every turn start. */
   let mcpTools: AiToolDefinition[] = options.mcpTools ?? [];
-
-  /**
-   * 261121-s4k CR-01/WR-02: the resolver keeps changing after construction. The coordinator
-   * reads these mutable values at send/provision time so no target swap rebuilds the run.
-   */
-  let currentWorktreeTarget: AgentDeveloperWorktreeTarget | undefined =
-    options.agentDeveloperWorktree;
-  let worktreeAmbiguousSystems: readonly string[] = options.worktreeAmbiguousSystems ?? [];
 
   /**
    * D-03/D-07: the roster a turn runs with. With a `loadRoster` seam it starts EMPTY, so no
@@ -1487,114 +1434,11 @@ export function createTeamRunCoordinator(
     return finalized;
   }
 
-  /** Request-bound provisioned worktree; set only after provisioning succeeds. */
-  const provisionedWorktrees = new Map<string, WorktreeDescriptor>();
-
-  /**
-   * WR-05: resolve the ONE developer by stable marker. The mutable display name is used only
-   * as a legacy fallback for rosters that predate `agentKind`, and only when no row carries
-   * the marker — so renaming another member to "Agent Developer" cannot grant code_edit.
-   */
+  /** Stable `agentKind` marker first; display name only for legacy rosters. Capability only. */
   function developerAgentId(): string | undefined {
     const marked = roster.employees.filter((row) => row.agentKind === 'developer');
     if (marked.length > 0) return marked[0]!.id;
     return roster.employees.find((row) => row.name === CODE_EDIT_AGENT_NAME)?.id;
-  }
-
-  /**
-   * Fallback for a missing live push: re-read the exact same linked-system source the
-   * workspace uses. Only a single unambiguous usable system is auto-selected; ambiguity
-   * stays unresolved and must be answered by the user in chat.
-   */
-  async function hydrateWorktreeTargetFromLinks(): Promise<void> {
-    // No guard: this runs only when there is NO target at all, so there is no live
-    // worktree identity to swap underneath a running verb.
-    try {
-      const usable = (await listLinkedSystems(teamId, db)).filter(
-        (row) => row.sshConfigId && row.remoteRepoPath
-      );
-      if (usable.length !== 1) return;
-      const row = usable[0]!;
-      const target = { sshConfigId: row.sshConfigId!, remoteRepoPath: row.remoteRepoPath! };
-      // Assign directly: setAgentDeveloperWorktree refuses while the developer is running,
-      // but a missing target means no live worktree exists to protect from a swap.
-      currentWorktreeTarget = target;
-      options.onAgentDeveloperWorktreeSet?.(target);
-    } catch {
-      // A transient DB read failure must not create a target; the truthful refusal stays.
-    }
-  }
-
-  /**
-   * 261121-s4k CR-01: never swap a worktree under a running verb. Runtime state is the
-   * authority (the same liveness check `send` uses), not the ledger or a stale descriptor.
-   */
-  function developerIsRunning(): boolean {
-    const id = developerAgentId();
-    if (!id) return false;
-    if (registry.peek(id)?.isRunning() === true) return true;
-    const state = agents.get(id);
-    return state !== undefined && !TERMINAL_STATUSES.includes(state.status);
-  }
-
-  /** 261121-s4k CR-01/WR-02: live-resolver push, no coordinator rebuild (WR-06). */
-  function setAgentDeveloperWorktree(target?: AgentDeveloperWorktreeTarget): boolean {
-    if (developerIsRunning()) return false;
-    const previous = currentWorktreeTarget;
-    currentWorktreeTarget = target;
-    const changedIdentity =
-      !previous ||
-      !target ||
-      previous.sshConfigId !== target.sshConfigId ||
-      previous.remoteRepoPath !== target.remoteRepoPath;
-    if (changedIdentity) {
-      const developerId = developerAgentId();
-      if (developerId) provisionedWorktrees.delete(developerId);
-    }
-    options.onAgentDeveloperWorktreeSet?.(target);
-    return true;
-  }
-
-  function setWorktreeAmbiguousSystems(names: readonly string[]): void {
-    worktreeAmbiguousSystems = names;
-    options.onWorktreeAmbiguousSystemsSet?.(names);
-  }
-
-  /**
-   * Phase 48 D-08/D-09: session start owns provisioning. No activation until the descriptor
-   * with a real `remoteWorktreePath` exists; failure throws a truthful refusal.
-   */
-  async function provisionAgentSession(agentId: string): Promise<void> {
-    if (agentId !== developerAgentId()) return;
-    if (provisionedWorktrees.has(agentId)) return;
-    // 261123: the live push from the workspace can legitimately be absent for one turn
-    // (mount ordering, a live-query tick, a transient resolver read). Re-resolve from the
-    // SAME linked-system source before refusing, so a system that IS configured in
-    // Settings > Hệ thống never reports WORKTREE_NOT_AVAILABLE for want of a push.
-    if (!currentWorktreeTarget?.sshConfigId || !currentWorktreeTarget.remoteRepoPath) {
-      await hydrateWorktreeTargetFromLinks();
-    }
-    const target = currentWorktreeTarget;
-    if (!target?.sshConfigId || !target.remoteRepoPath) {
-      throw new LocalWorktreeError(
-        'WORKTREE_NOT_AVAILABLE: chưa cấu hình SSH worktree cho Agent Developer. ' +
-        'Mở Cài đặt > Hệ thống, chọn hệ thống được liên kết (trực tiếp hoặc qua CR) và điền SSH config + đường dẫn repo remote.'
-      );
-    }
-    const config = await getSshConfigById(target.sshConfigId, db);
-    if (!config) {
-      throw new LocalWorktreeError('WORKTREE_NOT_AVAILABLE: SSH config của Agent Developer không tồn tại.');
-    }
-    const secret = (await getSshSecret(config.id)) ?? undefined;
-    const descriptor = await provisionWorktree({
-      sshConfigId: config.id,
-      config,
-      remoteRepoPath: target.remoteRepoPath,
-      sessionKey: agentId,
-      baseRef: target.baseRef,
-      secret,
-    });
-    provisionedWorktrees.set(agentId, requireProvisionedWorktree(descriptor));
   }
 
   function toolContext(
@@ -1617,9 +1461,8 @@ export function createTeamRunCoordinator(
     const role: 'lead' | 'employee' = isLead ? 'lead' : 'employee';
     const agentName = isLead ? roster.lead?.name : employee?.name;
     const folderId = isLead ? undefined : memberFolderIds.get(agentId);
-    // WR-05: the capability follows the stable developer id and the request-bound target,
-    // never the display name. `remoteTarget`/`codeEditAllowed` are both gated by this.
-    const codeEditGranted = !isLead && agentId === developerAgentId() && !!currentWorktreeTarget;
+    // Capability follows the stable developer id on a non-lead turn, never the display name.
+    const fileGenerationAllowed = !isLead && agentId === developerAgentId();
     return {
       db,
       teamId,
@@ -1634,17 +1477,7 @@ export function createTeamRunCoordinator(
       ...(signal ? { signal } : {}),
       ...(loopCallId ? { loopCallId } : {}),
       ...(repoHints.length > 0 ? { repoHints: [...repoHints] } : {}),
-      ...(codeEditGranted
-        ? { remoteTarget: {
-            sshConfigId: currentWorktreeTarget!.sshConfigId,
-            repoPath: currentWorktreeTarget!.remoteRepoPath,
-            branch: currentWorktreeTarget!.baseRef ?? '',
-          } }
-        : {}),
-      ...(codeEditGranted ? { codeEditAllowed: true } : {}),
-      ...(provisionedWorktrees.get(agentId)
-        ? { worktreeDescriptor: provisionedWorktrees.get(agentId) }
-        : {}),
+      ...(fileGenerationAllowed ? { fileGenerationAllowed: true } : {}),
     };
   }
 
@@ -2570,16 +2403,12 @@ export function createTeamRunCoordinator(
         recentTurns,
         ...(folderId ? { folderId } : {}),
         mode,
-        // Same gate as `toolContext` (1486): the third prompt exception exists only for the
-        // developer whose request actually carries a worktree descriptor.
-        ...(employee.id === developerAgentId() && !!currentWorktreeTarget
-          ? { codeEditAllowed: true }
-          : {}),
+        // Same gate as `toolContext`: the third prompt exception is developer-only.
+        ...(employee.id === developerAgentId() ? { codeEditAllowed: true } : {}),
       });
 
-      // WR-03 (261121-s4k): compute the reply recipient BEFORE provisioning. A `send_message`
-      // trigger row names the peer/leader who asked; a provisioning throw must address that
-      // sender, never fall back to USER_PARTICIPANT_ID in the catch bubble below.
+      // WR-03 (261121-s4k): a `send_message` trigger row names the peer/leader who asked, so
+      // an error bubble addresses that sender, never USER_PARTICIPANT_ID.
       const replyTarget = triggerMessageId ?? attempt?.instructionMessageId;
       if (replyTarget !== undefined) replyTargetByAgent.set(employee.id, replyTarget);
       else replyTargetByAgent.delete(employee.id);
@@ -2588,11 +2417,6 @@ export function createTeamRunCoordinator(
       const replyRecipient = replyFrom ?? roster.lead?.id;
       if (replyRecipient !== undefined) replyRecipientByAgent.set(employee.id, replyRecipient);
       else replyRecipientByAgent.delete(employee.id);
-
-      // D-08/D-09: provision BEFORE the turn is advertised or any verb can run. No descriptor
-      // means no active session — the catch path settles this agent with a truthful refusal.
-      // WR-05: capability follows the STABLE developer marker, not the display name.
-      await provisionAgentSession(employee.id);
 
       const request: ChatTurnRequest = {
         ...prompt,
@@ -2718,11 +2542,7 @@ export function createTeamRunCoordinator(
         agentDeferreds.delete(employee.id);
         throw err;
       }
-      // 261121-s4k: classify once by TYPE. Only `instanceof LocalWorktreeError` gets a truthful
-      // bounded bubble; everything else keeps the sanitized copy. Local errors keep 'provider'
-      // only because the union has no local stop reason — report text carries the truth, and
-      // provider text (same words included) still never reaches `content`.
-      const truthfulReport = truthfulLocalReport(err);
+      // Every throw gets the sanitized bubble. Provider copy never reaches `content`.
       try {
         if (attempt) {
           // `from` must be a literal status, so read the row and branch rather than passing
@@ -2734,7 +2554,7 @@ export function createTeamRunCoordinator(
               'queued',
               'error',
               'provider',
-              truthfulReport ?? SANITIZED_TURN_ERROR,
+              SANITIZED_TURN_ERROR,
               boundedDiagnostic(err)
             );
           } else if (current === 'running') {
@@ -2743,51 +2563,13 @@ export function createTeamRunCoordinator(
               'running',
               'error',
               'provider',
-              truthfulReport ?? SANITIZED_TURN_ERROR,
+              SANITIZED_TURN_ERROR,
               boundedDiagnostic(err)
             );
           }
         }
       } finally {
-        settleAgent(employee.id, 'error', truthfulReport ?? SANITIZED_TURN_ERROR, attempt?.assignmentId);
-        // 261121-r78: a mention-started turn owns no assignment, so `finalizeAttempt` inserts
-        // no bubble. Persist the same truthful copy here so the agent's error is visible in
-        // the transcript. Provider throws get no bubble here — they keep `onError`'s sanitized
-        // copy and must never reach `content`.
-        if (truthfulReport !== undefined && attempt === undefined) {
-          try {
-            const reportId = generateId();
-            const createdAt = new Date().toISOString();
-            await insertReportMessage(
-              {
-                id: reportId,
-                threadId: options.threadId,
-                content: truthfulReport,
-                createdAt,
-                agentId: employee.id,
-                agentName: employee.name,
-                runStatus: 'error',
-                incomplete: true,
-              },
-              db
-            );
-            await appendForExistingMessage(
-              {
-                id: reportId,
-                teamId,
-                from: employee.id,
-                to: [replyRecipientByAgent.get(employee.id) ?? USER_PARTICIPANT_ID],
-                content: truthfulReport,
-                kind: 'report',
-                createdAt,
-              },
-              db
-            );
-            notifyAIChatSync({ type: 'message_saved', threadId: options.threadId });
-          } catch {
-            /* a transcript write must not mask the original provisioning failure */
-          }
-        }
+        settleAgent(employee.id, 'error', SANITIZED_TURN_ERROR, attempt?.assignmentId);
       }
       throw err;
     } finally {
@@ -2849,17 +2631,6 @@ export function createTeamRunCoordinator(
         const folderId = memberFolderIds.get(row.id);
         return folderId ? [{ agentName: row.name, folderId }] : [];
       });
-      // 261121-qpp: ambiguity is a prompt-only fact. Names are user-authored data, so each
-      // enters through wrapUntrusted; no sshConfigId or repo path reaches the model.
-      const worktreeAmbiguitySegment = worktreeAmbiguousSystems.length > 0
-        ? [
-            WORKTREE_AMBIGUITY_LINE,
-            '[CÁC HỆ THỐNG ỨNG VIÊN]',
-            ...worktreeAmbiguousSystems.map(
-              (name) => `- ${wrapUntrusted('TÊN HỆ THỐNG', name)}`
-            ),
-          ].join('\n')
-        : '';
       const prompt = buildLeadTurnRequest({
         lead,
         team: roster.teamRow ?? team,
@@ -2870,7 +2641,6 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         ...(conventionsSegment ? { conventionsSegment } : {}),
         ...(pinnedContextSegment ? { pinnedContextSegment } : {}),
-        ...(worktreeAmbiguitySegment ? { worktreeAmbiguitySegment } : {}),
         ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
         ...(memberFolders.length > 0 ? { memberFolders } : {}),
         ...(batchHistory.length > 0 ? { batchHistory } : {}),
@@ -3354,37 +3124,6 @@ export function createTeamRunCoordinator(
     }
     // The roster load is an await: a dispose during it must not let the turn start.
     if (disposed) return 'blocked';
-
-    // 261121-s4k CR-01: recoverable ambiguity. The user's NEXT message names one of the
-    // already-linked systems; resolve it BEFORE the message starts any turn. Only catalog rows
-    // may be selected — never a raw path scraped from text. A temporary db failure stays silent
-    // and leaves the prompt asking again rather than dropping the message.
-    if (worktreeAmbiguousSystems.length > 0) {
-      try {
-        const usable = (await listLinkedSystems(teamId, db)).filter(
-          (row) => row.sshConfigId && row.remoteRepoPath
-        );
-        const hints = extractRepoHintsFromText(text, usable);
-        const hintKeys = new Set(hints.map((hint) => hint.toLocaleLowerCase()));
-        const matches = usable.filter((row) =>
-          [row.name, row.code, repoPathTail(row.remoteRepoPath ?? '')].some((term) =>
-            hintKeys.has(term.trim().toLocaleLowerCase())
-          )
-        );
-        if (matches.length === 1) {
-          const chosen = matches[0]!;
-          // Only clear the question when the target was ACTUALLY applied. A running developer
-          // refuses the swap; clearing here would lose the answer and leave provisioning empty.
-          const applied = setAgentDeveloperWorktree({
-            sshConfigId: chosen.sshConfigId!,
-            remoteRepoPath: chosen.remoteRepoPath!,
-          });
-          if (applied) setWorktreeAmbiguousSystems([]);
-        }
-      } catch {
-        /* resolver failure must not block the message; the lead asks again next turn */
-      }
-    }
 
     // 37.1 §1.1: ONE primitive. The message is appended first — always, whatever is running.
     // `to[]` is who must RESPOND; everyone reads it, so the leader can see a message the user
@@ -4776,8 +4515,6 @@ export function createTeamRunCoordinator(
 
   return {
     send,
-    setAgentDeveloperWorktree,
-    setWorktreeAmbiguousSystems,
     finalizeAttempt,
     runBatch: dispatchBatch,
     retryAssignment,
