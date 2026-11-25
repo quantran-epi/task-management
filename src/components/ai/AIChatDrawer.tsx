@@ -45,7 +45,7 @@ import {
   describeToolMutationWithContext,
 } from '../../services/ai/aiTools';
 import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
-import { getGraphitiSkillSegment } from '../../services/ai/graphitiRules';
+import { getGraphitiSkillSegment, SOURCE_TOOL_NAMES } from '../../services/ai/graphitiRules';
 import { getToolsForTurnWithRemote } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
@@ -241,6 +241,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const { token } = useAntdToken();
   const {
     pendingPrompt, clearPendingPrompt, pendingDraft, clearPendingDraft, setCustomScope, registerActiveItem,
+    focusRequest, clearFocusRequest,
   } = useAIChat();
 
   // Width management with drag-resize clamping
@@ -582,6 +583,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
               streamingStatusLabel: stageLabelFor(status),
               streamingText: tabRuntimesRef.current.get(tabId)?.streamingText ?? '',
               toolEvents: tabRuntimesRef.current.get(tabId)?.toolEvents ?? [],
+              // The running tab is the turn's identity. Publish it so the footer indicator can
+              // focus exactly this tab on click instead of guessing from the scope (which would
+              // land on another tab of the same scope and look like a lost conversation).
+              meta: { tabId },
               abort: () => {
                 abortHostTurn(tabId);
                 globalTabTurnRegistry?.abortTab(tabId);
@@ -944,6 +949,27 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     },
     [db, scopeKey]
   );
+
+  // A footer/progress-indicator click asks the drawer to focus one specific running tab. Apply
+  // only once this scope's tabs are loaded; setActiveTab scopes the active-flag flip to this
+  // scope, so other running sessions/tabs keep their state. One-shot: clear after applying.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const requestedKey = buildScopeKey(focusRequest.scope.type, focusRequest.scope.id);
+    if (requestedKey !== scopeKey) return;
+    const target = durableTabs.find((tab) => tab.id === focusRequest.tabId);
+    // Tabs for this scope are loaded but the requested one is gone — never let a stale
+    // request hijack a later tab selection in this scope.
+    if (!target) {
+      if (durableTabs.length > 0) clearFocusRequest();
+      return;
+    }
+    if (activeTabId === focusRequest.tabId) {
+      clearFocusRequest();
+      return;
+    }
+    handleSelectTab(focusRequest.tabId).finally(clearFocusRequest);
+  }, [focusRequest, scopeKey, durableTabs, activeTabId, handleSelectTab, clearFocusRequest]);
 
   const handleRenameTab = useCallback(
     async (tabId: string, title: string) => {
@@ -1921,11 +1947,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       let dynamicMcpTools: AiToolDefinition[] = [];
+      const sourceEnabled = (await getMcpServers(db)).some(
+        (s) => s.id === 'svng-source' && s.enabled
+      );
       // Graphiti/SQL servers are governed only by their own Settings card, not by the tab gate.
       try {
         dynamicMcpTools = await discoverGraphitiSqlMcpTools(db);
       } catch (err) {
         logAiChatError('Graphiti MCP discovery unavailable', err);
+      }
+      if (
+        sourceEnabled &&
+        !dynamicMcpTools.some((tool) => SOURCE_TOOL_NAMES.includes(tool.function.name as never))
+      ) {
+        appMessage.warning('Không discovery được source tool từ svng-source; hãy kiểm tra máy chủ.');
       }
       if (turnMcpEnabled) {
         try {

@@ -7,6 +7,7 @@ import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenSe
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as conventionService from '../../src/services/conventionService';
 import * as graphitiRules from '../../src/services/ai/graphitiRules';
+import * as mcpClient from '../../src/services/ai/mcpClient';
 import {
   clearGroundedTurnTestHooks,
   setGroundedTurnTestHooks,
@@ -153,6 +154,52 @@ describe('AIChatDrawer Conventions Injection', () => {
       await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
       const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
       expect(systemMsg.content).toContain(SKILL_MARKER);
+    });
+
+    const SOURCE_NAMES = [
+      'search_source',
+      'explore_source',
+      'source_callers',
+      'source_callees',
+      'read_source',
+    ];
+    const SOURCE_SEGMENT = `[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]\n${SOURCE_NAMES.join(', ')}`;
+
+    it('injects the segment with all five source tool names into the system prompt', async () => {
+      vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SOURCE_SEGMENT);
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      submit('Cần bằng chứng source');
+
+      await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
+      const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
+      expect(systemMsg.content).toContain(SOURCE_SEGMENT);
+      for (const name of SOURCE_NAMES) expect(systemMsg.content).toContain(name);
+    });
+
+    it('warns when source discovery fails but keeps the turn running', async () => {
+      vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SOURCE_SEGMENT);
+      vi.spyOn(mcpClient, 'discoverGraphitiSqlMcpTools').mockRejectedValue(new Error('source down'));
+      vi.spyOn(mcpClient, 'getMcpServers').mockResolvedValue([
+        {
+          id: 'svng-source',
+          name: 'SVNG Source MCP',
+          url: 'http://127.0.0.1:9102/mcp',
+          enabled: true,
+          instruction: '',
+        },
+      ]);
+      const warning = vi.fn();
+      const ui = await import('../../src/components/ui');
+      vi.spyOn(ui, 'useMessage').mockReturnValue({ warning } as never);
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      submit('Cần bằng chứng source');
+
+      await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining('source tool'));
+      const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
+      expect(systemMsg.content).toContain(SOURCE_SEGMENT);
     });
 
     it('keeps the dedicated segment when the tab master MCP gate is off', async () => {
