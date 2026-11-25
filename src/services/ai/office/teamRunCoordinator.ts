@@ -2390,9 +2390,12 @@ export function createTeamRunCoordinator(
         )
       );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
-      // Phase 45 D-16/D-17: the per-team pin is framed as untrusted data on every turn and
-      // passed to the shared member builder — covering assignment, chat, continuation, retry.
-      const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
+      // 261125-u4w: the badge and the prompt both read the persisted team row. `liveTeam` is
+      // a toggle mirror and can lag the stored pin (e.g. a failed docs backfill), so the
+      // fresh roster row is the source of truth for this turn.
+      const pinnedContextSegment = buildPinnedContextSegment(
+        (roster.teamRow ?? liveTeam).pinnedContext
+      );
       // Same gate as refreshMcpTools: an explicit false opts the team out. A settings or rule
       // read failure degrades to no segment, never a blocked turn.
       const graphitiSkillSegment = await getGraphitiSkillSegment(
@@ -2639,8 +2642,11 @@ export function createTeamRunCoordinator(
       );
       const conventionsSegment = buildConventionsSegment({ global: globalConventions });
       // Phase 45 D-16/D-17: framed per-team pin reaches the leader on every planning,
-      // synthesis, continuation and retry turn via the shared lead builder.
-      const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
+      // synthesis, continuation and retry turn via the shared lead builder. 261125-u4w:
+      // read it from the fresh roster row, not the lagging toggle mirror.
+      const pinnedContextSegment = buildPinnedContextSegment(
+        (roster.teamRow ?? liveTeam).pinnedContext
+      );
       // Same dedicated skill segment as single chat, governed by its own Settings card;
       // read failure is a no-op so a bad hash cannot block the lead's turn.
       const graphitiSkillSegment = await getGraphitiSkillSegment(db, text).catch(() => '');
