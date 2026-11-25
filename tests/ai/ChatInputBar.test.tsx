@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { useState, useRef } from 'react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
 import { TaskPlannerDatabase } from '../../src/db';
 import { extractMentionedEntityIds } from '../../src/services/ai/contextGrounding';
@@ -127,6 +128,53 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
 
     expect(handleSubmit).not.toHaveBeenCalled();
     expect(textarea).toHaveValue('nhập tiếng Việt');
+  });
+
+  it('keeps IME preedit intact when controlled draft updates are coalesced', () => {
+    vi.useFakeTimers();
+    try {
+      const onDraftChange = vi.fn();
+      function ControlledHarness() {
+        const [rendered, setRendered] = useState('');
+        const latest = useRef('');
+        const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+        const handleChange = (next: string) => {
+          onDraftChange(next);
+          latest.current = next;
+          if (timer.current) clearTimeout(timer.current);
+          // Mirror useTabRuntimes: registry patch lands in React after ~50ms.
+          timer.current = setTimeout(() => setRendered(latest.current), 50);
+        };
+        return (
+          <ChatInputBar
+            onSubmit={vi.fn()}
+            db={db}
+            value={rendered}
+            onValueChange={handleChange}
+          />
+        );
+      }
+
+      render(<ControlledHarness />);
+      const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI') as HTMLTextAreaElement;
+
+      fireEvent.compositionStart(textarea, { data: 'c' });
+      fireEvent.change(textarea, { target: { value: 'c' } });
+      act(() => { vi.advanceTimersByTime(50); });
+      fireEvent.change(textarea, { target: { value: 'co' } });
+      act(() => { vi.advanceTimersByTime(50); });
+      fireEvent.change(textarea, { target: { value: 'có' } });
+      act(() => { vi.advanceTimersByTime(50); });
+      fireEvent.compositionEnd(textarea, { data: 'có', target: { value: 'có' } });
+      act(() => { vi.advanceTimersByTime(50); });
+
+      expect(textarea.value).toBe('có');
+      // Intermediate preedit states must never reach the parent; only the committed value.
+      expect(onDraftChange).toHaveBeenCalledTimes(1);
+      expect(onDraftChange).toHaveBeenCalledWith('có');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('submits document mentions with @doc: syntax', () => {

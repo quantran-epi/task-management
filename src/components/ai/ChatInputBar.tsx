@@ -118,10 +118,12 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   agentOptions,
 }) => {
   const { token } = useAntdToken();
-  const [internalValue, setInternalValue] = useState('');
-  const effectiveValue = value ?? internalValue;
+  const isComposingRef = useRef(false);
+  const [internalValue, setInternalValue] = useState(value ?? '');
+  // Local mirror drives the DOM. The controlled `value` is a coalesced (~50ms) echo of
+  // what we emitted; binding the DOM to it wipes live IME preedit in the echo window.
+  const effectiveValue = internalValue;
   const update = (next: string) => {
-    // Mirror locally so uncontrolled/remounted callers keep working; the runtime owns the canonical draft.
     setInternalValue(next);
     onValueChange?.(next);
   };
@@ -137,10 +139,25 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
   }, [externalValue, onExternalValueConsumed]);
 
-  // The controlled value is authoritative; keep the local mirror in step after remounts.
+  // Follow the controlled value between edits/remounts, but never mid-IME: the parent's
+  // echo is coalesced and can arrive while preedit is live, which would wipe the composition.
   useEffect(() => {
+    if (isComposingRef.current) return;
     if (typeof value === 'string' && value !== internalValue) setInternalValue(value);
   }, [value]);
+
+  // During composition the DOM owns the preedit text. Keep local state in step for handlers
+  // but defer parent notification to compositionEnd, so no coalesced echo can clobber preedit.
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+  const handleCompositionChange = (next: string) => {
+    setInternalValue(next);
+  };
+  const handleCompositionEnd = (next: string) => {
+    isComposingRef.current = false;
+    update(next);
+  };
   const [searchInfo, setSearchInfo] = useState<{ text: string; prefix: string }>({
     text: '',
     prefix: '',
@@ -816,8 +833,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               clearInput();
               return;
             }
+            if (isComposingRef.current) {
+              handleCompositionChange(newVal);
+              return;
+            }
             update(newVal);
           }}
+          onCompositionStart={handleCompositionStart}
           onInput={(e: React.FormEvent<HTMLTextAreaElement>) => {
             if (isSubmittingRef.current) {
               const target = e.target as HTMLTextAreaElement;
@@ -828,7 +850,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             if (isSubmittingRef.current) {
               const target = e.target as HTMLTextAreaElement;
               clearInput(target);
+              return;
             }
+            handleCompositionEnd((e.target as HTMLTextAreaElement).value);
           }}
           onSearch={handleSearch}
           onSelect={handleSelect}
