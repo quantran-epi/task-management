@@ -83,11 +83,15 @@ export async function applyGraphitiRules(
 ): Promise<McpServerConfig[]> {
   const { graphitiRules, sqlRules } = await loadVerifiedRules();
   const servers = await getMcpServers(db);
+  // graphiti-memory answers schema/FK/join questions, so it loads both the shared rules and
+  // the SQL memory prompt. svng-source tools read source code as evidence, so they get only
+  // the shared rules. Both texts come from the same verified manifest.
+  const graphitiInstruction = `${graphitiRules}\n\n${sqlRules}`;
   const next = servers.map((server) =>
-    server.id === 'graphiti-banking' ? { ...server, instruction: graphitiRules } : server
+    server.id === 'graphiti-banking' ? { ...server, instruction: graphitiInstruction } : server
   );
   if (!next.some((server) => server.id === 'graphiti-banking')) {
-    next.unshift({ ...DEFAULT_MCP_SERVERS[0]!, instruction: graphitiRules });
+    next.unshift({ ...DEFAULT_MCP_SERVERS[0]!, instruction: graphitiInstruction });
   }
   const svngIndex = next.findIndex((server) => server.id === 'svng-source');
   const svng: McpServerConfig = {
@@ -97,9 +101,7 @@ export async function applyGraphitiRules(
     url: svngIndex >= 0 ? next[svngIndex]!.url : '',
     enabled: true,
     desktopOnly: true,
-    // graphiti-sql loads both files: the shared Graphiti rules first, then its SQL memory
-    // prompt. graphiti-banking above keeps only the shared text.
-    instruction: `${graphitiRules}\n\n${sqlRules}`,
+    instruction: graphitiRules,
   };
   if (svngIndex >= 0) next[svngIndex] = svng;
   else next.push(svng);

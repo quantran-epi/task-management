@@ -11,6 +11,7 @@ import {
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
 import { isTauriApp } from '../../utils/timerPopout';
+import { applyGraphitiRules } from '../../services/ai/graphitiRules';
 
 const { Text, Paragraph } = Typography;
 
@@ -65,6 +66,20 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
       onConfigChange?.();
     } catch (err: any) {
       message.error(`Không thể thay đổi trạng thái MCP: ${err?.message || 'Lỗi không xác định'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApplyRules = async () => {
+    setLoading(true);
+    try {
+      const next = await applyGraphitiRules(db);
+      setServers(next);
+      message.success('Đã áp dụng luật Graphiti/SQL đã kiểm tra SHA-256 vào cấu hình MCP.');
+      onConfigChange?.();
+    } catch (err: any) {
+      message.error(`Không thể áp dụng luật Graphiti/SQL: ${err?.message || 'Lỗi không xác định'}`);
     } finally {
       setLoading(false);
     }
@@ -158,19 +173,32 @@ export const McpConfigCard: React.FC<McpConfigCardProps> = ({
           </Space>
         }
         extra={
-          <Button
-            type="primary"
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={handleOpenAdd}
-          >
-            Thêm máy chủ
-          </Button>
+          <Space>
+            <Button
+              size="small"
+              loading={loading}
+              aria-label="Áp dụng luật Graphiti/SQL"
+              onClick={handleApplyRules}
+            >
+              Áp dụng luật Graphiti/SQL
+            </Button>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={handleOpenAdd}
+            >
+              Thêm máy chủ
+            </Button>
+          </Space>
         }
       >
         <Paragraph type="secondary" style={{ marginBottom: 16 }}>
           Định cấu hình các máy chủ Model Context Protocol (MCP) dạng HTTP endpoint. Trợ lý AI sẽ tự động nạp
           công cụ nghiệp vụ và chỉ dẫn chuyên ngành từ các máy chủ được kích hoạt.
+        </Paragraph>
+        <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          Nút "Áp dụng luật Graphiti/SQL" kiểm tra băm SHA-256 của các tệp luật đi kèm trước khi ghi. svng-source vẫn cần điền URL qua biểu mẫu sửa.
         </Paragraph>
 
         {servers.length === 0 ? (
