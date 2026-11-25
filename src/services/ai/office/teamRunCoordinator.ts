@@ -49,6 +49,7 @@ import { getGraphitiSkillSegment } from '../graphitiRules';
 import {
   discoverGatedMcpTools,
   discoverGraphitiSqlMcpTools,
+  invalidateMcpDiscovery,
   isReadOnlyMcpTool,
 } from '../mcpClient';
 import { getOracleConnectionProfiles } from '../oracleSqlclService';
@@ -1584,6 +1585,7 @@ export function createTeamRunCoordinator(
     // The two dedicated Graphiti/SQL servers are governed only by their own Settings card;
     // the team flag gates every OTHER MCP server. Absent means ON.
     const discover = async () => {
+      invalidateMcpDiscovery();
       const graphitiTools = await discoverGraphitiSqlMcpTools(db);
       const gatedTools = liveTeam.mcpEnabled === false ? [] : await discoverGatedMcpTools(db);
       return [...graphitiTools, ...gatedTools];

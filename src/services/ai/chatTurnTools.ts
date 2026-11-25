@@ -7,7 +7,7 @@ import {
   normalizeToolName,
 } from './aiTools';
 import type { AiTeam } from '../../types/aiOffice';
-import { isReadOnlyMcpTool } from './mcpClient';
+import { invalidateMcpDiscovery, isReadOnlyMcpTool } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { TEAM_TOOL_DEFINITIONS } from './office/teamTools';
 import { discoverAllMcpTools } from './mcpClient';
@@ -107,6 +107,8 @@ export function getToolsForTurn(
   allowedToolNames?: readonly string[],
   disabledToolNames: ReadonlySet<string> = new Set()
 ): AiToolDefinition[] {
+  // Advertise what the server says it has. `SOURCE_TOOL_NAMES` is prompt text only; the
+  // read-only gate below is the sole execution policy for dynamic tools.
   const allowed = allowedToolNames === undefined
     ? undefined
     : new Set(allowedToolNames.map(normalizeToolName));
@@ -322,6 +324,7 @@ export async function getAllAvailableToolDefinitions(
 
   let mcpTools: AiToolDefinition[] = [];
   try {
+    invalidateMcpDiscovery();
     mcpTools = await discoverAllMcpTools(db);
   } catch (error) {
     console.warn('[chatTurnTools] MCP discovery failed for tool catalog:', error);

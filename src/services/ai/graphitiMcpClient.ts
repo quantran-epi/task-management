@@ -8,13 +8,6 @@ export const DEFAULT_GRAPHITI_MCP_ENDPOINT = 'http://10.4.97.70:30456/mcp';
 const GRAPHITI_ENDPOINT_SETTINGS_KEY = 'graphiti_mcp_endpoint';
 export const GRAPHITI_ENABLED_SETTINGS_KEY = 'graphiti_mcp_enabled';
 
-const GRAPHITI_TOOL_NAMES = [
-  'list_advertised_groups',
-  'search_nodes',
-  'search_memory_facts',
-  'get_catalog_object_context',
-] as const;
-const GRAPHITI_TOOL_NAME_SET = new Set<string>(GRAPHITI_TOOL_NAMES);
 const MAX_TOOL_RESULT_CHARS = 20_000;
 
 interface TauriProxyResponse {
@@ -35,13 +28,17 @@ let requestId = 0;
 let discoveryPromise: Promise<AiToolDefinition[]> | undefined;
 const groupResultCache = new Map<string, Promise<string>>();
 
+/** Names advertised by the server in the last successful discovery. */
+const discoveredToolNames = new Set<string>();
+
 export function isGraphitiMcpTool(name: string): boolean {
-  return GRAPHITI_TOOL_NAME_SET.has(name);
+  return discoveredToolNames.has(name);
 }
 
 function clearSession(): void {
   sessionId = undefined;
   discoveryPromise = undefined;
+  discoveredToolNames.clear();
   groupResultCache.clear();
 }
 
@@ -214,16 +211,17 @@ async function discoverTools(
   const result = await invokeGraphiti('tools/list', undefined, false, customEndpoint, db);
   if (!Array.isArray(result?.tools)) return [];
 
-  return result.tools.flatMap((tool: any) => {
+  const advertised = new Set<string>();
+  const tools = result.tools.flatMap((tool: any) => {
     if (
       !tool ||
       typeof tool.name !== 'string' ||
-      !isGraphitiMcpTool(tool.name) ||
       typeof tool.description !== 'string' ||
       !isInputSchema(tool.inputSchema)
     ) {
       return [];
     }
+    advertised.add(tool.name);
     return [
       {
         type: 'function' as const,
@@ -235,6 +233,15 @@ async function discoverTools(
       },
     ];
   });
+  discoveredToolNames.clear();
+  for (const name of advertised) discoveredToolNames.add(name);
+  return tools;
+}
+
+/** Discovery cache for the legacy Graphiti client; invalidated per turn via `refreshMcpTools`. */
+export function invalidateGraphitiMcpDiscovery(): void {
+  discoveryPromise = undefined;
+  discoveredToolNames.clear();
 }
 
 export function getGraphitiMcpToolDefinitions(

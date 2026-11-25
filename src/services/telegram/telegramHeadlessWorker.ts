@@ -64,6 +64,7 @@ import {
   getEnabledMcpCapabilitySummaries,
   executeDynamicMcpTool,
   discoverAllMcpTools,
+  invalidateMcpDiscovery,
 } from '../ai/mcpClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
@@ -1505,6 +1506,7 @@ export async function processTelegramInboundMessage(
   // AI-Chat parity: merge dynamically discovered MCP tools for knowledge-capable scopes.
   if (dataScope === 'full' || dataScope === 'knowledge_only') {
     try {
+      invalidateMcpDiscovery();
       const dynamicMcpTools = await discoverAllMcpTools(db);
       availableTools = [...availableTools, ...dynamicMcpTools];
     } catch (err) {

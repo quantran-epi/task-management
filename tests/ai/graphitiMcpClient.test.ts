@@ -8,6 +8,7 @@ import {
   isGraphitiMcpEnabled,
   isGraphitiMcpTool,
   resetGraphitiMcpClientForTests,
+  invalidateGraphitiMcpDiscovery,
   setGraphitiMcpEnabled,
   setGraphitiMcpEndpoint,
   testGraphitiMcpConnection,
@@ -50,7 +51,7 @@ describe('graphitiMcpClient', () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it('initializes in order, propagates session, filters tools, and caches schemas', async () => {
+  it('initializes in order, propagates session, advertises every tool, and caches schemas', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
     queueDiscovery([
       allowedTool,
@@ -60,16 +61,8 @@ describe('graphitiMcpClient', () => {
     const first = await getGraphitiMcpToolDefinitions();
     const second = await getGraphitiMcpToolDefinitions();
 
-    expect(first).toEqual([
-      {
-        type: 'function',
-        function: {
-          name: 'search_nodes',
-          description: 'Search graph nodes',
-          parameters: allowedTool.inputSchema,
-        },
-      },
-    ]);
+    expect(first).toHaveLength(2);
+    expect(first?.map((tool) => tool.function.name)).toEqual(['search_nodes', 'delete_episode']);
     expect(second).toBe(first);
     expect(invokeMock).toHaveBeenCalledTimes(3);
     const firstCall = invokeMock.mock.calls[0];
@@ -115,8 +108,23 @@ describe('graphitiMcpClient', () => {
     await expect(getGraphitiMcpToolDefinitions()).resolves.toHaveLength(1);
   });
 
+  it('advertises newly discovered names and drops removed ones after invalidation', async () => {
+    (window as any).__TAURI_INTERNALS__ = {};
+    queueDiscovery([allowedTool, { name: 'delete_episode', description: 'Delete', inputSchema: { type: 'object', properties: {} } }]);
+    expect((await getGraphitiMcpToolDefinitions()).map((tool) => tool.function.name)).toContain('delete_episode');
+    expect(isGraphitiMcpTool('delete_episode')).toBe(true);
+
+    invalidateGraphitiMcpDiscovery();
+    // Session is kept: only the advertised tool set is refreshed.
+    invokeMock.mockResolvedValueOnce(response({ tools: [allowedTool] }));
+    expect((await getGraphitiMcpToolDefinitions()).map((tool) => tool.function.name)).toEqual(['search_nodes']);
+    expect(isGraphitiMcpTool('delete_episode')).toBe(false);
+  });
+
   it('caches successful group calls while keeping search calls live', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
+    queueDiscovery([allowedTool, { name: 'list_advertised_groups', description: 'Groups', inputSchema: { type: 'object', properties: {} } }]);
+    await getGraphitiMcpToolDefinitions();
     invokeMock
       .mockResolvedValueOnce(response({ content: [{ type: 'text', text: 'groups' }] }))
       .mockResolvedValueOnce(response({ structuredContent: { nodes: [1] } }))
@@ -126,14 +134,13 @@ describe('graphitiMcpClient', () => {
     expect(await executeGraphitiMcpTool('list_advertised_groups', { scope: 'all' })).toBe('groups');
     expect(await executeGraphitiMcpTool('search_nodes', { query: 'one' })).toBe('{"nodes":[1]}');
     expect(await executeGraphitiMcpTool('search_nodes', { query: 'one' })).toBe('{"nodes":[2]}');
-    expect(invokeMock).toHaveBeenCalledTimes(3);
+    expect(invokeMock).toHaveBeenCalledTimes(6);
   });
 
-  it('rejects unlisted names locally before invoke', async () => {
+  it('rejects names that were never advertised locally before invoke', async () => {
     (window as any).__TAURI_INTERNALS__ = {};
-    expect(isGraphitiMcpTool('search_nodes')).toBe(true);
-    expect(isGraphitiMcpTool('delete_episode')).toBe(false);
-    await expect(executeGraphitiMcpTool('delete_episode', {})).rejects.toThrow('not allowed');
+    expect(isGraphitiMcpTool('never_advertised')).toBe(false);
+    await expect(executeGraphitiMcpTool('never_advertised', {})).rejects.toThrow('not allowed');
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
