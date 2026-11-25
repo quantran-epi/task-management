@@ -2388,7 +2388,7 @@ export function createTeamRunCoordinator(
       // read failure degrades to no segment, never a blocked turn.
       const graphitiSkillSegment = liveTeam.mcpEnabled === false
         ? ''
-        : await getGraphitiSkillSegment(db, originalRequest).catch(() => '');
+        : await getGraphitiSkillSegment(db, `${originalRequest}\n${instruction}`).catch(() => '');
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
       const folderId = memberFolderIds.get(employee.id);

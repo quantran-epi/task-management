@@ -122,7 +122,9 @@ describe('AIChatDrawer Conventions Injection', () => {
     expect(systemMsg.content).toContain('[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]');
     expect(systemMsg.content).toContain('GLOBAL_RULE: Always write unit tests with Vitest.');
     expect(systemMsg.content).toContain('REPO_RULE: Use TypeScript strict mode.');
-    expect(systemMsg.content).toContain('REPOSITORY CONVENTIONS - CORE-SVC (/var/repos/core-service)');
+    expect(systemMsg.content).toContain(
+      'DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU — REPOSITORY CONVENTIONS - CORE-SVC (/var/repos/core-service)'
+    );
   });
 
   it('omits conventions segment when neither global nor repo convention exists', async () => {

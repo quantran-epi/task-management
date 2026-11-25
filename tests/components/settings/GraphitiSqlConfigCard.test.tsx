@@ -108,6 +108,18 @@ describe('GraphitiSqlConfigCard', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('disables saving when the current config cannot be read', async () => {
+    getServersMock.mockRejectedValueOnce(new Error('IndexedDB busy'));
+    render(<GraphitiSqlConfigCard db={db} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Không đọc được cấu hình hiện tại/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Lưu cấu hình Graphiti\/SQL/i })).toBeDisabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình Graphiti\/SQL/i }));
+    expect(saveServersMock).not.toHaveBeenCalled();
+  });
+
   it('reports save failures in Vietnamese without calling onConfigChange', async () => {
     saveServersMock.mockRejectedValueOnce(new Error('URL không hợp lệ'));
     const onConfigChange = vi.fn();

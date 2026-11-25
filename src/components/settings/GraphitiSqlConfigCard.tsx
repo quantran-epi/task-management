@@ -26,15 +26,20 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
     source: { url: '', enabled: false },
   });
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let active = true;
     void getGraphitiSqlServers(db)
       .then((loaded) => {
-        if (active) setConfig(loaded);
+        if (active) {
+          setConfig(loaded);
+          setLoadError(false);
+        }
       })
       .catch(() => {
-        // An unreadable settings row leaves the empty form; saving is still possible.
+        // Fail closed: never save an empty form over settings we could not read.
+        if (active) setLoadError(true);
       });
     return () => {
       active = false;
@@ -42,6 +47,7 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
   }, [db]);
 
   const handleSave = async () => {
+    if (loadError) return;
     setLoading(true);
     try {
       const saved = await saveGraphitiSqlServers(config, db);
@@ -79,6 +85,9 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
         URL do bạn khai báo; luật lấy từ tệp đi kèm đã kiểm tra SHA-256. Tắt một server sẽ loại công cụ
         và luật của server đó, không làm mất URL đã lưu.
       </Paragraph>
+      {loadError && (
+        <Paragraph type="danger">Không đọc được cấu hình hiện tại. Vui lòng thử lại trước khi lưu.</Paragraph>
+      )}
 
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Space direction="vertical" style={{ width: '100%' }} size="small">
@@ -139,7 +148,13 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
           </Space>
         </Space>
 
-        <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSave}>
+        <Button
+          type="primary"
+          icon={<SaveOutlined />}
+          loading={loading}
+          disabled={loadError}
+          onClick={handleSave}
+        >
           Lưu cấu hình Graphiti/SQL
         </Button>
       </Space>
