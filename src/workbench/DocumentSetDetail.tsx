@@ -824,16 +824,8 @@ export function DocumentSetDetail({
           )}
         </div>
         {detailWidth >= 560 ? (
-          <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
-            {configOpen ? (
-              <DocumentSetForm
-                ref={formRef}
-                notes={formNotes}
-                initialSet={set}
-                availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
-                onSave={(value) => void handleSaveDocumentSet(value)}
-              />
-            ) : (
+          <aside style={{ width: 260, minWidth: 260, boxSizing: 'border-box', flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
+            <div style={{ display: configOpen ? 'none' : 'block' }}>
               <Space direction="vertical" size="small" style={{ width: '100%' }}>
                 <Button size="small" icon={<EditOutlined />} onClick={() => setConfigOpen(true)}>Mở form cấu hình</Button>
                 {selectedDoc ? (
@@ -849,7 +841,16 @@ export function DocumentSetDetail({
                   <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
                 )}
               </Space>
-            )}
+            </div>
+            <div style={{ display: configOpen ? 'block' : 'none' }}>
+              <DocumentSetForm
+                ref={formRef}
+                notes={formNotes}
+                initialSet={set}
+                availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
+                onSave={(value) => void handleSaveDocumentSet(value)}
+              />
+            </div>
           </aside>
         ) : configOpen ? (
           <DocumentSetForm

@@ -717,9 +717,9 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       )}
 
       {/* Checklist (task) + linked notes side by side — keeps the main column focused */}
-      {itemType === 'task' && (currentTask?.checklist?.length ?? 0) > 0 && (
+      {itemType === 'task' && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          <Col xs={24} md={12}>
+          {(currentTask?.checklist?.length ?? 0) > 0 && <Col xs={24} md={12}>
             <Card title="Checklist / Tiêu chí nghiệm thu" style={{ height: '100%' }}>
               <List
                 dataSource={currentTask?.checklist ?? []}
@@ -737,8 +737,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 )}
               />
             </Card>
-          </Col>
-          <Col xs={24} md={12}>
+          </Col>}
+          <Col xs={24} md={(currentTask?.checklist?.length ?? 0) > 0 ? 12 : 24}>
             <Card
               title={<Space><FileTextOutlined /><span>Ghi chú liên quan ({relatedNotes.length})</span></Space>}
               extra={
