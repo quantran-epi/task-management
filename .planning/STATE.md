@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-25 - Completed quick task 261125-g51: Tool Explorer utility tools only: allow multiple independent tabs per tool and rename those tabs
+Last activity: 2026-11-25 - Completed quick task 261125-qdr: Refactor màn hình "Cấu hình cho người khác" theo sketch 005C + 006B
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -136,6 +136,7 @@ Progress: [█████░░░░░] 50%
 | 261125-ffm | Fix CR detail screen task table: system dropdown options currently show only system code; show readable system name alongside code. | 2026-11-25 | bd3a1a60 | complete | [261125-ffm-fix-cr-detail-screen-task-table-system-d](./quick/261125-ffm-fix-cr-detail-screen-task-table-system-d/) |
 | 261125-g51 | Tool Explorer utility tools only: allow multiple independent tabs per tool and rename those tabs | 2026-11-25 | fa4ef59c | — | [261125-g51-tool-explorer-utility-tools-only-allow-m](./quick/261125-g51-tool-explorer-utility-tools-only-allow-m/) |
 | 261125-k8o | Fix màn hình Bộ tài liệu: đưa danh sách doc lên đầu, bỏ nested scroll, dùng full-height virtual list + inspector 260px, giữ testid/hành vi cũ; test Chrome thật | 2026-11-25 | 39221b84, f3c31fd5 | Verified | [261125-k8o-fix-m-n-h-nh-b-t-i-li-u](./quick/261125-k8o-fix-m-n-h-nh-b-t-i-li-u/) |
+| 261125-qdr | Refactor màn hình "Cấu hình cho người khác" theo sketch 005C + 006B: rail nhiều profile, editor 4 tab, panel rà soát/preview export | 2026-11-25 | 6ddc55ab, 921bdc3a | Verified | [261125-qdr-refactor-configprofilesview-theo-sketch-](./quick/261125-qdr-refactor-configprofilesview-theo-sketch-/) |
 
 ## Accumulated Context
 
