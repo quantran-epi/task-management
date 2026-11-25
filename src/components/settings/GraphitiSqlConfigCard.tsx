@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Typography, Space, Button, Input, Switch, useMessage } from '../ui';
+import { Card, Typography, Space, Button, Input, useMessage } from '../ui';
 import { DatabaseOutlined, SaveOutlined } from '../ui/icon';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -22,8 +22,8 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
 }) => {
   const message = useMessage();
   const [config, setConfig] = useState<GraphitiSqlServers>({
-    memory: { url: '', enabled: false },
-    source: { url: '', enabled: false },
+    memory: { url: '', enabled: true },
+    source: { url: '', enabled: true },
   });
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -54,14 +54,8 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
       const savedMemory = saved.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.memory);
       const savedSource = saved.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.source);
       setConfig({
-        memory: {
-          url: savedMemory?.url ?? config.memory.url,
-          enabled: savedMemory?.enabled ?? config.memory.enabled,
-        },
-        source: {
-          url: savedSource?.url ?? config.source.url,
-          enabled: savedSource?.enabled ?? config.source.enabled,
-        },
+        memory: { url: savedMemory?.url ?? config.memory.url, enabled: true },
+        source: { url: savedSource?.url ?? config.source.url, enabled: true },
       });
       message.success('Đã lưu cấu hình Graphiti/SQL.');
       onConfigChange?.();
@@ -82,8 +76,8 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
       }
     >
       <Paragraph type="secondary">
-        URL do bạn khai báo; luật lấy từ tệp đi kèm đã kiểm tra SHA-256. Tắt một server sẽ loại công cụ
-        và luật của server đó, không làm mất URL đã lưu.
+        URL do bạn khai báo; luật lấy từ tệp đi kèm đã kiểm tra SHA-256. Hai máy chủ này luôn bật,
+        chỉ cho phép đổi URL.
       </Paragraph>
       {loadError && (
         <Paragraph type="danger">Không đọc được cấu hình hiện tại. Vui lòng thử lại trước khi lưu.</Paragraph>
@@ -105,17 +99,6 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
               placeholder="Địa chỉ MCP do bạn khai báo"
               style={{ width: 360, maxWidth: '100%' }}
             />
-            <Switch
-              aria-label="Bật Graphiti Memory"
-              checked={config.memory.enabled}
-              onChange={(checked) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  memory: { ...prev.memory, enabled: checked },
-                }))
-              }
-            />
-            <Text type="secondary">Bật Graphiti Memory</Text>
           </Space>
         </Space>
 
@@ -134,17 +117,6 @@ export const GraphitiSqlConfigCard: React.FC<GraphitiSqlConfigCardProps> = ({
               placeholder="Địa chỉ MCP do bạn khai báo"
               style={{ width: 360, maxWidth: '100%' }}
             />
-            <Switch
-              aria-label="Bật SVNG Source"
-              checked={config.source.enabled}
-              onChange={(checked) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  source: { ...prev.source, enabled: checked },
-                }))
-              }
-            />
-            <Text type="secondary">Bật SVNG Source</Text>
           </Space>
         </Space>
 

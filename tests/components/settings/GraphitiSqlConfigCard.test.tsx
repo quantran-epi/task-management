@@ -47,7 +47,7 @@ describe('GraphitiSqlConfigCard', () => {
     vi.stubGlobal('fetch', fetchMock);
     getServersMock.mockResolvedValue({
       memory: { url: 'http://localhost:9101/mcp', enabled: true },
-      source: { url: 'http://localhost:9102/mcp', enabled: false },
+      source: { url: 'http://localhost:9102/mcp', enabled: true },
     });
     saveServersMock.mockImplementation(async (config: any) => [
       {
@@ -74,38 +74,34 @@ describe('GraphitiSqlConfigCard', () => {
     await db.delete();
   });
 
-  it('renders two URL inputs and two independent switches with saved values', async () => {
+  it('renders the two implicit server URLs from settings', async () => {
     render(<GraphitiSqlConfigCard db={db} />);
 
     await waitFor(() => {
       expect(screen.getByLabelText('URL Graphiti Memory')).toHaveValue('http://localhost:9101/mcp');
       expect(screen.getByLabelText('URL SVNG Source')).toHaveValue('http://localhost:9102/mcp');
     });
-    expect(screen.getByRole('switch', { name: 'Bật Graphiti Memory' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('switch', { name: 'Bật SVNG Source' })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/SHA-256/i)).toBeInTheDocument();
+        expect(screen.getByText(/SHA-256/i)).toBeInTheDocument();
   });
 
-  it('keeps both URLs when toggling and saving', async () => {
-    const onConfigChange = vi.fn();
-    render(<GraphitiSqlConfigCard db={db} onConfigChange={onConfigChange} />);
-
+  it('offers URL-only editing: implicit servers stay always-on with no toggle', async () => {
+    render(<GraphitiSqlConfigCard db={db} />);
     await waitFor(() => expect(screen.getByLabelText('URL SVNG Source')).toHaveValue('http://localhost:9102/mcp'));
-    fireEvent.click(screen.getByRole('switch', { name: 'Bật SVNG Source' }));
-    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình Graphiti\/SQL/i }));
+    expect(screen.queryByRole('switch', { name: 'Bật Graphiti Memory' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Bật SVNG Source' })).not.toBeInTheDocument();
+    expect(screen.getByText(/luôn bật/i)).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(saveServersMock).toHaveBeenCalledWith(
-        {
-          memory: { url: 'http://localhost:9101/mcp', enabled: true },
-          source: { url: 'http://localhost:9102/mcp', enabled: true },
-        },
-        db
-      );
-      expect(messageSuccessMock).toHaveBeenCalled();
-      expect(onConfigChange).toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('URL SVNG Source'), {
+      target: { value: 'http://localhost:9202/mcp' },
     });
-    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình Graphiti\/SQL/i }));
+    await waitFor(() => expect(saveServersMock).toHaveBeenCalledWith(
+      {
+        memory: { url: 'http://localhost:9101/mcp', enabled: true },
+        source: { url: 'http://localhost:9202/mcp', enabled: true },
+      },
+      db
+    ));
   });
 
   it('disables saving when the current config cannot be read', async () => {

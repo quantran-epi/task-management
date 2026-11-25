@@ -118,13 +118,14 @@ export async function getGraphitiSqlServers(
   const memoryRow = servers.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.memory);
   const sourceRow = servers.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.source);
   return {
+    // Implicit servers are always-on: only their URLs are user-configurable.
     memory: {
       url: memoryRow?.url ?? DEFAULT_MCP_SERVERS[0]!.url,
-      enabled: memoryRow?.enabled ?? DEFAULT_MCP_SERVERS[0]!.enabled,
+      enabled: true,
     },
     source: {
       url: sourceRow?.url ?? '',
-      enabled: sourceRow?.enabled ?? false,
+      enabled: true,
     },
   };
 }
@@ -145,7 +146,7 @@ export async function saveGraphitiSqlServers(
       return {
         ...server,
         url: memoryUrl,
-        enabled: config.memory.enabled,
+        enabled: true,
         name: server.name || DEFAULT_MCP_SERVERS[0]!.name,
         description: DEFAULT_GRAPHITI_DESCRIPTION,
         desktopOnly: true,
@@ -156,7 +157,7 @@ export async function saveGraphitiSqlServers(
       return {
         ...server,
         url: sourceUrl,
-        enabled: config.source.enabled,
+        enabled: true,
         name: server.name || 'SVNG Source MCP',
         description: SOURCE_DESCRIPTION,
         desktopOnly: true,
@@ -169,7 +170,7 @@ export async function saveGraphitiSqlServers(
     next.unshift({
       ...DEFAULT_MCP_SERVERS[0]!,
       url: memoryUrl,
-      enabled: config.memory.enabled,
+      enabled: true,
       description: DEFAULT_GRAPHITI_DESCRIPTION,
       instruction: '',
       desktopOnly: true,
@@ -180,7 +181,7 @@ export async function saveGraphitiSqlServers(
       id: GRAPHITI_SQL_SERVER_IDS.source,
       name: 'SVNG Source MCP',
       url: sourceUrl,
-      enabled: config.source.enabled,
+      enabled: true,
       description: SOURCE_DESCRIPTION,
       instruction: '',
       desktopOnly: true,

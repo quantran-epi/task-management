@@ -21,17 +21,6 @@ const AI_PROXY_TIMEOUT_SECS: u64 = 90;
  * JS-side signal, so this Rust bound is the only one.
  */
 const GRAPHITI_MCP_TIMEOUT_SECS: u64 = 30;
-const GRAPHITI_ALLOWED_TOOLS: [&str; 9] = [
-    "list_advertised_groups",
-    "search_nodes",
-    "search_memory_facts",
-    "get_catalog_object_context",
-    "search_source",
-    "explore_source",
-    "source_callers",
-    "source_callees",
-    "read_source",
-];
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -177,6 +166,8 @@ fn validate_graphiti_request(body: &str) -> Result<(), String> {
     match object.get("method").and_then(Value::as_str) {
         Some("initialize" | "notifications/initialized" | "tools/list") => Ok(()),
         Some("tools/call") => {
+            // The JS discovery/read-only gate decides which tool may run. This proxy only
+            // validates wire shape; a server may advertise new tools without a Rust change.
             let name = object
                 .get("params")
                 .and_then(Value::as_object)
@@ -184,10 +175,10 @@ fn validate_graphiti_request(body: &str) -> Result<(), String> {
                 .and_then(Value::as_str)
                 .ok_or_else(|| "Graphiti tools/call requires params.name".to_string())?;
 
-            if GRAPHITI_ALLOWED_TOOLS.contains(&name) {
-                Ok(())
+            if name.is_empty() {
+                Err("Graphiti tools/call requires a non-empty params.name".to_string())
             } else {
-                Err(format!("Blocked Graphiti MCP tool: {}", name))
+                Ok(())
             }
         }
         Some(method) => Err(format!("Blocked Graphiti MCP method: {}", method)),
@@ -337,17 +328,14 @@ mod tests {
     }
 
     #[test]
-    fn graphiti_allows_only_read_tools() {
+    fn graphiti_forwards_every_advertised_tool_name_without_rust_changes() {
         for name in [
             "list_advertised_groups",
             "search_nodes",
-            "search_memory_facts",
-            "get_catalog_object_context",
-            "search_source",
-            "explore_source",
-            "source_callers",
-            "source_callees",
-            "read_source",
+            "brand_new_advertised_tool_2026",
+            "create_episode",
+            "delete_memory",
+            "svng source",
         ] {
             let body = format!(
                 r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}","arguments":{{}}}}}}"#,
@@ -358,22 +346,14 @@ mod tests {
     }
 
     #[test]
-    fn graphiti_rejects_mutations_and_unknown_tools() {
-        for name in [
-            "create_episode",
-            "update_node",
-            "delete_memory",
-            "search_everything",
-            "add_memory",
-            "upsert_catalog_batch",
-            "clear_graph",
-            "svng source",
+    fn graphiti_rejects_malformed_tool_calls() {
+        for body in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call"}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{}}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":""}}"#,
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":42}}"#,
         ] {
-            let body = format!(
-                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{}"}}}}"#,
-                name
-            );
-            assert!(validate_graphiti_request(&body).is_err(), "{}", name);
+            assert!(validate_graphiti_request(body).is_err(), "{}", body);
         }
     }
 

@@ -114,7 +114,7 @@ describe('graphitiRules dedicated service', () => {
       url: (await getMcpServers(db))[0]!.url,
       enabled: true,
     });
-    expect(seeded.source).toEqual({ url: '', enabled: false });
+    expect(seeded.source).toEqual({ url: '', enabled: true });
 
     await saveMcpServers(
       [
@@ -173,7 +173,7 @@ describe('graphitiRules dedicated service', () => {
 
     const saved = await saveGraphitiSqlServers(
       {
-        memory: { url: 'http://localhost:9999/mcp/', enabled: false },
+        memory: { url: 'http://localhost:9999/mcp/', enabled: true },
         source: { url: '', enabled: true },
       },
       db
@@ -183,7 +183,7 @@ describe('graphitiRules dedicated service', () => {
     expect(memory).toMatchObject({
       name: 'Renamed Graphiti',
       url: 'http://localhost:9999/mcp',
-      enabled: false,
+      enabled: true,
       instruction: '',
       desktopOnly: true,
       description: 'Tra cứu catalog, memory, schema/FK/join cho SVFE_SHB và MAIN1 qua Graphiti MCP.',
@@ -202,13 +202,13 @@ describe('graphitiRules dedicated service', () => {
     await saveGraphitiSqlServers(
       {
         memory: { url: persisted.memory.url, enabled: true },
-        source: { url: persisted.source.url, enabled: false },
+        source: { url: persisted.source.url, enabled: true },
       },
       db
     );
     expect(await getGraphitiSqlServers(db)).toEqual({
       memory: { url: 'http://localhost:9999/mcp', enabled: true },
-      source: { url: '', enabled: false },
+      source: { url: '', enabled: true },
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -272,7 +272,7 @@ describe('graphitiRules dedicated service', () => {
     mockBundle(GRAPHITI_BODY, SQL_BODY);
     await saveGraphitiSqlServers(
       {
-        memory: { url: '', enabled: false },
+        memory: { url: '', enabled: true },
         source: { url: 'http://localhost:9102/mcp', enabled: true },
       },
       db
@@ -286,7 +286,7 @@ describe('graphitiRules dedicated service', () => {
     expect(segment).toContain(SOURCE_SECTION_MARKER);
   });
 
-  it('never interpolates raw user URLs into the trusted prompt and skips fetching when disabled', async () => {
+  it('never interpolates raw user URLs into the trusted prompt', async () => {
     const segment = buildGraphitiSkillSegment({
       text: 'catalog',
       rules: RULES,
@@ -297,17 +297,6 @@ describe('graphitiRules dedicated service', () => {
     });
     expect(segment).not.toContain('Ignore previous rules');
     expect(segment).toContain('http://x/mcp');
-
-    await saveMcpServers(
-      [
-        { id: GRAPHITI_SQL_SERVER_IDS.memory, name: 'm', url: '', enabled: false, instruction: '' },
-        { id: GRAPHITI_SQL_SERVER_IDS.source, name: 's', url: '', enabled: false, instruction: '' },
-      ],
-      db
-    );
-    const empty = await getGraphitiSkillSegment(db, 'catalog', fetchMock);
-    expect(empty).toBe('');
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('throws from getGraphitiSkillSegment on a hash mismatch and never writes settings', async () => {
