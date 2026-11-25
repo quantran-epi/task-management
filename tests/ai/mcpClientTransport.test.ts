@@ -127,9 +127,9 @@ describe('mcpClient transport hardening', () => {
     expect(result).toBe('{"deleted":true}');
   });
 
-  it('requires an explicit server instead of scanning every enabled server', async () => {
+  it('resolves a tool owner only from discovery, never from a hard-coded name', async () => {
     mockFetch(() => ({}));
-    await expect(executeDynamicMcpTool('search_nodes', { query: 'x' }, db)).rejects.toThrow(
+    await expect(executeDynamicMcpTool('search_source', { query: 'x' }, db)).rejects.toThrow(
       /Không rõ máy chủ MCP/
     );
   });

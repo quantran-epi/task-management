@@ -73,10 +73,9 @@ const serverGroupCaches = new Map<string, Map<string, Promise<string>>>();
 const toolToServerMap = new Map<string, string>(); // toolName -> serverId
 
 /**
- * Read-only enforcement (fail closed). A tool may be executed only when the server
- * advertises `readOnlyHint: true` or its name is in this explicit allowlist — the
- * read-only Graphiti/catalog surface already documented in
- * DEFAULT_GRAPHITI_INSTRUCTION. Everything else is refused before any tools/call.
+ * Fail-closed fallback for servers that omit `readOnlyHint`: these specific read-only
+ * catalog/source names stay callable. This is NOT an advertise/dispatch allowlist — any
+ * advertised tool is advertised, and only the read-only gate decides execution.
  */
 export const READ_ONLY_TOOL_ALLOWLIST: ReadonlySet<string> = new Set([
   'list_advertised_groups',
@@ -103,20 +102,43 @@ interface CachedToolMeta {
 const toolMetaCache = new Map<string, CachedToolMeta>();
 const schemaValidators = new Map<string, z.ZodType>();
 
+/** Short TTL: a later chat turn sees added/removed tools without a manual reload. */
+export const MCP_DISCOVERY_TTL_MS = 15_000;
+
+interface CachedDiscovery {
+  tools: AiToolDefinition[];
+  meta: Map<string, CachedToolMeta>;
+  fetchedAt: number;
+}
+const serverDiscoveryCache = new Map<string, CachedDiscovery>();
+
 function toolMetaKey(serverId: string, toolName: string): string {
   return `${serverId}::${toolName}`;
+}
+
+/** Drop discovery state for one server, or every server when no id is given. */
+export function invalidateMcpDiscovery(serverId?: string): void {
+  const ids = serverId ? [serverId] : [...serverDiscoveryCache.keys()];
+  for (const id of ids) {
+    serverDiscoveryCache.delete(id);
+    for (const [name, owner] of toolToServerMap) {
+      if (owner === id) toolToServerMap.delete(name);
+    }
+    const prefix = `${id}::`;
+    for (const key of toolMetaCache.keys()) {
+      if (key.startsWith(prefix)) {
+        toolMetaCache.delete(key);
+        schemaValidators.delete(key);
+      }
+    }
+  }
 }
 
 /** Invalidate all per-server caches after a URL change so a stale session never reaches a new endpoint. */
 export function resetMcpServerCache(serverId: string): void {
   sessionIds.delete(serverId);
   serverGroupCaches.delete(serverId);
-  for (const [toolName, owner] of toolToServerMap) {
-    if (owner === serverId) {
-      toolToServerMap.delete(toolName);
-      toolMetaCache.delete(toolMetaKey(serverId, toolName));
-    }
-  }
+  invalidateMcpDiscovery(serverId);
 }
 
 export function sanitizeUrl(rawUrl: string): string {
@@ -412,9 +434,11 @@ function isInputSchema(value: unknown): value is AiToolDefinition['function']['p
   return schema.type === 'object' && typeof schema.properties === 'object' && schema.properties !== null;
 }
 
+/** Fresh `tools/list`, no cache. Refreshes discovery metadata for exactly one server. */
 export async function fetchServerTools(server: McpServerConfig): Promise<AiToolDefinition[]> {
   await initializeServerSession(server);
   const tools: AiToolDefinition[] = [];
+  const meta = new Map<string, CachedToolMeta>();
   let cursor: string | undefined;
   // Follow tools/list pagination; bounded so a misbehaving server cannot loop us.
   for (let page = 0; page < 10; page++) {
@@ -428,13 +452,13 @@ export async function fetchServerTools(server: McpServerConfig): Promise<AiToolD
 
     for (const tool of result.tools) {
       if (tool && typeof tool.name === 'string' && isInputSchema(tool.inputSchema)) {
-        toolToServerMap.set(tool.name, server.id);
-        toolMetaCache.set(toolMetaKey(server.id, tool.name), {
+        const entry: CachedToolMeta = {
           serverId: server.id,
           name: tool.name,
           inputSchema: tool.inputSchema as Record<string, unknown>,
           readOnly: tool.annotations?.readOnlyHint === true,
-        });
+        };
+        meta.set(tool.name, entry);
         tools.push({
           type: 'function',
           function: {
@@ -450,7 +474,41 @@ export async function fetchServerTools(server: McpServerConfig): Promise<AiToolD
     if (typeof nextCursor !== 'string' || !nextCursor || nextCursor === cursor) break;
     cursor = nextCursor;
   }
+
+  // Swap atomically: a removed tool must not survive into the next turn's map or gate.
+  const ownedPrefix = `${server.id}::`;
+  for (const [name, owner] of toolToServerMap) {
+    if (owner === server.id) toolToServerMap.delete(name);
+  }
+  for (const name of meta.keys()) toolToServerMap.set(name, server.id);
+  for (const key of toolMetaCache.keys()) {
+    if (key.startsWith(ownedPrefix)) {
+      toolMetaCache.delete(key);
+      schemaValidators.delete(key);
+    }
+  }
+  for (const [name, entry] of meta) {
+    const key = toolMetaKey(server.id, name);
+    toolMetaCache.set(key, entry);
+  }
+  serverDiscoveryCache.set(server.id, { tools, meta, fetchedAt: Date.now() });
   return tools;
+}
+
+/** Tools advertised by one server, refreshed when the short TTL expires or cache is invalidated. */
+export async function discoverServerTools(
+  server: McpServerConfig,
+  forceRefresh = false
+): Promise<AiToolDefinition[]> {
+  const cached = serverDiscoveryCache.get(server.id);
+  if (
+    !forceRefresh &&
+    cached &&
+    Date.now() - cached.fetchedAt < MCP_DISCOVERY_TTL_MS
+  ) {
+    return cached.tools;
+  }
+  return fetchServerTools(server);
 }
 
 const GRAPHITI_SQL_MCP_IDS = new Set(['graphiti-banking', 'svng-source']);
@@ -463,7 +521,7 @@ async function discoverToolsFrom(
   const allTools: AiToolDefinition[] = [];
   for (const server of enabledServers) {
     try {
-      const tools = await fetchServerTools(server);
+      const tools = await discoverServerTools(server);
       allTools.push(...tools);
     } catch (err) {
       console.error(`[mcpClient] Failed to discover tools from MCP server "${server.id}" (${server.name}):`, err);
@@ -567,13 +625,7 @@ export async function executeDynamicMcpTool(
   const servers = await getMcpServers(db);
   const isTauri = isTauriApp();
 
-  const serverId =
-    options.serverId ??
-    toolToServerMap.get(toolName) ??
-    ((SOURCE_TOOL_NAMES as readonly string[]).includes(toolName) &&
-    servers.some((s) => s.id === 'svng-source')
-      ? 'svng-source'
-      : undefined);
+  const serverId = options.serverId ?? toolToServerMap.get(toolName);
   if (!serverId) {
     const disabledServer = servers.find((s) => !s.enabled);
     if (disabledServer) {
@@ -671,7 +723,5 @@ export function resetMcpClientForTests(): void {
   sessionIds.clear();
   requestIdCounter = 0;
   serverGroupCaches.clear();
-  toolToServerMap.clear();
-  toolMetaCache.clear();
-  schemaValidators.clear();
+  invalidateMcpDiscovery();
 }
