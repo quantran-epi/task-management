@@ -17,6 +17,11 @@ interface EntityOption {
   value: string;
 }
 
+interface EntityName {
+  label: string;
+  type: NoteEntityType;
+}
+
 export interface QuickNotesPanelProps {
   db?: TaskPlannerDatabase;
 }
@@ -29,21 +34,24 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
   const [editorOpen, setEditorOpen] = useState(false);
   const [listEntityFilter, setListEntityFilter] = useState<string | undefined>(undefined);
 
-  const entityNames = useLiveQuery(async (): Promise<Map<string, string>> => {
+  const entityNames = useLiveQuery(async (): Promise<Map<string, EntityName>> => {
     const [crs, tasks, systems] = await Promise.all([
       db.changeRequests.toArray(),
       db.tasks.toArray(),
       db.systems.toArray(),
     ]);
-    const names = new Map<string, string>();
-    crs.forEach((cr) => names.set(cr.id, cr.code || cr.name));
-    tasks.forEach((task) => names.set(task.id, task.name));
-    systems.forEach((system) => names.set(system.id, system.name));
+    const names = new Map<string, EntityName>();
+    crs.forEach((cr) => names.set(cr.id, { label: cr.code || cr.name, type: 'cr' }));
+    tasks.forEach((task) => names.set(task.id, { label: task.name, type: 'task' }));
+    systems.forEach((system) => names.set(system.id, { label: system.name, type: 'system' }));
     return names;
-  }, [db], new Map<string, string>());
+  }, [db], new Map<string, EntityName>());
 
   const entityOptions: EntityOption[] = entityType
-    ? [...(entityNames?.entries() ?? [])].slice(0, 200).map(([value, label]) => ({ label, value }))
+    ? [...(entityNames?.entries() ?? [])]
+        .filter(([, entity]) => entity.type === entityType)
+        .slice(0, 200)
+        .map(([value, entity]) => ({ label: entity.label, value }))
     : [];
 
   const notes = useLiveQuery(async (): Promise<Note[]> => {
@@ -60,7 +68,7 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
         notes
           .flatMap((note) => {
             const value = note.entityId;
-            const label = value ? entityNames?.get(value) : undefined;
+            const label = value ? entityNames?.get(value)?.label : undefined;
             return value && label ? [[value, { label, value }] as const] : [];
           })
       ).values()
@@ -147,9 +155,10 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   {note.title && <Typography.Text strong>{note.title}</Typography.Text>}
-                  {note.entityId && entityNames?.get(note.entityId) && (
-                    <Tag style={{ marginLeft: 6 }}>{entityNames.get(note.entityId)}</Tag>
-                  )}
+                  {(() => {
+                    const linkedLabel = note.entityId ? entityNames?.get(note.entityId)?.label : undefined;
+                    return linkedLabel ? <Tag style={{ marginLeft: 6 }}>{linkedLabel}</Tag> : null;
+                  })()}
                   <div
                     style={{
                       fontSize: 'var(--font-size-small)',

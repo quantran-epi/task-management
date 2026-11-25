@@ -391,6 +391,7 @@ describe('QuickNotesPanel', () => {
     expect(select.querySelector('.ant-select-selection-item')).toBeNull();
 
     fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    fireEvent.keyDown(select.querySelector('input') ?? select, { key: 'ArrowDown', keyCode: 40 });
     expect(await screen.findByTitle('Task kiểm thử')).toBeDefined();
     expect(screen.queryByTitle('CR-001')).toBeNull();
 
