@@ -19,6 +19,7 @@ const AI_GEOMETRY_STORAGE_KEY = 'planner:ai_popout_geometry';
 
 export interface AIPopoutViewProps {
   db?: TaskPlannerDatabase | undefined;
+  standaloneChat?: boolean | undefined;
 }
 
 export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) => {

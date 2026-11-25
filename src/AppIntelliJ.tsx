@@ -29,7 +29,13 @@ import { startNotificationDeepLinkListener } from './utils/notificationDeepLink'
 import { attachGlobalToolTaskListener } from './components/ai/runtime/toolTaskStore';
 import { isTauriApp } from './utils/timerPopout';
 
-export const AppIntelliJ: React.FC = () => {
+const STANDALONE_CHAT = import.meta.env.VITE_CHAT_STANDALONE === '1';
+
+export interface AppIntelliJProps {
+  standaloneChat?: boolean | undefined;
+}
+
+export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STANDALONE_CHAT }) => {
   const { route } = useHashRoute();
   const isPopout =
     route === 'timer-popout' ||
@@ -109,9 +115,11 @@ export const AppIntelliJ: React.FC = () => {
     return (
       <AntdThemeAdapter>
         <ThemeAppHolder>
-          <AIChatProvider>
-            <AIPopoutView />
-          </AIChatProvider>
+          <KnowledgeConfigProvider>
+            <AIChatProvider>
+              <AIPopoutView standaloneChat={standaloneChat} />
+            </AIChatProvider>
+          </KnowledgeConfigProvider>
         </ThemeAppHolder>
       </AntdThemeAdapter>
     );
