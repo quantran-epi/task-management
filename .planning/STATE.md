@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-25 - Completed quick task 261125-tp9: Select entity chỉ hiện option đúng loại Segmented; trước đó 261125-t5q: Chỉnh list ghi chú nhanh theo quick note + filter entity đã link
+Last activity: 2026-11-25 - Completed quick task 261125-ulp: Ẩn trigger và cấu hình Ghost Dev khỏi UI; trước đó 261125-tp9: Select entity chỉ hiện option đúng loại Segmented
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -143,6 +143,7 @@ Progress: [█████░░░░░] 50%
 | 261125-t5q | Chỉnh giao diện ghi chú nhanh: list dưới chỉ quick note, hiện entity đang linked + tiêu đề + 2 dòng nội dung mờ, bỏ box scroll, thêm filter theo entity đã link | 2026-11-25 | 893bf414 | — | [261125-t5q-ch-nh-giao-di-n-ghi-ch-nhanh-strip-b-n-p](./quick/261125-t5q-ch-nh-giao-di-n-ghi-ch-nhanh-strip-b-n-p/) |
 | 261125-svm | Dynamic MCP tool list cho mọi AI surface: advertise mọi tool server, auto reload theo turn, 2 server ngầm luôn bật, mutation vẫn chặn | 2026-11-25 | d0943604, d1a49648, a096fb87 | Needs UAT | [261125-svm-dynamic-mcp-tool-list-cho-m-i-ai-surface](./quick/261125-svm-dynamic-mcp-tool-list-cho-m-i-ai-surface/) |
 | 261125-tp9 | Select thực thể trong panel ghi chú nhanh chỉ hiện option đúng loại Segmented, clear entity khi đổi loại | 2026-11-25 | b391bd11, 25f3c54f | — | [261125-tp9-khi-switch-segmented-ch-n-lo-i-th-c-th-g](./quick/261125-tp9-khi-switch-segmented-ch-n-lo-i-th-c-th-g/) |
+| 261125-ulp | Ẩn toàn bộ trigger và cấu hình Ghost Dev khỏi UI (TaskDrawer, TaskTable, Settings, Config Profiles), giữ code/data/runtime | 2026-11-25 | d71cd62a | — | [261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-](./quick/261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-/) |
 
 ## Accumulated Context
 
