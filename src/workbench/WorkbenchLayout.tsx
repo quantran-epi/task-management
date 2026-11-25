@@ -34,7 +34,8 @@ import {
   JetBrainsOfficeIcon,
   JetBrainsStaffIcon,
 } from '../components/icons/JetBrainsIcons';
-import { DatabaseOutlined } from '../components/ui/icon';
+import { DatabaseOutlined, FormOutlined } from '../components/ui/icon';
+import { QuickNotesPanel } from '../components/notes/QuickNotesPanel';
 import { toolExplorerIcon } from './toolExplorerIcon';
 import '../styles/workbench-tokens.css';
 import '../components/ui/ui-tokens.css';
@@ -112,6 +113,11 @@ export function WorkbenchLayout({
 
   const rightItems = useMemo<ToolWindowItem[]>(() => {
     return [
+      {
+        id: 'quick_notes',
+        name: 'Ghi chú nhanh',
+        icon: <FormOutlined style={{ fontSize: 16, color: 'var(--accent, #3871e1)' }} />,
+      },
       { id: 'tool_explorer', name: 'Tool Explorer', icon: toolExplorerIcon(16), shortcut: 'Alt+9' },
       { id: 'ai_chat', name: 'AI Assistant', icon: <JetBrainsAIIcon size={16} />, shortcut: 'Alt+3' },
       {
@@ -461,9 +467,9 @@ export function WorkbenchLayout({
                   >
                     <div className="workbench-island-card workbench-island-card-toolwindow" style={{ height: '100%', width: '100%' }}>
                       {rightPanelContent || (
-                        <RightToolWindow
-                          {...(db ? { db } : {})}
-                        />
+                        <RightToolWindow {...(db ? { db } : {})}>
+                          <QuickNotesPanel {...(db ? { db } : {})} />
+                        </RightToolWindow>
                       )}
                     </div>
                   </Panel>
