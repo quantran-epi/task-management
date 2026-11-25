@@ -143,6 +143,172 @@ describe('QuickNotesPanel', () => {
     });
   });
 
+  it('danh sách chỉ hiện quick note, không hiện note document', async () => {
+    const now = new Date().toISOString();
+    await db.notes.add({
+      id: generateId(),
+      type: 'quick_note',
+      body: 'Nội dung quick note duy nhất',
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.notes.add({
+      id: generateId(),
+      type: 'document',
+      body: 'Nội dung document không được hiện',
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nội dung quick note duy nhất/)).toBeDefined();
+    });
+    expect(screen.queryByText(/Nội dung document không được hiện/)).toBeNull();
+  });
+
+  it('row hiện tag entity và tiêu đề note', async () => {
+    const noteId = generateId();
+    const now = new Date().toISOString();
+    await db.notes.add({
+      id: noteId,
+      type: 'quick_note',
+      title: 'Tiêu đề ghi chú CR',
+      entityType: 'cr',
+      entityId: crId,
+      body: 'Body ghi chú CR',
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { container } = render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Body ghi chú CR/)).toBeDefined();
+    });
+    const row = container.querySelector(`[data-ai-context-id="${noteId}"]`);
+    expect(row?.textContent).toContain('CR-001');
+    expect(row?.textContent).toContain('Tiêu đề ghi chú CR');
+    expect(row?.textContent).toContain('Body ghi chú CR');
+  });
+
+  it('row body dùng clamp 2 dòng, không có ô scroll', async () => {
+    const noteId = generateId();
+    const now = new Date().toISOString();
+    await db.notes.add({
+      id: noteId,
+      type: 'quick_note',
+      body: 'Nội dung clamp hai dòng',
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const { container } = render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Nội dung clamp hai dòng/)).toBeDefined();
+    });
+    const bodyNode = container.querySelector(`[data-ai-context-id="${noteId}"] p`)?.parentElement;
+    const style = bodyNode?.getAttribute('style') ?? '';
+    expect(style).toContain('-webkit-line-clamp: 2');
+    expect(style).toContain('-webkit-box-orient: vertical');
+    expect(style).toContain('overflow: hidden');
+    expect(style).not.toContain('overflow-y: auto');
+    expect(style).not.toContain('max-height');
+  });
+
+  const seedQuickNotesForFilter = async (): Promise<{ crNoteBody: string; taskNoteBody: string; plainBody: string }> => {
+    const now = new Date().toISOString();
+    const bodies = {
+      crNoteBody: 'Ghi chú filter CR',
+      taskNoteBody: 'Ghi chú filter Task',
+      plainBody: 'Ghi chú filter không gắn entity',
+    };
+    await db.notes.add({
+      id: generateId(),
+      type: 'quick_note',
+      entityType: 'cr',
+      entityId: crId,
+      body: bodies.crNoteBody,
+      isPinned: false,
+      createdAt: now,
+      updatedAt: new Date(Date.now() + 3000).toISOString(),
+    });
+    await db.notes.add({
+      id: generateId(),
+      type: 'quick_note',
+      entityType: 'task',
+      entityId: taskId,
+      body: bodies.taskNoteBody,
+      isPinned: false,
+      createdAt: now,
+      updatedAt: new Date(Date.now() + 2000).toISOString(),
+    });
+    await db.notes.add({
+      id: generateId(),
+      type: 'quick_note',
+      body: bodies.plainBody,
+      isPinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return bodies;
+  };
+
+  it('filter chỉ liệt kê entity đã có note link', async () => {
+    await seedQuickNotesForFilter();
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    const filter = await screen.findByTestId('quick-notes-list-filter');
+    fireEvent.mouseDown(filter.querySelector('.ant-select-selector') ?? filter);
+
+    expect(await screen.findByTitle('CR-001')).toBeDefined();
+    expect(await screen.findByTitle('Task kiểm thử')).toBeDefined();
+    expect(screen.queryByTitle('Hệ thống Core')).toBeNull();
+    expect(screen.getAllByText('Tất cả').length).toBeGreaterThan(0);
+  });
+
+  it('chọn entity thì danh sách chỉ hiện note của entity đó', async () => {
+    const bodies = await seedQuickNotesForFilter();
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    const filter = await screen.findByTestId('quick-notes-list-filter');
+    fireEvent.mouseDown(filter.querySelector('.ant-select-selector') ?? filter);
+    fireEvent.click(await screen.findByTitle('Task kiểm thử'));
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(bodies.taskNoteBody))).toBeDefined();
+      expect(screen.queryByText(new RegExp(bodies.crNoteBody))).toBeNull();
+      expect(screen.queryByText(new RegExp(bodies.plainBody))).toBeNull();
+    });
+  });
+
+  it('chọn lại Tất cả thì hiện lại mọi quick note', async () => {
+    const bodies = await seedQuickNotesForFilter();
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    const filter = await screen.findByTestId('quick-notes-list-filter');
+    fireEvent.mouseDown(filter.querySelector('.ant-select-selector') ?? filter);
+    fireEvent.click(await screen.findByTitle('Task kiểm thử'));
+    await waitFor(() => {
+      expect(screen.queryByText(new RegExp(bodies.crNoteBody))).toBeNull();
+    });
+
+    fireEvent.mouseDown(filter.querySelector('.ant-select-selector') ?? filter);
+    fireEvent.click(await screen.findByTitle('Tất cả'));
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(bodies.crNoteBody))).toBeDefined();
+      expect(screen.getByText(new RegExp(bodies.taskNoteBody))).toBeDefined();
+      expect(screen.getByText(new RegExp(bodies.plainBody))).toBeDefined();
+    });
+  });
+
   it('tích hợp: stripe mở panel, lưu note có entity, click lại đóng panel', async () => {
     localStorage.clear();
     act(() => {

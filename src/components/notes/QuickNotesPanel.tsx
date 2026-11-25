@@ -27,6 +27,7 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [listEntityFilter, setListEntityFilter] = useState<string | undefined>(undefined);
 
   const entityNames = useLiveQuery(async (): Promise<Map<string, string>> => {
     const [crs, tasks, systems] = await Promise.all([
@@ -46,11 +47,27 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
     : [];
 
   const notes = useLiveQuery(async (): Promise<Note[]> => {
-    const rows = await db.notes.filter((note) => !note.deletedAt && note.type !== 'diagram').toArray();
+    const rows = await db.notes.filter((note) => !note.deletedAt && note.type === 'quick_note').toArray();
     return rows
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 20);
   }, [db], []);
+
+  const listFilterOptions: EntityOption[] = [
+    { label: 'Tất cả', value: '' },
+    ...Array.from(
+      new Map(
+        notes
+          .flatMap((note) => {
+            const value = note.entityId;
+            const label = value ? entityNames?.get(value) : undefined;
+            return value && label ? [[value, { label, value }] as const] : [];
+          })
+      ).values()
+    ),
+  ];
+
+  const visibleNotes = listEntityFilter ? notes.filter((note) => note.entityId === listEntityFilter) : notes;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px', height: '100%', overflowY: 'auto' }}>
@@ -103,11 +120,22 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
         {...(entityId ? { defaultEntityId: entityId } : {})}
       />
 
-      {!notes || notes.length === 0 ? (
+      <Select<string>
+        showSearch
+        allowClear={false}
+        data-testid="quick-notes-list-filter"
+        value={listEntityFilter ?? ''}
+        placeholder="Lọc theo thực thể đã gắn"
+        options={listFilterOptions}
+        onChange={(value) => setListEntityFilter(value || undefined)}
+        filterOption={(input, option) => searchIncludes(String(option?.label ?? ''), input)}
+      />
+
+      {visibleNotes.length === 0 ? (
         <Empty description="Chưa có ghi chú nào" />
       ) : (
         <Space direction="vertical" size={8} style={{ width: '100%' }}>
-          {notes.map((note) => (
+          {visibleNotes.map((note) => (
             <Card
               key={note.id}
               size="small"
@@ -124,11 +152,13 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
                   )}
                   <div
                     style={{
-                      fontSize: 13,
+                      fontSize: 'var(--font-size-small)',
                       color: 'var(--fg-secondary)',
-                      maxHeight: 120,
-                      overflowY: 'auto',
-                      whiteSpace: 'pre-wrap',
+                      lineHeight: '1.4',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
                     }}
                     dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(readNoteMarkdown(note.body)) }}
                   />
