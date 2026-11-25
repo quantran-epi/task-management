@@ -1540,9 +1540,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
 
       // 261125-u4w: read the global standing instruction ONCE per turn, before the grounded
-      // branch returns. Repo conventions stay on the ordinary-turn path below.
-      const globalConvText = await getGlobalConventions(db).catch(() => '');
-      const globalConventionsSegment = buildConventionsSegment({ global: globalConvText });
+      // branch returns. D-08: standalone chat never reads TaskMate global conventions; field
+      // stays editable in settings but is not injected into prompts. Repo conventions stay
+      // on the ordinary-turn path below.
+      let globalConvText = '';
+      let globalConventionsSegment = '';
+      if (!isStandaloneChat) {
+        globalConvText = await getGlobalConventions(db).catch(() => '');
+        globalConventionsSegment = buildConventionsSegment({ global: globalConvText });
+      }
 
       // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
       if (!turnAnalysisMode) {
@@ -1880,7 +1886,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         } catch (err) {
           logAiChatError('Context grounding resolution error', err);
         }
-      } else {
+      } else if (!isStandaloneChat) {
         try {
           systemInstruction = await buildGlobalContextPrompt(db);
         } catch (err) {
@@ -1888,13 +1894,26 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
       }
 
-      const { taskIds, crIds, systemIds, filePaths } = extractMentionedEntityIds(trimmed);
+      // D-08: standalone never resolves TaskMate entity mentions. File references are
+      // separate and stay available to knowledge/SSH tools.
+      let taskIds: string[] = [];
+      let crIds: string[] = [];
+      let systemIds: string[] = [];
+      let filePaths: string[] = [];
+      if (!isStandaloneChat) {
+        const mentioned = extractMentionedEntityIds(trimmed);
+        taskIds = mentioned.taskIds;
+        crIds = mentioned.crIds;
+        systemIds = mentioned.systemIds;
+        filePaths = mentioned.filePaths;
+      }
       const mentionedContexts: string[] = [];
       const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
       const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
       if (allFiles.length !== turnReferences.length) {
         tabRuntimes.patch(turnTabId, { references: allFiles });
       }
+      if (!isStandaloneChat) {
       for (const taskId of taskIds) {
         if (effectiveScope.type === 'task' && effectiveScope.id === taskId) continue;
         try {
@@ -1944,9 +1963,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           logAiChatError(`Grounding error for system ${systemId}`, err);
         }
       }
-      if (mentionedContexts.length > 0) {
-        const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
-        systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
+        if (mentionedContexts.length > 0) {
+          const mentionsBlock = `<mentioned_entities>\n[User Referenced Items Grounding]:\nThe user explicitly referenced the following items using mentions in their request. Their detailed database state is provided below for exact grounding:\n${mentionedContexts.join('\n\n')}\n</mentioned_entities>`;
+          systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
+        }
       }
       if (allFiles.length > 0) {
         const filesList = allFiles.map((filePath) => `- \`${filePath}\``).join('\n');
@@ -2719,12 +2739,16 @@ Rules:
             ...(groundedCallbacks ? { groundedCallbacks } : {}),
             transientClarifyMessage: clarifyByTab[activeTabId] ?? null,
             onCancelClarify: () => setTransientClarifyMessage(activeTabId, null),
-            canAddToChecklist: currentScope.type === 'task',
-            canSaveStickyNote: true,
-            canRunClaudeCode: currentScope.type === 'task',
-            onAddToChecklist: handleAddToChecklist,
-            onSaveStickyNote: handleSaveStickyNote,
-            onRunClaudeCode: handleRunClaudeCode,
+            canAddToChecklist: !isStandaloneChat && currentScope.type === 'task',
+            canSaveStickyNote: !isStandaloneChat,
+            canRunClaudeCode: !isStandaloneChat && currentScope.type === 'task',
+            ...(isStandaloneChat
+              ? {}
+              : {
+                  onAddToChecklist: handleAddToChecklist,
+                  onSaveStickyNote: handleSaveStickyNote,
+                  onRunClaudeCode: handleRunClaudeCode,
+                }),
           }}
           statusExtensions={
             <>
