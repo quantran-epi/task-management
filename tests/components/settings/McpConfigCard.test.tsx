@@ -9,7 +9,6 @@ vi.mock('../../../src/utils/timerPopout', async (importOriginal) => ({
   isTauriApp: vi.fn(() => false),
 }));
 
-const applyGraphitiRulesMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 
@@ -29,10 +28,6 @@ vi.mock('antd', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../src/services/ai/graphitiRules', () => ({
-  applyGraphitiRules: applyGraphitiRulesMock,
-}));
-
 describe('McpConfigCard', () => {
   let db: TaskPlannerDatabase;
 
@@ -40,7 +35,6 @@ describe('McpConfigCard', () => {
     db = new TaskPlannerDatabase(`test-mcp-config-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await db.open();
     vi.clearAllMocks();
-    applyGraphitiRulesMock.mockReset();
     messageErrorMock.mockReset();
     messageSuccessMock.mockReset();
   });
@@ -116,56 +110,12 @@ describe('McpConfigCard', () => {
     expect(servers.some((s) => s.name === 'Custom Mock MCP')).toBe(true);
   });
 
-  it('applies verified Graphiti/SQL rules and refreshes the rendered list', async () => {
-    const onConfigChange = vi.fn();
-    const applied = [
-      {
-        id: 'graphiti-banking',
-        name: 'Graphiti Banking MCP',
-        url: 'http://10.4.97.70:30456/mcp',
-        enabled: true,
-        instruction: 'shared rules applied',
-        desktopOnly: true,
-      },
-      {
-        id: 'svng-source',
-        name: 'SVNG Source MCP',
-        url: '',
-        enabled: true,
-        instruction: 'shared + sql rules applied',
-        desktopOnly: true,
-      },
-    ];
-    applyGraphitiRulesMock.mockResolvedValueOnce(applied);
-    render(<McpConfigCard db={db} onConfigChange={onConfigChange} />);
-    await waitFor(() => {
-      expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Áp dụng luật Graphiti\/SQL/i }));
-
-    await waitFor(() => {
-      expect(applyGraphitiRulesMock).toHaveBeenCalledTimes(1);
-      expect(applyGraphitiRulesMock).toHaveBeenCalledWith(db);
-      expect(screen.getByText('SVNG Source MCP')).toBeInTheDocument();
-      expect(onConfigChange).toHaveBeenCalled();
-    });
-  });
-
-  it('shows verification errors without changing the rendered server list', async () => {
-    applyGraphitiRulesMock.mockRejectedValueOnce(new Error('SHA-256 không khớp'));
+  it('does not expose the old Graphiti/SQL apply button', async () => {
     render(<McpConfigCard db={db} />);
     await waitFor(() => {
       expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByRole('button', { name: /Áp dụng luật Graphiti\/SQL/i }));
-
-    await waitFor(() => {
-      expect(messageErrorMock).toHaveBeenCalledWith('Không thể áp dụng luật Graphiti/SQL: SHA-256 không khớp');
-    });
-    expect(screen.getByText('Graphiti Banking MCP')).toBeInTheDocument();
-    expect(screen.queryByText('SVNG Source MCP')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Áp dụng luật Graphiti\/SQL/i })).not.toBeInTheDocument();
   });
 
   it('calls test connection and displays result', async () => {
