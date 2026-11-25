@@ -24,6 +24,7 @@ export interface V28FixtureIds {
 }
 
 export interface V28Fixture {
+  databaseName?: string;
   ids: V28FixtureIds;
   systems: readonly System[];
   changeRequests: readonly ChangeRequest[];
@@ -125,9 +126,14 @@ export function v28FixtureRows(): V28Fixture {
   };
 }
 
-/** Seed into a fresh V28 database. Caller owns clear/delete when re-seeding. */
+/** Default workbench DB name — random per call, never the production name. */
+export function workbenchDbName(): string {
+  return `WorkbenchV28-${crypto.randomUUID()}`;
+}
+
+/** Seed into a fresh V28 database. Never defaults to the production DB name. */
 export async function seedV28(targetDb?: TaskPlannerDatabase): Promise<V28Fixture> {
-  const db = targetDb ?? new TaskPlannerDatabase('PersonalTaskPlannerDB');
+  const db = targetDb ?? new TaskPlannerDatabase(workbenchDbName());
   await initializeDatabaseDefaults(db);
   const rows = v28FixtureRows();
   await db.transaction(
@@ -145,7 +151,7 @@ export async function seedV28(targetDb?: TaskPlannerDatabase): Promise<V28Fixtur
       await db.documentSets.bulkAdd([...rows.documentSets]);
     }
   );
-  return rows;
+  return { ...rows, databaseName: db.name };
 }
 
 export const V28_SCHEMA_VERSION = LATEST_SCHEMA_VERSION;

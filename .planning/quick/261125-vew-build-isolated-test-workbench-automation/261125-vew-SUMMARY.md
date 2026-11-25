@@ -62,7 +62,7 @@ completed: 2026-11-25
 ## Performance
 
 - **Duration:** ~20 min
-- **Started:** 2026-11-25T22:47:00Z
+- **Started:** 2026-11-25T15:47:00Z
 - **Completed:** 2026-11-25T16:07:00Z
 - **Tasks:** 3/3
 - **Files modified:** 13 created
@@ -142,6 +142,18 @@ completed: 2026-11-25
 **Total deviations:** 4 auto-fixed (2 Rule 1, 2 Rule 3)
 **Impact on plan:** Không đổi app/code/config/dependency; tất cả nằm trong workbench. Goal "no human UAT" giữ nguyên.
 
+## Review Fixes (7 findings)
+
+| Finding | Fix |
+|--------|-----|
+| M1 aggregate BLOCKED bị hạ cấp | Thay mọi `\|\| OVERALL=1` bằng hàm `escalate $?`; mã 2 luôn giữ 2, mã khác chỉ set 1 khi OVERALL=0. Pin bằng `workbench/unit/runnerAggregate.test.mjs`. |
+| M2 thiếu token bị skip=0 | `record_gate knowledge-live ... 2` + `escalate 2`, khớp `test-knowledge-live.mjs:642-643`. |
+| M3 seed dùng DB production | `seedV28()` mặc định `WorkbenchV28-${crypto.randomUUID()}`, fixture có `databaseName`; unit pin không đụng `PersonalTaskPlannerDB`. |
+| L1 manifest fallback lệch | `baseline.fallback` đổi `HEAD` → `HEAD~1` khớp resolver. |
+| L2 timestamp đảo | Started đổi `2026-11-25T15:47:00Z` (22:47 +07), Completed `16:07Z`. |
+| L3 race db.delete() sau boot | `page.addInitScript` seed trước navigation, marker `__workbenchSeeded`, không delete sau boot; 4 spec chạy 4 lần liên tiếp đều pass. |
+| L4 config anchor cwd | `testDir`/`webServer.cwd` dùng `import.meta.url`; `reuseExistingServer: false` và port riêng 5174 để không tái dùng Vite của repo gốc. |
+
 ## Issues Encountered
 - `03_evidence_pack.json` không phải response HTTP của app (app tự pack evidence từ 02), nên dùng làm nguồn authority để đối chiếu citation id thay vì inject trực tiếp; `04_llm_request_payload.json` dùng làm request-shape reference.
 - `--full` không chạy trong phiên này vì project rule cấm full suite (>1 giờ); exit 2 BLOCKED chỉ được kiểm tra bằng mã hóa trong runner, chưa có live evidence.
@@ -150,12 +162,11 @@ completed: 2026-11-25
 None — Chrome channel có sẵn, không cần token thật (mock sinh token ngẫu nhiên trong browser).
 
 ## Verify Commands Đã Chạy
-- `node --test workbench/unit/detectChanges.test.mjs` → exit 0 (6/6)
 - `bash -n workbench/run.sh` → OK
-- `bash workbench/run.sh --scope workbench/gate-map.json` → exit 0
-- `npx vitest run workbench/unit/v28Seed.test.ts --bail=1` → exit 0 (4/4)
-- `npx playwright test --config workbench/playwright.workbench.config.ts e2e/smoke.e2e.ts e2e/grounded-knowledge.e2e.ts` → exit 0 (2/2)
-- `npx playwright test --config workbench/playwright.workbench.config.ts e2e/backup-roundtrip.e2e.ts e2e/change-pack.e2e.ts` → exit 0 (2/2)
+- `node --test workbench/unit/detectChanges.test.mjs` → exit 0 (6/6)
+- `node --test workbench/unit/runnerAggregate.test.mjs` → exit 0 (3/3)
+- `npx vitest run workbench/unit/v28Seed.test.ts --bail=1` → exit 0 (5/5)
+- `npx playwright test --config workbench/playwright.workbench.config.ts e2e/smoke.e2e.ts e2e/grounded-knowledge.e2e.ts e2e/backup-roundtrip.e2e.ts e2e/change-pack.e2e.ts` → exit 0 (4/4), lặp 4 lần đều 4/4
 - `bash workbench/run.sh` → exit 0, `scope=changed rules=workbench`, evidence exit 0
 
 ## Self-Check: PASSED

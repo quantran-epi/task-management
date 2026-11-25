@@ -43,6 +43,16 @@ run_gate() {
   return "$code"
 }
 
+# Chỉ escalate, không bao giờ hạ cấp BLOCKED (2) xuống FAIL (1).
+escalate() {
+  local code=$1
+  if [[ "$code" -eq 2 ]]; then
+    OVERALL=2
+  elif [[ "$code" -ne 0 && "$OVERALL" -eq 0 ]]; then
+    OVERALL=1
+  fi
+}
+
 visible_scope() {
   node -e '
     const fs = require("fs");
@@ -129,30 +139,29 @@ if [[ "$MODE" == "full" ]]; then
   echo "[MODE] full — release/nghi lan, chạy mọi gate"
   OVERALL=0
 
-  run_gate "unit-root" npm test -- --bail=1 || OVERALL=1
-  run_gate "unit-knowledge" npm run test:knowledge || OVERALL=1
-  run_gate "jira-proxy" node --test proxy/jira-proxy.test.mjs || OVERALL=1
-  run_gate "knowledge-self-check" node scripts/test-knowledge-live.mjs --self-check || OVERALL=1
+  run_gate "unit-root" npm test -- --bail=1; escalate $?
+  run_gate "unit-knowledge" npm run test:knowledge; escalate $?
+  run_gate "jira-proxy" node --test proxy/jira-proxy.test.mjs; escalate $?
+  run_gate "knowledge-self-check" node scripts/test-knowledge-live.mjs --self-check; escalate $?
 
   if [[ -n "${KNOWLEDGE_SERVER_TOKEN:-}" ]]; then
     run_gate "knowledge-live" node scripts/test-knowledge-live.mjs
     LIVE_CODE=$?
     if [[ $LIVE_CODE -eq 2 ]]; then
-      OVERALL=2
       echo "[BLOCKED] knowledge live trả 2 — không tính pass"
-    elif [[ $LIVE_CODE -ne 0 ]]; then
-      OVERALL=1
     fi
+    escalate "$LIVE_CODE"
   else
-    echo "[SKIP] knowledge-live (thiếu KNOWLEDGE_SERVER_TOKEN)"
-    record_gate "knowledge-live" "knowledge-live (skipped: no token)" 0
+    echo "[BLOCKED] knowledge-live: thiếu KNOWLEDGE_SERVER_TOKEN (theo test-knowledge-live.mjs:642-643)"
+    record_gate "knowledge-live" "knowledge-live (BLOCKED: no token)" 2
+    escalate 2
   fi
 
   ALL_SPECS=()
   while IFS= read -r spec; do
     [[ -n "$spec" ]] && ALL_SPECS+=("$spec")
   done < <(find workbench/e2e -maxdepth 1 -name '*.e2e.ts' -print 2>/dev/null | sort)
-  run_playwright "e2e-all" "${ALL_SPECS[@]:-}" || OVERALL=1
+  run_playwright "e2e-all" "${ALL_SPECS[@]:-}"; escalate $?
 
   node -e '
     const fs = require("fs");
@@ -206,16 +215,16 @@ for file in "${UNIT_ARGS[@]}"; do
   esac
 done
 if [[ ${#NODE_UNIT[@]} -gt 0 ]]; then
-  run_gate "unit-node-scoped" node --test "${NODE_UNIT[@]}" || OVERALL=1
+  run_gate "unit-node-scoped" node --test "${NODE_UNIT[@]}"; escalate $?
 fi
 if [[ ${#VITEST_UNIT[@]} -gt 0 ]]; then
-  run_gate "unit-vitest-scoped" npx vitest run "${VITEST_UNIT[@]}" --bail=1 || OVERALL=1
+  run_gate "unit-vitest-scoped" npx vitest run "${VITEST_UNIT[@]}" --bail=1; escalate $?
 fi
 if [[ ${#NODE_UNIT[@]} -eq 0 && ${#VITEST_UNIT[@]} -eq 0 ]]; then
   echo "[SKIP] unit-scoped (không có file unit nào map)"
   record_gate "unit-scoped" "no unit files" 0
 fi
-run_playwright "e2e-scoped" "${E2E_ARGS[@]}" || OVERALL=1
+run_playwright "e2e-scoped" "${E2E_ARGS[@]}"; escalate $?
 
 write_evidence "$OVERALL"
 echo "EVIDENCE=$EVIDENCE exit=$OVERALL"

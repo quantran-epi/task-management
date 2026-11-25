@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { LATEST_SCHEMA_VERSION } from '../../src/db/schema';
-import { seedV28, v28FixtureRows, V28_SCHEMA_VERSION } from '../seed/v28Seed';
+import {
+  seedV28,
+  v28FixtureRows,
+  V28_SCHEMA_VERSION,
+  workbenchDbName,
+} from '../seed/v28Seed';
 
 describe('V28 workbench seed', () => {
   let db: TaskPlannerDatabase;
@@ -53,6 +58,22 @@ describe('V28 workbench seed', () => {
     } finally {
       await fresh.delete();
     }
+  });
+
+  it('never defaults to the production database name', async () => {
+    const name = workbenchDbName();
+    expect(name).toMatch(/^WorkbenchV28-/);
+    expect(name).not.toBe('PersonalTaskPlannerDB');
+    expect(workbenchDbName()).not.toBe(name);
+
+    const prod = new TaskPlannerDatabase('PersonalTaskPlannerDB');
+    expect(await prod.tasks.count()).toBe(0);
+    const fixture = await seedV28();
+    const workbench = new TaskPlannerDatabase(fixture.databaseName!);
+    expect(await workbench.tasks.count()).toBe(5);
+    await workbench.delete();
+    await prod.delete();
+    expect(fixture.databaseName).toMatch(/^WorkbenchV28-/);
   });
 
   it('fixture rows are deterministic and use v4 UUIDs', () => {

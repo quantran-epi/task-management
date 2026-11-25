@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-25T16:05:07.125Z",
+  "timestamp": "2026-11-25T16:23:40.267Z",
   "mode": "change-scoped",
   "scope": "changed",
   "explicitPath": null,
@@ -7,8 +7,6 @@
     "workbench"
   ],
   "changed": [
-    "workbench/e2e/backup-roundtrip.e2e.ts",
-    "workbench/e2e/change-pack.e2e.ts",
     "workbench/e2e/grounded-knowledge.e2e.ts",
     "workbench/e2e/helpers.ts",
     "workbench/e2e/smoke.e2e.ts",
@@ -16,9 +14,8 @@
     "workbench/gate-map.json",
     "workbench/playwright.workbench.config.ts",
     "workbench/run.sh",
-    "workbench/scripts/detect-changes.mjs",
     "workbench/seed/v28Seed.ts",
-    "workbench/unit/detectChanges.test.mjs",
+    "workbench/unit/runnerAggregate.test.mjs",
     "workbench/unit/v28Seed.test.ts"
   ],
   "unit": [
@@ -26,6 +23,7 @@
   ],
   "unitFiles": [
     "workbench/unit/detectChanges.test.mjs",
+    "workbench/unit/runnerAggregate.test.mjs",
     "workbench/unit/v28Seed.test.ts"
   ],
   "e2e": [
@@ -34,7 +32,7 @@
   "gates": [
     {
       "name": "unit-node-scoped",
-      "command": "node --test workbench/unit/detectChanges.test.mjs",
+      "command": "node --test workbench/unit/detectChanges.test.mjs workbench/unit/runnerAggregate.test.mjs",
       "exitCode": 0
     },
     {

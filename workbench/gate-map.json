@@ -1,7 +1,7 @@
 {
   "baseline": {
     "command": "git merge-base HEAD master",
-    "fallback": "HEAD",
+    "fallback": "HEAD~1",
     "maxDivergence": 50,
     "scopeWindow": "HEAD~1",
     "note": "Scope theo working-tree (staged + unstaged + untracked) cộng baseline khi branch không lệch quá maxDivergence; nếu lệch hơn thì dùng HEAD~1 để tránh coi toàn bộ lịch sử branch là 'thay đổi mới'."

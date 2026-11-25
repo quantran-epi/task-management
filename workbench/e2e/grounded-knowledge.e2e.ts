@@ -22,8 +22,7 @@ const rawLlmSample = JSON.parse(
   choices: { message: { content: string } }[];
 };
 
-const KNOWLEDGE_ORIGIN = 'http://127.0.0.1:5173';
-const LLM_ORIGIN = `${KNOWLEDGE_ORIGIN}/task-management/__wb`;
+const LLM_PATH = '/task-management/__wb';
 
 interface SeenRequests {
   retrieveBodies: unknown[];
@@ -85,20 +84,21 @@ async function configureMocks(page: Page, seen: SeenRequests): Promise<void> {
 /** Seed settings directly; token is generated in-browser and never written to source/evidence. */
 async function seedKnowledgeSettings(page: Page): Promise<void> {
   await page.evaluate(
-    async ({ origin, llm }) => {
+    async ({ llm }) => {
       const { TaskPlannerDatabase } = await import('/task-management/src/db/index.ts');
       const db = new TaskPlannerDatabase('PersonalTaskPlannerDB');
       const token = `wb-${crypto.randomUUID()}`;
       await db.settings.bulkPut([
         { key: 'knowledge_server_enabled', value: true },
-        { key: 'knowledge_server_base_url', value: origin },
+        { key: 'knowledge_server_base_url', value: window.location.origin },
         { key: 'knowledge_server_token', value: token },
         { key: 'ninerouter_endpoint', value: llm },
         { key: 'ninerouter_api_key', value: token },
         { key: 'ninerouter_default_model', value: 'gpt-4o' },
       ]);
+      db.close();
     },
-    { origin: KNOWLEDGE_ORIGIN, llm: LLM_ORIGIN }
+    { llm: LLM_PATH }
   );
 }
 

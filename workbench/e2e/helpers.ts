@@ -1,6 +1,10 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Seed V28 through the app's real Vite-served modules; no setContent, no raw IDB writes. */
+/**
+ * Seed V28 through the app's real Vite-served modules before first navigation.
+ * addInitScript runs at document_start, so no post-boot db.delete() race with
+ * the app's own Dexie connection. Idempotent across reloads.
+ */
 export async function seedV28InBrowser(page: Page): Promise<{
   crCode: string;
   crId: string;
@@ -8,25 +12,40 @@ export async function seedV28InBrowser(page: Page): Promise<{
   taskIds: string[];
   systemCode: string;
 }> {
-  await page.goto('/task-management/');
-  await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
-  const seeded = await page.evaluate(async () => {
+  await page.addInitScript(async () => {
+    if (!location.pathname.startsWith('/task-management')) return;
     const base = '/task-management';
     const { TaskPlannerDatabase } = await import(`${base}/src/db/index.ts`);
     const { seedV28 } = await import(`${base}/workbench/seed/v28Seed.ts`);
     const db = new TaskPlannerDatabase('PersonalTaskPlannerDB');
-    await db.delete();
-    const fresh = new TaskPlannerDatabase('PersonalTaskPlannerDB');
-    const fixture = await seedV28(fresh);
+    if ((await db.tasks.count()) === 0) {
+      await seedV28(db);
+    }
+    db.close();
+    (window as unknown as { __workbenchSeeded?: boolean }).__workbenchSeeded = true;
+  });
+
+  await page.goto('/task-management/');
+  await page.waitForFunction(
+    () => (window as unknown as { __workbenchSeeded?: boolean }).__workbenchSeeded === true
+  );
+
+  const seeded = await page.evaluate(async () => {
+    const base = '/task-management';
+    const { TaskPlannerDatabase } = await import(`${base}/src/db/index.ts`);
+    const db = new TaskPlannerDatabase('PersonalTaskPlannerDB');
+    const fixtureRows = await db.tasks.toArray();
+    const crs = await db.changeRequests.toArray();
+    const systems = await db.systems.toArray();
+    db.close();
     return {
-      crCode: fixture.changeRequests[0]!.code,
-      crId: fixture.changeRequests[0]!.id,
-      taskNames: fixture.tasks.map((task) => task.name),
-      taskIds: fixture.tasks.map((task) => task.id).sort(),
-      systemCode: fixture.systems[0]!.code,
+      crCode: crs[0]!.code,
+      crId: crs[0]!.id,
+      taskNames: fixtureRows.map((task) => task.name),
+      taskIds: fixtureRows.map((task) => task.id).sort(),
+      systemCode: systems[0]!.code,
     };
   });
-  await page.reload();
   await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
   return seeded;
 }
