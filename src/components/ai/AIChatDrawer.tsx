@@ -194,6 +194,14 @@ const DRAWER_QUICK_PROMPTS = [
   { id: 'overdue', label: 'Tác vụ quá hạn', prompt: 'Kiểm tra các tác vụ quá hạn' },
   { id: 'help', label: 'Hướng dẫn sử dụng', prompt: 'Hướng dẫn sử dụng trợ lý AI và các lệnh' },
 ];
+export const STANDALONE_QUICK_PROMPTS = [
+  { id: 'explain-code', label: 'Giải thích mã', prompt: 'Giải thích mã này' },
+  { id: 'lookup-docs', label: 'Tra cứu tài liệu', prompt: 'Tra cứu tài liệu liên quan' },
+];
+export const STANDALONE_EMPTY_STATE = {
+  heading: 'Chưa có hội thoại',
+  body: 'Nhập tin nhắn bên dưới để bắt đầu. Enter để gửi, Shift+Enter để xuống dòng.',
+};
 
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
@@ -2692,13 +2700,17 @@ Rules:
             onOpenSshFsSettings: () => setIsSshFsModalOpen(true),
             sshFsToolEnabled,
           }}
-          quickPrompts={DRAWER_QUICK_PROMPTS}
+          quickPrompts={isStandaloneChat ? STANDALONE_QUICK_PROMPTS : DRAWER_QUICK_PROMPTS}
           onClearThread={handleDeleteCurrentThread}
           onClearAllHistory={handleClearAllHistory}
-          emptyState={{
-            heading: `Trợ lý AI ${APP_NAME}`,
-            body: 'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.',
-          }}
+          emptyState={
+            isStandaloneChat
+              ? STANDALONE_EMPTY_STATE
+              : {
+                  heading: `Trợ lý AI ${APP_NAME}`,
+                  body: 'Đặt câu hỏi về tác vụ hiện tại, phân tích tiến độ, gợi ý checklist hoặc tra cứu tài liệu đính kèm. Nhập câu hỏi bên dưới để bắt đầu.',
+                }
+          }
           toolEvents={activeToolEvents}
           placeholder={
             activeRuntime?.pendingConfirmation
