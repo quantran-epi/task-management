@@ -347,4 +347,64 @@ describe('QuickNotesPanel', () => {
     expect(useLayoutStore.getState().rightActiveId).toBeNull();
     expect(screen.queryByTestId('quick-notes-entity-select')).toBeNull();
   });
+
+  it('Select chỉ liệt kê CR khi Segmented chọn CR', async () => {
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    fireEvent.click(screen.getByText('CR'));
+    const select = screen.getByTestId('quick-notes-entity-select');
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+
+    expect(await screen.findByTitle('CR-001')).toBeDefined();
+    expect(screen.queryByTitle('Task kiểm thử')).toBeNull();
+    expect(screen.queryByTitle('Hệ thống Core')).toBeNull();
+  });
+
+  it('Select đổi option theo Task rồi Hệ thống', async () => {
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    fireEvent.click(screen.getByText('Task'));
+    let select = screen.getByTestId('quick-notes-entity-select');
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    expect(await screen.findByTitle('Task kiểm thử')).toBeDefined();
+    expect(screen.queryByTitle('CR-001')).toBeNull();
+    expect(screen.queryByTitle('Hệ thống Core')).toBeNull();
+
+    fireEvent.click(screen.getByText('Hệ thống'));
+    select = screen.getByTestId('quick-notes-entity-select');
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    expect(await screen.findByTitle('Hệ thống Core')).toBeDefined();
+    expect(screen.queryByTitle('CR-001')).toBeNull();
+    expect(screen.queryByTitle('Task kiểm thử')).toBeNull();
+  });
+
+  it('đổi loại xóa lựa chọn cũ và note lưu sau đó không giữ type/id cũ', async () => {
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    fireEvent.click(screen.getByText('CR'));
+    let select = screen.getByTestId('quick-notes-entity-select');
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    fireEvent.click(await screen.findByTitle('CR-001'));
+
+    fireEvent.click(screen.getByText('Task'));
+    select = screen.getByTestId('quick-notes-entity-select');
+    expect(select.querySelector('.ant-select-selection-item')).toBeNull();
+
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    expect(await screen.findByTitle('Task kiểm thử')).toBeDefined();
+    expect(screen.queryByTitle('CR-001')).toBeNull();
+
+    fireEvent.change(screen.getByPlaceholderText('Ghi chú nhanh...'), {
+      target: { value: 'Ghi chú sau đổi loại' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu/ }));
+
+    await waitFor(async () => {
+      const notes = await db.notes.toArray();
+      expect(notes).toHaveLength(1);
+      expect(notes[0]?.entityType).toBe('task');
+      expect(notes[0]?.entityId).toBeUndefined();
+      expect(notes.some((note) => note.entityType === 'cr')).toBe(false);
+    });
+  });
 });
