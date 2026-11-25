@@ -1,0 +1,217 @@
+// @vitest-environment jsdom
+import 'fake-indexeddb/auto';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import Dexie from 'dexie';
+import { useState } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TaskPlannerDatabase } from '../../src/db';
+import { generateId } from '../../src/utils/uuid';
+import { KnowledgeConfigProvider } from '../../src/services/knowledge/knowledgeConfig';
+
+const GROUP_LABELS = [
+  'Provider',
+  'Knowledge Server',
+  'MCP',
+  'Graphiti',
+  'Oracle SQLcl',
+  'SSH File System',
+  'Tool Catalog',
+] as const;
+
+type CardProps = { db?: TaskPlannerDatabase };
+
+const cardMocks = vi.hoisted(() => ({
+  nineRouter: vi.fn((_props: CardProps) => null),
+  knowledge: vi.fn(() => null),
+  mcp: vi.fn((_props: CardProps) => null),
+  graphiti: vi.fn((_props: CardProps) => null),
+  oracle: vi.fn((_props: CardProps) => null),
+  sshFs: vi.fn((_props: CardProps) => null),
+  catalog: vi.fn((_props: CardProps) => null),
+}));
+
+vi.mock('../../src/components/settings/NineRouterConfigCard', () => ({
+  NineRouterConfigCard: (props: CardProps) => {
+    cardMocks.nineRouter(props);
+    return (
+      <div data-testid="card-nine-router">
+        <span>API Endpoint</span>
+        <span>API Key</span>
+        <span>Default Model</span>
+        <span>Context window</span>
+        <span>Global conventions</span>
+      </div>
+    );
+  },
+}));
+
+vi.mock('../../src/components/settings/KnowledgeServerConfigCard', () => ({
+  KnowledgeServerConfigCard: () => {
+    cardMocks.knowledge();
+    return <div data-testid="card-knowledge-server" />;
+  },
+}));
+
+vi.mock('../../src/components/settings/McpConfigCard', () => ({
+  McpConfigCard: (props: CardProps) => {
+    cardMocks.mcp(props);
+    return <div data-testid="card-mcp" />;
+  },
+}));
+
+vi.mock('../../src/components/settings/GraphitiSqlConfigCard', () => ({
+  GraphitiSqlConfigCard: (props: CardProps) => {
+    cardMocks.graphiti(props);
+    return <div data-testid="card-graphiti" />;
+  },
+}));
+
+vi.mock('../../src/components/settings/OracleAiToolConfigCard', () => ({
+  OracleAiToolConfigCard: (props: CardProps) => {
+    cardMocks.oracle(props);
+    return <div data-testid="card-oracle" />;
+  },
+}));
+
+vi.mock('../../src/components/settings/SshFsAiToolConfigCard', () => ({
+  SshFsAiToolConfigCard: (props: CardProps) => {
+    cardMocks.sshFs(props);
+    return <div data-testid="card-ssh-fs" />;
+  },
+}));
+
+vi.mock('../../src/components/settings/AiToolCatalogCard', () => ({
+  AiToolCatalogCard: (props: CardProps) => {
+    cardMocks.catalog(props);
+    return <div data-testid="card-tool-catalog" />;
+  },
+}));
+
+vi.mock('../../src/services/ai/nineRouterTokenService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/ai/nineRouterTokenService')>();
+  return { ...actual, setNineRouterApiKey: vi.fn(actual.setNineRouterApiKey) };
+});
+
+describe('phase 51 AI settings drawer', () => {
+  let dbName: string;
+  let db: TaskPlannerDatabase;
+
+  beforeEach(async () => {
+    dbName = `AISettingsDrawer_${generateId()}`;
+    db = new TaskPlannerDatabase(dbName);
+    await db.open();
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    cleanup();
+    db.close();
+    await Dexie.delete(dbName);
+  });
+
+  it('Test 1: side nav exposes exactly seven locked labels in order', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
+    render(<AISettingsDrawerBody db={db} />);
+
+    const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent)).toEqual(GROUP_LABELS);
+    expect(screen.queryByText('GlobalConventionsCard')).not.toBeInTheDocument();
+  });
+
+  it('Test 2: switching groups shows one card, marks nav active, and exposes accordion state', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
+    render(<AISettingsDrawerBody db={db} />);
+
+    const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });
+    expect(within(nav).getByRole('button', { name: 'Provider' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByTestId('card-nine-router')).toBeInTheDocument();
+    expect(screen.queryByTestId('card-mcp')).not.toBeInTheDocument();
+
+    const accordionHeader = screen.getByRole('button', { name: 'NineRouter' });
+    expect(accordionHeader).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(accordionHeader);
+    expect(accordionHeader).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(accordionHeader);
+    expect(accordionHeader).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(within(nav).getByRole('button', { name: 'MCP' }));
+    expect(within(nav).getByRole('button', { name: 'MCP' })).toHaveAttribute('aria-current', 'true');
+    expect(within(nav).getByRole('button', { name: 'Provider' })).not.toHaveAttribute('aria-current');
+    expect(screen.queryByTestId('card-nine-router')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card-mcp')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'MCP servers' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('Test 3: Provider mounts real card with locked fields and shared keyring service', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
+    render(<AISettingsDrawerBody db={db} />);
+
+    for (const label of ['API Endpoint', 'API Key', 'Default Model', 'Context window', 'Global conventions']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    expect(cardMocks.nineRouter).toHaveBeenCalledTimes(1);
+    expect(cardMocks.nineRouter).toHaveBeenCalledWith({ db });
+
+    const { setNineRouterApiKey } = await import('../../src/services/ai/nineRouterTokenService');
+    expect(vi.isMockFunction(setNineRouterApiKey)).toBe(true);
+    const keyring = await import('../../src/services/keyringService');
+    expect(keyring.KEYRING_KEYS.NINEROUTER_API_KEY).toBe('ninerouter_api_key');
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    expect(readFileSync(resolve(process.cwd(), 'src/services/keyringService.ts'), 'utf8')).toContain("KEYRING_SERVICE = 'task-planner'");
+  });
+
+  it('Test 4: every other group mounts its real card module with the same db', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
+    render(
+      <KnowledgeConfigProvider db={db}>
+        <AISettingsDrawerBody db={db} />
+      </KnowledgeConfigProvider>
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });
+    const expected: Array<[string, string, keyof typeof cardMocks]> = [
+      ['Knowledge Server', 'card-knowledge-server', 'knowledge'],
+      ['MCP', 'card-mcp', 'mcp'],
+      ['Graphiti', 'card-graphiti', 'graphiti'],
+      ['Oracle SQLcl', 'card-oracle', 'oracle'],
+      ['SSH File System', 'card-ssh-fs', 'sshFs'],
+      ['Tool Catalog', 'card-tool-catalog', 'catalog'],
+    ];
+
+    for (const [label, testId, cardKey] of expected) {
+      fireEvent.click(within(nav).getByRole('button', { name: label }));
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+      const cardMock = cardMocks[cardKey];
+      expect(cardMock).toHaveBeenCalled();
+      if (cardKey !== 'knowledge') {
+        expect(cardMock.mock.calls.at(-1)?.[0]?.db?.name).toBe(db.name);
+      }
+    }
+  });
+
+  it('Test 5: opening and closing the drawer keeps chat mounted and preserves draft', async () => {
+    const { AISettingsDrawer } = await import('../../src/components/ai/AISettingsDrawer');
+    const ChatAndDrawer = () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <input aria-label="Nội dung tin nhắn trò chuyện AI" defaultValue="" />
+          <button onClick={() => setOpen(true)}>Mở Cài đặt AI</button>
+          <AISettingsDrawer open={open} onClose={() => setOpen(false)} db={db} />
+        </>
+      );
+    };
+    render(<ChatAndDrawer />);
+
+    const composer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'draft trước khi mở drawer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mở Cài đặt AI' }));
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('draft trước khi mở drawer');
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng Cài đặt AI' }));
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('draft trước khi mở drawer');
+  });
+});
