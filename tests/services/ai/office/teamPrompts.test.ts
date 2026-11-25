@@ -1029,6 +1029,24 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
       }
     });
 
+    it('carries all five source tool names in both lead and employee segments', () => {
+      const SOURCE_NAMES = [
+        'search_source',
+        'explore_source',
+        'source_callers',
+        'source_callees',
+        'read_source',
+      ];
+      const SOURCE_SEGMENT = `[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]\nsvng-source là TÊN SERVER; công cụ: ${SOURCE_NAMES.join(', ')}.`;
+      for (const system of [
+        buildEmployee({ graphitiSkillSegment: SOURCE_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
+        buildLead({ graphitiSkillSegment: SOURCE_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
+      ]) {
+        expect(system).toContain(SOURCE_SEGMENT);
+        for (const name of SOURCE_NAMES) expect(system).toContain(name);
+      }
+    });
+
     it('emits no skill block when the segment is absent', () => {
       for (const system of [
         buildEmployee({ pinnedContextSegment: PIN_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),

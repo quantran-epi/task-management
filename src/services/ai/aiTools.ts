@@ -6,6 +6,7 @@ import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../
 import { getTodayDateString } from '../../utils/date';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 import { wrapField } from './untrustedData';
+import { SOURCE_TOOL_NAMES } from './mcpClient';
 import { getEffectiveDailyCapacity } from '../../utils/capacity';
 import { inspectDateCapacity } from '../../utils/feasibility';
 import { filterSessionsByPeriod, aggregateWorkTypeBreakdown } from '../../utils/analytics';
@@ -5187,6 +5188,11 @@ export function normalizeToolName(toolName: string): string {
   let name = toolName.trim();
   name = name.replace(/(_ide|_cc|_tool)$/, '');
   name = name.replace(/^(proxy_|tool_)/, '');
+  // ponytail: ceiling là repair prefix `svng source`; mở rộng khi server id khác gây nhiễu tương tự.
+  const spaced = name.replace(/[_-]+/g, ' ').trim();
+  const match = spaced.match(/^svng source (.+)$/);
+  const repaired = SOURCE_TOOL_NAMES.find((sourceName) => sourceName.replace(/_/g, ' ') === match?.[1]);
+  if (repaired) return repaired;
   return name;
 }
 

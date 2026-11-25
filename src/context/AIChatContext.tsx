@@ -7,15 +7,24 @@ export interface ActiveScope {
   title?: string | undefined;
 }
 
+export interface ChatFocusRequest {
+  scope: ActiveScope;
+  tabId: string;
+}
+
 export interface AIChatContextValue {
   isOpen: boolean;
   openChat: (scope?: ActiveScope, initialPrompt?: string) => void;
   openChatWithDraft: (scope?: ActiveScope, draftText?: string) => void;
+  /** Open at a specific running tab; the drawer consumes the request once its scope is loaded. */
+  openChatAtTab: (scope: ActiveScope, tabId: string) => void;
   closeChat: () => void;
   toggleChat: () => void;
   activeScope: ActiveScope;
   setCustomScope: (scope: ActiveScope) => void;
   registerActiveItem: (scope: ActiveScope | null) => () => void;
+  focusRequest: ChatFocusRequest | null;
+  clearFocusRequest: () => void;
   pendingPrompt: string | null;
   clearPendingPrompt: () => void;
   pendingDraft: string | null;
@@ -60,6 +69,9 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
   });
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [pendingDraft, setPendingDraftState] = useState<string | null>(null);
+  // One-shot intent: which tab the drawer must focus after it opens at a scope. Cleared by the
+  // drawer after applying. Never persisted — a stale focus must not survive a reload.
+  const [focusRequest, setFocusRequest] = useState<ChatFocusRequest | null>(null);
 
   const saveOpenState = (open: boolean) => {
     setIsOpen(open);
@@ -94,6 +106,16 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     }
     saveOpenState(true);
   }, [persistScope]);
+
+  const openChatAtTab = useCallback((scope: ActiveScope, tabId: string) => {
+    persistScope(scope);
+    setFocusRequest({ scope, tabId });
+    saveOpenState(true);
+  }, [persistScope]);
+
+  const clearFocusRequest = useCallback(() => {
+    setFocusRequest(null);
+  }, []);
 
   const setPendingDraft = useCallback((text: string | null) => {
     setPendingDraftState(text);
@@ -152,11 +174,14 @@ export const AIChatProvider: React.FC<AIChatProviderProps> = ({ children }) => {
     isOpen,
     openChat,
     openChatWithDraft,
+    openChatAtTab,
     closeChat,
     toggleChat,
     activeScope,
     setCustomScope,
     registerActiveItem,
+    focusRequest,
+    clearFocusRequest,
     pendingPrompt,
     clearPendingPrompt,
     pendingDraft,
@@ -171,11 +196,14 @@ const defaultContextValue: AIChatContextValue = {
   isOpen: false,
   openChat: () => {},
   openChatWithDraft: () => {},
+  openChatAtTab: () => {},
   closeChat: () => {},
   toggleChat: () => {},
   activeScope: { type: 'global' },
   setCustomScope: () => {},
   registerActiveItem: () => () => {},
+  focusRequest: null,
+  clearFocusRequest: () => {},
   pendingPrompt: null,
   clearPendingPrompt: () => {},
   pendingDraft: null,

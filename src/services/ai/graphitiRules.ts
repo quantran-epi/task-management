@@ -5,8 +5,12 @@ import {
   resetMcpServerCache,
   sanitizeUrl,
   saveMcpServers,
+  SOURCE_TOOL_NAMES,
   type McpServerConfig,
 } from './mcpClient';
+
+// Prompt-facing re-export; the constant lives in mcpClient to break the aiTools import cycle.
+export { SOURCE_TOOL_NAMES } from './mcpClient';
 
 const BASE = import.meta.env.BASE_URL.endsWith('/')
   ? import.meta.env.BASE_URL
@@ -229,7 +233,11 @@ export function buildGraphitiSkillSegment(input: BuildGraphitiSkillSegmentInput)
       ? [`- graphiti-memory đang bật (${safeUrlForPrompt(servers.memory.url)}).`]
       : []),
     ...(servers.source.enabled
-      ? [`- svng-source đang bật (${safeUrlForPrompt(servers.source.url)}).`]
+      ? [
+          `- svng-source đang bật (${safeUrlForPrompt(servers.source.url)}).`,
+          `- svng-source là TÊN SERVER, không phải tên công cụ. Các công cụ đọc source của server này là ${SOURCE_TOOL_NAMES.join(', ')}.`,
+          '- Chỉ gọi các công cụ đó khi cần bằng chứng source; tuyệt đối không gọi công cụ có tên `svng source` hoặc `svng-source`.',
+        ]
       : []),
   ];
   const parts = [

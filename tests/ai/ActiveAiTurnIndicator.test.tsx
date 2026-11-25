@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ActiveAiTurnIndicator } from '../../src/components/ai/ActiveAiTurnIndicator';
 import { BudgetTopUpModal } from '../../src/components/ai/office/BudgetTopUpModal';
 import { aiTurnManager } from '../../src/services/ai/aiTurnManager';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
+import * as aiChatContext from '../../src/context/AIChatContext';
 
 // The tab label must come from the authoritative team row, not the turn's agent-derived title.
 vi.mock('../../src/db/repositories/aiTeamRepo', async (importOriginal) => {
@@ -184,6 +185,115 @@ describe('ActiveAiTurnIndicator', () => {
       const tab = useLayoutStore.getState().openTabs.find((t) => t.id === 'team_workspace:team-1');
       expect(tab!.title).toBe('Nhóm Alpha');
     });
+  });
+});
+
+describe('clicking the footer indicator opens the exact running session', () => {
+  let openChatAtTab: ReturnType<typeof vi.fn<(scope: aiChatContext.ActiveScope, tabId: string) => void>>;
+  let openChat: ReturnType<typeof vi.fn<(scope?: aiChatContext.ActiveScope) => void>>;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    aiTurnManager.abortAll();
+    useLayoutStore.getState().resetLayout();
+    openChatAtTab = vi.fn();
+    openChat = vi.fn();
+    vi.spyOn(aiChatContext, 'useAIChat').mockReturnValue({
+      isOpen: true,
+      openChat,
+      openChatWithDraft: vi.fn(),
+      openChatAtTab,
+      closeChat: vi.fn(),
+      toggleChat: vi.fn(),
+      activeScope: { type: 'global' },
+      setCustomScope: vi.fn(),
+      registerActiveItem: () => () => {},
+      focusRequest: null,
+      clearFocusRequest: vi.fn(),
+      pendingPrompt: null,
+      clearPendingPrompt: vi.fn(),
+      pendingDraft: null,
+      setPendingDraft: vi.fn(),
+      clearPendingDraft: vi.fn(),
+    });
+  });
+
+  it('rebuilds the scope from a task scopeKey and focuses the running tab', () => {
+    act(() => {
+      aiTurnManager.registerTurn({
+        id: 'tab-task-1',
+        scopeKey: 'task:task-1',
+        title: 'Chat: Đang viết docs',
+        status: 'streaming',
+        streamingStatusLabel: 'Đang phản hồi',
+        abort: vi.fn(),
+        meta: { tabId: 'tab-task-1' },
+      });
+    });
+
+    render(<ActiveAiTurnIndicator compact />);
+    fireEvent.click(screen.getByTestId('active-ai-turn-capsule'));
+
+    expect(openChatAtTab).toHaveBeenCalledTimes(1);
+    expect(openChatAtTab).toHaveBeenCalledWith(
+      { type: 'task', id: 'task-1', title: 'Chat: Đang viết docs' },
+      'tab-task-1'
+    );
+    expect(openChat).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the turn id when no tabId metadata is present', () => {
+    act(() => {
+      aiTurnManager.registerTurn({
+        id: 'tab-global-1',
+        scopeKey: 'global',
+        title: 'AI Chat',
+        status: 'streaming',
+        streamingStatusLabel: 'Đang phản hồi',
+        abort: vi.fn(),
+      });
+    });
+
+    render(<ActiveAiTurnIndicator />);
+    fireEvent.click(screen.getByTestId('active-ai-turn-capsule'));
+
+    expect(openChatAtTab).toHaveBeenCalledWith({ type: 'global' }, 'tab-global-1');
+  });
+
+  it('focuses the clicked turn in the dropdown, not the first turn', () => {
+    act(() => {
+      aiTurnManager.registerTurn({
+        id: 'tab-a',
+        scopeKey: 'task:task-a',
+        title: 'Chat: Session A',
+        status: 'streaming',
+        streamingStatusLabel: 'Đang chạy',
+        abort: vi.fn(),
+        meta: { tabId: 'tab-a' },
+      });
+      aiTurnManager.registerTurn({
+        id: 'tab-b',
+        scopeKey: 'cr:cr-b',
+        title: 'Chat: Session B',
+        status: 'tool',
+        streamingStatusLabel: 'Truy xuất',
+        abort: vi.fn(),
+        meta: { tabId: 'tab-b' },
+      });
+    });
+
+    render(<ActiveAiTurnIndicator compact />);
+    fireEvent.click(screen.getByTestId('active-ai-turns-multi-capsule'));
+    fireEvent.click(screen.getByText('Chat: Session B'));
+
+    expect(openChatAtTab).toHaveBeenCalledTimes(1);
+    expect(openChatAtTab).toHaveBeenCalledWith(
+      { type: 'cr', id: 'cr-b', title: 'Chat: Session B' },
+      'tab-b'
+    );
   });
 });
 
