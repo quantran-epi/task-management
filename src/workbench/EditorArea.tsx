@@ -942,10 +942,18 @@ export function EditorArea({ db }: EditorAreaProps) {
           minHeight: 0,
           height: '100%',
           overflow:
-            activeTab?.viewType === 'notes' || activeTab?.viewType === 'config-profiles' ? 'hidden' : 'auto',
+            activeTab?.viewType === 'notes' ||
+            activeTab?.viewType === 'config-profiles' ||
+            activeTab?.viewType === 'doc_set_library'
+              ? 'hidden'
+              : 'auto',
           position: 'relative',
           padding:
-            activeTab?.viewType === 'notes' || activeTab?.viewType === 'config-profiles' ? 0 : '16px 20px',
+            activeTab?.viewType === 'notes' ||
+            activeTab?.viewType === 'config-profiles' ||
+            activeTab?.viewType === 'doc_set_library'
+              ? 0
+              : '16px 20px',
           display: 'flex',
           flexDirection: 'column',
         }}

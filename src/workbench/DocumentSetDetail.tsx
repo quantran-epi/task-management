@@ -579,9 +579,18 @@ export function DocumentSetDetail({
   const [statusFilter, setStatusFilter] = useState<PublishPrimaryState | undefined>(undefined);
   const [sortKey, setSortKey] = useState<'updated' | 'name'>('updated');
   const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [pendingPicker, setPendingPicker] = useState(false);
   const formRef = useRef<DocumentSetFormHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useState(0);
+
+  useEffect(() => {
+    if (configOpen && pendingPicker) {
+      formRef.current?.openPicker();
+      setPendingPicker(false);
+    }
+  }, [configOpen, pendingPicker]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -675,7 +684,7 @@ export function DocumentSetDetail({
     <div
       ref={rootRef}
       data-testid="doc-set-detail"
-      style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, minHeight: 0, gap: 'var(--gap-12)', overflow: 'auto' }}
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', minWidth: 0, minHeight: 0, gap: 'var(--gap-8)', overflow: 'hidden' }}
     >
       <div style={{ flexShrink: 0 }}>
         <Title level={4} style={{ margin: 0, fontSize: 20 }}>
@@ -691,6 +700,24 @@ export function DocumentSetDetail({
             <Tag color={stateUi.color} icon={stateUi.icon}>{stateUi.label}</Tag>
           </Tooltip>
           {activeSummary ? <Text>{activeSummary}</Text> : null}
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            aria-label="Cấu hình bộ tài liệu"
+            onClick={() => setConfigOpen((open) => !open)}
+          >
+            Cấu hình
+          </Button>
+          <Button
+            size="small"
+            type="primary"
+            aria-label="Xem trước xuất bản"
+            disabled={previewDisabled}
+            loading={previewLoading}
+            onClick={() => void handlePreviewDocumentSet()}
+          >
+            Xem trước xuất bản
+          </Button>
           <Button
             size="small"
             danger
@@ -743,23 +770,100 @@ export function DocumentSetDetail({
         </div>
       )}
 
-      <DocumentSetForm
-        ref={formRef}
-        notes={formNotes}
-        initialSet={set}
-        availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
-        onSave={(value) => void handleSaveDocumentSet(value)}
-      />
-      <Button
-        aria-label="Xem trước xuất bản"
-        type="primary"
-        disabled={previewDisabled}
-        loading={previewLoading}
-        onClick={() => void handlePreviewDocumentSet()}
-      >
-        Xem trước xuất bản
-      </Button>
+      {/* Docs list owns the viewport: graph/history fold into a compact pane below. */}
+      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: '1 1 auto', minHeight: 160, minWidth: 0, gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', background: 'var(--ant-color-bg-layout, #f5f6f8)' }}>
+            <SearchInput
+              aria-label="Tìm tài liệu trong bộ"
+              placeholder="Tên hoặc đường dẫn"
+              value={docQuery}
+              onChange={(event) => setDocQuery(event.target.value)}
+              style={{ flex: '1 1 160px', minWidth: 100, width: detailWidth >= 560 ? 200 : 'auto' }}
+            />
+            <Select
+              aria-label="Lọc trạng thái"
+              allowClear
+              placeholder="Trạng thái"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ flex: '1 1 110px', minWidth: 90, width: detailWidth >= 560 ? 150 : 'auto' }}
+              options={Object.keys(STATE_UI).map((value) => ({ value, label: value }))}
+            />
+            <Select
+              aria-label="Sắp xếp"
+              value={sortKey}
+              onChange={setSortKey}
+              style={{ flex: '1 1 90px', minWidth: 80, width: detailWidth >= 560 ? 120 : 'auto' }}
+              options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
+            />
+            <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
+          </div>
+          {detailWidth < 560 && selectedDoc ? (
+            <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', overflow: 'hidden' }}>
+              <Text strong ellipsis style={{ fontSize: 12 }}>{selectedDoc.title}</Text>
+              <Text type="secondary" ellipsis style={{ fontSize: 11, display: 'block' }}>{selectedDoc.path || '—'}</Text>
+            </div>
+          ) : null}
+          {rows.length === 0 ? (
+            <Empty description="Chưa có tài liệu nào trong bộ này">
+              <Button type="primary" onClick={() => { setConfigOpen(true); setPendingPicker(true); }}>Thêm tài liệu</Button>
+            </Empty>
+          ) : (
+            <VirtualizedList
+              items={filteredRows}
+              estimateSize={() => DOC_ROW_HEIGHT}
+              height="100%"
+              overscan={4}
+              role="listbox"
+              aria-label="Danh sách tài liệu trong bộ"
+              renderItem={(row) => (
+                <DocumentRowView row={row} selected={row.id === selectedDocId} onSelect={setSelectedDocId} />
+              )}
+            />
+          )}
+        </div>
+        {detailWidth >= 560 ? (
+          <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
+            {configOpen ? (
+              <DocumentSetForm
+                ref={formRef}
+                notes={formNotes}
+                initialSet={set}
+                availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
+                onSave={(value) => void handleSaveDocumentSet(value)}
+              />
+            ) : (
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                <Button size="small" icon={<EditOutlined />} onClick={() => setConfigOpen(true)}>Mở form cấu hình</Button>
+                {selectedDoc ? (
+                  <>
+                    <Text strong>{selectedDoc.title}</Text>
+                    <Text type="secondary">{selectedDoc.path || '—'}</Text>
+                    <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
+                    <Text type="secondary">{selectedDoc.updatedAt}</Text>
+                    <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
+                    <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
+                  </>
+                ) : (
+                  <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
+                )}
+              </Space>
+            )}
+          </aside>
+        ) : configOpen ? (
+          <DocumentSetForm
+            ref={formRef}
+            notes={formNotes}
+            initialSet={set}
+            availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
+            onSave={(value) => void handleSaveDocumentSet(value)}
+          />
+        ) : null}
+      </div>
 
+      {/* Compact graph/history pane below the doc list. */}
+      <div style={{ flex: '0 1 auto', minHeight: 72, maxHeight: 260, overflowY: 'auto', borderTop: '1px solid var(--ant-color-border, #f0f0f0)' }}>
       {/* Section: Đồ thị tri thức (Knowledge Graph) */}
       <section aria-labelledby="knowledge-graph-heading">
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
@@ -938,75 +1042,6 @@ export function DocumentSetDetail({
         <Title level={3} id="attempt-history-heading">Lịch sử xuất bản</Title>
         <AttemptHistoryList attempts={publishData.attempts} />
       </section>
-
-      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: 1, minHeight: 0, gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', background: 'var(--ant-color-bg-layout, #f5f6f8)' }}>
-            <SearchInput
-              aria-label="Tìm tài liệu trong bộ"
-              placeholder="Tên hoặc đường dẫn"
-              value={docQuery}
-              onChange={(event) => setDocQuery(event.target.value)}
-              style={{ flex: '1 1 160px', minWidth: 100, width: detailWidth >= 560 ? 200 : 'auto' }}
-            />
-            <Select
-              aria-label="Lọc trạng thái"
-              allowClear
-              placeholder="Trạng thái"
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ flex: '1 1 110px', minWidth: 90, width: detailWidth >= 560 ? 150 : 'auto' }}
-              options={Object.keys(STATE_UI).map((value) => ({ value, label: value }))}
-            />
-            <Select
-              aria-label="Sắp xếp"
-              value={sortKey}
-              onChange={setSortKey}
-              style={{ flex: '1 1 90px', minWidth: 80, width: detailWidth >= 560 ? 120 : 'auto' }}
-              options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
-          </div>
-          {detailWidth < 560 && selectedDoc ? (
-            <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', overflow: 'hidden' }}>
-              <Text strong ellipsis style={{ fontSize: 12 }}>{selectedDoc.title}</Text>
-              <Text type="secondary" ellipsis style={{ fontSize: 11, display: 'block' }}>{selectedDoc.path || '—'}</Text>
-            </div>
-          ) : null}
-          {rows.length === 0 ? (
-            <Empty description="Chưa có tài liệu nào trong bộ này">
-              <Button type="primary" onClick={() => formRef.current?.openPicker()}>Thêm tài liệu</Button>
-            </Empty>
-          ) : (
-            <VirtualizedList
-              items={filteredRows}
-              estimateSize={() => DOC_ROW_HEIGHT}
-              height={440}
-              overscan={4}
-              role="listbox"
-              aria-label="Danh sách tài liệu trong bộ"
-              renderItem={(row) => (
-                <DocumentRowView row={row} selected={row.id === selectedDocId} onSelect={setSelectedDocId} />
-              )}
-            />
-          )}
-        </div>
-        {detailWidth >= 560 ? (
-          <aside style={{ width: 260, flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
-            {selectedDoc ? (
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Text strong>{selectedDoc.title}</Text>
-                <Text type="secondary">{selectedDoc.path || '—'}</Text>
-                <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
-                <Text type="secondary">{selectedDoc.updatedAt}</Text>
-                <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
-                <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
-              </Space>
-            ) : (
-              <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
-            )}
-          </aside>
-        ) : null}
       </div>
 
       {/* Confirmation modal before rebuild per D-21 */}

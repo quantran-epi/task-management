@@ -242,6 +242,7 @@ describe('document-set management', () => {
     const emptyDb = await seedTabDb({ set: { ...documentSet, documentIds: [] } });
     await renderTab(emptyDb, { setId: 'set-a', configured: true });
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cấu hình bộ tài liệu' }));
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled();
     cleanup();
     emptyDb.close();
@@ -263,6 +264,7 @@ describe('document-set management', () => {
     });
     await renderTab(db3, { setId: 'set-a', configured: true });
     expect(screen.getByRole('button', { name: 'Xem trước xuất bản' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cấu hình bộ tài liệu' }));
     expect(screen.getByRole('button', { name: 'Lưu thay đổi' })).toBeEnabled();
     db3.close();
   }, 30000);

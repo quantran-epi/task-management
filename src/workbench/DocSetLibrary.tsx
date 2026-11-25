@@ -168,7 +168,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
           />
         </div>
       </div>
-      <div data-testid="doc-set-library-detail" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', padding: narrow ? 8 : 16 }}>
+      <div data-testid="doc-set-library-detail" style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden', padding: narrow ? 8 : 16, display: 'flex', flexDirection: 'column' }}>
         {creating ? (
           <DocumentSetForm
             notes={formNotes as Note[]}
