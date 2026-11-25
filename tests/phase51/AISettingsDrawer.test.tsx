@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
 import { generateId } from '../../src/utils/uuid';
 import { KnowledgeConfigProvider } from '../../src/services/knowledge/knowledgeConfig';
+import { AIChatProvider } from '../../src/context/AIChatContext';
+import { AIPopoutView } from '../../src/views/AIPopoutView';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const GROUP_LABELS = [
   'Provider',
@@ -77,6 +81,13 @@ vi.mock('../../src/components/settings/SshFsAiToolConfigCard', () => ({
   SshFsAiToolConfigCard: (props: CardProps) => {
     cardMocks.sshFs(props);
     return <div data-testid="card-ssh-fs" />;
+  },
+  DEFAULT_SSH_FS_CONFIG: {
+    sshConfigId: '',
+    defaultBasePath: '/',
+    maxLinesPerRead: 100,
+    maxListEntries: 100,
+    maxGrepMatches: 50,
   },
 }));
 
@@ -191,6 +202,78 @@ describe('phase 51 AI settings drawer', () => {
     }
   });
 
+  it('Test 6: standalone host mounts AISettingsDrawer exactly once with db and open state', async () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
+    expect(source.match(/<AISettingsDrawer\b/g)).toHaveLength(1);
+    expect(source).not.toMatch(/<Drawer\b/);
+    expect(source).toContain('onClose={() => setSettingsOpen(false)}');
+
+    render(
+      <AIChatProvider>
+        <AIPopoutView standaloneChat db={db} />
+      </AIChatProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('chat-settings-gear'));
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+    expect(screen.getByRole('navigation', { name: 'Cài đặt AI' })).toBeInTheDocument();
+  });
+
+  it('Test 7: KnowledgeServerConfigCard resolves route provider without throw', async () => {
+    const { KnowledgeConfigProvider: RealProvider } =
+      await import('../../src/services/knowledge/knowledgeConfig');
+    render(
+      <AIChatProvider>
+        <RealProvider db={db}>
+          <AIPopoutView standaloneChat db={db} />
+        </RealProvider>
+      </AIChatProvider>
+    );
+
+    fireEvent.click(screen.getByTestId('chat-settings-gear'));
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Cài đặt AI' })).getByRole('button', { name: 'Knowledge Server' }));
+    expect(screen.getByTestId('card-knowledge-server')).toBeInTheDocument();
+    expect(screen.queryByText(/requires KnowledgeConfigProvider/)).not.toBeInTheDocument();
+  });
+
+  it('Test 8: close button, Esc and backdrop restore gear focus and keep draft', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <AIChatProvider>
+        <AIPopoutView standaloneChat db={db} />
+      </AIChatProvider>
+    );
+
+    const composer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'giữ nháp qua đóng drawer' } });
+    const gear = screen.getByTestId('chat-settings-gear');
+    gear.focus();
+    fireEvent.click(gear);
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+
+    const closeButton = screen.getByRole('button', { name: 'Close' });
+    expect(within(closeButton).getByLabelText('Đóng Cài đặt AI')).toBeInTheDocument();
+    fireEvent.click(closeButton);
+    await waitFor(() => expect(document.activeElement).toBe(gear), { timeout: 2000 });
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('giữ nháp qua đóng drawer');
+
+    gear.focus();
+    fireEvent.click(gear);
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(document.activeElement).toBe(gear), { timeout: 2000 });
+
+    fireEvent.click(gear);
+    await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+    const mask = document.querySelector('.ant-drawer-mask');
+    expect(mask).not.toBeNull();
+    fireEvent.click(mask!);
+    await waitFor(() => expect(document.querySelector('.ant-drawer-open')).toBeNull(), { timeout: 2000 });
+    expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('giữ nháp qua đóng drawer');
+    errorSpy.mockRestore();
+  });
+
   it('Test 5: opening and closing the drawer keeps chat mounted and preserves draft', async () => {
     const { AISettingsDrawer } = await import('../../src/components/ai/AISettingsDrawer');
     const ChatAndDrawer = () => {
@@ -211,7 +294,7 @@ describe('phase 51 AI settings drawer', () => {
     await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
 
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('draft trước khi mở drawer');
-    fireEvent.click(screen.getByRole('button', { name: 'Đóng Cài đặt AI' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('draft trước khi mở drawer');
   });
 });

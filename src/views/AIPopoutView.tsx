@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Drawer, useAntdToken } from '../components/ui';
+import { useAntdToken } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { AIChatDrawer, type ActiveScope } from '../components/ai/AIChatDrawer';
+import { AISettingsDrawer } from '../components/ai/AISettingsDrawer';
 import {
   isTauriApp,
   isAiWindowAlwaysOnTop,
@@ -227,14 +228,7 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb, stan
         onOpenSettings={standaloneChat ? () => setSettingsOpen(true) : undefined}
         db={db}
       />
-      <Drawer
-        title="AI Settings · tất cả"
-        width={460}
-        placement="right"
-        mask
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={db} />
     </div>
   );
 };

@@ -91,17 +91,32 @@ export const AISettingsDrawer: React.FC<AISettingsDrawerProps> = ({
   open,
   onClose,
   db = defaultDb,
-}) => (
-  <Drawer
-    title="AI Settings · tất cả"
-    width={460}
-    placement="right"
-    mask
-    closable
-    open={open}
-    onClose={onClose}
-    closeIcon={<span role="button" aria-label="Đóng Cài đặt AI">✕</span>}
-  >
-    <AISettingsDrawerBody db={db} />
-  </Drawer>
-);
+}) => {
+  const triggerRef = React.useRef<HTMLElement | null>(null);
+  const wasOpenRef = React.useRef(false);
+
+  // Capture during render: child Drawer autofocuses its panel in a layout effect,
+  // so an effect here would record the panel instead of the gear trigger.
+  if (open && !wasOpenRef.current) {
+    triggerRef.current = document.activeElement as HTMLElement | null;
+  }
+  wasOpenRef.current = open;
+
+  return (
+    <Drawer
+      title="AI Settings · tất cả"
+      width={460}
+      placement="right"
+      mask
+      closable
+      open={open}
+      onClose={onClose}
+      closeIcon={<span aria-label="Đóng Cài đặt AI">✕</span>}
+      afterOpenChange={(visible) => {
+        if (!visible) triggerRef.current?.focus();
+      }}
+    >
+      <AISettingsDrawerBody db={db} />
+    </Drawer>
+  );
+};
