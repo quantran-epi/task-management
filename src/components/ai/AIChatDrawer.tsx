@@ -1537,6 +1537,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
       const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
 
+      // 261125-u4w: read the global standing instruction ONCE per turn, before the grounded
+      // branch returns. Repo conventions stay on the ordinary-turn path below.
+      const globalConvText = await getGlobalConventions(db).catch(() => '');
+      const globalConventionsSegment = buildConventionsSegment({ global: globalConvText });
+
       // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
       if (!turnAnalysisMode) {
         try {
@@ -1588,6 +1593,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
             },
             catalog,
             recentSessionId: threadId,
+            ...(globalConventionsSegment ? { instructions: globalConventionsSegment } : {}),
           },
           groundedDeps
         );
@@ -1995,14 +2001,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
       let conventionsSegment = '';
       try {
-        const [globalConv, repoConvs] = await Promise.all([
-          getGlobalConventions(db),
+        // Global conventions were already read above for the grounded branch; reuse that
+        // snapshot. Repo conventions remain ordinary-turn only.
+        const repoConvs =
           activeTargetSystemIds.length > 0
-            ? loadMultiRepoConventions(activeTargetSystemIds, db)
-            : Promise.resolve([]),
-        ]);
+            ? await loadMultiRepoConventions(activeTargetSystemIds, db)
+            : [];
         conventionsSegment = buildConventionsSegment({
-          global: globalConv,
+          global: globalConvText,
           repos: repoConvs.map((r) => ({
             systemCode: r.systemCode,
             systemName: r.systemName,

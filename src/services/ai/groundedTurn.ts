@@ -63,6 +63,11 @@ export interface GroundedTurnInput {
     id: string;
   };
   preRoutedIntent?: RouteIntentResult;
+  /**
+   * 261125-u4w: caller-supplied standing instructions (framed global conventions). Optional
+   * and empty-safe; forwarded only to synthesis so every grounded return kind sees it.
+   */
+  instructions?: string | undefined;
 }
 
 export interface CandidateRef {
@@ -408,6 +413,7 @@ export async function runGroundedTurn(
           promptVersion: input.config.promptVersion,
           signal: input.signal,
           capabilityProfile: { strictJsonSchema: true },
+          ...(input.instructions ? { instructions: input.instructions } : {}),
         });
 
         if (input.signal.aborted) {
@@ -862,6 +868,12 @@ export async function runGroundedTurn(
     }
 
     try {
+      // Seed-only existence claims are a hard constraint; caller instructions (global
+      // conventions) follow it instead of replacing it.
+      const seedOnlyText =
+        'The knowledge graph resolved the seed entity/entities, but no relationship path exists. ' +
+        'Returned entities prove EXISTENCE ONLY. Do not claim any relation, direction, dependency, ' +
+        'impact, reader, writer, sequence, or caller-callee link unless a cited path supports it.';
       const seedSynthResult = await deps.synthesizeGroundedAnswer({
         query: input.query,
         recentTurns: input.recentTurns,
@@ -872,10 +884,7 @@ export async function runGroundedTurn(
         promptVersion: input.config.promptVersion,
         signal: input.signal,
         capabilityProfile: { strictJsonSchema: true },
-        instructions:
-          'The knowledge graph resolved the seed entity/entities, but no relationship path exists. ' +
-          'Returned entities prove EXISTENCE ONLY. Do not claim any relation, direction, dependency, ' +
-          'impact, reader, writer, sequence, or caller-callee link unless a cited path supports it.',
+        instructions: [seedOnlyText, input.instructions].filter(Boolean).join('\n'),
       });
 
       if (input.signal.aborted) {
@@ -1058,6 +1067,7 @@ export async function runGroundedTurn(
       promptVersion: input.config.promptVersion,
       signal: input.signal,
       capabilityProfile: { strictJsonSchema: true },
+      ...(input.instructions ? { instructions: input.instructions } : {}),
     });
 
     if (input.signal.aborted) {
