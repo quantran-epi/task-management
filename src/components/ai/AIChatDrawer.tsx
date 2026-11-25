@@ -209,16 +209,17 @@ export interface AIChatDrawerProps {
   open: boolean;
   onClose: () => void;
   isPinned?: boolean;
-  onTogglePin?: () => void;
+  onTogglePin?: (() => void) | undefined;
   activeScope?: ActiveScope;
   db?: TaskPlannerDatabase;
   width?: number;
   onWidthChange?: (width: number) => void;
-  onOpenSettings?: () => void;
+  onOpenSettings?: (() => void) | undefined;
   isMobile?: boolean;
-  onPopout?: () => void;
+  onPopout?: (() => void) | undefined;
   isPopoutWindow?: boolean;
   isDockedPanel?: boolean;
+  isStandaloneChat?: boolean;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -235,6 +236,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   onPopout,
   isPopoutWindow = false,
   isDockedPanel = false,
+  isStandaloneChat = false,
 }) => {
   const appMessage = useMessage();
   const { modal, contextHolder } = useTaskMateModal();
@@ -483,7 +485,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // its scope via AIChatContext's `customScope ?? registeredTop ?? global` precedence. A manual
   // customScope still wins; we never call setCustomScope automatically and never persist it here.
   useEffect(() => {
-    if (!activeRemoteConfigId) return undefined;
+    if (isStandaloneChat || !activeRemoteConfigId) return undefined;
     const targetUuid = deriveRemoteTargetUuid(
       activeRemoteConfigId,
       activeRemoteRepoPath,
@@ -491,7 +493,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     );
     const title = `${activeRemoteConfigId} · ${activeRemoteRepoPath || '/'} · ${activeRemoteBranch || '-'}`;
     return registerActiveItem({ type: 'remote', id: targetUuid, title });
-  }, [activeRemoteConfigId, activeRemoteRepoPath, activeRemoteBranch, registerActiveItem]);
+  }, [activeRemoteConfigId, activeRemoteRepoPath, activeRemoteBranch, registerActiveItem, isStandaloneChat]);
 
   // Per-tab runtime/request ownership. Runtime state stays ephemeral; durable history stays in Dexie.
   const tabRuntimes = useTabRuntimes();
@@ -2522,20 +2524,21 @@ Rules:
       {/* Chat Header with Drawer-level Scope */}
       <ChatHeader
         currentScope={currentScope}
-        onOpenScopePicker={() => setScopeModalOpen(true)}
-        onDetachScope={() => {
+        onOpenScopePicker={isStandaloneChat ? undefined : () => setScopeModalOpen(true)}
+        onDetachScope={isStandaloneChat ? undefined : () => {
           setIsDetached(true);
           setInternalScope({ type: 'global' });
           setCustomScope({ type: 'global' });
         }}
         isPinned={isPinned}
-        onTogglePin={() => onTogglePin?.()}
+        onTogglePin={isStandaloneChat ? undefined : () => onTogglePin?.()}
         onClearAllHistory={handleClearAllHistory}
         onDeleteCurrentThread={handleDeleteCurrentThread}
-        onOpenDebug={() => setIsDebugModalOpen(true)}
-        onPopout={!isPopoutWindow ? handlePopoutAction : undefined}
-        onOpenInstructions={() => setIsInstructionsOpen(true)}
+        onOpenDebug={isStandaloneChat ? undefined : () => setIsDebugModalOpen(true)}
+        onPopout={isStandaloneChat || isPopoutWindow ? undefined : handlePopoutAction}
+        onOpenInstructions={isStandaloneChat ? undefined : () => setIsInstructionsOpen(true)}
         onClose={onClose}
+        onOpenSettings={isStandaloneChat ? onOpenSettings : undefined}
       />
 
       {/* Chrome-like Multi-Tab Bar for All Scopes */}

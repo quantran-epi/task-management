@@ -1,7 +1,7 @@
 import React from 'react';
-import { Button, Tooltip, Dropdown, useAntdToken } from '../ui';
+import { Button, IconButton, Tooltip, Dropdown, useAntdToken } from '../ui';
 import type { MenuProps } from 'antd';
-import { PushpinOutlined, PushpinFilled, CloseOutlined, BugOutlined, ExportOutlined, MoreOutlined, BookOutlined, DeleteOutlined, DisconnectOutlined } from '../ui/icon';
+import { PushpinOutlined, PushpinFilled, CloseOutlined, BugOutlined, ExportOutlined, MoreOutlined, BookOutlined, DeleteOutlined, DisconnectOutlined, SettingOutlined } from '../ui/icon';
 import { JetBrainsAIIcon } from '../icons/JetBrainsIcons';
 import type { ActiveScope } from '../../context/AIChatContext';
 
@@ -10,13 +10,14 @@ export interface ChatHeaderProps {
   onOpenScopePicker?: (() => void) | undefined;
   onDetachScope?: (() => void) | undefined;
   isPinned: boolean;
-  onTogglePin: () => void;
+  onTogglePin: (() => void) | undefined;
   onClearAllHistory?: (() => void) | undefined;
   onDeleteCurrentThread?: (() => void) | undefined;
   onOpenDebug?: (() => void) | undefined;
   onPopout?: (() => void) | undefined;
   onOpenInstructions?: (() => void) | undefined;
   onClose: () => void;
+  onOpenSettings?: (() => void) | undefined;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -31,8 +32,54 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onPopout,
   onOpenInstructions,
   onClose,
+  onOpenSettings,
 }) => {
   const { token } = useAntdToken();
+  const isStandalone = Boolean(onOpenSettings);
+
+  if (isStandalone) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: 34,
+          padding: '0 10px',
+          borderBottom: `1px solid var(--border, #e9eaee)`,
+          background: `var(--bg-elev, #f7f8fa)`,
+          userSelect: 'none',
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', minWidth: 0, flex: 1 }}>
+          <JetBrainsAIIcon size={14} />
+          <span style={{ fontSize: 'var(--font-size-small)', fontWeight: 600, whiteSpace: 'nowrap', color: 'var(--fg-strong, #000000)', flexShrink: 0 }}>
+            AI Chat
+          </span>
+          <span
+            data-testid="chat-global-scope-chip"
+            style={{
+              fontSize: 'var(--font-size-xs)',
+              color: token.colorTextSecondary,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Global · không có ngữ cảnh TaskMate
+          </span>
+        </div>
+        <Tooltip title="AI settings">
+          <IconButton
+            type="text"
+            icon={<SettingOutlined />}
+            onClick={onOpenSettings}
+            aria-label="Mở Cài đặt AI"
+            data-testid="chat-settings-gear"
+          />
+        </Tooltip>
+      </div>
+    );
+  }
 
   const menuItems: MenuProps['items'] = [
     ...(onOpenInstructions
@@ -45,16 +92,18 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           },
         ]
       : []),
-    {
-      key: 'pin',
-      icon: isPinned ? (
-        <PushpinFilled style={{ color: token.colorPrimary }} />
-      ) : (
-        <PushpinOutlined />
-      ),
-      label: isPinned ? 'Bỏ ghim ngăn trò chuyện' : 'Ghim ngăn trò chuyện bên phải',
-      onClick: onTogglePin,
-    },
+    ...(onTogglePin
+      ? [{
+          key: 'pin',
+          icon: isPinned ? (
+            <PushpinFilled style={{ color: token.colorPrimary }} />
+          ) : (
+            <PushpinOutlined />
+          ),
+          label: isPinned ? 'Bỏ ghim ngăn trò chuyện' : 'Ghim ngăn trò chuyện bên phải',
+          onClick: onTogglePin,
+        }]
+      : []),
     ...(onOpenDebug
       ? [
           {

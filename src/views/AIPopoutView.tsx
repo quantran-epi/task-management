@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAntdToken } from '../components/ui';
+import { Drawer, useAntdToken } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { AIChatDrawer, type ActiveScope } from '../components/ai/AIChatDrawer';
 import {
@@ -22,13 +22,14 @@ export interface AIPopoutViewProps {
   standaloneChat?: boolean | undefined;
 }
 
-export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) => {
+export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb, standaloneChat = false }) => {
   const { token } = useAntdToken();
   const { setPendingDraft } = useAIChat();
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeScope, setActiveScope] = useState<ActiveScope>(() => {
-    if (typeof window === 'undefined') return { type: 'global' };
+    if (standaloneChat || typeof window === 'undefined') return { type: 'global' };
     const hash = window.location.hash || '';
     const matchType = hash.match(/[?&]scopeType=([^&]+)/);
     const matchId = hash.match(/[?&]scopeId=([^&]+)/);
@@ -45,6 +46,7 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
 
   // Tauri window listeners and geometry persistence
   useEffect(() => {
+    if (standaloneChat) return undefined;
     let unlistenScope: (() => void) | undefined;
     let unlistenDraft: (() => void) | undefined;
     let unlistenMoved: (() => void) | undefined;
@@ -174,7 +176,7 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
       if (unlistenMoved) unlistenMoved();
       if (unlistenResized) unlistenResized();
     };
-  }, [isTauri, setPendingDraft]);
+  }, [isTauri, setPendingDraft, standaloneChat]);
 
   const handleTogglePin = async () => {
     const next = !pinned;
@@ -216,12 +218,22 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb }) =>
       `}</style>
       <AIChatDrawer
         open={true}
-        onClose={handleClose}
-        isPinned={pinned}
-        onTogglePin={handleTogglePin}
+        onClose={standaloneChat ? () => undefined : handleClose}
+        isPinned={standaloneChat ? false : pinned}
+        onTogglePin={standaloneChat ? undefined : handleTogglePin}
         activeScope={activeScope}
         isPopoutWindow={true}
+        isStandaloneChat={standaloneChat}
+        onOpenSettings={standaloneChat ? () => setSettingsOpen(true) : undefined}
         db={db}
+      />
+      <Drawer
+        title="AI Settings · tất cả"
+        width={460}
+        placement="right"
+        mask
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
     </div>
   );
