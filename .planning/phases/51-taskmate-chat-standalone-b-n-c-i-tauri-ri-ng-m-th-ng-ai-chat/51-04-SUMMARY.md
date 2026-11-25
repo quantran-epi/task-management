@@ -10,7 +10,7 @@ requires:
 provides:
   - isStandaloneChat gates on global conventions, global context, entity mentions, and task actions
   - Five zero-call/non-regression tests for standalone grounding plus legacy action regression
-  - Phase-51 scoped gate green and recorded chat build smoke with documented DMG blocker
+  - Phase-51 scoped gate green and chat build smoke producing `.app` plus verified `.dmg`
 affects: [51-05, standalone chat verification, dual-app install re-check]
 
 tech-stack:
@@ -33,7 +33,7 @@ key-decisions:
   - "TaskMate mention grounding is skipped by clearing taskIds/crIds/systemIds and skipping the entity loops; file references still reach knowledge and SSH tools."
   - "Standalone messageListExtensions omits the three task callbacks via conditional spread so no undefined stub can be invoked."
   - "Repo conventions at the ordinary-turn path remain unchanged; Knowledge, MCP, Graphiti, Oracle and SSH service calls are untouched."
-  - "Chat release binary and .app bundle built successfully; DMG packaging failed and is recorded verbatim in 51-01-SUMMARY.md as a documented blocker, not a pass."
+  - "Chat release binary, .app bundle, and .dmg built successfully; `tauri:build:chat` sets `CI=true` to skip Finder cosmetic AppleScript, and `hdiutil verify` reports VALID."
 
 patterns-established:
   - "Flag-gated additive behavior: legacy path values stay byte-identical while standalone suppresses only TaskMate data grounding and task actions."
@@ -54,7 +54,7 @@ completed: 2026-11-26
 - **Duration:** ~18 min
 - **Started:** 2026-11-25T17:34:29Z
 - **Completed:** 2026-11-25T17:52:44Z
-- **Tasks:** 3/3 (Task 3 auto-approved with documented build blocker)
+- **Tasks:** 3/3 (Task 3 build smoke completed with CI-safe DMG packaging)
 - **Files modified:** 4 (1 created, 3 modified)
 
 ## Accomplishments
@@ -63,7 +63,7 @@ completed: 2026-11-26
 - Gated `canAddToChecklist`, `canSaveStickyNote`, `canRunClaudeCode` and omitted all three task callbacks in standalone; legacy flags and callbacks remain identical.
 - Added five tests covering zero-call suppression, prompt absence of `<global_context>`/`<mentioned_entities>`, legacy non-regression, knowledge-family non-regression, and task-action absence.
 - Extended legacy popout regression to explicitly pass `standaloneChat={false}`; 6 phase-51 files / 28 tests pass with `npx tsc --noEmit` clean.
-- Ran `npm run tauri:build:chat`: release binary and `TaskMate Chat.app` built with correct `com.personal.taskmate.chat` identity; DMG packaging failed and was recorded verbatim in `51-01-SUMMARY.md`.
+- Ran `npm run tauri:build:chat`: release binary, `TaskMate Chat.app`, and valid `.dmg` built with correct `com.personal.taskmate.chat` identity.
 
 ## Task Commits
 
@@ -82,14 +82,14 @@ _Note: RED was observed for each behavior before implementation; per this plan's
 - `src/components/ai/AIChatDrawer.tsx` - four grounding suppression gates and three task-action gates
 - `tests/phase51/groundingSuppression.test.tsx` - five zero-call/non-regression tests and turn driver
 - `tests/phase51/AIPopoutView.legacy.test.tsx` - explicit legacy flag on existing regression
-- `.planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-01-SUMMARY.md` - build smoke result and documented DMG blocker
+- `.planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-01-SUMMARY.md` - final build smoke result and CI-safe DMG packaging note
 
 ## Decisions Made
 
 - Kept `globalConvText`/`globalConventionsSegment` as empty local values in standalone instead of touching shared services, so global conventions can stay editable without entering prompts.
 - Skipped only task/CR/system mention grounding; file paths remain separately available for knowledge/SSH tools and other knowledge-family paths are unchanged.
 - Used conditional spread to omit task callbacks in standalone, avoiding undefined callbacks that could be invoked downstream.
-- Recorded chat build result as partial success: `.app` bundle built and identity verified, DMG step failed with exact Tauri output; no fake pass.
+- Recorded chat build result as full success: `.app` and `.dmg` built, identity verified, and DMG checksum verified.
 
 ## Deviations from Plan
 
@@ -142,8 +142,8 @@ _Note: RED was observed for each behavior before implementation; per this plan's
 
 ## Issues Encountered
 
-- `npm run tauri:build:chat` succeeded through release compile and `.app` bundling, then failed at DMG step with: `failed to bundle project: error running bundle_dmg.sh: \`failed to run /Users/tranducquan/Working/Personal/task-management/src-tauri/target/release/bundle/dmg/bundle_dmg.sh\``. Exact error recorded in `51-01-SUMMARY.md`. A minimal traced reproduction hit `cp: /tmp/nonexistent.icns: No such file or directory`, but Tauri's own invocation did not expose the precise missing input. Treated as a documented DMG toolchain blocker, not a codesign pass.
-- Auto-approved checkpoint (auto-mode): `⚡ Auto-approved checkpoint (auto-mode)`. Verification followed the plan's fallback rules: recorded exact build error, did not claim install/coexistence pass, and did not block on user input.
+- Initial DMG attempt failed on macOS Finder Apple Events (`-1743`). Tauri's create-dmg script skips only cosmetic Finder AppleScript when `CI=true`, so `tauri:build:chat` now sets that env; full `.app` + `.dmg` build passes and `hdiutil verify` reports VALID. Details recorded in `51-01-SUMMARY.md`.
+- Auto-approved checkpoint (auto-mode): `⚡ Auto-approved checkpoint (auto-mode)`. Build smoke completed; manual dual-app install/coexistence remains a human check because no second install was performed in this environment.
 - Ant Design deprecation and jsdom `act`/pseudo-element warnings remain from existing components; no assertion failure and no changes to unrelated files.
 - No full Vitest suite run per project rule. No stash, reset, force-push, or touched concurrent-session files.
 
@@ -161,13 +161,13 @@ None. Threat register mitigations T-51-13..T-51-16 upheld by zero-call tests and
 
 ## User Setup Required
 
-None for automated behavior. Manual DMG install/coexistence verification remains pending until the macOS DMG toolchain issue is resolved; the built `.app` can be manually installed meanwhile.
+None for automated behavior. Manual DMG install/coexistence verification remains pending as a human check; the built `.app` and verified `.dmg` are available for manual installation.
 
 ## Next Phase Readiness
 
 - Standalone chat no longer leaks TaskMate task/CR/system/document grounding and exposes no task actions.
 - Legacy TaskMate and popout behavior remains unchanged and covered.
-- Re-run `npm run tauri:build:chat` and dual-app install verification when DMG packaging is available.
+- `npm run tauri:build:chat` now produces both bundles; dual-app install verification remains the phase-51 human checkpoint.
 
 ## Verification
 
@@ -175,7 +175,7 @@ None for automated behavior. Manual DMG install/coexistence verification remains
 - `npx vitest run tests/phase51 --bail=1` - 6 files, 28 tests passed.
 - `npx tsc --noEmit` - exit 0.
 - `node -e "package.json + tauri.conf.chat.json identity check"` - `chat bundle inputs OK`.
-- `npm run tauri:build:chat` - release binary and `.app` built; DMG packaging failed with exact error recorded in `51-01-SUMMARY.md`.
+- `npm run tauri:build:chat` - release binary, `.app`, and `.dmg` built; `hdiutil verify` reports VALID.
 - Protected shared files (`.planning/STATE.md`, `.planning/config.json`, `.planning/debug/*`, other branches) untouched by this plan.
 
 ## Self-Check: PASSED

@@ -117,16 +117,13 @@ None - no external service configuration required for this plan.
 - Chat bundle identity, hash route seeding, and committed marker are in place; downstream plans can gate standalone chat UI at `import.meta.env.VITE_CHAT_STANDALONE === '1'`.
 - Real dual-app install smoke remains a phase-51 human checkpoint (per research open question 2), not part of this plan.
 
-## Plan 04 build smoke (2026-11-26)
+## Plan 04 build smoke (2026-11-26, final)
 
-- `npm run tauri:build:chat` compiled the release binary and bundled `TaskMate Chat.app` successfully.
+- Initial `npm run tauri:build:chat` failed at DMG step only: generated `bundle_dmg.sh` aborted on `Not authorized to send Apple events to Finder. (-1743)`. Tauri's create-dmg script supports `--skip-jenkins` when `CI` is set, so `tauri:build:chat` now sets `CI=true` for this script.
   - Verified identity with `PlistBuddy`: `CFBundleIdentifier = com.personal.taskmate.chat`, `CFBundleName = TaskMate Chat`.
   - App path: `src-tauri/target/release/bundle/macos/TaskMate Chat.app`.
-- DMG packaging step failed after the `.app` bundle; exact Tauri output:
-  - `failed to bundle project: error running bundle_dmg.sh: \`failed to run /Users/tranducquan/Working/Personal/task-management/src-tauri/target/release/bundle/dmg/bundle_dmg.sh\``
-  - `Error failed to bundle project: error running bundle_dmg.sh: \`failed to run /Users/tranducquan/Working/Personal/task-management/src-tauri/target/release/bundle/dmg/bundle_dmg.sh\``
-  - Reproduced with `bash -x ... bundle_dmg.sh`: `cp: /tmp/nonexistent.icns: No such file or directory` in the reproduced minimal invocation; Tauri's own invocation did not surface a deeper codesign/hdiutil error. This is a DMG-packaging blocker, not a compile or `.app` bundling failure.
-- Auto-approved checkpoint (auto-mode): owner fallback accepted as documented blocker, not a full install/coexistence pass. Re-run DMG packaging / install verification when the macOS DMG toolchain is available. The built `.app` is available for manual drag-to-Applications verification meanwhile.
+  - DMG path: `src-tauri/target/release/bundle/dmg/TaskMate Chat_0.1.1_aarch64.dmg`; `hdiutil verify` reports checksum VALID.
+  - `CI=true` skips Finder cosmetic AppleScript only; it does not skip DMG creation, signing input, or artifact verification.
 - No files from concurrent sessions touched; no stash, reset, force-push, or new dependency.
 
 ## Self-Check: PASSED
