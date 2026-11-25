@@ -135,6 +135,7 @@ Progress: [█████░░░░░] 50%
 | 261125-dqj | Bỏ tool code_edit của Agent Developer trong AI chat team; developer chỉ sinh code + tính năng gen file cho user download. | 2026-11-25 | 831cbc5c | — | [261125-dqj-b-tool-code-edit-c-a-agent-developer-tro](./quick/261125-dqj-b-tool-code-edit-c-a-agent-developer-tro/) |
 | 261125-ffm | Fix CR detail screen task table: system dropdown options currently show only system code; show readable system name alongside code. | 2026-11-25 | bd3a1a60 | complete | [261125-ffm-fix-cr-detail-screen-task-table-system-d](./quick/261125-ffm-fix-cr-detail-screen-task-table-system-d/) |
 | 261125-g51 | Tool Explorer utility tools only: allow multiple independent tabs per tool and rename those tabs | 2026-11-25 | fa4ef59c | — | [261125-g51-tool-explorer-utility-tools-only-allow-m](./quick/261125-g51-tool-explorer-utility-tools-only-allow-m/) |
+| 261125-k8o | Fix màn hình Bộ tài liệu: đưa danh sách doc lên đầu, bỏ nested scroll, dùng full-height virtual list + inspector 260px, giữ testid/hành vi cũ; test Chrome thật | 2026-11-25 | 39221b84, f3c31fd5 | Verified | [261125-k8o-fix-m-n-h-nh-b-t-i-li-u](./quick/261125-k8o-fix-m-n-h-nh-b-t-i-li-u/) |
 
 ## Accumulated Context
 
