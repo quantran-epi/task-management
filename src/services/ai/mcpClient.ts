@@ -98,7 +98,7 @@ function toolMetaKey(serverId: string, toolName: string): string {
   return `${serverId}::${toolName}`;
 }
 
-function sanitizeUrl(rawUrl: string): string {
+export function sanitizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error(`Địa chỉ máy chủ MCP không hợp lệ (phải bắt đầu bằng http:// hoặc https://): ${rawUrl}`);

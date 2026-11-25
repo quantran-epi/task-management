@@ -2,14 +2,46 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase, type TaskPlannerDatabase as TaskPlannerDatabaseType } from '../../../db';
-import { loadVerifiedRules, applyGraphitiRules } from '../graphitiRules';
+import {
+  GRAPHITI_SQL_SERVER_IDS,
+  GRAPHITI_SECTION_MARKER,
+  SOURCE_SECTION_MARKER,
+  WRITE_ROUTES_SECTION_MARKER,
+  SQL_PROMPT_BEGIN,
+  SQL_PROMPT_END,
+  buildGraphitiSkillSegment,
+  getGraphitiSkillSegment,
+  getGraphitiSqlServers,
+  loadVerifiedRules,
+  saveGraphitiSqlServers,
+  selectGraphitiSkill,
+  type VerifiedRules,
+} from '../graphitiRules';
 import { getMcpServers, saveMcpServers } from '../mcpClient';
 
-const RULE_BODY_A = 'Quy tac Graphiti khong duoc viet thanh literal trong TypeScript.';
-const RULE_BODY_B = 'Quy tac SQL agent memory duoc kiem tra bang SHA-256.';
+// Section headings are imported markers, not copies of the real rule body.
+const GRAPHITI_BODY = [
+  '# Shared rules',
+  '',
+  GRAPHITI_SECTION_MARKER,
+  'Graphiti fixture body.',
+  '',
+  SOURCE_SECTION_MARKER,
+  'Source fixture body.',
+  '',
+  WRITE_ROUTES_SECTION_MARKER,
+  'Write routes fixture body.',
+  '',
+].join('\n');
+const SQL_BODY = [
+  '# SQL agent memory prompt',
+  SQL_PROMPT_BEGIN,
+  'SQL fixture body.',
+  SQL_PROMPT_END,
+  '',
+].join('\n');
 
 function digest(text: string): string {
-  // Same digest as the service's Web Crypto path, computed in Node for the test fixture.
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
@@ -17,7 +49,9 @@ function manifestFor(a: string, b: string): string {
   return `${digest(a)}  graphiti/graphiti-mcp-rules.md\n${digest(b)}  graphiti-sql/sql-agent-memory-prompt.md\n`;
 }
 
-describe('graphitiRules service', () => {
+const RULES: VerifiedRules = { graphitiRules: GRAPHITI_BODY, sqlRules: SQL_BODY };
+
+describe('graphitiRules dedicated service', () => {
   let db: TaskPlannerDatabaseType;
   const fetchMock = vi.fn();
 
@@ -42,96 +76,207 @@ describe('graphitiRules service', () => {
     });
   }
 
-  it('returns both verified texts and applies them to the two MCP configs', async () => {
-    mockBundle(RULE_BODY_A, RULE_BODY_B);
-    expect(await loadVerifiedRules()).toEqual({ graphitiRules: RULE_BODY_A, sqlRules: RULE_BODY_B });
+  it('returns both verified texts and fails closed on tampering or a bad manifest', async () => {
+    mockBundle(GRAPHITI_BODY, SQL_BODY);
+    expect(await loadVerifiedRules()).toEqual(RULES);
 
-    await getMcpServers(db); // seed graphiti-banking
-    const next = await applyGraphitiRules(db);
-    const graphiti = next.find((s) => s.id === 'graphiti-banking');
-    const svng = next.find((s) => s.id === 'svng-source');
-    expect(graphiti?.instruction).toBe(`${RULE_BODY_A}\n\n${RULE_BODY_B}`);
-    expect(svng?.instruction).toBe(RULE_BODY_A);
-    expect(svng?.enabled).toBe(true);
-    expect(svng?.desktopOnly).toBe(true);
-    expect(svng?.name).toBe('SVNG Source MCP');
-    expect(svng?.url).toBe('');
-    expect((await getMcpServers(db)).find((s) => s.id === 'svng-source')?.instruction).toBe(
-      RULE_BODY_A
-    );
-  });
+    await expect(loadVerifiedRules()).resolves.toEqual(RULES);
 
-  it('preserves an existing graphiti-banking row and an existing svng-source URL', async () => {
-    mockBundle(RULE_BODY_A, RULE_BODY_B);
-    await saveMcpServers(
-      [
-        {
-          id: 'graphiti-banking',
-          name: 'Renamed Graphiti',
-          url: 'http://localhost:9999/mcp',
-          enabled: false,
-          instruction: 'old rule',
-          desktopOnly: false,
-          description: 'keep me',
-        },
-        {
-          id: 'svng-source',
-          name: 'Old SVNG',
-          url: 'http://localhost:7777/mcp',
-          enabled: false,
-          instruction: 'old sql rule',
-        },
-      ],
-      db
-    );
-    const next = await applyGraphitiRules(db);
-    expect(next.find((s) => s.id === 'graphiti-banking')).toMatchObject({
-      name: 'Renamed Graphiti',
-      url: 'http://localhost:9999/mcp',
-      enabled: false,
-      desktopOnly: false,
-      description: 'keep me',
-      instruction: `${RULE_BODY_A}\n\n${RULE_BODY_B}`,
-    });
-    expect(next.find((s) => s.id === 'svng-source')).toMatchObject({
-      url: 'http://localhost:7777/mcp',
-      enabled: true,
-      desktopOnly: true,
-      name: 'SVNG Source MCP',
-      instruction: RULE_BODY_A,
-    });
-  });
-
-  it('throws on a tampered rule body and leaves mcp_servers byte-identical', async () => {
-    mockBundle(RULE_BODY_A, RULE_BODY_B);
-    await getMcpServers(db);
-    const before = await db.settings.get('mcp_servers');
     fetchMock.mockImplementation(async (url: string) => {
       const suffix = String(url);
-      if (suffix.endsWith('SHA256SUMS')) return { ok: true, text: async () => manifestFor(RULE_BODY_A, RULE_BODY_B) };
-      if (suffix.endsWith('graphiti/graphiti-mcp-rules.md')) return { ok: true, text: async () => RULE_BODY_A };
-      if (suffix.endsWith('graphiti-sql/sql-agent-memory-prompt.md')) return { ok: true, text: async () => RULE_BODY_B + '\nTAMPERED' };
+      if (suffix.endsWith('SHA256SUMS')) return { ok: true, text: async () => manifestFor(GRAPHITI_BODY, SQL_BODY) };
+      if (suffix.endsWith('graphiti/graphiti-mcp-rules.md')) return { ok: true, text: async () => GRAPHITI_BODY };
+      if (suffix.endsWith('graphiti-sql/sql-agent-memory-prompt.md')) return { ok: true, text: async () => `${SQL_BODY}\nTAMPERED` };
       throw new Error(`Unexpected fetch: ${suffix}`);
     });
-    await expect(applyGraphitiRules(db)).rejects.toThrow(/SHA-256|khớp/i);
-    expect(await db.settings.get('mcp_servers')).toEqual(before);
+    await expect(loadVerifiedRules()).rejects.toThrow(/SHA-256|khớp/i);
+
+    const badManifest = `${'0'.repeat(64)}  graphiti/graphiti-mcp-rules.md\n${digest(SQL_BODY)}  graphiti-sql/sql-agent-memory-prompt.md\n`;
+    mockBundle(GRAPHITI_BODY, SQL_BODY, badManifest);
+    await expect(loadVerifiedRules()).rejects.toThrow(/SHA-256|khớp/i);
   });
 
-  it('throws on a bad manifest hash and leaves mcp_servers byte-identical', async () => {
-    await getMcpServers(db);
-    const before = await db.settings.get('mcp_servers');
-    const badManifest = `${'0'.repeat(64)}  graphiti/graphiti-mcp-rules.md\n${digest(RULE_BODY_B)}  graphiti-sql/sql-agent-memory-prompt.md\n`;
-    mockBundle(RULE_BODY_A, RULE_BODY_B, badManifest);
-    await expect(applyGraphitiRules(db)).rejects.toThrow(/SHA-256|khớp/i);
-    expect(await db.settings.get('mcp_servers')).toEqual(before);
-  });
-
-  it('honors the configured BASE_URL when fetching bundled files', async () => {
-    mockBundle(RULE_BODY_A, RULE_BODY_B);
+  it('honors BASE_URL when fetching bundled files', async () => {
+    mockBundle(GRAPHITI_BODY, SQL_BODY);
     await loadVerifiedRules();
     const urls = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(urls).toContain(`${import.meta.env.BASE_URL}ai-rules/SHA256SUMS`);
     expect(urls).toContain(`${import.meta.env.BASE_URL}ai-rules/graphiti/graphiti-mcp-rules.md`);
     expect(urls).toContain(`${import.meta.env.BASE_URL}ai-rules/graphiti-sql/sql-agent-memory-prompt.md`);
+  });
+
+  it('reads both server configs from mcp_servers without inventing a source URL', async () => {
+    const seeded = await getGraphitiSqlServers(db);
+    expect(seeded.memory).toEqual({
+      url: (await getMcpServers(db))[0]!.url,
+      enabled: true,
+    });
+    expect(seeded.source).toEqual({ url: '', enabled: false });
+
+    await saveMcpServers(
+      [
+        ...(await getMcpServers(db)),
+        {
+          id: GRAPHITI_SQL_SERVER_IDS.source,
+          name: 'SVNG Source MCP',
+          url: 'http://localhost:7777/mcp',
+          enabled: true,
+          instruction: '',
+        },
+      ],
+      db
+    );
+    const stored = await getGraphitiSqlServers(db);
+    expect(stored.source).toEqual({ url: 'http://localhost:7777/mcp', enabled: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('validates URLs, preserves other row fields, clears instruction and never loses URLs on toggle', async () => {
+    await saveMcpServers(
+      [
+        {
+          id: GRAPHITI_SQL_SERVER_IDS.memory,
+          name: 'Renamed Graphiti',
+          url: 'http://localhost:9999/mcp',
+          enabled: true,
+          instruction: 'old rule text',
+          desktopOnly: false,
+          description: 'keep me',
+          cachedTools: ['cached'],
+        },
+        {
+          id: GRAPHITI_SQL_SERVER_IDS.source,
+          name: 'Old SVNG',
+          url: 'http://localhost:7777/mcp',
+          enabled: false,
+          instruction: 'old sql rule text',
+        },
+      ],
+      db
+    );
+
+    await expect(
+      saveGraphitiSqlServers(
+        {
+          memory: { url: 'not-a-url', enabled: true },
+          source: { url: '', enabled: true },
+        },
+        db
+      )
+    ).rejects.toThrow(/không hợp lệ/i);
+    expect((await getMcpServers(db)).find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.memory)?.url).toBe(
+      'http://localhost:9999/mcp'
+    );
+
+    const saved = await saveGraphitiSqlServers(
+      {
+        memory: { url: 'http://localhost:9999/mcp/', enabled: false },
+        source: { url: '', enabled: true },
+      },
+      db
+    );
+    const memory = saved.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.memory);
+    const source = saved.find((s) => s.id === GRAPHITI_SQL_SERVER_IDS.source);
+    expect(memory).toMatchObject({
+      name: 'Renamed Graphiti',
+      url: 'http://localhost:9999/mcp',
+      enabled: false,
+      instruction: '',
+      desktopOnly: true,
+      description: 'keep me',
+      cachedTools: ['cached'],
+    });
+    expect(source).toMatchObject({
+      name: 'Old SVNG',
+      url: '',
+      enabled: true,
+      instruction: '',
+      desktopOnly: true,
+    });
+
+    // Toggling from the persisted state keeps the URLs intact.
+    const persisted = await getGraphitiSqlServers(db);
+    await saveGraphitiSqlServers(
+      {
+        memory: { url: persisted.memory.url, enabled: true },
+        source: { url: persisted.source.url, enabled: false },
+      },
+      db
+    );
+    expect(await getGraphitiSqlServers(db)).toEqual({
+      memory: { url: 'http://localhost:9999/mcp', enabled: true },
+      source: { url: '', enabled: false },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('selects the skill by intent', () => {
+    expect(selectGraphitiSkill('Tìm catalog object trong memory')).toBe('graphiti');
+    expect(selectGraphitiSkill('Where is the source evidence for this flow?')).toBe('graphiti');
+    expect(selectGraphitiSkill('Viết migration cho SVFE_SHB')).toBe('graphiti-sql');
+    expect(selectGraphitiSkill('DDL cho bảng MAIN1')).toBe('graphiti-sql');
+    expect(selectGraphitiSkill('check the fk and join')).toBe('graphiti-sql');
+    expect(selectGraphitiSkill('stored procedure index view trigger')).toBe('graphiti-sql');
+  });
+
+  it('builds the segment per skill and drops sections of disabled servers', () => {
+    const bothOn = {
+      memory: { url: 'http://localhost:9101/mcp', enabled: true },
+      source: { url: 'http://localhost:9102/mcp', enabled: true },
+    };
+    const shared = buildGraphitiSkillSegment({ text: 'catalog', rules: RULES, servers: bothOn });
+    expect(shared).toContain('[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]');
+    expect(shared).toContain(GRAPHITI_SECTION_MARKER);
+    expect(shared).toContain(SOURCE_SECTION_MARKER);
+    expect(shared).toContain(WRITE_ROUTES_SECTION_MARKER);
+    expect(shared).not.toContain('SQL fixture body.');
+
+    const sql = buildGraphitiSkillSegment({ text: 'SQL join SVFE_SHB', rules: RULES, servers: bothOn });
+    expect(sql).toContain('SQL fixture body.');
+    expect(sql).toContain(SOURCE_SECTION_MARKER);
+
+    const sourceOnly = buildGraphitiSkillSegment({
+      text: 'SQL join MAIN1',
+      rules: RULES,
+      servers: { memory: { url: 'x', enabled: false }, source: bothOn.source },
+    });
+    expect(sourceOnly).toContain(SOURCE_SECTION_MARKER);
+    expect(sourceOnly).not.toContain(GRAPHITI_SECTION_MARKER);
+    expect(sourceOnly).not.toContain(WRITE_ROUTES_SECTION_MARKER);
+    expect(sourceOnly).not.toContain('SQL fixture body.');
+
+    const memoryOnly = buildGraphitiSkillSegment({
+      text: 'catalog',
+      rules: RULES,
+      servers: { memory: bothOn.memory, source: { url: '', enabled: false } },
+    });
+    expect(memoryOnly).toContain(GRAPHITI_SECTION_MARKER);
+    expect(memoryOnly).not.toContain(SOURCE_SECTION_MARKER);
+
+    expect(
+      buildGraphitiSkillSegment({
+        text: 'catalog',
+        rules: RULES,
+        servers: { memory: { url: '', enabled: false }, source: { url: '', enabled: false } },
+      })
+    ).toBe('');
+  });
+
+  it('throws from getGraphitiSkillSegment on a hash mismatch and never writes settings', async () => {
+    mockBundle(GRAPHITI_BODY, SQL_BODY);
+    await saveGraphitiSqlServers(
+      {
+        memory: { url: 'http://localhost:9101/mcp', enabled: true },
+        source: { url: 'http://localhost:9102/mcp', enabled: true },
+      },
+      db
+    );
+    const before = await db.settings.get('mcp_servers');
+    const good = await getGraphitiSkillSegment(db, 'catalog');
+    expect(good).toContain(GRAPHITI_SECTION_MARKER);
+
+    mockBundle(GRAPHITI_BODY, `${SQL_BODY}\nTAMPERED`, manifestFor(GRAPHITI_BODY, SQL_BODY));
+    await expect(getGraphitiSkillSegment(db, 'catalog')).rejects.toThrow(/SHA-256|khớp/i);
+    expect(await db.settings.get('mcp_servers')).toEqual(before);
   });
 });
