@@ -1293,6 +1293,7 @@ Plans:
 **Requirements**: D-01–D-15 (locked decisions in 51-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 50
 **Plans:** 4/4 plans complete
+**Status:** COMPLETE — 2026-11-26; phase goal đạt được sau 3 quick fix review/verification: `261126-1kz` (copy/quick prompts trung tính), `261126-1od` (tool scope leak + system prompt), `261126-1q1` (slash aliases, scope picker/chips, notification deeplink, connection status). Final gate: `npx vitest run tests/phase51 tests/ai/chatTurnTools.test.ts --bail=1` (11 files / 64 tests pass), `npx tsc --noEmit` exit 0, `npm run tauri:build:chat` exit 0 (.app + .dmg, hdiutil verify VALID); build chạy trước harness fix `98bb7424` (chỉ test teardown). T16 human UAT cài 2 app cùng tồn tại vẫn là checkpoint thủ công; artifact sẵn sàng.
 
 Plans:
 **Wave 1**
