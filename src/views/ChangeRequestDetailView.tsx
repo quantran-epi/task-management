@@ -176,10 +176,13 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const statusMeta = CR_STATUS_LABEL[cr.status] ?? CR_STATUS_LABEL.Open;
 
   const subsystemOptions = [
-    ...cr.targets.map((t) => ({
-      value: t.systemId,
-      label: systemMap.get(t.systemId)?.code ?? t.systemId,
-    })),
+    ...cr.targets.map((t) => {
+      const sys = systemMap.get(t.systemId);
+      return {
+        value: t.systemId,
+        label: sys ? `${sys.name} (${sys.code})` : t.systemId,
+      };
+    }),
     { value: UNATTACHED_OPTION, label: 'Chung (không gắn)' },
   ];
 
@@ -379,7 +382,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 title: 'Subsystem',
                 dataIndex: 'systemId',
                 key: 'systemId',
-                width: 160,
+                width: 200,
                 render: (systemId: string | undefined, record: Task) => (
                   <span data-testid={`subsystem-cell-${record.id}`}>
                     <Select
