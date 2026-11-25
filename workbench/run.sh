@@ -59,11 +59,13 @@ existing_specs() {
   local out=()
   local spec
   for spec in "$@"; do
-    if [[ -f "$REPO_ROOT/$spec" ]]; then
+    local file="$spec"
+    [[ "$file" == e2e/* ]] && file="workbench/$file"
+    if [[ -f "$REPO_ROOT/$file" ]]; then
       out+=("$spec")
     else
-      echo "[SKIP] spec chưa tồn tại: $spec"
-      record_gate "spec-missing:$spec" "playwright spec" 0
+      echo "[SKIP] spec chưa tồn tại: $file"
+      record_gate "spec-missing:$file" "playwright spec" 0
     fi
   done
   printf '%s\n' "${out[@]:-}"

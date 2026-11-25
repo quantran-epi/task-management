@@ -9,33 +9,79 @@
   "rules": [
     {
       "id": "knowledge",
-      "match": ["src/services/knowledge/**", "src/services/ai/**", "tests/knowledge/**", "workbench/e2e/grounded-knowledge.e2e.ts"],
-      "unit": ["tests/knowledge", "src/services/ai/__tests__"],
-      "e2e": ["workbench/e2e/grounded-knowledge.e2e.ts"]
+      "match": [
+        "src/services/knowledge/**",
+        "src/services/ai/**",
+        "tests/knowledge/**",
+        "workbench/e2e/grounded-knowledge.e2e.ts"
+      ],
+      "unit": [
+        "tests/knowledge",
+        "src/services/ai/__tests__"
+      ],
+      "e2e": [
+        "e2e/grounded-knowledge.e2e.ts"
+      ]
     },
     {
       "id": "backup",
-      "match": ["src/db/**", "src/services/backup/**", "src/services/crypto/**", "tests/backup/**", "tests/migrations.test.tsx", "workbench/e2e/backup-roundtrip.e2e.ts"],
-      "unit": ["tests/backup", "tests/migrations.test.tsx", "src/services/crypto/__tests__"],
-      "e2e": ["workbench/e2e/backup-roundtrip.e2e.ts"]
+      "match": [
+        "src/db/**",
+        "src/services/backup/**",
+        "src/services/crypto/**",
+        "tests/backup/**",
+        "tests/migrations.test.tsx",
+        "workbench/e2e/backup-roundtrip.e2e.ts"
+      ],
+      "unit": [
+        "tests/backup",
+        "tests/migrations.test.tsx",
+        "src/services/crypto/__tests__"
+      ],
+      "e2e": [
+        "e2e/backup-roundtrip.e2e.ts"
+      ]
     },
     {
       "id": "change-pack",
-      "match": ["src/components/notes/DocsLibraryActions.tsx", "src/components/notes/ZipImportPreviewModal.tsx", "tests/fixtures/ai/change-packs/**", "workbench/e2e/change-pack.e2e.ts"],
-      "unit": ["src/workbench/__tests__/DocsExplorerZip.test.tsx"],
-      "e2e": ["workbench/e2e/change-pack.e2e.ts"]
+      "match": [
+        "src/components/notes/DocsLibraryActions.tsx",
+        "src/components/notes/ZipImportPreviewModal.tsx",
+        "tests/fixtures/ai/change-packs/**",
+        "workbench/e2e/change-pack.e2e.ts"
+      ],
+      "unit": [
+        "src/workbench/__tests__/DocsExplorerZip.test.tsx"
+      ],
+      "e2e": [
+        "e2e/change-pack.e2e.ts"
+      ]
     },
     {
       "id": "workbench",
-      "match": ["workbench/scripts/**", "workbench/gate-map.json", "workbench/seed/**", "workbench/unit/**", "workbench/run.sh", "workbench/e2e/**"],
-      "unit": ["workbench/unit"],
-      "e2e": ["workbench/e2e/smoke.e2e.ts"]
+      "match": [
+        "workbench/**"
+      ],
+      "unit": [
+        "workbench/unit"
+      ],
+      "e2e": [
+        "e2e/smoke.e2e.ts"
+      ]
     }
   ],
   "fallback": {
     "scope": "fallback",
-    "unit": ["workbench/unit/detectChanges.test.mjs"],
-    "e2e": ["workbench/e2e/smoke.e2e.ts"]
+    "unit": [
+      "workbench/unit/detectChanges.test.mjs"
+    ],
+    "e2e": [
+      "e2e/smoke.e2e.ts"
+    ]
   },
-  "unitTestFileSuffixes": [".test.ts", ".test.tsx", ".test.mjs"]
+  "unitTestFileSuffixes": [
+    ".test.ts",
+    ".test.tsx",
+    ".test.mjs"
+  ]
 }
