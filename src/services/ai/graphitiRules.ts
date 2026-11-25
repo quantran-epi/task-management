@@ -40,6 +40,14 @@ export const GRAPHITI_SQL_SERVER_IDS = {
   source: 'svng-source',
 } as const;
 
+export const SOURCE_TOOL_NAMES = [
+  'search_source',
+  'explore_source',
+  'source_callers',
+  'source_callees',
+  'read_source',
+] as const;
+
 // Short capability descriptions for the intent router and retrieval planner. Rule text lives
 // only in the verified asset segment, never in the MCP `instruction` field.
 const DEFAULT_GRAPHITI_DESCRIPTION =
@@ -229,7 +237,11 @@ export function buildGraphitiSkillSegment(input: BuildGraphitiSkillSegmentInput)
       ? [`- graphiti-memory đang bật (${safeUrlForPrompt(servers.memory.url)}).`]
       : []),
     ...(servers.source.enabled
-      ? [`- svng-source đang bật (${safeUrlForPrompt(servers.source.url)}).`]
+      ? [
+          `- svng-source đang bật (${safeUrlForPrompt(servers.source.url)}).`,
+          `- svng-source là TÊN SERVER, không phải tên công cụ. Các công cụ đọc source của server này là ${SOURCE_TOOL_NAMES.join(', ')}.`,
+          '- Chỉ gọi các công cụ đó khi cần bằng chứng source; tuyệt đối không gọi công cụ có tên `svng source` hoặc `svng-source`.',
+        ]
       : []),
   ];
   const parts = [

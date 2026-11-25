@@ -9,6 +9,7 @@ import {
   WRITE_ROUTES_SECTION_MARKER,
   SQL_PROMPT_BEGIN,
   SQL_PROMPT_END,
+  SOURCE_TOOL_NAMES,
   buildGraphitiSkillSegment,
   getGraphitiSkillSegment,
   getGraphitiSqlServers,
@@ -265,6 +266,24 @@ describe('graphitiRules dedicated service', () => {
         servers: { memory: { url: '', enabled: false }, source: { url: '', enabled: false } },
       })
     ).toBe('');
+  });
+
+  it('names the five source tools as tools and svng-source as the server id', async () => {
+    mockBundle(GRAPHITI_BODY, SQL_BODY);
+    await saveGraphitiSqlServers(
+      {
+        memory: { url: '', enabled: false },
+        source: { url: 'http://localhost:9102/mcp', enabled: true },
+      },
+      db
+    );
+    const segment = await getGraphitiSkillSegment(db, 'source evidence', fetchMock);
+
+    for (const name of SOURCE_TOOL_NAMES) expect(segment).toContain(name);
+    expect(segment).toContain('TÊN SERVER');
+    expect(segment).toContain('không phải tên công cụ');
+    expect(segment).not.toContain('gọi công cụ `svng-source`');
+    expect(segment).toContain(SOURCE_SECTION_MARKER);
   });
 
   it('never interpolates raw user URLs into the trusted prompt and skips fetching when disabled', async () => {

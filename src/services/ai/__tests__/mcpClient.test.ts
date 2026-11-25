@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../../db';
+import { normalizeToolName } from '../aiTools';
 import {
   getMcpServers,
   saveMcpServers,
@@ -169,6 +170,15 @@ describe('mcpClient service', () => {
     expect(instructions).toContain('Rules for server one');
     expect(instructions).toContain('Rules for server three');
     expect(instructions).not.toContain('Rules for server two');
+  });
+
+  it('repairs garbled source tool names without inventing a tool', () => {
+    expect(normalizeToolName('svng source search_source')).toBe('search_source');
+    expect(normalizeToolName('svng-source source_callers')).toBe('source_callers');
+    expect(normalizeToolName('svng_source read_source')).toBe('read_source');
+    expect(normalizeToolName('svng source')).toBe('svng source');
+    expect(normalizeToolName('svng source delete_memory')).toBe('svng source delete_memory');
+    expect(normalizeToolName('search_nodes')).toBe('search_nodes');
   });
 
   it('rejects invalid URL schemes during upsert', async () => {
