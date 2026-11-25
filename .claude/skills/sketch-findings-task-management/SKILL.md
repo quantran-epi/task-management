@@ -1,6 +1,6 @@
 ---
 name: sketch-findings-task-management
-description: Validated design decisions, CSS patterns, and performance direction for TaskMate's doc-set screen. Auto-loaded when refactoring or implementing UI in task-management.
+description: Validated design decisions and CSS patterns for TaskMate's doc-set screen and profile authoring screen. Auto-loaded when refactoring or implementing UI in task-management.
 ---
 
 <context>
@@ -37,6 +37,7 @@ Sketch sessions wrapped: 2026-11-24.
 | Layout & Navigation | references/layout-navigation.md | Rail 248px cố định + detail + inspector 260px; giữ khung workbench |
 | Virtual List & Search | references/virtual-list-search.md | Filter sticky + virtual rows; 50.000 docs vẫn ~12 row DOM |
 | States & Pickers | references/states-pickers.md | Inline progress/errors; picker flat searchable thay Tree |
+| Profile Authoring & Review | references/profile-authoring-review.md | Rail 220px + editor 4 tab + review panel 296px; checklist không chặn export |
 
 ## Theme
 
@@ -44,7 +45,7 @@ Winning theme: `sources/themes/default.css` (copy từ `.planning/sketches/theme
 
 ## Source Files
 
-Full interactive mockups preserved in `sources/002-*`, `sources/003-*`, `sources/004-*/index.html`. Mở trực tiếp bằng browser, không cần build.
+Full interactive mockups preserved in `sources/002-*`, `sources/003-*`, `sources/004-*`, `sources/001-*`, `sources/005-*`, `sources/006-*/index.html`. Mở trực tiếp bằng browser, không cần build.
 </findings_index>
 
 <metadata>
@@ -53,6 +54,7 @@ Full interactive mockups preserved in `sources/002-*`, `sources/003-*`, `sources
 - 002-doc-set-workbench-layout (winner A)
 - 003-doc-set-virtual-list (winner A)
 - 004-doc-set-heavy-states (winner A)
-
-Không include 001-config-profiles-layout trong lần wrap-up này (chủ đề khác, để riêng).
+- 001-config-profiles-layout (winner C)
+- 005-profile-management-ui (winner C)
+- 006-profile-review-controls (winner B)
 </metadata>

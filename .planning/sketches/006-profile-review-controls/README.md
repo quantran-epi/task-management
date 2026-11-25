@@ -2,7 +2,7 @@
 sketch: 006
 name: profile-review-controls
 question: "Khi sửa profile cho người khác, làm sao làm rõ secret/path máy mà không làm người dùng bỏ sót?"
-winner: null
+winner: "B"
 tags: [states, review, checklist, secrets, profiles]
 ---
 

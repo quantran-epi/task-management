@@ -16,4 +16,4 @@ Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench g�
 | 003 | doc-set-virtual-list | Danh sách docs lớn nên quét/tìm/chọn thế nào mà không lag? | A — Virtual scroll + filter dính | virtualization, search, list, performance |
 | 004 | doc-set-heavy-states | Trạng thái nặng (hash/index/publish/empty/error/picker) nên hiển thị ra sao? | A — Inline progress + action | states, progress, picker, performance |
 | 005 | profile-management-ui | Quản lý nhiều profile và luồng chọn → sửa → lưu → xuất bố trí ra sao? | C — List + detail + preview | layout, settings, profiles, management, ant-design |
-| 006 | profile-review-controls | Làm rõ secret/path máy khi sửa profile cho người khác thế nào? | null | states, review, checklist, secrets, profiles |
+| 006 | profile-review-controls | Làm rõ secret/path máy khi sửa profile cho người khác thế nào? | B — Review panel dính | states, review, checklist, secrets, profiles |
