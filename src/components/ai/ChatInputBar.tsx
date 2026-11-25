@@ -847,6 +847,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             }
           }}
           onCompositionEnd={(e: React.CompositionEvent<HTMLTextAreaElement>) => {
+            isComposingRef.current = false;
             if (isSubmittingRef.current) {
               const target = e.target as HTMLTextAreaElement;
               clearInput(target);
