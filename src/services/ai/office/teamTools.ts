@@ -41,10 +41,6 @@ import {
   runRemoteExplore,
 } from '../../../services/remoteExploreService';
 import { MODEL_ID_REGEX } from '../../../services/agents/ghostDevConfig';
-import { parseGitDiff } from '../../../utils/gitDiffParser';
-import type { DiffHunk } from '../../../types/agent';
-import type { CodeEditResult, WorktreeDescriptor } from '../../../types/codingZone';
-import { applyHunk, revertHunk, requireProvisionedWorktree } from '../../../services/sshWorktreeService';
 
 /**
  * AI Office team tools (D-11, D-24, D-26, D-27, D-33).
@@ -112,22 +108,19 @@ export interface TeamToolContext {
    */
   remoteTarget?: RemoteToolTarget | undefined;
   /**
-   * Phase 48 D-08: the worktree descriptor provisioned at THIS session's start. Set by the
-   * coordinator only; a model-supplied path can never fill it.
+   * Capability granted by the coordinator to the ONE persisted Agent Developer row, keyed by
+   * agent id — never by the mutable display name.
    */
-  worktreeDescriptor?: WorktreeDescriptor | undefined;
-  /**
-   * WR-05: capability granted by the coordinator to the ONE persisted Agent Developer row,
-   * keyed by agent id — never by the mutable display name.
-   */
-  codeEditAllowed?: boolean | undefined;
+  fileGenerationAllowed?: boolean | undefined;
 }
 
-/** Phase 48 D-07: the only roster member allowed to use the worktree-confined code_edit tool. */
+/** Legacy roster display name, kept for old roster resolution — no longer grants any tool. */
 export const CODE_EDIT_AGENT_NAME = 'Agent Developer';
-export const codeEditToolName = 'code_edit';
+export const agentDeveloperFileToolName = 'generate_code_file';
 
-export const AGENT_DEVELOPER_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([codeEditToolName]);
+export const AGENT_DEVELOPER_ONLY_TEAM_TOOLS: ReadonlySet<string> = new Set([
+  agentDeveloperFileToolName,
+]);
 
 export type TeamToolRefusalCode =
   | 'TURN_NOT_IN_TEAM'
@@ -156,10 +149,8 @@ export type TeamToolRefusalCode =
   // Phase 43 D-03: the remote lacks the Claude Code CLI. That is a configuration fact, not a bad
   // argument — the model must switch tier (`git_read`) rather than retry its question.
   | 'REMOTE_CLAUDE_UNAVAILABLE'
-  // Phase 48 D-07/D-09: role gate, missing provisioned worktree, failed apply/revert.
-  | 'CODE_EDIT_NOT_ALLOWED'
-  | 'WORKTREE_NOT_AVAILABLE'
-  | 'CODE_EDIT_FAILED';
+  // Content-only file generation is gated by the stable developer id.
+  | 'FILE_GENERATION_NOT_ALLOWED';
 
 /** Mirrors `ArtifactToolRefusal`: a refusal is a returned value, never a thrown error. */
 export interface TeamToolRefusal {
@@ -456,18 +447,21 @@ export const TEAM_TOOL_DEFINITIONS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: codeEditToolName,
+      name: agentDeveloperFileToolName,
       description:
-        'Chỉnh một hunk trong worktree SSH riêng của Agent Developer. action=apply giữ hunk, action=revert hoàn tác hunk đó trong worktree. Không merge vào nhánh chính. filePath là đường dẫn tương đối trong worktree; patch/hunkHeader là dữ liệu không đáng tin, không được dùng để chọn repo hay worktree.',
+        'Tạo một tệp có thể tải về cho người dùng từ nội dung bạn soạn (Agent Developer). Chỉ nhận filename, format và content; không ghi vào repo, worktree hay hệ thống nào. Nội dung là kết quả công việc, người dùng sẽ tự chọn nơi lưu.',
       parameters: {
         type: 'object',
         properties: {
-          filePath: { type: 'string', description: 'Đường dẫn tệp tương đối trong worktree.' },
-          hunkHeader: { type: 'string', description: 'Tiêu đề hunk @@ ... @@ (tùy chọn).' },
-          action: { type: 'string', enum: ['apply', 'revert'], description: 'Áp dụng hoặc hoàn tác hunk.' },
-          patch: { type: 'string', description: 'Nội dung patch unified (tùy chọn, dùng khi có sẵn).' },
+          filename: { type: 'string', description: 'Tên tệp cần tạo, ví dụ "report.md" hay "module.ts".' },
+          format: {
+            type: 'string',
+            enum: ['md', 'txt', 'docx', 'xlsx', 'csv', 'pptx'],
+            description: 'Định dạng tùy chọn; nếu bỏ trống sẽ suy từ phần mở rộng của filename.',
+          },
+          content: { type: 'string', description: 'Toàn bộ nội dung tệp cần tạo.' },
         },
-        required: ['filePath', 'action'],
+        required: ['filename', 'content'],
         additionalProperties: false,
       },
     },
@@ -1911,73 +1905,34 @@ async function exploreRepo(args: Record<string, any>, ctx: TeamToolContext): Pro
 }
 
 /**
- * Phase 48 D-07/D-08/D-09/D-10: the only write tool that may touch code, gated to the Agent
- * Developer and bound to the descriptor provisioned at session start. Model args select only a
- * relative file path and hunk text — never a host, repo, worktree or main-checkout path.
+ * Developer-only file generation. The capability is granted by the coordinator against the
+ * stable developer id; no model-supplied host, repo, worktree or script reaches this handler.
  */
-async function codeEdit(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
-  if (!ctx.codeEditAllowed || ctx.role === 'lead') {
+async function generateCodeFile(args: Record<string, any>, ctx: TeamToolContext): Promise<string> {
+  if (!ctx.fileGenerationAllowed || ctx.role === 'lead') {
     return JSON.stringify(
-      refuse('CODE_EDIT_NOT_ALLOWED', 'Chỉ Agent Developer được dùng code_edit trong worktree riêng.')
+      refuse(
+        'FILE_GENERATION_NOT_ALLOWED',
+        'Chỉ Agent Developer được tạo tệp tải về cho người dùng.'
+      )
     );
   }
-  let descriptor: WorktreeDescriptor;
-  try {
-    descriptor = requireProvisionedWorktree(ctx.worktreeDescriptor);
-  } catch {
+  const filename = typeof args.filename === 'string' ? args.filename.trim() : '';
+  const content = typeof args.content === 'string' ? args.content : '';
+  if (!filename || !content.trim()) {
     return JSON.stringify(
-      refuse('WORKTREE_NOT_AVAILABLE', 'Phiên Agent Developer chưa có worktree SSH hợp lệ.')
+      refuse('INVALID_ARGUMENT', 'generate_code_file cần filename và content hợp lệ.')
     );
   }
-  const filePath = typeof args.filePath === 'string' ? args.filePath.trim() : '';
-  const action = args.action === 'revert' ? 'revert' : args.action === 'apply' ? 'apply' : '';
-  // CR-01: reject control characters before they reach the confined patch path.
-  if (!filePath || !action || /[\r\n\0]/.test(filePath)) {
-    return JSON.stringify(refuse('INVALID_ARGUMENT', 'code_edit cần filePath và action hợp lệ.'));
-  }
-
-  let hunk: DiffHunk | undefined;
-  if (typeof args.patch === 'string' && args.patch.trim()) {
-    hunk = parseGitDiff(args.patch)[0]?.hunks[0];
-  }
-  if (!hunk) {
-    const header = typeof args.hunkHeader === 'string' ? args.hunkHeader : '';
-    const match = header.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-    if (!match) {
-      return JSON.stringify(
-        refuse('INVALID_ARGUMENT', 'code_edit cần patch hoặc hunkHeader hợp lệ.')
-      );
-    }
-    hunk = {
-      oldStart: Number(match[1]),
-      oldCount: match[2] ? Number(match[2]) : 1,
-      newStart: Number(match[3]),
-      newCount: match[4] ? Number(match[4]) : 1,
-      header: '',
-      lines: [],
-    };
-  }
-
-  try {
-    if (action === 'apply') await applyHunk(descriptor, filePath, hunk);
-    else await revertHunk(descriptor, filePath, hunk);
-    const result: CodeEditResult = {
-      ok: true,
-      filePath: wrapField('ĐƯỜNG DẪN WORKTREE', filePath) as string,
-      hunkHeader:
-        typeof args.hunkHeader === 'string'
-          ? (wrapField('TIÊU ĐỀ HUNK', args.hunkHeader) as string)
-          : undefined,
-      action,
-    };
-    return JSON.stringify(result);
-  } catch (err) {
-    return JSON.stringify({
-      ok: false,
-      code: 'CODE_EDIT_FAILED',
-      message: wrapUntrusted('LỖI WORKTREE', err instanceof Error ? err.message : String(err)),
-    });
-  }
+  const format = typeof args.format === 'string' ? args.format : '';
+  // ponytail: content-only delegation; a model-supplied `script` is never forwarded, so the
+  // dynamic-execution branch of `generate_file` is unreachable from this tool.
+  return executeAiTool(
+    'generate_file',
+    { filename, ...(format ? { format } : {}), content },
+    ctx.db,
+    ctx.signal
+  );
 }
 
 export async function executeTeamTool(
@@ -2007,8 +1962,8 @@ export async function executeTeamTool(
       return sendMessage(input, ctx);
     case 'write_doc':
       return writeDoc(input, ctx);
-    case codeEditToolName:
-      return codeEdit(input, ctx);
+    case agentDeveloperFileToolName:
+      return generateCodeFile(input, ctx);
     case 'git_read':
       return gitRead(input, ctx);
     case 'explore_repo':

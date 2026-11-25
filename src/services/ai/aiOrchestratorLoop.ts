@@ -550,7 +550,11 @@ export async function runAiOrchestratorLoop(
       onToolResult?.(tc.id, toolResult, toolDuration);
 
       const normalizedToolName = normalizeToolName(tc.function.name);
-      if (normalizedToolName === 'generate_file' || normalizedToolName === 'generate_pptx') {
+      if (
+        normalizedToolName === 'generate_file' ||
+        normalizedToolName === 'generate_code_file' ||
+        normalizedToolName === 'generate_pptx'
+      ) {
         try {
           const parsedRes = JSON.parse(toolResult);
           if (parsedRes.success && parsedRes.filename) {
