@@ -1292,7 +1292,7 @@ Plans:
 **Goal:** Bản cài Tauri riêng "TaskMate Chat" mở thẳng AI chat full-window, không task UI hay ngữ cảnh TaskMate, kèm drawer AI settings side-nav 7 nhóm; chạy độc lập và cùng tồn tại với TaskMate.
 **Requirements**: D-01–D-15 (locked decisions in 51-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 50
-**Plans:** 1/4 plans executed
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -1301,7 +1301,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 51-02-PLAN.md — Chat full-bleed: route standalone, provider, neutralize pin/close/parent listeners/geometry, gear (D-04/05/06/07/13)
+- [x] 51-02-PLAN.md — Chat full-bleed: route standalone, provider, neutralize pin/close/parent listeners/geometry, gear (D-04/05/06/07/13)
 
 **Wave 3** *(blocked on Wave 2)*
 
