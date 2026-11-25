@@ -941,14 +941,6 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           <Button
             type="text"
             icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
-            onClick={() => setGhostDevModalOpen(true)}
-            aria-label="Khởi chạy Ghost Dev"
-          >
-            Ghost Dev
-          </Button>
-          <Button
-            type="text"
-            icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
             onClick={handleAskAI}
             aria-label="Hỏi AI về tác vụ này"
           >

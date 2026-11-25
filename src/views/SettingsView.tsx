@@ -15,7 +15,6 @@ import { JiraConfigCard } from '../components/settings/JiraConfigCard';
 import { NineRouterConfigCard } from '../components/settings/NineRouterConfigCard';
 import { BudgetWarnThresholdCard } from '../components/settings/BudgetWarnThresholdCard';
 import { KnowledgeServerConfigCard } from '../components/settings/KnowledgeServerConfigCard';
-import { GhostDevConfigCard } from '../components/settings/GhostDevConfigCard';
 import { GlobalConventionsCard } from '../components/settings/GlobalConventionsCard';
 import { McpConfigCard } from '../components/settings/McpConfigCard';
 import { GraphitiSqlConfigCard } from '../components/settings/GraphitiSqlConfigCard';
@@ -257,7 +256,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       label: (
         <span>
           <RobotOutlined style={{ marginRight: 8 }} />
-          Trợ lý AI & Ghost Dev
+          Trợ lý AI
         </span>
       ),
       children: (
@@ -269,8 +268,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <AiToolCatalogCard db={db} />
           <OracleAiToolConfigCard db={db} />
           <SshFsAiToolConfigCard db={db} />
-          <Text strong>Trợ lý & Ghost Dev</Text>
-          <GhostDevConfigCard />
           <NineRouterConfigCard db={db} />
           <Text strong>Ngân sách & Knowledge</Text>
           <BudgetWarnThresholdCard db={db} />

@@ -315,14 +315,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
   const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
     {
-      key: 'run-ghost-dev',
-      icon: <RobotOutlined style={{ color: 'var(--accent)' }} />,
-      label: 'Chạy Ghost Dev',
-      onClick: () => {
-        setGhostDevTask(record);
-      },
-    },
-    {
       key: 'ai-chat',
       icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
       label: 'Hỏi Trợ lý AI',
