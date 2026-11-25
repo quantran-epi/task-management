@@ -16,6 +16,19 @@ vi.mock('../../src/components/common/AriaLiveRegion', () => ({
   AriaLiveRegion: () => null,
 }));
 
+// AntD App.useApp() notification là stub trong jsdom; test không render App contextHolder.
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>();
+  const noop = () => ({ destroy: vi.fn() });
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({ notification: { success: noop, error: noop, info: noop, warning: noop } }),
+    },
+  };
+});
+
 describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => {
   let db: TaskPlannerDatabase;
 
@@ -45,8 +58,8 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     }
   });
 
-  const openPanel = (label: string) => {
-    fireEvent.click(screen.getByText(label).closest('.ant-collapse-header')!);
+  const openPanel = (_label: string) => {
+    fireEvent.click(screen.getByRole('tab', { name: 'Công suất' }));
   };
 
   it('seeds the form from DEFAULT_* constants and NEVER reads db.settings during authoring', async () => {
@@ -402,7 +415,7 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
     fireEvent.change(search, { target: { value: '' } });
 
     fireEvent.click(screen.getByTestId(`profile-list-item-${rows[0]!.id}`));
-    fireEvent.click(screen.getByRole('button', { name: /Nhân bản profile/i }));
+    fireEvent.click(screen.getByLabelText('Nhân bản profile'));
 
     await waitFor(async () => {
       const stored = await db.settings.get(CONFIGURATION_PROFILES_SETTING_KEY);
@@ -423,5 +436,65 @@ describe('ConfigProfilesView — defaults-seeded authoring (D-01..D-07)', () => 
 
     expect(screen.getByLabelText('9Router endpoint')).toHaveValue(DEFAULT_NINEROUTER_ENDPOINT);
     expect(screen.getByLabelText('9Router endpoint')).not.toHaveValue('http://evil');
+  });
+
+  it('giữ mọi field/testid cũ khi chuyển qua 4 tab', () => {
+    render(<ConfigProfilesView db={db} />);
+
+    for (const label of ['Cơ bản', 'Kết nối', 'AI & Team', 'Công suất']) {
+      fireEvent.click(screen.getByRole('tab', { name: label }));
+    }
+    expect(screen.getByLabelText('9Router endpoint')).toBeInTheDocument();
+    expect(screen.getByLabelText('Cài đặt thông báo')).toBeInTheDocument();
+    expect(screen.getByLabelText('GitHub owner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ghost Dev claudePath')).toBeInTheDocument();
+    expect(screen.getByLabelText('Team budget warn threshold')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-capacity-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ghost-dev-section')).toBeInTheDocument();
+    expect(screen.getByTestId('profile-ai-team-section')).toBeInTheDocument();
+  });
+
+  it('panel preview JSON của draft đang sửa, không có recipient, secret trống', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Cho Lan' } });
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'METADATA-KHONG-XUAT' } });
+    fireEvent.change(screen.getByLabelText('GitHub owner'), { target: { value: 'lan-org' } });
+
+    const preview = screen.getByTestId('profile-export-preview');
+    await waitFor(() => {
+      expect(preview.textContent).toContain('"github_owner": "lan-org"');
+    });
+    expect(preview.textContent).toContain('"name": "Cho Lan"');
+    expect(preview.textContent).not.toContain('"recipient"');
+    expect(preview.textContent).not.toContain('METADATA-KHONG-XUAT');
+    expect(preview.textContent).toContain('"github_pat": ""');
+    expect(JSON.parse(preview.textContent!).profile.config.settings.github_owner).toBe('lan-org');
+  });
+
+  it('cảnh báo theo máy cập nhật theo draft và checkbox không chặn Export', async () => {
+    render(<ConfigProfilesView db={db} />);
+
+    expect(screen.getByText(/Đã đổi \d+ giá trị theo máy/)).toBeInTheDocument();
+    const initialCount = Number(
+      screen.getByText(/Đã đổi \d+ giá trị theo máy/).textContent!.match(/Đã đổi (\d+)/)![1]
+    );
+    fireEvent.change(screen.getByLabelText('GitHub owner'), { target: { value: 'may-cua-toi' } });
+    expect(screen.getByText(new RegExp(`Đã đổi ${initialCount + 1} giá trị theo máy`))).toBeInTheDocument();
+
+    for (const testId of ['review-check-machine', 'review-check-secret', 'review-check-preview']) {
+      expect(screen.getByTestId(testId)).toBeInTheDocument();
+    }
+    const exportButton = screen.getByRole('button', { name: /Xuất profile này/i });
+    expect(exportButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('Tên profile'), { target: { value: 'Có recipient' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu profile/i }));
+    await waitFor(() => expect(exportButton).toBeEnabled());
+
+    for (const testId of ['review-check-machine', 'review-check-secret', 'review-check-preview']) {
+      fireEvent.click(screen.getByTestId(testId));
+    }
+    expect(exportButton).toBeEnabled();
   });
 });
