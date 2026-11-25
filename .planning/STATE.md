@@ -164,6 +164,7 @@ Progress: [█████░░░░░] 50%
 - Phase 46.1 inserted after Phase 46: Unified remote file search, compact remote tree, and shared workbench visual tokens from the approved draft (URGENT)
 - Phase 46.1 edited: edited title, goal, requirements, success criteria
 - Phase 48 added (2026-11-21): Agent Developer Workbench — SSH worktree coding zone, popout, hunk review. UI source of truth: `.planning/quick/261121-0ix-t-o-b-n-draft-html-t-ng-t-c-cho-agent-de/agent-developer-workbench-draft.html`. agent developer edits only inside its allocated SSH remote worktree; user reviews/merges outside.
+- Phase 51 added (2026-11-25): TaskMate Chat standalone — bản cài Tauri riêng, mở thẳng AI chat full-window, không task UI/context. Full AI settings trong drawer side-nav 7 nhóm; giữ knowledge server/MCP/Graphiti/Oracle/SSH. UI decisions: sketch 007 winner A (chat full-bleed + gear) + 008 winner C (side nav + accordion).
 
 ## Decisions
 

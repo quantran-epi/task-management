@@ -1287,6 +1287,17 @@ Plans:
 
 - [x] 48-04-PLAN.md — Focused gate + Chrome Playwright UAT + clean re-review complete; guarded merge/push delivered to feature/intellij-workbench (D-19..D-22)
 
+### Phase 51: TaskMate Chat standalone: bản cài Tauri riêng mở thẳng AI chat full-window (không task UI), full AI settings drawer side-nav 7 nhóm, không taskmate context
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 50
+**Plans:** 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 51 to break down)
+
 ---
 
 ## Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
