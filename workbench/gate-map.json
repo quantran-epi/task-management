@@ -1,0 +1,41 @@
+{
+  "baseline": {
+    "command": "git merge-base HEAD master",
+    "fallback": "HEAD",
+    "maxDivergence": 50,
+    "scopeWindow": "HEAD~1",
+    "note": "Scope theo working-tree (staged + unstaged + untracked) cộng baseline khi branch không lệch quá maxDivergence; nếu lệch hơn thì dùng HEAD~1 để tránh coi toàn bộ lịch sử branch là 'thay đổi mới'."
+  },
+  "rules": [
+    {
+      "id": "knowledge",
+      "match": ["src/services/knowledge/**", "src/services/ai/**", "tests/knowledge/**", "workbench/e2e/grounded-knowledge.e2e.ts"],
+      "unit": ["tests/knowledge", "src/services/ai/__tests__"],
+      "e2e": ["workbench/e2e/grounded-knowledge.e2e.ts"]
+    },
+    {
+      "id": "backup",
+      "match": ["src/db/**", "src/services/backup/**", "src/services/crypto/**", "tests/backup/**", "tests/migrations.test.tsx", "workbench/e2e/backup-roundtrip.e2e.ts"],
+      "unit": ["tests/backup", "tests/migrations.test.tsx", "src/services/crypto/__tests__"],
+      "e2e": ["workbench/e2e/backup-roundtrip.e2e.ts"]
+    },
+    {
+      "id": "change-pack",
+      "match": ["src/components/notes/DocsLibraryActions.tsx", "src/components/notes/ZipImportPreviewModal.tsx", "tests/fixtures/ai/change-packs/**", "workbench/e2e/change-pack.e2e.ts"],
+      "unit": ["src/workbench/__tests__/DocsExplorerZip.test.tsx"],
+      "e2e": ["workbench/e2e/change-pack.e2e.ts"]
+    },
+    {
+      "id": "workbench",
+      "match": ["workbench/scripts/**", "workbench/gate-map.json", "workbench/seed/**", "workbench/unit/**", "workbench/run.sh", "workbench/e2e/**"],
+      "unit": ["workbench/unit"],
+      "e2e": ["workbench/e2e/smoke.e2e.ts"]
+    }
+  ],
+  "fallback": {
+    "scope": "fallback",
+    "unit": ["workbench/unit/detectChanges.test.mjs"],
+    "e2e": ["workbench/e2e/smoke.e2e.ts"]
+  },
+  "unitTestFileSuffixes": [".test.ts", ".test.tsx", ".test.mjs"]
+}

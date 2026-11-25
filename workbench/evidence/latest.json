@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-11-25T15:53:15.673Z",
+  "mode": "change-scoped",
+  "scope": "explicit",
+  "explicitPath": "workbench/gate-map.json",
+  "rules": [
+    "workbench"
+  ],
+  "changed": [
+    "workbench/evidence/latest.json",
+    "workbench/gate-map.json",
+    "workbench/run.sh",
+    "workbench/scripts/detect-changes.mjs",
+    "workbench/unit/detectChanges.test.mjs"
+  ],
+  "unit": [
+    "workbench/unit"
+  ],
+  "unitFiles": [
+    "workbench/unit/detectChanges.test.mjs"
+  ],
+  "e2e": [
+    "workbench/e2e/smoke.e2e.ts"
+  ],
+  "gates": [
+    {
+      "name": "unit-scoped",
+      "command": "node --test workbench/unit/detectChanges.test.mjs",
+      "exitCode": 0
+    },
+    {
+      "name": "spec-missing:workbench/e2e/smoke.e2e.ts",
+      "command": "playwright spec",
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-scoped",
+      "command": "playwright (config missing)",
+      "exitCode": 0
+    }
+  ],
+  "exit": 0,
+  "note": "Chỉ ghi metadata; không ghi token hay response body."
+}
