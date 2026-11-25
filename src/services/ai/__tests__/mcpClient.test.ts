@@ -8,6 +8,7 @@ import {
   deleteMcpServer,
   toggleMcpServer,
   setAllMcpServersEnabled,
+  setGatedMcpServersEnabled,
   getEnabledMcpInstructions,
   resetMcpClientForTests,
   DEFAULT_MCP_SERVERS,
@@ -113,6 +114,20 @@ describe('mcpClient service', () => {
     expect(on.every((s) => s.enabled)).toBe(true);
     const reloaded = await getMcpServers(db);
     expect(reloaded.every((s) => s.enabled)).toBe(true);
+  });
+
+  it('gated toggle-all leaves the dedicated Graphiti/SQL servers untouched', async () => {
+    const servers: McpServerConfig[] = [
+      { id: 'graphiti-banking', name: 'Graphiti', url: 'http://localhost:9001/mcp', enabled: true, instruction: '' },
+      { id: 'svng-source', name: 'Source', url: 'http://localhost:9002/mcp', enabled: true, instruction: '' },
+      { id: 'generic', name: 'Generic', url: 'http://localhost:9003/mcp', enabled: true, instruction: '' },
+    ];
+    await saveMcpServers(servers, db);
+
+    const off = await setGatedMcpServersEnabled(false, db);
+    expect(off.find((s) => s.id === 'generic')?.enabled).toBe(false);
+    expect(off.find((s) => s.id === 'graphiti-banking')?.enabled).toBe(true);
+    expect(off.find((s) => s.id === 'svng-source')?.enabled).toBe(true);
   });
 
   it('toggle-all with a single seeded MCP still flips that server', async () => {

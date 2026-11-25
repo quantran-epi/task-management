@@ -169,6 +169,18 @@ vi.mock('../../../../src/services/ai/mcpClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../../src/services/ai/mcpClient')>();
   return {
     ...actual,
+    discoverGraphitiSqlMcpTools: async (
+      db: Parameters<typeof actual.discoverGraphitiSqlMcpTools>[0]
+    ) => {
+      if (mcpProbe.active && db) {
+        const rows = await db.chatMessages.where('threadId').equals(mcpProbe.threadId).toArray();
+        for (const row of rows) {
+          if (row.role === 'user') mcpProbe.userRowsSeen.push(String(row.content));
+        }
+      }
+      if (mcpProbe.hang) return new Promise<never>(() => {});
+      return actual.discoverGraphitiSqlMcpTools(db);
+    },
     discoverAllMcpTools: async (db: Parameters<typeof actual.discoverAllMcpTools>[0]) => {
       if (mcpProbe.active && db) {
         const rows = await db.chatMessages.where('threadId').equals(mcpProbe.threadId).toArray();

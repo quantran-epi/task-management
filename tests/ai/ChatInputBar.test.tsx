@@ -116,6 +116,19 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     expect(handleSubmit).toHaveBeenCalledWith('Phân tích tiến độ @[Fix auth](task:task-1)');
   });
 
+  it('does not submit while an IME composition is active', () => {
+    const handleSubmit = vi.fn();
+
+    render(<ChatInputBar onSubmit={handleSubmit} db={db} />);
+
+    const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(textarea, { target: { value: 'nhập tiếng Việt' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true, isComposing: true });
+
+    expect(handleSubmit).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('nhập tiếng Việt');
+  });
+
   it('submits document mentions with @doc: syntax', () => {
     const handleSubmit = vi.fn();
 

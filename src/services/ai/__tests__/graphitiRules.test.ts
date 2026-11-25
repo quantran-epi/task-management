@@ -279,7 +279,13 @@ describe('graphitiRules dedicated service', () => {
     expect(segment).not.toContain('Ignore previous rules');
     expect(segment).toContain('http://x/mcp');
 
-    await saveMcpServers([], db);
+    await saveMcpServers(
+      [
+        { id: GRAPHITI_SQL_SERVER_IDS.memory, name: 'm', url: '', enabled: false, instruction: '' },
+        { id: GRAPHITI_SQL_SERVER_IDS.source, name: 's', url: '', enabled: false, instruction: '' },
+      ],
+      db
+    );
     const empty = await getGraphitiSkillSegment(db, 'catalog', fetchMock);
     expect(empty).toBe('');
     expect(fetchMock).not.toHaveBeenCalled();

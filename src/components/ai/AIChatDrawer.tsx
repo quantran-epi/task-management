@@ -49,9 +49,10 @@ import { getGraphitiSkillSegment } from '../../services/ai/graphitiRules';
 import { getToolsForTurnWithRemote } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
-  discoverAllMcpTools,
+  discoverGatedMcpTools,
+  discoverGraphitiSqlMcpTools,
   toggleMcpServer,
-  setAllMcpServersEnabled,
+  setGatedMcpServersEnabled,
   type McpServerConfig,
 } from '../../services/ai/mcpClient';
 import { launchClaudeTerminal } from '../../services/ai/claudeCliService';
@@ -347,7 +348,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // Reload MCP servers on open or change
   const reloadMcpServers = useCallback(async () => {
     try {
-      const list = await getMcpServers(db);
+      // Dedicated Graphiti/SQL servers are configured in their own card; hide them here so the
+      // chat panel never offers a toggle that would conflict with that configuration.
+      const list = (await getMcpServers(db)).filter(
+        (s) => s.id !== 'graphiti-banking' && s.id !== 'svng-source'
+      );
       setMcpServers(list);
     } catch (err) {
       logAiChatError('Failed to load MCP servers', err);
@@ -389,8 +394,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
   const handleToggleAllMcpServers = async (enabled: boolean) => {
     try {
-      const next = await setAllMcpServersEnabled(enabled, db);
-      setMcpServers(next);
+      const next = await setGatedMcpServersEnabled(enabled, db);
+      setMcpServers(next.filter((s) => s.id !== 'graphiti-banking' && s.id !== 'svng-source'));
       appMessage.success(enabled ? 'Đã bật toàn bộ máy chủ MCP' : 'Đã tắt toàn bộ máy chủ MCP');
     } catch (err: any) {
       appMessage.error(`Không thể đổi trạng thái MCP: ${err?.message || err}`);
@@ -1916,18 +1921,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       let dynamicMcpTools: AiToolDefinition[] = [];
-      let graphitiSkillSegment = '';
+      // Graphiti/SQL servers are governed only by their own Settings card, not by the tab gate.
+      try {
+        dynamicMcpTools = await discoverGraphitiSqlMcpTools(db);
+      } catch (err) {
+        logAiChatError('Graphiti MCP discovery unavailable', err);
+      }
       if (turnMcpEnabled) {
         try {
-          dynamicMcpTools = await discoverAllMcpTools(db);
+          dynamicMcpTools = [...dynamicMcpTools, ...(await discoverGatedMcpTools(db))];
         } catch (err) {
           logAiChatError('MCP discovery unavailable', err);
         }
-        try {
-          graphitiSkillSegment = await getGraphitiSkillSegment(db, promptText);
-        } catch (err) {
-          logAiChatError('Graphiti skill segment resolution error', err);
-        }
+      }
+      let graphitiSkillSegment = '';
+      try {
+        graphitiSkillSegment = await getGraphitiSkillSegment(db, promptText);
+      } catch (err) {
+        logAiChatError('Graphiti skill segment resolution error', err);
       }
       // Quick cz2: chat has no team flag, so SSH/Oracle availability = shared connection config
       // existence. Tools whose connection is not configured are removed from the payload entirely.

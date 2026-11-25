@@ -40,7 +40,9 @@ export const McpSettingsModal: React.FC<McpSettingsModalProps> = ({
 
   const loadServers = async () => {
     try {
-      const list = await getMcpServers(db);
+      const list = (await getMcpServers(db)).filter(
+        (s) => s.id !== 'graphiti-banking' && s.id !== 'svng-source'
+      );
       setServers(list);
     } catch (err) {
       console.error('Failed to load MCP servers:', err);

@@ -222,6 +222,24 @@ export async function setAllMcpServersEnabled(
   return next;
 }
 
+/** Toggle only generic MCP servers; dedicated Graphiti/SQL rows stay under their Settings card. */
+export async function setGatedMcpServersEnabled(
+  enabled: boolean,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<McpServerConfig[]> {
+  const servers = await getMcpServers(db);
+  const next = servers.map((s) =>
+    GRAPHITI_SQL_MCP_IDS.has(s.id) ? s : { ...s, enabled }
+  );
+  await saveMcpServers(next, db);
+  if (!enabled) {
+    for (const s of servers) {
+      if (!GRAPHITI_SQL_MCP_IDS.has(s.id)) resetMcpServerCache(s.id);
+    }
+  }
+  return next;
+}
+
 export async function getEnabledMcpInstructions(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<string> {
@@ -431,13 +449,13 @@ export async function fetchServerTools(server: McpServerConfig): Promise<AiToolD
   return tools;
 }
 
-export async function discoverAllMcpTools(
-  db: TaskPlannerDatabase = defaultDb
+const GRAPHITI_SQL_MCP_IDS = new Set(['graphiti-banking', 'svng-source']);
+
+async function discoverToolsFrom(
+  servers: McpServerConfig[]
 ): Promise<AiToolDefinition[]> {
-  const servers = await getMcpServers(db);
   const isTauri = isTauriApp();
   const enabledServers = servers.filter((s) => s.enabled && (!s.desktopOnly || isTauri));
-
   const allTools: AiToolDefinition[] = [];
   for (const server of enabledServers) {
     try {
@@ -448,6 +466,28 @@ export async function discoverAllMcpTools(
     }
   }
   return allTools;
+}
+
+export async function discoverAllMcpTools(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiToolDefinition[]> {
+  return discoverToolsFrom(await getMcpServers(db));
+}
+
+/** The two dedicated Graphiti/SQL servers are controlled only by their own Settings card. */
+export async function discoverGraphitiSqlMcpTools(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiToolDefinition[]> {
+  const servers = (await getMcpServers(db)).filter((s) => GRAPHITI_SQL_MCP_IDS.has(s.id));
+  return discoverToolsFrom(servers);
+}
+
+/** Other MCP servers stay behind the per-tab / per-team master gate. */
+export async function discoverGatedMcpTools(
+  db: TaskPlannerDatabase = defaultDb
+): Promise<AiToolDefinition[]> {
+  const servers = (await getMcpServers(db)).filter((s) => !GRAPHITI_SQL_MCP_IDS.has(s.id));
+  return discoverToolsFrom(servers);
 }
 
 function stableSerialize(value: unknown): string {

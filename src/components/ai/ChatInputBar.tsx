@@ -316,6 +316,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // An IME uses Enter to commit a Vietnamese word; never send mid-composition.
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
@@ -965,6 +967,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           rows={16}
           showCount
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault();
               handleSendFromFullscreen();

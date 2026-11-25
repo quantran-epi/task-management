@@ -37,7 +37,7 @@ import {
   getNineRouterApiKey,
   getNineRouterConfig,
 } from '../../../services/ai/nineRouterTokenService';
-import { getMcpServers, toggleMcpServer, setAllMcpServersEnabled, MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from '../../../services/ai/mcpClient';
+import { getMcpServers, toggleMcpServer, setGatedMcpServersEnabled, MCP_SERVERS_SETTINGS_KEY, type McpServerConfig } from '../../../services/ai/mcpClient';
 import { McpSettingsModal } from '../McpSettingsModal';
 import { getGlobalBudgetWarnThresholdPct } from '../../../services/ai/budgetWarnSettings';
 import {
@@ -214,7 +214,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const mcpServers = useLiveQuery(
     async () => {
       const rec = await db.settings.get(MCP_SERVERS_SETTINGS_KEY);
-      return Array.isArray(rec?.value) ? (rec.value as McpServerConfig[]) : [];
+      const all = Array.isArray(rec?.value) ? (rec.value as McpServerConfig[]) : [];
+      // Graphiti/SQL has its own Settings card; do not offer a conflicting toggle here.
+      return all.filter((s) => s.id !== 'graphiti-banking' && s.id !== 'svng-source');
     },
     [db]
   ) ?? [];
@@ -1190,7 +1192,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                       runAction(() => toggleMcpServer(id, enabled, db));
                     },
                     onToggleAllMcpServers: (enabled) => {
-                      runAction(() => setAllMcpServersEnabled(enabled, db));
+                      runAction(() => setGatedMcpServersEnabled(enabled, db));
                     },
                     onOpenMcpSettings: () => setMcpSettingsOpen(true),
                   }}

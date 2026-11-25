@@ -46,7 +46,11 @@ import {
   getToolsForTurn,
 } from '../chatTurnTools';
 import { getGraphitiSkillSegment } from '../graphitiRules';
-import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
+import {
+  discoverGatedMcpTools,
+  discoverGraphitiSqlMcpTools,
+  isReadOnlyMcpTool,
+} from '../mcpClient';
 import { getOracleConnectionProfiles } from '../oracleSqlclService';
 import { getSshFsToolConfig } from '../sshFsToolService';
 import { aiTurnManager } from '../aiTurnManager';
@@ -1577,11 +1581,13 @@ export function createTeamRunCoordinator(
    * reused, not cleared).
    */
   async function refreshMcpTools(): Promise<void> {
-    // Absent means ON — only an explicit `false` opts a team out of MCP.
-    if (liveTeam.mcpEnabled === false) {
-      mcpTools = [];
-      return;
-    }
+    // The two dedicated Graphiti/SQL servers are governed only by their own Settings card;
+    // the team flag gates every OTHER MCP server. Absent means ON.
+    const discover = async () => {
+      const graphitiTools = await discoverGraphitiSqlMcpTools(db);
+      const gatedTools = liveTeam.mcpEnabled === false ? [] : await discoverGatedMcpTools(db);
+      return [...graphitiTools, ...gatedTools];
+    };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(
@@ -1590,7 +1596,7 @@ export function createTeamRunCoordinator(
       );
     });
     try {
-      mcpTools = await Promise.race([discoverAllMcpTools(db), timeout]);
+      mcpTools = await Promise.race([discover(), timeout]);
     } catch {
       // Keep the cached list: a transient failure must not strip tools the last turn had.
     } finally {
@@ -2386,9 +2392,10 @@ export function createTeamRunCoordinator(
       const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
       // Same gate as refreshMcpTools: an explicit false opts the team out. A settings or rule
       // read failure degrades to no segment, never a blocked turn.
-      const graphitiSkillSegment = liveTeam.mcpEnabled === false
-        ? ''
-        : await getGraphitiSkillSegment(db, `${originalRequest}\n${instruction}`).catch(() => '');
+      const graphitiSkillSegment = await getGraphitiSkillSegment(
+        db,
+        `${originalRequest}\n${instruction}`
+      ).catch(() => '');
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
       const folderId = memberFolderIds.get(employee.id);
@@ -2631,11 +2638,9 @@ export function createTeamRunCoordinator(
       // Phase 45 D-16/D-17: framed per-team pin reaches the leader on every planning,
       // synthesis, continuation and retry turn via the shared lead builder.
       const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
-      // Same dedicated skill segment as single chat, gated like refreshMcpTools; read failure
-      // is a no-op so a bad hash cannot block the lead's turn.
-      const graphitiSkillSegment = liveTeam.mcpEnabled === false
-        ? ''
-        : await getGraphitiSkillSegment(db, text).catch(() => '');
+      // Same dedicated skill segment as single chat, governed by its own Settings card;
+      // read failure is a no-op so a bad hash cannot block the lead's turn.
+      const graphitiSkillSegment = await getGraphitiSkillSegment(db, text).catch(() => '');
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
       // final goes), never a `write_doc` target. T-41-28: only live roster members with an
       // entry in this turn's map are emitted, so a member removed mid-turn is never named.

@@ -144,7 +144,7 @@ describe('AIChatDrawer Conventions Injection', () => {
   describe('dedicated Graphiti skill segment', () => {
     const SKILL_MARKER = '[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]\nGRAPHITI_SKILL_TEST_MARKER';
 
-    it('injects the segment when the master MCP gate is on', async () => {
+    it('injects the segment regardless of the generic-MCP master gate', async () => {
       vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SKILL_MARKER);
 
       render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
@@ -155,7 +155,7 @@ describe('AIChatDrawer Conventions Injection', () => {
       expect(systemMsg.content).toContain(SKILL_MARKER);
     });
 
-    it('omits the segment when the tab master MCP gate is off', async () => {
+    it('keeps the dedicated segment when the tab master MCP gate is off', async () => {
       vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SKILL_MARKER);
       const tab = await createChatTab(
         {
@@ -174,8 +174,9 @@ describe('AIChatDrawer Conventions Injection', () => {
 
       await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
       const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
-      expect(systemMsg.content).not.toContain(SKILL_MARKER);
-      expect(graphitiRules.getGraphitiSkillSegment).not.toHaveBeenCalled();
+      // The tab gate now governs only generic MCP servers; Graphiti/SQL has its own switch.
+      expect(systemMsg.content).toContain(SKILL_MARKER);
+      expect(graphitiRules.getGraphitiSkillSegment).toHaveBeenCalled();
     });
   });
 });
