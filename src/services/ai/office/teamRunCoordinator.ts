@@ -45,7 +45,7 @@ import {
   getGatedAddenda,
   getToolsForTurn,
 } from '../chatTurnTools';
-import { discoverAllMcpTools, isReadOnlyMcpTool } from '../mcpClient';
+import { discoverAllMcpTools, getEnabledMcpInstructions, isReadOnlyMcpTool } from '../mcpClient';
 import { getOracleConnectionProfiles } from '../oracleSqlclService';
 import { getSshFsToolConfig } from '../sshFsToolService';
 import { aiTurnManager } from '../aiTurnManager';
@@ -2383,6 +2383,11 @@ export function createTeamRunCoordinator(
       // Phase 45 D-16/D-17: the per-team pin is framed as untrusted data on every turn and
       // passed to the shared member builder — covering assignment, chat, continuation, retry.
       const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
+      // Same gate as refreshMcpTools: an explicit false opts the team out. A settings read
+      // failure degrades to no segment, never a blocked turn.
+      const mcpInstructionsSegment = liveTeam.mcpEnabled === false
+        ? ''
+        : await getEnabledMcpInstructions(db).catch(() => '');
       const skill = skillFor(employee);
       // Phase 41 D-16: the folder id is a fixed fact for the turn, so it goes into the prompt.
       const folderId = memberFolderIds.get(employee.id);
@@ -2399,6 +2404,7 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         ...(conventionsSegment ? { conventionsSegment } : {}),
         ...(pinnedContextSegment ? { pinnedContextSegment } : {}),
+        ...(mcpInstructionsSegment ? { mcpInstructionsSegment } : {}),
         assignmentHistory,
         recentTurns,
         ...(folderId ? { folderId } : {}),
@@ -2624,6 +2630,10 @@ export function createTeamRunCoordinator(
       // Phase 45 D-16/D-17: framed per-team pin reaches the leader on every planning,
       // synthesis, continuation and retry turn via the shared lead builder.
       const pinnedContextSegment = buildPinnedContextSegment(liveTeam.pinnedContext);
+      // Same single-chat instruction string, gated like refreshMcpTools; read failure is no-op.
+      const mcpInstructionsSegment = liveTeam.mcpEnabled === false
+        ? ''
+        : await getEnabledMcpInstructions(db).catch(() => '');
       // Phase 41 D-07/D-16: the team folder is a READ fact for the leader (where the approved
       // final goes), never a `write_doc` target. T-41-28: only live roster members with an
       // entry in this turn's map are emitted, so a member removed mid-turn is never named.
@@ -2641,6 +2651,7 @@ export function createTeamRunCoordinator(
         ...(batchResults && batchResults.length > 0 ? { batchResults } : {}),
         ...(conventionsSegment ? { conventionsSegment } : {}),
         ...(pinnedContextSegment ? { pinnedContextSegment } : {}),
+        ...(mcpInstructionsSegment ? { mcpInstructionsSegment } : {}),
         ...(liveTeam.docsFolderId ? { docsFolderId: liveTeam.docsFolderId } : {}),
         ...(memberFolders.length > 0 ? { memberFolders } : {}),
         ...(batchHistory.length > 0 ? { batchHistory } : {}),

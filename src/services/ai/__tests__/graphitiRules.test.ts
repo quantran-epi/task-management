@@ -51,12 +51,14 @@ describe('graphitiRules service', () => {
     const graphiti = next.find((s) => s.id === 'graphiti-banking');
     const svng = next.find((s) => s.id === 'svng-source');
     expect(graphiti?.instruction).toBe(RULE_BODY_A);
-    expect(svng?.instruction).toBe(RULE_BODY_B);
+    expect(svng?.instruction).toBe(`${RULE_BODY_A}\n\n${RULE_BODY_B}`);
     expect(svng?.enabled).toBe(true);
     expect(svng?.desktopOnly).toBe(true);
     expect(svng?.name).toBe('SVNG Source MCP');
     expect(svng?.url).toBe('');
-    expect((await getMcpServers(db)).find((s) => s.id === 'svng-source')?.instruction).toBe(RULE_BODY_B);
+    expect((await getMcpServers(db)).find((s) => s.id === 'svng-source')?.instruction).toBe(
+      `${RULE_BODY_A}\n\n${RULE_BODY_B}`
+    );
   });
 
   it('preserves an existing graphiti-banking row and an existing svng-source URL', async () => {
@@ -96,7 +98,7 @@ describe('graphitiRules service', () => {
       enabled: true,
       desktopOnly: true,
       name: 'SVNG Source MCP',
-      instruction: RULE_BODY_B,
+      instruction: `${RULE_BODY_A}\n\n${RULE_BODY_B}`,
     });
   });
 

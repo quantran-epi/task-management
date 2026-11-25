@@ -97,7 +97,9 @@ export async function applyGraphitiRules(
     url: svngIndex >= 0 ? next[svngIndex]!.url : '',
     enabled: true,
     desktopOnly: true,
-    instruction: sqlRules,
+    // graphiti-sql loads both files: the shared Graphiti rules first, then its SQL memory
+    // prompt. graphiti-banking above keeps only the shared text.
+    instruction: `${graphitiRules}\n\n${sqlRules}`,
   };
   if (svngIndex >= 0) next[svngIndex] = svng;
   else next.push(svng);
