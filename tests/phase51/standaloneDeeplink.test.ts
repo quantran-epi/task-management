@@ -7,7 +7,6 @@ import {
   NOTIFICATION_DEEPLINK_EVENT,
   NotificationDeepLink,
   isSafeHashRoute,
-  startNotificationDeepLinkListener,
 } from '../../src/utils/notificationDeepLink';
 
 const readSource = (relativePath: string): string =>

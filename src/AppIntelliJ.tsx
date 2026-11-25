@@ -67,7 +67,7 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
       console.warn('Storage persistence auto-request failed on boot:', err);
     });
     // Clicking an OS notification focuses the window and navigates to its target page.
-    const stopDeepLinks = startNotificationDeepLinkListener();
+    const stopDeepLinks = startNotificationDeepLinkListener(standaloneChat);
 
     // ONE global tool-task listener for the whole app lifetime — it must not live in a
     // chat tab, otherwise closing the tab would stop observing still-running tasks.

@@ -17,6 +17,7 @@ export const NOTIFICATION_DEEPLINK_EVENT = 'taskmate:notification-deeplink';
 export const BROWSER_NOTIFICATION_CLICK_EVENT = 'notification-deeplink';
 
 export const NotificationDeepLink = {
+  aiPopout: '#/ai-popout',
   dashboard: '#/dashboard',
   tasks: '#/tasks',
   telegram: '#/telegram',
@@ -71,7 +72,7 @@ export function applyNotificationDeepLink(route: string): void {
  * Mounts the global OS-notification-click listener. Returns an unlisten function. Safe to call
  * in a browser (non-Tauri) environment — the Tauri listener simply fails to register there.
  */
-export function startNotificationDeepLinkListener(): () => void {
+export function startNotificationDeepLinkListener(standaloneChat = false): () => void {
   let unlisten: (() => void) | undefined;
   let disposed = false;
 
@@ -81,6 +82,7 @@ export function startNotificationDeepLinkListener(): () => void {
       const stop = await listen<NotificationClickedPayload>(
         NOTIFICATION_CLICKED_EVENT,
         (event) => {
+          if (standaloneChat) return;
           const route = event.payload?.route;
           if (typeof route === 'string') applyNotificationDeepLink(route);
         }
@@ -97,6 +99,7 @@ export function startNotificationDeepLinkListener(): () => void {
 
   // Browser/PWA fallback notifications dispatch a custom click event carrying their route.
   const onBrowserClick = (event: Event) => {
+    if (standaloneChat) return;
     const detail = (event as CustomEvent<{ route?: string }>).detail;
     if (detail && typeof detail.route === 'string') applyNotificationDeepLink(detail.route);
   };

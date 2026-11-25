@@ -1320,7 +1320,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       title: `${APP_NAME} AI`,
       body: snippet + (content.trim().length > 120 ? '...' : ''),
       tag: 'ai-turn-finished',
-      deeplink: NotificationDeepLink.dashboard,
+      deeplink: isStandaloneChat ? NotificationDeepLink.aiPopout : NotificationDeepLink.dashboard,
     });
   };
 
