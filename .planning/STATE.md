@@ -6,10 +6,10 @@ current_phase: 50
 current_phase_name: full-app-adoption
 status: executing
 stopped_at: Phase 50 UI-SPEC approved
-last_updated: "2026-11-25T03:46:15.142Z"
+last_updated: "2026-11-25T04:16:09.475Z"
 last_activity: 2026-11-25
 last_activity_desc: "Completed quick task 261124-vps: rà dark theme tokens/control toàn app, giữ palette 49-UI-SPEC, audit Chrome từng màn hình"
-state_head: 831cbc5c59ae10c0bb065685769a5da9196e65e8
+state_head: bd3a1a601d84aba09ecb5da35107218409e698bf
 progress:
   total_phases: 2
   completed_phases: 1
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 50 (full-app-adoption) — EXECUTING
 Plan: 1 of 9
 Status: Executing Phase 50
-Last activity: 2026-11-25 - Completed quick task 261125-dqj: Remove code_edit tool; developer generates downloadable code files
+Last activity: 2026-11-25 - Completed quick task 261125-ffm: Fix CR detail screen task table: system dropdown options currently show only system code; show readable system name alongside code.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -133,6 +133,7 @@ Progress: [█████░░░░░] 50%
 | 261124-vps | Rà/sửa dark theme toàn app: giữ palette 49-UI-SPEC, token hoá control hardcode, thêm biến diff, audit Chrome từng màn hình | 2026-11-24 | pending | Verified | [261124-vps-r-so-t-dark-theme-gi-palette-49-ui-spec-](./quick/261124-vps-r-so-t-dark-theme-gi-palette-49-ui-spec-/) |
 | 261125-dax | Hide Database Explorer feature from UI (keep code and data intact) | 2026-11-25 | 7aa15859 | Verified | [261125-dax-hide-database-explorer-feature-from-ui-k](./quick/261125-dax-hide-database-explorer-feature-from-ui-k/) |
 | 261125-dqj | Bỏ tool code_edit của Agent Developer trong AI chat team; developer chỉ sinh code + tính năng gen file cho user download. | 2026-11-25 | 831cbc5c | — | [261125-dqj-b-tool-code-edit-c-a-agent-developer-tro](./quick/261125-dqj-b-tool-code-edit-c-a-agent-developer-tro/) |
+| 261125-ffm | Fix CR detail screen task table: system dropdown options currently show only system code; show readable system name alongside code. | 2026-11-25 | bd3a1a60 | complete | [261125-ffm-fix-cr-detail-screen-task-table-system-d](./quick/261125-ffm-fix-cr-detail-screen-task-table-system-d/) |
 
 ## Accumulated Context
 
