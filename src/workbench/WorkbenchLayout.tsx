@@ -341,7 +341,12 @@ export function WorkbenchLayout({
         {/* Middle Body with Stripes and Splitters (padded for Tauri window bounds) */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden', position: 'relative', padding: 'var(--island-gap, 6px)' }}>
           {/* Left Tool Window Stripe */}
-          <Stripe slot="left" items={DEFAULT_LEFT_ITEMS} bottomItems={DEFAULT_BOTTOM_LEFT_ITEMS} />
+          {/* Database Explorer stays in code/data but is hidden from the discovery surface. */}
+          <Stripe
+            slot="left"
+            items={DEFAULT_LEFT_ITEMS.filter((item) => item.id !== 'database_explorer')}
+            bottomItems={DEFAULT_BOTTOM_LEFT_ITEMS}
+          />
 
           {/* Master Resizable Panel Group (Horizontal: Left Panel | Center Editor | Right Panel) */}
           <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', overflow: 'hidden', margin: '0 var(--island-gap, 6px)' }}>

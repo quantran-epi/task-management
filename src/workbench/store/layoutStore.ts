@@ -418,9 +418,12 @@ export const useLayoutStore = create<LayoutState>()(
             ? incoming.activeTabId
             : (tabs[0]?.id ?? DEFAULT_LAYOUT_STATE.activeTabId);
         // 'diagrams' retired: Diagram Explorer merged into Docs Explorer. Old persisted value maps to docs.
+        // 'database_explorer' is hidden from the UI; restored state must not re-open the panel.
         const leftActiveId =
           incoming.leftActiveId === 'diagrams'
             ? 'docs'
+            : incoming.leftActiveId === 'database_explorer'
+            ? DEFAULT_LAYOUT_STATE.leftActiveId
             : typeof incoming.leftActiveId === 'string'
             ? incoming.leftActiveId
             : current.leftActiveId;

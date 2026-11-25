@@ -77,6 +77,26 @@ describe('useLayoutStore', () => {
     expect(useLayoutStore.getState().leftActiveId).toBe('docs');
   });
 
+  it('falls back to the default left tool window for a persisted hidden database_explorer', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ state: { leftActiveId: 'database_explorer' }, version: 0 })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    expect(useLayoutStore.getState().leftActiveId).toBe(DEFAULT_LAYOUT_STATE.leftActiveId);
+  });
+
+  it('keeps an unrelated valid persisted left tool window unchanged on hydration', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ state: { leftActiveId: 'remote_explorer' }, version: 0 })
+    );
+    await useLayoutStore.persist.rehydrate();
+
+    expect(useLayoutStore.getState().leftActiveId).toBe('remote_explorer');
+  });
+
   it('keeps a valid activeTabId unchanged on hydration', async () => {
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,

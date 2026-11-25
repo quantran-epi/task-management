@@ -66,23 +66,17 @@ describe('Database Explorer workbench shell', () => {
     });
   });
 
-  it('places Database Explorer directly below Remote Git Explorer in left stripe', () => {
+  it('hides Database Explorer from the left stripe while keeping the other entries', () => {
     render(<WorkbenchLayout />);
-    const labels = screen
-      .getAllByRole('button')
-      .map((b) => b.getAttribute('aria-label') || '');
-    const remoteIndex = labels.findIndex((label) => label.includes('Remote Git Explorer'));
-    const dbIndex = labels.findIndex((label) => label.includes('Database Explorer'));
-    expect(remoteIndex).toBeGreaterThan(-1);
-    expect(dbIndex).toBe(remoteIndex + 1);
-  });
-
-  it('activates the Database Explorer left tool window', () => {
-    render(<WorkbenchLayout />);
-    fireEvent.click(screen.getByRole('button', { name: /Database Explorer/i }));
-    expect(useLayoutStore.getState().leftActiveId).toBe('database_explorer');
-    expect(screen.getByText('Database Explorer')).toBeDefined();
-    expect(screen.getByTestId('database-explorer')).toBeDefined();
+    expect(screen.queryAllByRole('button', { name: /Database Explorer/i })).toHaveLength(0);
+    for (const name of [
+      /CR Explorer/i,
+      /Docs Explorer/i,
+      /Systems Explorer/i,
+      /Remote Git Explorer/i,
+    ]) {
+      expect(screen.getByRole('button', { name })).toBeDefined();
+    }
   });
 
   it('loads tree lazily on expand, caches branches, and opens object tabs without leaking credentials', async () => {
