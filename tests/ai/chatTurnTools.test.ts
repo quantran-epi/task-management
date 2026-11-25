@@ -13,6 +13,7 @@ import {
   ORACLE_READ_TOOLS,
   isMutationTool,
   normalizeToolName,
+  type AiToolDefinition,
 } from '../../src/services/ai/aiTools';
 import { dispatchAiToolCall } from '../../src/services/ai/aiOrchestratorLoop';
 import { executeTeamTool, type TeamToolContext } from '../../src/services/ai/office/teamTools';
@@ -78,6 +79,99 @@ describe('quick cz2 enablement gating (getGatedAddenda)', () => {
       expect(payloadNames).not.toContain(name);
     }
     expect(payloadNames).toContain('query_tasks');
+  });
+});
+
+describe('quick 261126-1od standalone chat tool capability', () => {
+  const MCP_TOOL: AiToolDefinition = {
+    type: 'function',
+    function: {
+      name: 'mcp_sample_read',
+      description: 'Sample dynamic MCP read tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  };
+  const namesOf = (tools: readonly AiToolDefinition[]) =>
+    tools.map((t) => normalizeToolName(t.function.name));
+  const baseOptions = {
+    effectiveAnalysisMode: false,
+    globalSshConfigReady: true,
+    hasRemoteTarget: false,
+    oracleConfigReady: true,
+  };
+  const standaloneAllowed = [
+    'retrieve_knowledge',
+    'search_knowledge_base',
+    'get_document_details',
+    'generate_file',
+    'generate_pptx',
+    'generate_image',
+  ];
+  const forbiddenMutations = [
+    'create_task',
+    'update_task',
+    'delete_task',
+    'plan_allocation',
+    'log_work_session',
+    'delete_note',
+  ];
+
+  it('Test 1: standalone capability keeps knowledge/artifact, SSH/Oracle and dynamic MCP, drops TaskMate DB mutations', () => {
+    const payload = getToolsForTurnWithRemote({
+      ...baseOptions,
+      standaloneCapability: true,
+      dynamicMcpTools: [MCP_TOOL],
+    });
+    const names = namesOf(payload);
+    for (const name of standaloneAllowed) expect(names).toContain(name);
+    for (const name of [...SSH_READ_TOOLS, ...ORACLE_READ_TOOLS].map((t) =>
+      normalizeToolName(t.function.name)
+    )) {
+      expect(names).toContain(name);
+    }
+    expect(names).toContain('mcp_sample_read');
+    for (const name of forbiddenMutations) expect(names).not.toContain(name);
+    // generate_file is an artifact execution tool: helper stays true, so assert explicit names.
+    expect(payloadHasMutationTool(payload)).toBe(true);
+  });
+
+  it('Test 2: omitting the option leaves the legacy payload byte-for-byte in tool identity and count', () => {
+    const legacy = getToolsForTurnWithRemote({ ...baseOptions, dynamicMcpTools: [MCP_TOOL] });
+    const explicitFalse = getToolsForTurnWithRemote({
+      ...baseOptions,
+      standaloneCapability: false,
+      dynamicMcpTools: [MCP_TOOL],
+    });
+    expect(namesOf(explicitFalse)).toEqual(namesOf(legacy));
+    expect(namesOf(legacy)).toContain('query_tasks');
+    expect(namesOf(legacy)).toHaveLength(namesOf(getToolsForTurn(false, [MCP_TOOL])).length);
+  });
+
+  it('Test 3: option does not change analysis-mode, disabled-name or allowed-name behavior', () => {
+    const allowed = getToolsForTurnWithRemote({
+      ...baseOptions,
+      effectiveAnalysisMode: true,
+      allowedToolNames: EMPLOYEE_READ_ONLY_ALLOWLIST,
+      standaloneCapability: false,
+    });
+    expect(namesOf(allowed)).toContain('query_tasks');
+    expect(payloadHasMutationTool(allowed)).toBe(false);
+
+    const unconfigured = getToolsForTurnWithRemote({
+      ...baseOptions,
+      globalSshConfigReady: false,
+      oracleConfigReady: false,
+      standaloneCapability: true,
+      dynamicMcpTools: [MCP_TOOL],
+    });
+    const names = namesOf(unconfigured);
+    expect(names).toContain('retrieve_knowledge');
+    expect(names).toContain('mcp_sample_read');
+    for (const name of [...SSH_READ_TOOLS, ...ORACLE_READ_TOOLS].map((t) =>
+      normalizeToolName(t.function.name)
+    )) {
+      expect(names).not.toContain(name);
+    }
   });
 });
 
