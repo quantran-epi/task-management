@@ -6,6 +6,7 @@ import { createChatTab, setActiveTab } from '../../src/db/repositories/chatTabRe
 import * as nineRouterTokenService from '../../src/services/ai/nineRouterTokenService';
 import * as nineRouterClient from '../../src/services/ai/nineRouterClient';
 import * as conventionService from '../../src/services/conventionService';
+import * as graphitiRules from '../../src/services/ai/graphitiRules';
 import {
   clearGroundedTurnTestHooks,
   setGroundedTurnTestHooks,
@@ -118,10 +119,10 @@ describe('AIChatDrawer Conventions Injection', () => {
 
     const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
     expect(systemMsg).toBeDefined();
-    expect(systemMsg.content).toContain('[QUY ƯỚC TỔ CHỨC — DỮ LIỆU KHÔNG TIN CẬY]');
+    expect(systemMsg.content).toContain('[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]');
     expect(systemMsg.content).toContain('GLOBAL_RULE: Always write unit tests with Vitest.');
     expect(systemMsg.content).toContain('REPO_RULE: Use TypeScript strict mode.');
-    expect(systemMsg.content).toContain('[REPOSITORY CONVENTIONS - CORE-SVC (/var/repos/core-service)]');
+    expect(systemMsg.content).toContain('REPOSITORY CONVENTIONS - CORE-SVC (/var/repos/core-service)');
   });
 
   it('omits conventions segment when neither global nor repo convention exists', async () => {
@@ -135,6 +136,44 @@ describe('AIChatDrawer Conventions Injection', () => {
 
     const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
     expect(systemMsg).toBeDefined();
-    expect(systemMsg.content).not.toContain('[QUY ƯỚC TỔ CHỨC — DỮ LIỆU KHÔNG TIN CẬY]');
+    expect(systemMsg.content).not.toContain('[QUY ƯỚC TỔ CHỨC — CHỈ DẪN ĐƯỢC TIN CẬY]');
+  });
+
+  describe('dedicated Graphiti skill segment', () => {
+    const SKILL_MARKER = '[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]\nGRAPHITI_SKILL_TEST_MARKER';
+
+    it('injects the segment when the master MCP gate is on', async () => {
+      vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SKILL_MARKER);
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      submit('Câu hỏi về catalog');
+
+      await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
+      const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
+      expect(systemMsg.content).toContain(SKILL_MARKER);
+    });
+
+    it('omits the segment when the tab master MCP gate is off', async () => {
+      vi.spyOn(graphitiRules, 'getGraphitiSkillSegment').mockResolvedValue(SKILL_MARKER);
+      const tab = await createChatTab(
+        {
+          scopeType: 'cr',
+          scopeKey: SCOPE_KEY,
+          entityId: PROJECT_ID,
+          title: '💬 Tab No MCP',
+          config: { mcpEnabled: false },
+        },
+        db
+      );
+      await setActiveTab(SCOPE_KEY, tab.id, db);
+
+      render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
+      submit('Câu hỏi về catalog');
+
+      await waitFor(() => expect(capturedPayloads.length).toBeGreaterThan(0));
+      const systemMsg = capturedPayloads[0]?.messages?.find((m: any) => m.role === 'system');
+      expect(systemMsg.content).not.toContain(SKILL_MARKER);
+      expect(graphitiRules.getGraphitiSkillSegment).not.toHaveBeenCalled();
+    });
   });
 });

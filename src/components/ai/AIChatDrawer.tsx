@@ -45,11 +45,11 @@ import {
   describeToolMutationWithContext,
 } from '../../services/ai/aiTools';
 import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
+import { getGraphitiSkillSegment } from '../../services/ai/graphitiRules';
 import { getToolsForTurnWithRemote } from '../../services/ai/chatTurnTools';
 import {
   getMcpServers,
   discoverAllMcpTools,
-  getEnabledMcpInstructions,
   toggleMcpServer,
   setAllMcpServersEnabled,
   type McpServerConfig,
@@ -1916,7 +1916,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
 
       let dynamicMcpTools: AiToolDefinition[] = [];
-      let dynamicMcpInstructions = '';
+      let graphitiSkillSegment = '';
       if (turnMcpEnabled) {
         try {
           dynamicMcpTools = await discoverAllMcpTools(db);
@@ -1924,9 +1924,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           logAiChatError('MCP discovery unavailable', err);
         }
         try {
-          dynamicMcpInstructions = await getEnabledMcpInstructions(db);
+          graphitiSkillSegment = await getGraphitiSkillSegment(db, promptText);
         } catch (err) {
-          logAiChatError('MCP instruction resolution error', err);
+          logAiChatError('Graphiti skill segment resolution error', err);
         }
       }
       // Quick cz2: chat has no team flag, so SSH/Oracle availability = shared connection config
@@ -1991,7 +1991,7 @@ Because mutations run automatically without manual confirmation, your final resp
 - Highlight the outcome of each action clearly.
 Never perform mutations silently without providing this full change summary in your final reply.`
           : ' The system will prompt the user to confirm the mutation before applying it.'
-      }${dynamicMcpInstructions}
+      }${graphitiSkillSegment}
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
         turnAnalysisMode
           ? `\n\n[ANALYSIS MODE ACTIVE]:

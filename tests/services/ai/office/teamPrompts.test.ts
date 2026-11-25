@@ -1012,30 +1012,30 @@ describe('teamPrompts (D-04, D-05, D-10, D-24, D-29, T-34-16..18)', () => {
     });
   });
 
-  describe('dynamic MCP instructions segment', () => {
-    const MCP_SEGMENT = '\n[MCP SERVER INSTRUCTION: GRAPHITI BANKING MCP]\nQuy tac MCP dang duoc tiet them.';
+  describe('dedicated Graphiti skill segment', () => {
+    const SKILL_SEGMENT = '\n[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]\nQuy tac Graphiti dang duoc tiet them.';
     const PIN_SEGMENT = '[NGỮ CẢNH NHÓM ĐƯỢC GHIM — CHỈ DẪN ĐƯỢC TIN CẬY]\nGhim pin.';
 
     it('embeds the exact segment once, after the pinned-context segment, in both builders', () => {
       for (const system of [
-        buildEmployee({ pinnedContextSegment: PIN_SEGMENT, mcpInstructionsSegment: MCP_SEGMENT })
+        buildEmployee({ pinnedContextSegment: PIN_SEGMENT, graphitiSkillSegment: SKILL_SEGMENT })
           .systemMessages.map((m) => m.content).join('\n'),
-        buildLead({ pinnedContextSegment: PIN_SEGMENT, mcpInstructionsSegment: MCP_SEGMENT })
+        buildLead({ pinnedContextSegment: PIN_SEGMENT, graphitiSkillSegment: SKILL_SEGMENT })
           .systemMessages.map((m) => m.content).join('\n'),
       ]) {
-        expect(system.split(MCP_SEGMENT)).toHaveLength(2);
+        expect(system.split(SKILL_SEGMENT)).toHaveLength(2);
         expect(system.indexOf(PIN_SEGMENT)).toBeGreaterThanOrEqual(0);
-        expect(system.indexOf(MCP_SEGMENT)).toBeGreaterThan(system.indexOf(PIN_SEGMENT));
+        expect(system.indexOf(SKILL_SEGMENT)).toBeGreaterThan(system.indexOf(PIN_SEGMENT));
       }
     });
 
-    it('emits no MCP block when the segment is absent', () => {
+    it('emits no skill block when the segment is absent', () => {
       for (const system of [
         buildEmployee({ pinnedContextSegment: PIN_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
         buildLead({ pinnedContextSegment: PIN_SEGMENT }).systemMessages.map((m) => m.content).join('\n'),
       ]) {
-        expect(system).not.toContain(MCP_SEGMENT);
-        expect(system).not.toContain('[MCP SERVER INSTRUCTION');
+        expect(system).not.toContain(SKILL_SEGMENT);
+        expect(system).not.toContain('[KỸ NĂNG GRAPHITI / GRAPHITI-SQL]');
       }
     });
   });
