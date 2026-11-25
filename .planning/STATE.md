@@ -1,21 +1,19 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Design System & UI Consistency
-current_phase: 50
-current_phase_name: full-app-adoption
 status: executing
-stopped_at: Phase 50 UI-SPEC approved
-last_updated: "2026-11-25T04:56:41.903Z"
-last_activity: 2026-11-25
-last_activity_desc: "Completed quick task 261124-vps: rà dark theme tokens/control toàn app, giữ palette 49-UI-SPEC, audit Chrome từng màn hình"
-state_head: fa4ef59c90b09bdb25bb1ebdc4c937b290a0d1c3
+stopped_at: Phase 51 context gathered
+last_updated: "2026-11-25T16:24:50.075Z"
+last_activity: 2026-11-25 -- Phase 51 execution started
 progress:
   total_phases: 2
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 18
-  completed_plans: 9
-  percent: 50
+  completed_plans: 18
+  percent: 100
+current_phase: 50
+current_phase_name: full-app-adoption
 ---
 
 # Project State: TaskMate — Milestone v1.5
@@ -23,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Một bộ design system TaskMate duy nhất, IntelliJ-only, light+dark, mọi control AntD đều wrap và có thể thay đổi tại một điểm.
-**Current focus:** Phase 50 — full-app-adoption
+**Current focus:** Phase 51 — TaskMate Chat standalone
 
 ## Current Position
 
-Phase: 50 (full-app-adoption) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 50
-Last activity: 2026-11-25 - Completed quick task 261125-u4w: Fix stale pin context team và global convention trên grounded turn; trước đó 261125-ulp: Ẩn trigger và cấu hình Ghost Dev khỏi UI
+Phase: 51 (TaskMate Chat standalone) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 51
+Last activity: 2026-11-25 -- Phase 51 execution started
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -59,9 +57,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-21T11:35:29.369Z
-Stopped at: Phase 50 UI-SPEC approved
-Resume file: .planning/phases/50-full-app-adoption/50-UI-SPEC.md
+Last session: 2026-11-25T15:47:32.730Z
+Stopped at: Phase 51 context gathered
+Resume file: .planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-CONTEXT.md
 
 Progress: [█████░░░░░] 50%
 

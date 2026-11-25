@@ -1292,12 +1292,12 @@ Plans:
 **Goal:** Bản cài Tauri riêng "TaskMate Chat" mở thẳng AI chat full-window, không task UI hay ngữ cảnh TaskMate, kèm drawer AI settings side-nav 7 nhóm; chạy độc lập và cùng tồn tại với TaskMate.
 **Requirements**: D-01–D-15 (locked decisions in 51-CONTEXT.md; no formal REQ IDs assigned)
 **Depends on:** Phase 50
-**Plans:** 4 plans in 4 waves
+**Plans:** 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 51-01-PLAN.md — Bundle thứ hai: tauri.conf.chat.json, hash URL #ai-popout, build script và marker VITE_CHAT_STANDALONE (D-01/02/03/04/14/15)
+- [x] 51-01-PLAN.md — Bundle thứ hai: tauri.conf.chat.json, hash URL #ai-popout, build script và marker VITE_CHAT_STANDALONE (D-01/02/03/04/14/15)
 
 **Wave 2** *(blocked on Wave 1)*
 

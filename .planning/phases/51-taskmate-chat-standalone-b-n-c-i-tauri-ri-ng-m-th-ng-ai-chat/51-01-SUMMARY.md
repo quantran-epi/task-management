@@ -120,7 +120,7 @@ None - no external service configuration required for this plan.
 ## Self-Check: PASSED
 
 - All four plan artifacts exist (`src-tauri/tauri.conf.chat.json`, `vite.chat.config.ts`, `package.json`, `tests/phase51/chatConfig.test.ts`).
-- Commits `b3523d9c` (Task 1), `deb79e81` (Task 2), `8252577a` (metadata) exist in git history.
+- Commits `b3523d9c` (Task 1), `deb79e81` (Task 2), `e2334c87` (metadata) exist in git history.
 - `npx vitest run tests/phase51/chatConfig.test.ts --bail=1` → 6/6 pass; `npx tsc --noEmit` → clean; real Vite chat build → succeeds.
 - Protected files `tauri.conf.json`, `vite.config.ts`, `Cargo.toml`, `capabilities/default.json` unchanged (SHA-256 identical to baseline); no file deletions in any plan commit.
 
