@@ -788,7 +788,7 @@ export function DocumentSetDetail({
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ flex: '1 1 110px', minWidth: 90, width: detailWidth >= 560 ? 150 : 'auto' }}
-              options={Object.keys(STATE_UI).map((value) => ({ value, label: value }))}
+              options={Object.keys(STATE_UI).map((value) => ({ value, label: publishStateLabel(value as PublishPrimaryState) }))}
             />
             <Select
               aria-label="Sắp xếp"
