@@ -19,6 +19,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "tauri:dev:chat": "tauri dev -c src-tauri/tauri.conf.chat.json",
+    "tauri:build:chat": "tauri build -c src-tauri/tauri.conf.chat.json",
     "test:e2e": "playwright test",
     "lint": "eslint src",
     "test:foundation": "vitest run src/components/ui/__tests__ src/workbench/__tests__/shellRemoval.test.ts src/workbench/__tests__/mainBoot.test.ts src/workbench/__tests__/AntdThemeAdapter.test.tsx src/hooks/__tests__/themeBroadcast.test.ts --bail=1"
