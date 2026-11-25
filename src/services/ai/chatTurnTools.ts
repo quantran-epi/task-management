@@ -143,7 +143,22 @@ export interface RemoteTurnToolOptions {
   hasRemoteTarget: boolean;
   oracleConfigReady: boolean;
   allowedToolNames?: readonly string[];
+  /**
+   * Quick 261126-1od: standalone chat advertises only these builtin knowledge/artifact
+   * tools. Pure payload option — never use `allowedToolNames` here: that filter also
+   * removes dynamic MCP/Graphiti tools, which standalone chat must keep.
+   */
+  standaloneCapability?: boolean;
 }
+
+const STANDALONE_BUILTIN_TOOL_NAMES: readonly string[] = [
+  'retrieve_knowledge',
+  'search_knowledge_base',
+  'get_document_details',
+  'generate_file',
+  'generate_pptx',
+  'generate_image',
+];
 
 export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToolDefinition[] {
   const sshReady = options.hasRemoteTarget || options.globalSshConfigReady;
@@ -151,12 +166,21 @@ export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToo
     ...(sshReady ? [] : SSH_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
     ...(options.oracleConfigReady ? [] : ORACLE_READ_TOOLS.map((t) => normalizeToolName(t.function.name))),
   ]);
-  const tools = getToolsForTurn(
-    options.effectiveAnalysisMode,
-    options.dynamicMcpTools ?? [],
-    options.allowedToolNames,
-    disabled
-  );
+  const dynamicMcpTools = options.dynamicMcpTools ?? [];
+  const tools: AiToolDefinition[] = options.standaloneCapability
+    ? [
+        ...AI_DATABASE_TOOLS.filter((tool) =>
+          STANDALONE_BUILTIN_TOOL_NAMES.includes(normalizeToolName(tool.function.name))
+        ),
+        ...dynamicMcpTools,
+        ...getGatedAddenda({ sshConfigReady: sshReady, oracleConfigReady: options.oracleConfigReady }),
+      ]
+    : getToolsForTurn(
+        options.effectiveAnalysisMode,
+        dynamicMcpTools,
+        options.allowedToolNames,
+        disabled
+      );
   if (options.hasRemoteTarget) {
     const gitReadDef = TEAM_TOOL_DEFINITIONS.find(
       (t) => normalizeToolName(t.function.name) === 'git_read'
