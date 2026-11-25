@@ -28,19 +28,22 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
 
-  const entityOptions = useLiveQuery(async (): Promise<EntityOption[]> => {
-    if (!entityType) return [];
-    if (entityType === 'cr') {
-      const rows = await db.changeRequests.toArray();
-      return rows.slice(0, 200).map((cr) => ({ label: cr.code || cr.name, value: cr.id }));
-    }
-    if (entityType === 'task') {
-      const rows = await db.tasks.toArray();
-      return rows.slice(0, 200).map((task) => ({ label: task.name, value: task.id }));
-    }
-    const rows = await db.systems.toArray();
-    return rows.slice(0, 200).map((system) => ({ label: system.name, value: system.id }));
-  }, [db, entityType], []);
+  const entityNames = useLiveQuery(async (): Promise<Map<string, string>> => {
+    const [crs, tasks, systems] = await Promise.all([
+      db.changeRequests.toArray(),
+      db.tasks.toArray(),
+      db.systems.toArray(),
+    ]);
+    const names = new Map<string, string>();
+    crs.forEach((cr) => names.set(cr.id, cr.code || cr.name));
+    tasks.forEach((task) => names.set(task.id, task.name));
+    systems.forEach((system) => names.set(system.id, system.name));
+    return names;
+  }, [db], new Map<string, string>());
+
+  const entityOptions: EntityOption[] = entityType
+    ? [...(entityNames?.entries() ?? [])].slice(0, 200).map(([value, label]) => ({ label, value }))
+    : [];
 
   const notes = useLiveQuery(async (): Promise<Note[]> => {
     const rows = await db.notes.filter((note) => !note.deletedAt && note.type !== 'diagram').toArray();
@@ -48,8 +51,6 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 20);
   }, [db], []);
-
-  const selectedEntityLabel = entityOptions?.find((option) => option.value === entityId)?.label;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px', height: '100%', overflowY: 'auto' }}>
@@ -91,7 +92,7 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
                 ? 'Tìm hệ thống...'
                 : 'Chọn loại thực thể trước'
         }
-        options={entityOptions ?? []}
+        options={entityOptions}
         onChange={(value) => setEntityId(value)}
         filterOption={(input, option) => searchIncludes(String(option?.label ?? ''), input)}
       />
@@ -118,8 +119,8 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   {note.title && <Typography.Text strong>{note.title}</Typography.Text>}
-                  {selectedEntityLabel && note.entityId === entityId && (
-                    <Tag style={{ marginLeft: 6 }}>{selectedEntityLabel}</Tag>
+                  {note.entityId && entityNames?.get(note.entityId) && (
+                    <Tag style={{ marginLeft: 6 }}>{entityNames.get(note.entityId)}</Tag>
                   )}
                   <div
                     style={{
