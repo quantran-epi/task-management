@@ -107,6 +107,7 @@ import {
 import {
   applyTopUp,
   incrementMemberUsage,
+  listTeamLinks,
   listTeamMembers,
 } from '../../../db/repositories/aiTeamRepo';
 import {
@@ -127,6 +128,57 @@ import {
   readMessagesAfter,
 } from './teamEventLog';
 import { USER_PARTICIPANT_ID, type TeamMessage } from '../../../types/teamChat';
+import type { AttachmentScope } from '../../../types/sshFsTool';
+
+/** OUT_OF_SCOPE refusal body returned to the model; no host/path fallback follows. */
+export function attachmentOutOfScope(): string {
+  return JSON.stringify({
+    success: false,
+    code: 'ATTACHMENT_OUT_OF_SCOPE',
+    error: 'File đính kèm không nằm trong phạm vi team/task của lượt này.',
+  });
+}
+
+function normalizeScopePath(path: string): string {
+  const trimmed = path.trim();
+  const absolute = trimmed.startsWith('/');
+  const parts: string[] = [];
+  for (const segment of trimmed.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') parts.pop();
+    else parts.push(segment);
+  }
+  return `${absolute ? '/' : ''}${parts.join('/')}` || '.';
+}
+
+function isPathUnderRepo(path: string, repoPath: string): boolean {
+  const normalizedPath = normalizeScopePath(path);
+  const normalizedRepo = normalizeScopePath(repoPath);
+  return normalizedPath === normalizedRepo || normalizedPath.startsWith(`${normalizedRepo}/`);
+}
+
+/**
+ * Validate this turn's attachment identities against team/task links before they reach any
+ * attached-file executor. Returns null when the set is empty or any path is outside scope —
+ * the caller must fail closed with `ATTACHMENT_OUT_OF_SCOPE`.
+ */
+export function resolveTeamAttachmentScope(
+  attachedPaths: readonly string[],
+  repoPaths: readonly string[],
+  taskIds: readonly string[],
+  teamId: string,
+  allowedTaskIds?: readonly string[],
+): AttachmentScope | null {
+  const normalized = attachedPaths.map(normalizeScopePath).filter(Boolean);
+  if (normalized.length === 0 || repoPaths.length === 0) return null;
+  if (!normalized.every((path) => repoPaths.some((repo) => isPathUnderRepo(path, repo)))) return null;
+  if (allowedTaskIds && taskIds.some((id) => !allowedTaskIds.includes(id))) return null;
+  return {
+    attachedPaths: normalized,
+    teamId,
+    ...(taskIds.length > 0 ? { taskIds: [...taskIds] } : {}),
+  };
+}
 
 /**
  * Headless team-run coordinator (D-01/D-02/D-03, D-06, D-08, D-12/D-13, D-14, D-20/D-21,
@@ -287,7 +339,7 @@ export interface TeamRunCoordinator {
    * read it at its next round; `'refused'` means the addressed agent already settled (the
    * leader answers instead); `'blocked'` means the coordinator is disposed.
    */
-  send(text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
+  send(text: string, attachments?: string[]): Promise<'started' | 'steered' | 'refused' | 'blocked'>;
   /**
    * Internal seam (D-09/D-22): the ONE terminal writer for an attempt. 37-04's `stopAgent`
    * and `abortAll` call it; exported so the "exactly one report row under concurrency"
@@ -749,6 +801,8 @@ export function createTeamRunCoordinator(
    * its `finally`, so a reply can never be attributed to a previous turn's question.
    */
   const replyTargetByAgent = new Map<string, string>();
+  /** 261126-rfx: attachment identities from the user's latest team message, per recipient. */
+  const attachmentsByAgent = new Map<string, string[]>();
   /**
    * Who this turn's answer goes to. A dispatched turn answers the leader (its report); a turn
    * the user started by tagging the agent answers the USER. Without this the mention path
@@ -1621,6 +1675,36 @@ export function createTeamRunCoordinator(
       loopCallId?: string
     ): Promise<string> => {
       const normalized = normalizeToolName(name);
+      if (
+        normalized === 'ssh_attached_file_info' ||
+        normalized === 'ssh_attached_file_search' ||
+        normalized === 'ssh_attached_file_read'
+      ) {
+        // Fail closed: team agents only read attachments inside their team/task scope.
+        // The role gate stays upstream (team.sshFsToolsEnabled + lead/employee allowlist).
+        if (!liveTeam.sshFsToolsEnabled) return attachmentOutOfScope();
+        const links = await listTeamLinks(teamId, toolDb).catch(() => []);
+        const tasks = links.filter((link) => link.itemType === 'task').map((link) => link.itemId);
+        const systemIds = links.filter((link) => link.itemType === 'system').map((link) => link.itemId);
+        const systems = await Promise.all(
+          systemIds.map((id) => toolDb.systems.get(id).catch(() => null))
+        );
+        const repoPaths = systems
+          .map((system) => system?.remoteRepoPath?.trim())
+          .filter((path): path is string => Boolean(path));
+        repoPaths.push(...repoHints.map((hint) => hint.trim()).filter(Boolean));
+        const request = currentRequests.get(agentId);
+        const reportedPaths = Array.isArray(request?.attachedPaths) ? request.attachedPaths : [];
+        if (reportedPaths.length === 0) return attachmentOutOfScope();
+        const scope = resolveTeamAttachmentScope(reportedPaths, repoPaths, tasks, teamId);
+        if (!scope) return attachmentOutOfScope();
+        const dispatchPaths = reportedPaths;
+        return dispatchAiToolCall(name, args, toolDb, signal, {
+          ...(loopCallId ? { callId: loopCallId } : {}),
+          attachedPaths: dispatchPaths,
+          attachmentScope: scope,
+        });
+      }
       // `repoHints` is this turn's immutable snapshot, captured when the loop started. No tool
       // callback reads shared state, so a concurrent turn can never overwrite these hints.
       const ctx = toolContext(agentId, repoHints, signal, loopCallId);
@@ -2457,6 +2541,9 @@ export function createTeamRunCoordinator(
         messageKind: 'report',
         agentId: employee.id,
         agentName: employee.name,
+        ...(attachmentsByAgent.get(employee.id)?.length
+          ? { attachedPaths: attachmentsByAgent.get(employee.id)! }
+          : {}),
         beforeToolRound: beforeToolRoundFor(
           employee.id,
           triggerMessageId ?? attempt?.instructionMessageId
@@ -2692,6 +2779,9 @@ export function createTeamRunCoordinator(
         messageKind: 'synthesis',
         agentId: lead.id,
         agentName: lead.name,
+        ...(attachmentsByAgent.get(lead.id)?.length
+          ? { attachedPaths: attachmentsByAgent.get(lead.id)! }
+          : {}),
         beforeToolRound: beforeToolRoundFor(lead.id, triggerMessageId),
       };
 
@@ -3134,7 +3224,8 @@ export function createTeamRunCoordinator(
   }
 
   async function send(
-    text: string
+    text: string,
+    attachments?: string[]
   ): Promise<'started' | 'steered' | 'refused' | 'blocked'> {
     // D-18: a disposed coordinator is inert. Nothing may start, persist or register — and
     // no state change will ever make it work again, so the caller must not requeue.
@@ -3157,13 +3248,24 @@ export function createTeamRunCoordinator(
     // R12: one message, many addressees. A plain message (no tag) goes to the leader.
     const recipients = targets.length > 0 ? targets.map((row) => row.id) : [];
     if (recipients.length === 0 && roster.lead) recipients.push(roster.lead.id);
+    // 261126-rfx: bind this turn's attachments to every recipient. Scope is re-validated
+    // against team/task links at dispatch; an unscoped path never reaches an executor.
+    attachmentsByAgent.clear();
+    if (attachments?.length) {
+      for (const id of recipients) attachmentsByAgent.set(id, [...attachments]);
+    }
 
     // UAT-41 test 14: the user's own row lands BEFORE every per-turn preparation. A stalled
     // MCP discovery (an unreachable endpoint with no client timeout) would otherwise leave the
     // await pending forever with the user's message nowhere on disk — the transcript would look
     // as if the text was never sent. Nothing below this line can hide it again.
     const row = await saveTeamMessage(
-      { threadId: options.threadId, role: 'user', content: text },
+      {
+        threadId: options.threadId,
+        role: 'user',
+        content: text,
+        ...(attachments && attachments.length > 0 ? { attachments: [...attachments] } : {}),
+      },
       db
     );
     notify();

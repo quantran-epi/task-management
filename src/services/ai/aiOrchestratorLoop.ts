@@ -12,7 +12,7 @@ import {
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
 import { executeTeamTool } from './office/teamTools';
-import type { RemoteToolTarget } from '../../types/sshFsTool';
+import type { AttachmentScope, RemoteToolTarget } from '../../types/sshFsTool';
 
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   /** WR-19: CR the turn is bound to; entity ids outside it are rejected. */
@@ -24,6 +24,9 @@ export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
    * tool options and the team-tool context so git_read/SSH reads use exactly this host/repo/branch.
    */
   remoteTarget?: RemoteToolTarget;
+  /** 261126-rfx: attached identities forwarded to the shared attached-file tool family. */
+  attachedPaths?: string[];
+  attachmentScope?: AttachmentScope;
 }
 
 /**
@@ -87,6 +90,8 @@ export async function dispatchAiToolCall(
           ...(options?.crScopeId ? { crScopeId: options.crScopeId } : {}),
           ...(options?.callId ? { callId: options.callId } : {}),
           ...(options?.remoteTarget ? { remoteTarget: options.remoteTarget } : {}),
+          ...(options?.attachedPaths ? { attachedPaths: options.attachedPaths } : {}),
+          ...(options?.attachmentScope ? { attachmentScope: options.attachmentScope } : {}),
         }
       )
     : executeDynamicMcpTool(normalized, args, db, options);
@@ -135,6 +140,9 @@ export interface AiOrchestratorLoopOptions {
    * with the scope target. The real drawer path carries it through `executeToolFn` instead.
    */
   remoteTarget?: RemoteToolTarget;
+  /** 261126-rfx: attached identities + validated scope for the shared tool family. */
+  attachedPaths?: string[];
+  attachmentScope?: AttachmentScope;
   /** Recent tool outputs kept intact when pruning; older ones truncate. */
   keepRecentToolOutputs?: number;
   /** Character cap applied to older tool outputs. */
@@ -235,6 +243,8 @@ export async function runAiOrchestratorLoop(
     onFileGenerated,
     executeToolFn,
     remoteTarget,
+    attachedPaths,
+    attachmentScope,
     keepRecentToolOutputs = 2,
     maxOldToolChars = 500,
     contextWindowTokens,
@@ -539,6 +549,8 @@ export async function runAiOrchestratorLoop(
           : await dispatchAiToolCall(tc.function.name, args, db, signal, {
               callId: tc.id,
               ...(remoteTarget ? { remoteTarget } : {}),
+              ...(attachedPaths ? { attachedPaths } : {}),
+              ...(attachmentScope ? { attachmentScope } : {}),
             });
       } catch (toolErr: any) {
         if (toolErr?.name === 'AbortError' || signal?.aborted) throw toolErr;

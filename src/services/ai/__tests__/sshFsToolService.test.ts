@@ -462,3 +462,93 @@ describe('sshFsToolService', () => {
     });
   });
 });
+
+describe('shared attached-file tool family dispatch (261126-rfx task 3)', () => {
+  const family = ['ssh_attached_file_info', 'ssh_attached_file_search', 'ssh_attached_file_read'];
+
+  it('advertises the family on every surface without standalone gating', async () => {
+    const { AI_DATABASE_TOOLS, SSH_READ_TOOLS, normalizeToolName } = await import('../aiTools');
+    const { SSH_ATTACHED_TOOL_NAMES, getGatedAddenda, getToolsForTurnWithRemote } = await import('../chatTurnTools');
+
+    expect(SSH_ATTACHED_TOOL_NAMES).toEqual(family);
+    const builtin = AI_DATABASE_TOOLS.map((tool) => normalizeToolName(tool.function.name));
+    const sshRead = SSH_READ_TOOLS.map((tool) => normalizeToolName(tool.function.name));
+    for (const name of family) {
+      expect(builtin).toContain(name);
+      expect(sshRead).toContain(name);
+    }
+    expect(builtin).not.toContain('ssh_read_attached_file');
+    for (const standaloneCapability of [true, false]) {
+      const advertised = getToolsForTurnWithRemote({
+        effectiveAnalysisMode: true,
+        standaloneCapability,
+        globalSshConfigReady: true,
+        hasRemoteTarget: false,
+        oracleConfigReady: false,
+      }).map((tool) => normalizeToolName(tool.function.name));
+      expect(advertised).toEqual(expect.arrayContaining(family));
+    }
+    const teamAdvertised = getGatedAddenda({
+      team: { sshFsToolsEnabled: true, oracleToolsEnabled: false } as any,
+      sshConfigReady: true,
+      oracleConfigReady: false,
+    }).map((tool) => normalizeToolName(tool.function.name));
+    expect(teamAdvertised).toEqual(expect.arrayContaining(family));
+  });
+
+  it('rejects team attachments outside the team/task scope', async () => {
+    const { resolveTeamAttachmentScope, attachmentOutOfScope } = await import('../office/teamRunCoordinator');
+    expect(JSON.parse(attachmentOutOfScope())).toMatchObject({
+      success: false,
+      code: 'ATTACHMENT_OUT_OF_SCOPE',
+    });
+    const scoped = resolveTeamAttachmentScope(['/srv/repo/report.pdf'], ['/srv/repo'], [], 'team-1');
+    expect(scoped).toMatchObject({ attachedPaths: ['/srv/repo/report.pdf'], teamId: 'team-1' });
+    expect(resolveTeamAttachmentScope(['/etc/passwd'], ['/srv/repo'], [], 'team-1')).toBeNull();
+    expect(resolveTeamAttachmentScope([], ['/srv/repo'], [], 'team-1')).toBeNull();
+    expect(resolveTeamAttachmentScope(['/srv/repo/report.pdf'], [], [], 'team-1')).toBeNull();
+    expect(
+      resolveTeamAttachmentScope(['/srv/repo/report.pdf'], ['/srv/repo'], ['task-1'], 'team-1', ['task-2'])
+    ).toBeNull();
+  });
+
+  it('dispatches the family to executors and refuses a missing attached set', async () => {
+    const { executeAiTool } = await import('../aiTools');
+    const { dispatchAiToolCall } = await import('../aiOrchestratorLoop');
+    const sshFsToolService = await import('../sshFsToolService');
+    const db = {} as any;
+    const scope = { attachedPaths: ['/var/log/report.pdf'] };
+    const infoSpy = vi.spyOn(sshFsToolService, 'executeSshAttachedFileInfo')
+      .mockResolvedValue(JSON.stringify({ success: true, action: 'attached_file_info' }));
+    const readSpy = vi.spyOn(sshFsToolService, 'executeSshAttachedFileRead')
+      .mockResolvedValue(JSON.stringify({ success: true, action: 'attached_file_read' }));
+    const searchSpy = vi.spyOn(sshFsToolService, 'executeSshAttachedFileSearch')
+      .mockResolvedValue(JSON.stringify({ success: true, action: 'attached_file_search' }));
+
+    const info = JSON.parse(await executeAiTool('ssh_attached_file_info', { path: '/var/log/report.pdf' }, db,
+      undefined, { attachedPaths: scope.attachedPaths, attachmentScope: scope }));
+    expect(info).toMatchObject({ success: true, action: 'attached_file_info' });
+    expect(infoSpy).toHaveBeenCalledWith({ path: '/var/log/report.pdf' }, db, undefined, scope);
+
+    const read = JSON.parse(await dispatchAiToolCall('ssh_attached_file_read', { path: '/var/log/report.pdf' }, db,
+      undefined, { attachedPaths: scope.attachedPaths, attachmentScope: scope }));
+    expect(read).toMatchObject({ success: true, action: 'attached_file_read' });
+    expect(readSpy).toHaveBeenCalledWith({ path: '/var/log/report.pdf' }, db, undefined, scope);
+
+    const search = JSON.parse(await dispatchAiToolCall(
+      'ssh_attached_file_search', { path: '/var/log/report.pdf', kind: 'name', query: 'report' }, db,
+      undefined, { attachedPaths: scope.attachedPaths, attachmentScope: scope, callId: 'call-1' }
+    ));
+    expect(search).toMatchObject({ success: true, action: 'attached_file_search' });
+    expect(searchSpy).toHaveBeenCalledWith(
+      { path: '/var/log/report.pdf', kind: 'name', query: 'report' }, db, 'call-1', undefined, scope
+    );
+
+    for (const name of family) {
+      const refused = JSON.parse(await executeAiTool(name, { path: '/var/log/report.pdf' }, db));
+      expect(refused.success).toBe(false);
+      expect(refused.error).toMatch(/attached|đính kèm/);
+    }
+    expect(infoSpy).toHaveBeenCalledTimes(1);
+  });
+});

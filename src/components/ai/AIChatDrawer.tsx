@@ -1415,6 +1415,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // The user row is persisted before routing, so a clarify/refine answer still has its
       // question in the transcript. The runtime reuses this exact row (retry identity).
       const promptText = effectivePrompt === trimmed ? trimmed : effectivePrompt;
+      // D-08: standalone never resolves TaskMate entity mentions; file references stay separate.
+      const mentioned = isStandaloneChat ? null : extractMentionedEntityIds(trimmed);
+      // 261126-rfx: the attached set is the turn's tool identity. Resolve it BEFORE the user
+      // row is persisted so chip and tool scope share one immutable snapshot.
+      const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
+      const allFiles = Array.from(new Set([...turnReferences, ...(mentioned?.filePaths ?? [])]));
+      if (allFiles.length !== turnReferences.length) {
+        tabRuntimes.patch(turnTabId, { references: allFiles });
+      }
+      const attachedPaths = allFiles.length > 0 ? allFiles : undefined;
+      const attachmentScope = attachedPaths ? { attachedPaths } : undefined;
       let userMessageId = options.retryUserMessageId ?? null;
       const existingUserRow = userMessageId ? await db.chatMessages.get(userMessageId) : undefined;
       if (
@@ -1423,7 +1434,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         existingUserRow.threadId !== threadId ||
         existingUserRow.content !== promptText
       ) {
-        const saved = await saveMessage({ threadId, role: 'user', content: promptText }, db);
+        const saved = await saveMessage(
+          {
+            threadId,
+            role: 'user',
+            content: promptText,
+            ...(attachedPaths ? { attachments: attachedPaths } : {}),
+          },
+          db
+        );
         userMessageId = saved.id;
       }
       tabRuntimes.patch(turnTabId, { retryUserMessageId: userMessageId });
@@ -1548,25 +1567,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         }
       }
 
-      // D-08: standalone never resolves TaskMate entity mentions. File references are
-      // separate and stay available to knowledge/SSH tools.
-      let taskIds: string[] = [];
-      let crIds: string[] = [];
-      let systemIds: string[] = [];
-      let filePaths: string[] = [];
-      if (!isStandaloneChat) {
-        const mentioned = extractMentionedEntityIds(trimmed);
-        taskIds = mentioned.taskIds;
-        crIds = mentioned.crIds;
-        systemIds = mentioned.systemIds;
-        filePaths = mentioned.filePaths;
-      }
+      // D-08: standalone never resolves TaskMate entity mentions. File references were
+      // resolved above and stay available to knowledge/SSH tools.
+      const taskIds = mentioned?.taskIds ?? [];
+      const crIds = mentioned?.crIds ?? [];
+      const systemIds = mentioned?.systemIds ?? [];
       const mentionedContexts: string[] = [];
-      const turnReferences = tabRuntimes.get(turnTabId)?.references ?? [];
-      const allFiles = Array.from(new Set([...turnReferences, ...(filePaths || [])]));
-      if (allFiles.length !== turnReferences.length) {
-        tabRuntimes.patch(turnTabId, { references: allFiles });
-      }
       if (!isStandaloneChat) {
       for (const taskId of taskIds) {
         if (effectiveScope.type === 'task' && effectiveScope.id === taskId) continue;
@@ -1769,6 +1775,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         // Phase 47 D-13: the explicit scope target reaches the dispatcher chain ONLY through
         // this real turn request. This is how a remote git_read reads the looked-at host/repo/branch.
         ...(currentRemoteTarget ? { remoteTarget: currentRemoteTarget } : {}),
+        ...(attachedPaths ? { attachedPaths, attachmentScope } : {}),
       });
 
       const debugTurnId = debugTurnRef.current.get(turnTabId);

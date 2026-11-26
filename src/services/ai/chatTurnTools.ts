@@ -6,6 +6,13 @@ import {
   isMutationTool,
   normalizeToolName,
 } from './aiTools';
+
+/** Core attached-file family — shared by standalone, dock and team chat. Never a UI flag. */
+export const SSH_ATTACHED_TOOL_NAMES: readonly string[] = [
+  'ssh_attached_file_info',
+  'ssh_attached_file_search',
+  'ssh_attached_file_read',
+];
 import type { AiTeam } from '../../types/aiOffice';
 import { invalidateMcpDiscovery, isReadOnlyMcpTool } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
@@ -279,6 +286,15 @@ const SSH_ORACLE_USAGE: ToolCatalogUsage = {
 };
 
 /** Specific overrides layered on top of the builtin defaults. */
+const SSH_ATTACHED_TOOL_USAGE: ToolCatalogUsage = {
+  ...SSH_ORACLE_USAGE,
+  references: [
+    ...SSH_ORACLE_USAGE.references,
+    'AIChatDrawer.tsx (attachedPaths + attachmentScope)',
+    'teamRunCoordinator.ts (team/task scope validation)',
+  ],
+};
+
 const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
   query_tasks: {
     labels: ['Chat thường', 'Agent nhóm', 'Telegram headless'],
@@ -290,7 +306,9 @@ const BUILTIN_USAGE_OVERRIDES: Record<string, ToolCatalogUsage> = {
     ],
   },
   ssh_read_file_page: SSH_ORACLE_USAGE,
-  ssh_read_document: SSH_ORACLE_USAGE,
+  ssh_attached_file_info: SSH_ATTACHED_TOOL_USAGE,
+  ssh_attached_file_search: SSH_ATTACHED_TOOL_USAGE,
+  ssh_attached_file_read: SSH_ATTACHED_TOOL_USAGE,
   ssh_list_dir: SSH_ORACLE_USAGE,
   ssh_grep_files: SSH_ORACLE_USAGE,
   oracle_query: SSH_ORACLE_USAGE,

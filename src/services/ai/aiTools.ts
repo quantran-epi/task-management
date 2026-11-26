@@ -1,5 +1,5 @@
 import type { TaskPlannerDatabase } from '../../db';
-import type { RemoteToolTarget } from '../../types/sshFsTool';
+import type { AttachmentScope, RemoteToolTarget } from '../../types/sshFsTool';
 import { APP_NAME } from '../../constants/app';
 import type { Task, ChangeRequest, System, Note, ActiveTimer, ReminderItem } from '../../types/models';
 import { NOTIFICATION_SETTINGS_KEY, DEFAULT_NOTIFICATION_SETTINGS } from '../../types/notifications';
@@ -91,9 +91,11 @@ import {
   listOracleConnectionSummaries,
 } from './oracleSqlclService';
 import {
+  executeSshAttachedFileInfo,
+  executeSshAttachedFileRead,
+  executeSshAttachedFileSearch,
   executeSshListDir,
   executeSshReadFile,
-  executeSshReadDocument,
   executeSshGrepFiles,
 } from './sshFsToolService';
 import dayjs from 'dayjs';
@@ -2262,16 +2264,80 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
-      name: 'ssh_read_document',
+      name: 'ssh_attached_file_info',
       description:
-        'Read a remote .docx, .xlsx, or .pdf document over SSH and return its text for AI analysis. Returns format, sheetCount/pageCount when available, and a truncated flag. Cap 10 MB per file and ~24k characters of text output. Does NOT support scanned PDFs (no OCR).',
+        'Inspect a file attached to this chat turn by its exact attached path (identity, not selector). Returns format, size and count metadata plus the next suggested range. Path must belong to the current attached set; no host/path fallback.',
       parameters: {
         type: 'object',
         properties: {
           path: {
             type: 'string',
-            description: 'Remote path of the .docx, .xlsx, or .pdf file to read.',
+            description: 'Exact path of the attached file as shown in the chat.',
           },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_attached_file_search',
+      description:
+        'Search within an attached file. kind="name" finds filenames under the attached path (bounded shell find, max 200); kind="content" greps inside the attached file. Never reads files outside the attached set.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Exact path of the attached file as shown in the chat.',
+          },
+          kind: {
+            type: 'string',
+            enum: ['name', 'content'],
+            description: 'name = filename search; content = grep inside the file.',
+          },
+          query: {
+            type: 'string',
+            description: 'Filename fragment, required when kind="name". Shell-quoted before use.',
+          },
+          pattern: {
+            type: 'string',
+            description: 'Text or regex, required when kind="content".',
+          },
+          limit: {
+            type: 'number',
+            description: 'Optional max matches.',
+          },
+        },
+        required: ['path', 'kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ssh_attached_file_read',
+      description:
+        'Progressive read of an attached file. Text/code: 1-based offset/limit lines. PDF: pageStart/pageCount (max 20 pages per call). XLSX: sheet + rowStart/rowCount + colStart/colCount. DOCX: 1-based blockStart/blockCount. Use ssh_attached_file_info first to learn the available ranges. No OCR.',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Exact path of the attached file as shown in the chat.',
+          },
+          offset: { type: 'number', description: '1-based line offset for text/code.' },
+          limit: { type: 'number', description: 'Line count for text/code (max 500).' },
+          pageStart: { type: 'number', description: '1-based first PDF page.' },
+          pageCount: { type: 'number', description: 'PDF page count, at most 20.' },
+          sheet: { type: 'string', description: 'XLSX sheet name.' },
+          rowStart: { type: 'number', description: '1-based first XLSX row.' },
+          rowCount: { type: 'number', description: 'XLSX row count.' },
+          colStart: { type: 'number', description: '1-based first XLSX column.' },
+          colCount: { type: 'number', description: 'XLSX column count.' },
+          blockStart: { type: 'number', description: '1-based first DOCX block.' },
+          blockCount: { type: 'number', description: 'DOCX block count.' },
         },
         required: ['path'],
       },
@@ -2330,6 +2396,10 @@ export interface ExecuteAiToolOptions {
    * Ordinary global/team/Telegram callers leave it unset.
    */
   remoteTarget?: RemoteToolTarget;
+  /** Exact attached identities for this turn. Without a non-empty set the family refuses to read. */
+  attachedPaths?: string[];
+  /** Team/task validation result produced by the caller before dispatch. */
+  attachmentScope?: AttachmentScope;
 }
 
 /**
@@ -2390,8 +2460,27 @@ export async function executeAiTool(
         return await executeSshReadFile(args as any, db, options?.remoteTarget);
       }
 
-      case 'ssh_read_document': {
-        return await executeSshReadDocument(args as any, db, options?.remoteTarget);
+      case 'ssh_attached_file_info': {
+        if (!options?.attachedPaths?.length) {
+          return JSON.stringify({ success: false, error: 'Không có file đính kèm cho lượt này.' });
+        }
+        return await executeSshAttachedFileInfo(args as any, db, options?.remoteTarget, options?.attachmentScope);
+      }
+
+      case 'ssh_attached_file_search': {
+        if (!options?.attachedPaths?.length) {
+          return JSON.stringify({ success: false, error: 'Không có file đính kèm cho lượt này.' });
+        }
+        return await executeSshAttachedFileSearch(
+          args as any, db, options?.callId, options?.remoteTarget, options?.attachmentScope
+        );
+      }
+
+      case 'ssh_attached_file_read': {
+        if (!options?.attachedPaths?.length) {
+          return JSON.stringify({ success: false, error: 'Không có file đính kèm cho lượt này.' });
+        }
+        return await executeSshAttachedFileRead(args as any, db, options?.remoteTarget, options?.attachmentScope);
       }
 
       case 'ssh_grep_files': {
@@ -5171,12 +5260,19 @@ export const ORACLE_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((t
 );
 
 /**
- * The SSH FS read trio, filtered from `AI_DATABASE_TOOLS` so the definitions are not
- * duplicated. Used by the shared enablement gate in chatTurnTools so SSH tools are only
- * advertised when enabled and a connection is configured.
+ * SSH/attachment read tools, filtered from `AI_DATABASE_TOOLS` so definitions exist once.
+ * The shared gate in chatTurnTools advertises them on standalone, dock and team turns alike.
+ * `isStandaloneChat` never gates this list; only the browser UI is standalone-first.
  */
 export const SSH_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool) =>
-  ['ssh_list_dir', 'ssh_read_file_page', 'ssh_read_document', 'ssh_grep_files'].includes(normalizeToolName(tool.function.name))
+  [
+    'ssh_list_dir',
+    'ssh_read_file_page',
+    'ssh_attached_file_info',
+    'ssh_attached_file_search',
+    'ssh_attached_file_read',
+    'ssh_grep_files',
+  ].includes(normalizeToolName(tool.function.name))
 );
 
 /**

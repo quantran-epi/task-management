@@ -81,6 +81,8 @@ export interface ChatTurnRequest {
    * drawer turn's dispatch options so SSH git reads use exactly this host/repo/branch.
    */
   remoteTarget?: RemoteToolTarget;
+  /** 261126-rfx: exact attached identities validated for this turn's tool family. */
+  attachedPaths?: string[];
   /** Phase 34 D-31: AI Office attribution forwarded into the persisted assistant row. */
   agentId?: string | undefined;
   agentName?: string | undefined;
@@ -351,6 +353,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         db: deps.db,
         signal: turnController.signal,
         ...(request.remoteTarget ? { remoteTarget: request.remoteTarget } : {}),
+        ...(request.attachedPaths ? { attachedPaths: request.attachedPaths } : {}),
         // 37.1 §4.2: `beforeToolRound` is the ONE way a message reaches a running turn.
         // The coordinator's drain reads the durable log and returns what to append.
         ...(request.beforeToolRound
@@ -371,6 +374,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             ...(request.crScopeId ? { crScopeId: request.crScopeId } : {}),
             ...(callId ? { callId } : {}),
             ...(request.remoteTarget ? { remoteTarget: request.remoteTarget } : {}),
+            ...(request.attachedPaths ? { attachedPaths: request.attachedPaths } : {}),
           });
         },
         onTextChunk: (delta) => {
