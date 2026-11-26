@@ -90,7 +90,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         return await db.notes
           .where('entityId')
           .equals(changeRequestId)
-          .filter((n) => n.entityType === 'cr' && n.type !== 'diagram' && !n.deletedAt)
+          .filter((n) => n.entityType === 'cr' && !n.deletedAt)
           .count();
       },
       [changeRequestId, db]
@@ -110,7 +110,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     estimateLabel: formatMinutes(tasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0)),
     noteCount: crNotesCount,
     docCount: cr?.documentLinks?.length ?? 0,
-    reminderCount: cr?.reminders?.length ?? (cr?.reminderDate ? 1 : 0),
+    reminderCount: Math.max(cr?.reminders?.length ?? 0, cr?.reminderDate ? 1 : 0),
   }), [tasks, crNotesCount, cr]);
 
   if (!cr) {
