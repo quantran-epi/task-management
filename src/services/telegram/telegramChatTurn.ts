@@ -12,13 +12,15 @@ import { getGraphitiSkillSegment } from '../ai/graphitiRules';
 import type { ChatCompletionMessage } from '../ai/types';
 import type { ChatGeneratedFile, ChatTokenUsage } from '../../types/models';
 import type { TelegramDataScope } from './telegramTypes';
-import type { RouteIntentResult } from '../ai/intentRouter';
 import {
   buildTelegramTurnTools,
   readTelegramToolConfig,
   withTelegramTranscriptTools,
 } from './telegramChatTurnTools';
-import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../ai/knowledgeOutcome';
+import {
+  KNOWLEDGE_SERVER_EMPTY_NOTICE,
+  detectKnowledgeToolOutcome,
+} from '../ai/knowledgeOutcome';
 
 /**
  * Telegram-only host adapter around the shared `runAiOrchestratorLoop`.
@@ -30,10 +32,8 @@ import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../ai/knowledgeOutcome';
 
 export interface TelegramChatTurnParams {
   chatId: string;
-  userName: string;
   text: string;
   dataScope: TelegramDataScope;
-  routedIntent: RouteIntentResult | null;
   history: Array<{ role: 'user' | 'assistant'; content: string }>;
   contextText: string;
   endpoint: string;
@@ -107,13 +107,17 @@ async function resolveTelegramTranscript(
   // One durable thread per Telegram chat, mirroring the panel's transcript tools. The worker
   // still owns the session-log history; this thread is only the tool-bound transcript view.
   const thread = await createOrGetThread(
-    { scopeType: 'global', title: `Telegram: ${chatId}` },
+    { scopeType: 'remote', entityId: `telegram:${chatId}`, title: `Telegram: ${chatId}` },
     params.db
   );
-  await saveMessage(
-    { threadId: thread.id, role: 'user', content: params.text },
-    params.db
-  );
+  try {
+    await saveMessage(
+      { threadId: thread.id, role: 'user', content: params.text },
+      params.db
+    );
+  } catch (err) {
+    console.warn('[telegramChatTurn] transcript user write failed:', err);
+  }
   return thread.id;
 }
 
@@ -130,7 +134,11 @@ function executeTelegramTool(
   if (CHAT_HISTORY_TOOL_NAMES.has(normalized)) {
     return executeChatHistoryTool(normalized, args, threadId, db);
   }
-  return dispatchAiToolCall(name, args, db, signal, {
+  // `generate_image` can persist an attachment into a note via `saveToDocId`. That write has
+  // no approval UI on Telegram, so strip it from model-supplied args; image generation itself
+  // remains available and the result stays in the chat response.
+  const safeArgs = normalized === 'generate_image' ? { ...args, saveToDocId: undefined } : args;
+  return dispatchAiToolCall(name, safeArgs, db, signal, {
     ...(callId ? { callId } : {}),
     threadId,
   });
@@ -181,6 +189,8 @@ export async function runTelegramChatTurn(
     messages,
     ...(fullTools.length > 0 ? { tools: fullTools as any[] } : {}),
     temperature: 0.1,
+    // Headless turns keep the existing 30-round ceiling: no UI Stop control exists here.
+    maxLoops: 30,
     db,
     keepRecentToolOutputs: 20,
     maxOldToolChars: 100_000,
@@ -192,7 +202,7 @@ export async function runTelegramChatTurn(
     onToolResult: (callId, toolResult) => {
       if (serverEmptyNotice) return;
       const toolName = toolNames.get(callId) ?? '';
-      if (isServerEmptyResult(toolName, toolResult)) {
+      if (detectKnowledgeToolOutcome(toolName, toolResult) === 'NO_PUBLISHED_SETS') {
         serverEmptyNotice = KNOWLEDGE_SERVER_EMPTY_NOTICE;
       }
     },
@@ -225,16 +235,22 @@ export async function runTelegramChatTurn(
   });
   const replyMarkdown = [result.cleanResponse, ...artifactLines].filter(Boolean).join('\n\n');
 
-  await saveMessage(
-    {
-      threadId,
-      role: 'assistant',
-      content: replyMarkdown,
-      ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
-      ...(result.tokenUsage.totalTokens !== undefined ? { tokenUsage: result.tokenUsage } : {}),
-    },
-    db
-  );
+  try {
+    await saveMessage(
+      {
+        threadId,
+        role: 'assistant',
+        content: replyMarkdown,
+        ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+        ...(result.tokenUsage.totalTokens !== undefined ? { tokenUsage: result.tokenUsage } : {}),
+      },
+      db
+    );
+  } catch (err) {
+    // Transcript is a derived view. A write failure must never swallow a model answer that
+    // the worker is about to deliver to the user.
+    console.warn('[telegramChatTurn] transcript assistant write failed:', err);
+  }
 
   return {
     replyMarkdown,
@@ -243,14 +259,4 @@ export async function runTelegramChatTurn(
     loopLimitReached: result.loopLimitReached,
     serverEmptyNotice,
   };
-}
-
-function isServerEmptyResult(toolName: string, rawResult: string): boolean {
-  if (toolName !== 'retrieve_knowledge') return false;
-  try {
-    const parsed = JSON.parse(rawResult);
-    return parsed?.outcome === 'NO_PUBLISHED_SETS';
-  } catch {
-    return false;
-  }
 }
