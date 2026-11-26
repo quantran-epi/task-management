@@ -124,6 +124,14 @@ describe('chatHistoryTools — thread-scoped search and read', () => {
     );
     expect(refused.turnId).toBe(ownTurnId);
     expect(refused.content).toContain('Bí mật Q7J');
+    expect(JSON.stringify(refused)).not.toContain(foreignThreadId);
+  });
+
+  it('refuses an unknown chat-history tool with a truthful code', async () => {
+    const result = JSON.parse(
+      await executeChatHistoryTool('delete_chat_history', {}, threadId, db)
+    );
+    expect(result).toMatchObject({ refused: true, code: 'UNKNOWN_CHAT_HISTORY_TOOL' });
   });
 
   it('dispatches from options.threadId and refuses without reading the DB when it is missing', async () => {

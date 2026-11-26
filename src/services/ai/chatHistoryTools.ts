@@ -11,7 +11,10 @@ import { wrapUntrusted } from './untrustedData';
  * new table, and no change to the context-compaction window.
  */
 
-export type ChatHistoryToolRefusalCode = 'TURN_NOT_IN_THREAD' | 'THREAD_CONTEXT_MISSING';
+export type ChatHistoryToolRefusalCode =
+  | 'TURN_NOT_IN_THREAD'
+  | 'THREAD_CONTEXT_MISSING'
+  | 'UNKNOWN_CHAT_HISTORY_TOOL';
 
 export interface ChatHistoryToolRefusal {
   refused: true;
@@ -107,5 +110,5 @@ export async function executeChatHistoryTool(
       content: wrapUntrusted('LƯỢT HỘI THOẠI', row.content),
     });
   }
-  return JSON.stringify(refuse('THREAD_CONTEXT_MISSING', 'Công cụ lịch sử không hợp lệ.'));
+  return JSON.stringify(refuse('UNKNOWN_CHAT_HISTORY_TOOL', 'Công cụ lịch sử không hợp lệ.'));
 }
