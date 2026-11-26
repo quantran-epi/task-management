@@ -82,3 +82,76 @@ Hành vi:
 | `tests/phase51/*` | Test UI standalone (gating, multi-select, chip) | 4 |
 | `e2e/aiChatStandalone.html`, `e2e/aiChatStandalone.tsx`, `e2e/aiChatSettings.spec.ts` | E2E Chromium cho luồng attach + đọc | 4 |
 
+## 5. Tool mới `ssh_read_attached_file` và trust boundary
+
+### Hợp đồng tool
+
+Thêm tool `ssh_read_attached_file` trong `src/services/ai/aiTools.ts` (definition cạnh `ssh_read_document` tại dòng ~2265) và type `SshReadAttachedFileArgs` trong `src/types/sshFsTool.ts`:
+
+| Tham số | Kiểu | Bắt buộc | Ý nghĩa |
+|---------|------|----------|---------|
+| `path` | `string` | có | Đường dẫn remote phải nằm trong attached set của turn hiện tại (không nhận host/config selector do AI sinh) |
+| `offset` | `number` | không | 1-based, chỉ dùng cho text/code; ủy thác cho `executeSshReadFile` |
+| `limit` | `number` | không | clamp tới 500 như hiện tại; chỉ dùng cho text/code |
+
+Luồng xử lý đề xuất trong `sshFsToolService.ts` (hàm `executeSshReadAttachedFile`):
+
+1. Nhận `attachedSet` của turn hiện tại từ caller (tức `tabRuntimes.get(turnTabId)?.references` — `AIChatDrawer.tsx:1565` — đã chứa path đã attach). Không cho AI tự khai attached set.
+2. So khớp `args.path` với attached set **sau khi chuẩn hoá** bằng cùng `resolveRemoteToolPath(args.path, fsConfig.defaultBasePath, remoteTarget)`; từ chối nếu không khớp. Không fallback sang host/path khác và không fallback sang global config khi có `remoteTarget` (nhất quán với `resolveSshConfig()` hiện tại, `sshFsToolService.ts:77-105`).
+3. Phân loại extension:
+   - **Text/code:** gọi `executeSshReadFile({ path: resolved, offset, limit }, db, remoteTarget)`. `isLikelyBinaryPath()` trong hàm này chặn binary. AI chọn `offset`/`limit`.
+   - **`.docx`/`.xlsx`/`.pdf`:** gọi `executeSshReadDocument({ path: resolved }, db, remoteTarget)` — **đọc toàn file rồi cap 24.000 ký tự đầu** như đã điều tra. `offset`/`limit` bị bỏ qua; tool description phải nói rõ điều này để AI không kỳ vọng chọn trang/sheet. Không hứa hỗ trợ chọn sheet/trang khi parser hiện tại chưa có tham số đó.
+   - **Extension khác / binary không thuộc 3 định dạng trên:** từ chối (`success: false` + error message), không đoán định dạng.
+4. Trả nguyên JSON kết quả của hàm ủy thác để giữ nguyên `success`, `action`, `truncated`, `executionTimeMs` và `data.content` đã sanitize/wrapField. Không tự nối thêm nội dung thô vào result.
+
+### Trust boundary và mitigation
+
+| Boundary | Luồng dữ liệu | Rủi ro | Mitigation cụ thể |
+|----------|---------------|--------|-------------------|
+| (a) người dùng → attach | `StandaloneSshFileBrowser` → `onAttach(paths)` → `references` | Chọn nhầm path/host, path vượt repo, nội dung bị đọc sớm | Chỉ render UI khi `isStandaloneChat`; config đọc từ `activeDb` (`chatWindowDb`); mọi path đi qua `resolveRemoteToolPath`; attach lưu **danh tính path**, không gọi `readRemoteFileBytes`/`readRemoteFileSlice`/parser |
+| (b) AI → tool args | Model sinh `path`/`offset`/`limit`, có thể bị prompt injection từ nội dung tài liệu | Đọc file ngoài attached set, path traversal, host fallback, binary đọc nhầm | Validate path thuộc attached set của turn **sau** chuẩn hoá; `resolveRemoteToolPath` confinement; shell escape `shellQuote()` (`sshFsToolService.ts:42`) và `isLikelyBinaryPath()` giữ nguyên cho đường text; từ chối thay vì fallback; gating advertise tool chỉ standalone |
+| (c) remote document → prompt | `parsed.text` từ DOCX/XLSX/PDF → nội dung tool → ngữ cảnh AI | Text trong tài liệu giả mạo delimiter/instruction | Dùng nguyên `sanitizeBrowserFileText(parsed.text)` + `wrapField(label, ...)` từ `executeSshReadDocument` (nonce ngẫu nhiên, `untrustedData.ts:47`); không tin text trong tài liệu; không đưa raw bytes hay raw text vào prompt |
+
+**Quyết định thiết kế bổ sung:**
+
+- **Không gửi nội dung tới knowledge daemon.** Tool chỉ đọc qua Tauri/SSH local và trả về ngữ cảnh AI; giữ 100% local/Tauri, không gọi daemon hay network service khác.
+- **PDF scan vẫn không OCR.** Giữ `SCAN_NOTE` của `sshDocumentParser.ts:29`; nếu không có text layer thì tool trả text rỗng kèm note như hiện tại.
+- Giữ nguyên cap 24k ký tự của document; mọi thay đổi về cap phải là quick task riêng, không nằm trong thiết kế attach này.
+- Gating tool theo standalone được coi là đã mitigate T-QAG-04; dock chat không gắn affordance lẫn tool.
+
+## 6. Wave triển khai đề xuất
+
+| Wave | Phạm vi | Output kiểm tra được |
+|------|---------|----------------------|
+| **Wave 1 — contract + browser UI** | Thêm `isStandaloneChat` vào `ChatInputBar`/`ChatTabToolbox`; tạo `StandaloneSshFileBrowser.tsx`; đọc config từ `activeDb`, list bằng `listRemoteDir`, filter + multi-checkbox + nút Đính kèm; định nghĩa `SshReadAttachedFileArgs` | Mở standalone thấy nút browser; dock chat không thấy; chọn nhiều file trả về đúng mảng path đã chuẩn hoá; không tool call nào xảy ra lúc attach |
+| **Wave 2 — attach state + tool validate** | `AIChatDrawer.handleAttachFiles` cập nhật `references`; `executeSshReadAttachedFile` validate attached set + `resolveRemoteToolPath`; từ chối path ngoài set và binary extension | Unit test chặn path ngoài attached set, `..`, `~`, binary; chip hiển thị/remove đúng |
+| **Wave 3 — wire vào dispatcher + prompts** | Thêm tool definition + `case 'ssh_read_attached_file'` trong `aiTools.ts`; advertise chỉ khi standalone; cập nhật system prompt hướng dẫn dùng tool; ủy thác text/doc | Tool được gọi trong standalone turn, trả nội dung đã sanitize/wrapField; dock chat không advertise tool |
+| **Wave 4 — test** | Mở rộng unit test ssh service/parser, UI test standalone, e2e Chromium | Targeted test pass (xem phần 7), không chạy full vitest suite |
+
+Phụ thuộc: Wave 2 cần contract từ Wave 1; Wave 3 cần validator từ Wave 2; Wave 4 cần đủ 3 wave trước. Mỗi wave nên commit riêng; không gộp thay đổi production của wave này vào quick task hiện tại.
+
+## 7. Chiến lược test tập trung
+
+- **Unit service:** mở rộng `src/services/ai/__tests__/sshFsToolService.test.ts` — test path ngoài attached set bị từ chối, `..`/`~` bị chặn bởi `resolveRemoteToolPath`, text/code ủy thác `executeSshReadFile` với offset/limit, docx/xlsx/pdf ủy thác `executeSshReadDocument`, binary extension bị từ chối, result giữ cờ `truncated`.
+- **Unit parser:** mở rộng `src/services/ai/__tests__/sshDocumentParser.test.ts` — khẳng định lại cap 24.000 ký tự (`DEFAULT_MAX_CHARS`), flag `truncated`, và PDF scan trả note `SCAN_NOTE` không OCR. Không đổi expectation sang "chọn sheet/trang".
+- **UI standalone:** thêm test trong `tests/phase51/` — browser chỉ render khi `isStandaloneChat`, multi-select giữ selection qua điều hướng, chip hiển thị tên + tooltip path + remove, không gọi read khi attach.
+- **E2E Chromium:** dùng lại `e2e/aiChatStandalone.html` và `e2e/aiChatStandalone.tsx` để dựng fixture cửa sổ standalone, mở rộng `e2e/aiChatSettings.spec.ts` cho luồng cấu hình SSH → mở browser → attach nhiều file → AI gọi `ssh_read_attached_file` → nội dung hiển thị trong câu trả lời; kiểm tra dock chat không có nút/tool mới.
+- **Chạy test:** luôn chạy targeted theo đường dẫn cụ thể (ví dụ `npx vitest run src/services/ai/__tests__/sshFsToolService.test.ts src/services/ai/__tests__/sshDocumentParser.test.ts tests/phase51/...`). **Không chạy full vitest suite** — quy tắc dự án: full suite tốn hơn 1 giờ. Quick task này chỉ dùng targeted grep/kiểm tra tệp, không chạy suite.
+
+## Điểm nối đã xác minh (tóm tắt)
+
+| Khẳng định | File / hàm |
+|------------|------------|
+| Standalone truyền flag + DB riêng | `src/views/AIPopoutView.tsx:27-28,229-231` — `standaloneChat`, `chatWindowDb`, `isStandaloneChat` |
+| Drawer nhận flag, giữ references theo tab | `src/components/ai/AIChatDrawer.tsx:246,263,447-456,1565` |
+| Input bar đã có props attach | `src/components/ai/ChatInputBar.tsx:23-25,217-268` |
+| Toolbox có nút SSH Files | `src/components/ai/ChatTabToolbox.tsx:36-38,415-440` |
+| Config SSH FS trong DB/tool | `src/types/sshFsTool.ts:30`; `src/services/ai/sshFsToolService.ts:47-105`; `src/components/settings/SshFsAiToolConfigCard.tsx:29` |
+| List thư mục remote | `src/services/sshService.ts:121` — `listRemoteDir` |
+| Confinement path | `src/services/ai/sshFsToolService.ts:147` — `resolveRemoteToolPath`; `:42` — `shellQuote`; `:34` — `isLikelyBinaryPath` |
+| Đọc text phân trang / document toàn file | `src/services/ai/sshFsToolService.ts:247` (`executeSshReadFile`) / `:312` (`executeSshReadDocument`) |
+| Parser và cap | `src/services/ai/sshDocumentParser.ts:27,32-38,53-143` — `DEFAULT_MAX_CHARS`, `truncateText`, `parseSshDocument`; `:29` — `SCAN_NOTE` |
+| Sanitize + wrapField | `src/services/ai/browserFileReader.ts:46` — `sanitizeBrowserFileText`; `src/services/ai/untrustedData.ts:47` — `wrapField` |
+| Tool definition/dispatch hiện tại | `src/services/ai/aiTools.ts:2239,2265,2389-2395,5179` |
+| DB riêng của chat standalone | `src/db/chatWindowDb.ts:5` — `TaskMateChatWindowDB` |
+
