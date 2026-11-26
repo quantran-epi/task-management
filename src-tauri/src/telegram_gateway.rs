@@ -18,6 +18,8 @@ pub struct TelegramInboundPayload {
     pub update_id: i64,
     pub message_id: i64,
     pub chat_id: String,
+    // from.id là định danh thiết bị; chat_id chỉ là địa chỉ reply. Thiếu from -> 0.
+    pub from_id: i64,
     pub from_name: String,
     pub text: String,
     pub date: i64,
@@ -201,6 +203,7 @@ pub async fn start_telegram_polling(
 
                                         if let Some(msg) = update.message {
                                             if let Some(text) = msg.text {
+                                                let from_id = msg.from.as_ref().map(|u| u.id).unwrap_or(0);
                                                 let from_name = if let Some(from) = msg.from {
                                                     from.first_name.unwrap_or_else(|| {
                                                         from.username.unwrap_or_else(|| "User".to_string())
@@ -213,6 +216,7 @@ pub async fn start_telegram_polling(
                                                     update_id: update.update_id,
                                                     message_id: msg.message_id,
                                                     chat_id: msg.chat.id.to_string(),
+                                                    from_id,
                                                     from_name,
                                                     text,
                                                     date: msg.date,
