@@ -71,6 +71,9 @@ test.describe('AI chat settings and composer modals', () => {
       text.includes('localhost:20128') ||
       text.includes('net::ERR_FAILED') ||
       text.includes('net::ERR_NAME_NOT_RESOLVED') ||
+      text.includes('net::ERR_CONNECTION_REFUSED') ||
+      // Known baseline: pdfjs worker asset fetch in the symlinked worktree Vite dev server.
+      (text.includes('Failed to load resource') && text.includes('403 (Forbidden)')) ||
       knownNotices.some((notice) => text.includes(notice));
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !expectedNoise(msg.text())) errors.push(`console: ${msg.text()}`);
@@ -254,7 +257,7 @@ test.describe('AI chat settings and composer modals', () => {
         body: JSON.stringify({ data: [{ id: 'ky8-standalone-model' }] }),
       });
     });
-    await page.goto('/task-management/e2e/aiChatStandalone.html');
+    await page.goto('/task-management/e2e/aiChatStandalone.html?rfx=ui');
     await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
     await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
 
@@ -332,6 +335,205 @@ test.describe('AI chat settings and composer modals', () => {
       (el) => getComputedStyle(el).backgroundColor,
     );
     expect(darkBg).not.toBe(lightBg);
+    await expectNoErrors(errors);
+  });
+
+  /**
+   * 261126-rfx: confined harness exposes the real standalone boot path plus a synthetic
+   * Tauri SSH boundary. The fixture seeds SSH config + FS config in TaskMateChatWindowDB;
+   * every tool below runs through production executors, not a mock of the tool family.
+   */
+  test('RFX standalone: SSH config -> browse -> find -> multi-attach -> info/search/read -> reload chip', async ({ page }) => {
+    const errors = watchErrors(page);
+    let completions = 0;
+    await page.route('**/v1/models', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [{ id: 'rfx-fixture-model' }] }),
+      });
+    });
+    await page.route('**/v1/chat/completions', async (route) => {
+      completions += 1;
+      const body = completions === 1
+        ? [
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"rfx-info","type":"function","function":{"name":"ssh_attached_file_info","arguments":"{\\"path\\":\\"/srv/taskmate-fixture/reports/plan.docx\\"}"}},{"index":1,"id":"rfx-search","type":"function","function":{"name":"ssh_attached_file_search","arguments":"{\\"path\\":\\"/srv/taskmate-fixture/reports/plan.docx\\",\\"kind\\":\\"name\\",\\"query\\":\\"*.txt\\"}"}},{"index":2,"id":"rfx-read","type":"function","function":{"name":"ssh_attached_file_read","arguments":"{\\"path\\":\\"/srv/taskmate-fixture/reports/plan.docx\\",\\"blockStart\\":1,\\"blockCount\\":1}"}}]},"finish_reason":null}]}\n\n',
+            'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+            'data: [DONE]\n\n',
+          ].join('')
+        : 'data: {"choices":[{"delta":{"content":"Đã đọc tài liệu đính kèm."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    });
+
+    await page.goto('/task-management/e2e/aiChatStandalone.html?rfx=1');
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+    await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
+
+    // (1) config SSH connection and FS base path from the real settings surfaces
+    const gear = page.getByRole('button', { name: 'Mở Cài đặt AI' });
+    await gear.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText('AI Settings · tất cả')).toBeVisible();
+    const nav = page.getByRole('navigation', { name: 'Cài đặt AI' });
+    await expect(nav.getByRole('button')).toHaveCount(8);
+    await nav.getByRole('button', { name: 'SSH Connections' }).click();
+    await expect(page.getByText('Rfx fixture SSH')).toBeVisible();
+    await nav.getByRole('button', { name: 'SSH File System' }).click();
+    await expect(page.getByLabel('Thư mục gốc mặc định (Base Path)')).toHaveValue('/srv/taskmate-fixture');
+    await page.locator('.ant-modal-close').first().click();
+    await expect(page.locator('.ant-modal-container')).toHaveCount(0);
+
+    // (2) browse only in standalone, search by name, multi-select two full paths
+    await page.getByRole('button', { name: 'Duyệt tệp SSH từ xa' }).click();
+    const browser = page.getByRole('dialog').filter({ hasText: 'Duyệt tệp SSH' });
+    await expect(browser).toBeVisible();
+    await browser.getByLabel('Tìm tên tệp SSH').fill('*.doc*');
+    await browser.getByRole('button', { name: 'Tìm' }).click();
+    const docxRow = browser.locator('.ant-tree-treenode').filter({ hasText: 'plan.docx' });
+    await expect(docxRow).toBeVisible();
+    await docxRow.locator('.ant-tree-checkbox').click();
+    await browser.getByRole('button', { name: /Đính kèm \(1\)/ }).click();
+    await expect(browser).toHaveCount(0);
+    const composerChip = page.locator('.ant-tag').filter({ hasText: 'plan.docx' });
+    await expect(composerChip).toBeVisible();
+
+    // (3) real tool family dispatch: info + search + read on the attached identity
+    await page.getByRole('textbox', { name: 'Nội dung tin nhắn trò chuyện AI' }).fill('Đọc báo cáo đính kèm');
+    await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+    await expect(page.getByRole('button', { name: /công cụ đã gọi/ })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /công cụ đã gọi/ }).click();
+    for (const tool of ['ssh_attached_file_info', 'ssh_attached_file_search', 'ssh_attached_file_read']) {
+      await expect(page.locator('[data-tool-call-id]').filter({ hasText: tool }).first()).toBeVisible({ timeout: 20_000 });
+    }
+    await expect(page.getByText('Đã đọc tài liệu đính kèm.')).toBeVisible({ timeout: 20_000 });
+    expect(completions).toBeGreaterThanOrEqual(2);
+    const messageChip = page.locator('[data-message-attachment="/srv/taskmate-fixture/reports/plan.docx"]').first();
+    await expect(messageChip).toBeVisible();
+    await expect(messageChip.locator('button')).toHaveCount(0);
+
+    // (4) chip is durable across reload; it is a message field, not transient UI state
+    await page.reload();
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+    await expect(page.locator('[data-message-attachment="/srv/taskmate-fixture/reports/plan.docx"]').first()).toBeVisible();
+    await expectNoErrors(errors);
+  });
+
+  test('RFX dock chat: no browser button, but tool family still advertised with attachment + config', async ({ page }) => {
+    const errors = watchErrors(page);
+    let payloadCount = 0;
+    let firstPayloadTools: string[] = [];
+    await page.route('**/v1/chat/completions', async (route) => {
+      payloadCount += 1;
+      if (payloadCount === 1) {
+        const request = route.request();
+        const parsed = JSON.parse(request.postData() ?? '') as {
+          tools?: Array<{ function?: { name?: string } }>;
+        };
+        firstPayloadTools = (parsed.tools ?? []).map((tool) => tool.function?.name ?? '');
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: 'data: {"choices":[{"delta":{"content":"Dock OK."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+      });
+    });
+
+    // Seed the dock DB through the real IndexedDB settings boundary; the dock settings
+    // drawer intentionally has no SSH Connections tab (browser/picker is standalone-only).
+    await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('PersonalTaskPlannerDB');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction('settings', 'readwrite');
+          tx.objectStore('settings').put({
+            key: 'ssh_configurations',
+            value: [{
+              id: 'rfx-dock-ssh', name: 'Rfx dock SSH', host: 'fixture.invalid', port: 22,
+              username: 'uat', authType: 'password',
+              createdAt: '2026-11-26T00:00:00.000Z', updatedAt: '2026-11-26T00:00:00.000Z',
+            }],
+          });
+          tx.objectStore('settings').put({
+            key: 'ssh_fs_ai_tool_config',
+            value: {
+              sshConfigId: 'rfx-dock-ssh', defaultBasePath: '/srv/taskmate-fixture',
+              maxLinesPerRead: 100, maxListEntries: 100, maxGrepMatches: 50,
+            },
+          });
+          tx.objectStore('settings').put({ key: 'ninerouter_api_key', value: 'sk-rfx-dock' });
+          tx.objectStore('settings').put({ key: 'ninerouter_endpoint', value: 'http://localhost:20128' });
+          tx.objectStore('settings').put({ key: 'ninerouter_default_model', value: 'rfx-dock-model' });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } finally {
+        db.close();
+      }
+    });
+    await page.reload();
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+    await openAiAssistant(page);
+
+    // Docking never exposes the SSH picker; only standalone gets that affordance.
+    await expect(page.getByRole('button', { name: 'Duyệt tệp SSH từ xa' })).toHaveCount(0);
+
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Tham chiếu tập tin' }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({ name: 'dock-note.txt', mimeType: 'text/plain', buffer: Buffer.from('dock note') });
+    await expect(page.locator('.ant-tag').filter({ hasText: 'dock-note.txt' }).first()).toBeVisible();
+    await page.getByRole('textbox', { name: 'Nội dung tin nhắn trò chuyện AI' }).fill('Tóm tắt tệp đính kèm');
+    await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+    await expect(page.getByText('Dock OK.')).toBeVisible({ timeout: 20_000 });
+    expect(payloadCount).toBeGreaterThan(0);
+    for (const tool of ['ssh_attached_file_info', 'ssh_attached_file_search', 'ssh_attached_file_read']) {
+      expect(firstPayloadTools, `tools payload must include ${tool}`).toContain(tool);
+    }
+    await expectNoErrors(errors);
+  });
+
+  test('RFX team tool family: advertised via shared gate, out-of-scope attachment refused', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.goto('/task-management/e2e/aiChatStandalone.html');
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+
+    const result = await page.evaluate(async () => {
+      type Fixture = {
+        paths: { docx: string; txt: string };
+        teamTools: () => string[];
+        teamScope: (paths: string[], repoPaths: string[]) => {
+          scope: unknown;
+          refusal: string | null;
+        };
+        dispatchOutOfScope: () => Promise<string>;
+      };
+      const fixture = (window as unknown as { __rfxFixture: Fixture }).__rfxFixture;
+      const outOfScope = fixture.teamScope(['/etc/passwd'], ['/srv/taskmate-fixture']);
+      return {
+        tools: fixture.teamTools(),
+        inScope: fixture.teamScope([fixture.paths.docx], ['/srv/taskmate-fixture']).scope,
+        outOfScope,
+        dispatch: JSON.parse(await fixture.dispatchOutOfScope()) as {
+          success: boolean;
+          error?: string;
+        },
+      };
+    });
+
+    for (const tool of ['ssh_attached_file_info', 'ssh_attached_file_search', 'ssh_attached_file_read']) {
+      expect(result.tools, `team addenda must include ${tool}`).toContain(tool);
+    }
+    expect(result.inScope).toMatchObject({ teamId: 'rfx-team' });
+    expect(JSON.parse(result.outOfScope.refusal ?? '{}')).toMatchObject({
+      success: false,
+      code: 'ATTACHMENT_OUT_OF_SCOPE',
+    });
+    expect(result.dispatch.success).toBe(false);
+    expect(result.dispatch.error).toContain('không nằm trong tập file đã đính kèm');
     await expectNoErrors(errors);
   });
 });

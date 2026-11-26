@@ -12,6 +12,7 @@ import { ChatInputBar } from './ChatInputBar';
 import { StagedLoadingIndicator, type StagedLoadingStage } from './widget/StagedLoadingIndicator';
 import { MutationApprovalCard } from './widget/MutationApprovalCard';
 import { PatchDiffApprovalCard } from './widget/PatchDiffApprovalCard';
+import type { TaskPlannerDatabase } from '../../db';
 import type { ChatTurnApprovalInfo } from './runtime/chatTurnRuntime';
 
 export type AiChatScopeKind = 'chat';
@@ -108,6 +109,8 @@ export interface AiChatWidgetProps {
   agentDirectory?: Map<string, { agentId: string; name: string; role: string; isLead: boolean; color: string }> | undefined;
   agentStatuses?: Map<string, AgentRunStatus> | undefined;
   onStopAgent?: ((agentId: string) => void) | undefined;
+  /** 261126-rfx: standalone SSH browser must resolve config from the host's DB, not defaultDb. */
+  db?: TaskPlannerDatabase | undefined;
   /** 37-08 D-13: retry one assignment attempt from a persisted report bubble. */
   onRetryAgent?: ((assignmentId: string) => void) | undefined;
   /** Phase 34 D-08: lead-first `@agent` suggestions for the composer. */
@@ -263,6 +266,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   onAttachFiles,
   onRemoveFile,
   isStandaloneChat = false,
+  db,
   autoFocus,
   disabled,
   emptyState,
@@ -548,6 +552,7 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         {...(onAttachFile ? { onAttachFile } : {})}
         {...(onAttachFiles ? { onAttachFiles } : {})}
         {...(onRemoveFile ? { onRemoveFile } : {})}
+        {...(db ? { db } : {})}
         isStandaloneChat={isStandaloneChat}
         {...(externalValue !== undefined ? { externalValue } : {})}
         {...(onExternalValueConsumed ? { onExternalValueConsumed } : {})}

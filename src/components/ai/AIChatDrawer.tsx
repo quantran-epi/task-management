@@ -2317,6 +2317,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             label: `${currentScope.type} · ${currentScope.title ?? activeTab?.title ?? ''}`,
           }}
           messages={messages}
+          db={db}
           turn={{
             status:
               preludeTabs[activeTabId] && (activeTurnRuntime?.getStatus() ?? 'idle') === 'idle'
