@@ -110,22 +110,6 @@ describe('ChatTabBar', () => {
     expect(handleClose).toHaveBeenCalledWith('chat-1');
   });
 
-  it('hiển thị indicator Analysis Mode cho tab chat được bật', () => {
-    render(
-      <ChatTabBar
-        tabs={dummyTabs}
-        activeTabId="chat-1"
-        tabAnalysisModes={{ 'chat-1': true }}
-        onSelectTab={vi.fn()}
-        onAddTab={vi.fn()}
-        onCloseTab={vi.fn()}
-      />
-    );
-
-    const icons = screen.getAllByLabelText('Analysis Mode');
-    expect(icons.length).toBe(1);
-  });
-
   it('gán roving tabindex: tabIndex=0 cho active tab và -1 cho tab khác', () => {
     render(
       <ChatTabBar

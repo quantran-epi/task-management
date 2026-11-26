@@ -1173,16 +1173,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   toolbox={{
                     // The team orchestrator picks a model per agent, so this chat has no
                     // chat-scoped model and no analysis toggle — both are fixed by design.
-                    autoApproveMutations: team.autoApproveMutations === true,
-                    onToggleAutoApproveMutations: () => {
-                      runAction(() =>
-                        updateTeam(
-                          team.id,
-                          { autoApproveMutations: team.autoApproveMutations !== true },
-                          db
-                        )
-                      );
-                    },
                     mcpEnabled,
                     onToggleMcpEnabled: () => {
                       runAction(() => updateTeam(team.id, { mcpEnabled: !mcpEnabled }, db));

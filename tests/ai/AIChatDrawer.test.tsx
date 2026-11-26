@@ -105,6 +105,7 @@ describe('AIChatDrawer', () => {
     });
     vi.spyOn(graphitiMcpClient, 'getGraphitiMcpToolDefinitions').mockResolvedValue([]);
     vi.spyOn(mcpClient, 'discoverAllMcpTools').mockResolvedValue([]);
+    vi.spyOn(mcpClient, 'discoverGatedMcpTools').mockResolvedValue([]);
     db = new TaskPlannerDatabase(`test-aichat-drawer-${Date.now()}-${Math.random()}`);
     // `create_task` requires a CR (plan 01); every mutation test targets this one.
     await db.changeRequests.add({
@@ -460,7 +461,7 @@ describe('AIChatDrawer', () => {
         parameters: { type: 'object' as const, properties: { query: { type: 'string' } } },
       },
     };
-    vi.mocked(mcpClient.discoverAllMcpTools).mockResolvedValue([
+    vi.spyOn(mcpClient, 'discoverGatedMcpTools').mockResolvedValue([
       graphitiDefinition,
     ]);
     vi.spyOn(mcpClient, 'executeDynamicMcpTool').mockResolvedValueOnce('graphiti result');
@@ -497,7 +498,7 @@ describe('AIChatDrawer', () => {
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
     await waitFor(() => expect(screen.getByText(/Đã tổng hợp Graphiti/i)).toBeInTheDocument());
-    expect(mcpClient.discoverAllMcpTools).toHaveBeenCalledTimes(1);
+    expect(mcpClient.discoverGatedMcpTools).toHaveBeenCalledTimes(1);
     expect(mcpClient.executeDynamicMcpTool).toHaveBeenCalledWith(
       'search_nodes',
       {
@@ -507,12 +508,8 @@ describe('AIChatDrawer', () => {
       expect.objectContaining({ allowMutation: expect.any(Boolean) })
     );
     expect(payloads).toHaveLength(2);
-    expect(payloads[0].messages).toContainEqual(
-      expect.objectContaining({
-        role: 'system',
-        content: expect.stringContaining('SMARTVISTA BANKING DOMAIN DICTIONARY'),
-      })
-    );
+    expect(payloads[0].messages.some((m: any) => m.role === 'system' &&
+      m.content.includes('[ANALYSIS MODE ACTIVE]'))).toBe(true);
     expect(payloads[0].tools).toContainEqual(graphitiDefinition);
     expect(payloads[1].tools).toBe(payloads[0].tools);
     expect(payloads[1].messages).toContainEqual(
@@ -528,7 +525,7 @@ describe('AIChatDrawer', () => {
       defaultModel: 'gpt-4o',
       charLimit: 12000,
     });
-    vi.mocked(mcpClient.discoverAllMcpTools).mockRejectedValue(
+    vi.spyOn(mcpClient, 'discoverGatedMcpTools').mockRejectedValue(
       new Error('Graphiti offline')
     );
     const streamSpy = vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(

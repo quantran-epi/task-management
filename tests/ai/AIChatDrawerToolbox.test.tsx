@@ -98,8 +98,8 @@ describe('ChatTabToolbox and Tab Isolation', () => {
 
   it('assertTabFlagsAreIsolatedAfterMcpToggle', async () => {
     const { first, second } = await seedTabs(
-      { analysisMode: true, autoApproveMutations: false, mcpEnabled: true },
-      { analysisMode: true, autoApproveMutations: true, mcpEnabled: false }
+      { autoApproveMutations: false, mcpEnabled: true },
+      { autoApproveMutations: true, mcpEnabled: false }
     );
 
     render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
@@ -133,7 +133,6 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     // Verify Tab 2 configuration remains strictly isolated and unchanged
     const currentB = await db.chatTabs.get(second.id);
     expect(currentB?.config?.autoApproveMutations).toBe(true);
-    expect(currentB?.config?.analysisMode).toBe(true);
     expect(currentB?.config?.mcpEnabled).toBe(false);
   });
 });

@@ -2445,7 +2445,6 @@ export function createTeamRunCoordinator(
         endpoint: options.endpoint,
         apiKey: options.apiKey,
         model: employee.model || options.model,
-        analysisMode: true,
         // D-04: without the window the loop's tokenBudget is 0 and compaction never runs.
         ...(typeof options.contextWindowTokens === 'number' && options.contextWindowTokens > 0
           ? { contextWindowTokens: options.contextWindowTokens }
@@ -2680,7 +2679,6 @@ export function createTeamRunCoordinator(
         endpoint: options.endpoint,
         apiKey: options.apiKey,
         model: lead.model || options.model,
-        analysisMode: true,
         // D-04: same conditional spread as the employee path — `exactOptionalPropertyTypes`
         // rejects an explicit `undefined` here.
         ...(typeof options.contextWindowTokens === 'number' && options.contextWindowTokens > 0

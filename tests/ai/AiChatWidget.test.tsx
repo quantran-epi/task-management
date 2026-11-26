@@ -78,7 +78,7 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(tag).toHaveClass('ant-tag-default');
     expect(tag).not.toHaveClass('ant-tag-warning', 'ant-tag-error');
     expect(tag?.querySelector('[aria-label="stop"]')).toBeInTheDocument();
-    expect(tag?.style.fontSize || getComputedStyle(tag!).fontSize).toBeTruthy();
+    expect((tag as HTMLElement | null)?.style.fontSize || getComputedStyle(tag!).fontSize).toBeTruthy();
     expect(screen.getByRole('alert')).toHaveClass('ant-alert-warning');
     expect(screen.getByRole('alert')).toHaveTextContent('Đã dừng thu thập bằng chứng sau 7 vòng.');
     expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
@@ -250,6 +250,13 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(second).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(first!);
     expect(first).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('renders no analysis or auto-approve toggle in the toolbox', () => {
+    render(<AiChatWidget {...makeProps()} />);
+    expect(screen.queryByRole('button', { name: /Phân tích/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Tự duyệt/i })).toBeNull();
+    expect(screen.queryByTestId('analysis-mode-header-tag')).toBeNull();
   });
 
   it('renders exactly one approval control set and wires approve/reject', () => {

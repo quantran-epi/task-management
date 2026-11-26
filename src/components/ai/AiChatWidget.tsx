@@ -41,11 +41,6 @@ export interface AiChatToolboxProps {
   onModelChange?: ((model: string) => void) | undefined;
   onRefreshModels?: (() => Promise<void> | void) | undefined;
   isRefreshingModels?: boolean | undefined;
-  /** Omitted by hosts that always run in analysis mode (the team orchestrator). */
-  analysisMode?: boolean | undefined;
-  onToggleAnalysisMode?: ((tabId: string) => void) | undefined;
-  autoApproveMutations: boolean;
-  onToggleAutoApproveMutations: (tabId: string) => void;
   mcpEnabled: boolean;
   onToggleMcpEnabled: (tabId: string) => void;
   mcpServers?: McpServerConfig[] | undefined;
@@ -361,11 +356,6 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
               {turn.streamingStatusLabel}
             </Tag>
           )}
-          {toolbox.analysisMode && (
-            <Tag color="purple" style={{ margin: 0, fontSize: 'var(--font-size-small)' }}>
-              Phân tích
-            </Tag>
-          )}
         </div>
       </div>
       )}
@@ -380,12 +370,6 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         {...(toolbox.isRefreshingModels !== undefined
           ? { isRefreshingModels: toolbox.isRefreshingModels }
           : {})}
-        {...(toolbox.analysisMode !== undefined ? { analysisMode: toolbox.analysisMode } : {})}
-        {...(toolbox.onToggleAnalysisMode
-          ? { onToggleAnalysisMode: toolbox.onToggleAnalysisMode }
-          : {})}
-        autoApproveMutations={toolbox.autoApproveMutations}
-        onToggleAutoApproveMutations={toolbox.onToggleAutoApproveMutations}
         mcpEnabled={toolbox.mcpEnabled}
         onToggleMcpEnabled={toolbox.onToggleMcpEnabled}
         {...(toolbox.mcpServers ? { mcpServers: toolbox.mcpServers } : {})}

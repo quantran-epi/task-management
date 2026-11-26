@@ -1,7 +1,7 @@
 import React from 'react';
 import { Select, Button, Tooltip, Popover, Badge, Switch, Typography, Dropdown, useAntdToken } from '../ui';
 import type { MenuProps } from 'antd';
-import { ReloadOutlined, ExperimentFilled, ExperimentOutlined, ThunderboltFilled, ThunderboltOutlined, ClearOutlined, ApiOutlined, DatabaseOutlined, FolderOpenOutlined, SettingOutlined, MoreOutlined } from '../ui/icon';
+import { ReloadOutlined, ClearOutlined, ApiOutlined, DatabaseOutlined, FolderOpenOutlined, SettingOutlined, MoreOutlined } from '../ui/icon';
 import type { McpServerConfig } from '../../services/ai/mcpClient';
 import { searchIncludes } from '../../utils/searchText';
 
@@ -19,14 +19,6 @@ export interface ChatTabToolboxProps {
   onModelChange?: (model: string) => void;
   onRefreshModels?: () => Promise<void> | void;
   isRefreshingModels?: boolean;
-
-  // Analysis mode (tab-isolated)
-  analysisMode?: boolean;
-  onToggleAnalysisMode?: (tabId: string) => void;
-
-  // Auto-approve mutations (tab-isolated)
-  autoApproveMutations?: boolean;
-  onToggleAutoApproveMutations?: (tabId: string) => void;
 
   // MCP Enabled (tab-isolated)
   mcpEnabled?: boolean;
@@ -57,10 +49,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
   onModelChange,
   onRefreshModels,
   isRefreshingModels = false,
-  analysisMode = false,
-  onToggleAnalysisMode,
-  autoApproveMutations = false,
-  onToggleAutoApproveMutations,
   mcpEnabled = true,
   onToggleMcpEnabled,
   mcpServers = [],
@@ -205,46 +193,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
 
   // Compact dropdown menu items when compact={true}
   const compactMenuItems: MenuProps['items'] = [
-    ...(onToggleAnalysisMode
-      ? [
-          {
-            key: 'analysis-mode',
-            label: (
-              <div
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-12)' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleAnalysisMode(activeTabId);
-                }}
-              >
-                <span>Chế độ phân tích (ưu tiên tra cứu)</span>
-                <Switch size="small" checked={analysisMode} />
-              </div>
-            ),
-            icon: analysisMode ? <ExperimentFilled style={{ color: token.colorPrimary }} /> : <ExperimentOutlined />,
-          },
-        ]
-      : []),
-    ...(onToggleAutoApproveMutations
-      ? [
-          {
-            key: 'auto-approve',
-            label: (
-              <div
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-12)' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleAutoApproveMutations(activeTabId);
-                }}
-              >
-                <span>Tự động duyệt thay đổi</span>
-                <Switch size="small" checked={autoApproveMutations} />
-              </div>
-            ),
-            icon: autoApproveMutations ? <ThunderboltFilled style={{ color: token.colorError }} /> : <ThunderboltOutlined />,
-          },
-        ]
-      : []),
     ...(onOpenOracleSettings
       ? [
           {
@@ -343,7 +291,7 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
         ) : null}
       </div>
 
-      {/* Right controls: Tab Toggles (Analysis mode, Auto-approve, MCP, Clear context) */}
+      {/* Right controls: MCP and clear-context only; analysis is always on. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexShrink: 0 }}>
         {compact ? (
           <>
@@ -397,28 +345,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
           </>
         ) : (
           <>
-            {/* Analysis Mode Toggle */}
-            {onToggleAnalysisMode && (
-              <Tooltip title={analysisMode ? "Chế độ phân tích: ĐANG BẬT (AI ưu tiên tra cứu dữ liệu & tri thức; thay đổi chỉ tự chạy khi bật Tự động duyệt)" : "Chế độ phân tích: ĐANG TẮT (Bật để AI ưu tiên tra cứu tri thức/DB)"}>
-                <Button
-                  size="small"
-                  type={analysisMode ? 'primary' : 'default'}
-                  icon={analysisMode ? <ExperimentFilled data-testid="analysis-mode-header-tag" /> : <ExperimentOutlined />}
-                  onClick={() => onToggleAnalysisMode(activeTabId)}
-                  style={{
-                    fontSize: 'var(--font-size-xs)',
-                    padding: '0 6px',
-                    height: 22,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 'var(--gap-4)',
-                  }}
-                >
-                  Phân tích
-                </Button>
-              </Tooltip>
-            )}
-
             {/* Unified Single MCP Popover Toggle Button */}
             <Popover
               content={mcpPopoverContent}
@@ -455,30 +381,6 @@ export const ChatTabToolbox: React.FC<ChatTabToolboxProps> = ({
                 </Badge>
               </Tooltip>
             </Popover>
-
-            {/* Auto Approve Toggle */}
-            {onToggleAutoApproveMutations && (
-              <Tooltip title={autoApproveMutations ? "Tự động duyệt thay đổi: ĐANG BẬT (AI tự động ghi DB)" : "Tự động duyệt thay đổi: ĐANG TẮT (Hỏi xác nhận trước khi sửa DB)"}>
-                <Button
-                  size="small"
-                  data-testid="tab-auto-approve-btn"
-                  type={autoApproveMutations ? 'primary' : 'default'}
-                  danger={autoApproveMutations}
-                  icon={autoApproveMutations ? <ThunderboltFilled /> : <ThunderboltOutlined />}
-                  onClick={() => onToggleAutoApproveMutations(activeTabId)}
-                  style={{
-                    fontSize: 'var(--font-size-xs)',
-                    padding: '0 6px',
-                    height: 22,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 'var(--gap-4)',
-                  }}
-                >
-                  Tự duyệt
-                </Button>
-              </Tooltip>
-            )}
 
             {/* Oracle SQLcl Remote Tool Config Button */}
             {onOpenOracleSettings && (

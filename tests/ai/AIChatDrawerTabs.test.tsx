@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import 'fake-indexeddb/auto';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { AIChatDrawer } from '../../src/components/ai/AIChatDrawer';
 import { createRequestRegistry } from '../../src/components/ai/runtime/requestRegistry';
 import { createTabRuntime } from '../../src/components/ai/runtime/tabTypes';
@@ -131,7 +131,7 @@ describe('analysis mode is always on for chat turns', () => {
     expect(screen.queryByRole('button', { name: /Phân tích/i })).toBeNull();
     expect(within(screen.getByRole('tab', { name: /Chat/ })).queryByLabelText('Analysis Mode')).toBeNull();
     expect((await db.chatTabs.get(tab.id))?.config?.analysisMode).toBe(true);
-    expect(localStorage.getItem('planner:ai_analysis_mode')).toBeTruthy();
+    expect(localStorage.getItem('planner:ai_analysis_mode')).toBe('true');
 
     cleanup();
     await db.delete();

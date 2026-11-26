@@ -196,12 +196,9 @@ describe('Phase 25.1 static safety gates', () => {
     const localStorageKeys = [...drawer.matchAll(/localStorage\.(?:getItem|setItem)\(\s*([A-Z0-9_]+)/g)].map(
       (match) => match[1]
     );
-    // AI_ANALYSIS_MODE_KEY is a one-shot migration read plus removal; it is never a runtime
-    // source of truth, because currentTabAnalysisMode reads only durable ChatTab.config (D-07).
-    expect(new Set(localStorageKeys)).toEqual(
-      new Set(['AI_CHAT_WIDTH_KEY', 'AI_ANALYSIS_MODE_KEY'])
-    );
-    expect(drawer).not.toContain('Boolean(activeTab?.config?.analysisMode) ||');
+    // Analysis mode is always on; no legacy key is read or written by the chat runtime.
+    expect(new Set(localStorageKeys)).toEqual(new Set(['AI_CHAT_WIDTH_KEY']));
+    expect(drawer).not.toMatch(/config\?\.analysisMode/);
   });
 
   it('contains no hidden skip, todo, or fixme markers in targeted phase suites', () => {
@@ -243,7 +240,8 @@ describe('Phase 25.1 static safety gates', () => {
   it('keeps the AI core entry points wired in the chat drawer', () => {
     const drawer = stripComments(read('src/components/ai/AIChatDrawer.tsx'));
 
-    expect(drawer).toContain('runGroundedTurn(');
     expect(drawer).toContain('runAiOrchestratorLoop({');
+    expect(drawer).not.toContain('runGroundedTurn(');
+    expect(read('src/components/ai/runtime/chatTurnRuntime.ts')).toContain('compactAtRatio: 0\.9');
   });
 });

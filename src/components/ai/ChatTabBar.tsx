@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { CloseOutlined, ExperimentFilled, LeftOutlined, MessageOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '../ui/icon';
+import { CloseOutlined, LeftOutlined, MessageOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '../ui/icon';
 import {
   DndContext,
   closestCenter,
@@ -36,7 +36,6 @@ export interface ChatTabBarProps {
   onRenameTab?: (tabId: string, title: string) => void;
   onReorderTabs?: (fromIndex: number, toIndex: number) => void;
   tabStatuses?: Record<string, TabRuntimeStatus>;
-  tabAnalysisModes?: Record<string, boolean>;
 }
 
 const STATUS_TEXT: Record<Exclude<TabRuntimeStatus, 'idle'>, string> = {
@@ -51,7 +50,6 @@ interface SortableChatTabItemProps {
   tab: ChatTabItem;
   index: number;
   isActive: boolean;
-  isAnalysisActive: boolean;
   resolvedStatus: TabRuntimeStatus;
   statusText?: string | undefined;
   ariaLabel: string;
@@ -72,7 +70,6 @@ interface SortableChatTabItemProps {
 function SortableChatTabItem({
   tab,
   isActive,
-  isAnalysisActive,
   resolvedStatus,
   statusText,
   ariaLabel,
@@ -234,20 +231,6 @@ function SortableChatTabItem({
         </span>
       )}
 
-      {/* Icon biểu thị Chế độ Phân tích (Analysis Mode) trên từng tab */}
-      {isAnalysisActive && (
-        <Tooltip title="Tab này đang bật Analysis Mode">
-          <ExperimentFilled
-            aria-label="Analysis Mode"
-            style={{
-              fontSize: 10,
-              color: token.colorWarningActive || '#fa8c16',
-              flexShrink: 0,
-            }}
-          />
-        </Tooltip>
-      )}
-
       {/* Nút đóng tab */}
       <button
         type="button"
@@ -299,7 +282,6 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
   onRenameTab,
   onReorderTabs,
   tabStatuses,
-  tabAnalysisModes,
 }) => {
   const { token } = useAntdToken();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -480,8 +462,6 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
           >
             {tabs.map((tab, index) => {
               const isActive = tab.id === activeTabId;
-              const isAnalysisActive = Boolean(tabAnalysisModes?.[tab.id]);
-
               const resolvedStatus: TabRuntimeStatus = tabStatuses?.[tab.id] ?? 'idle';
 
               const statusText = resolvedStatus !== 'idle' ? STATUS_TEXT[resolvedStatus] : undefined;
@@ -523,7 +503,6 @@ export const ChatTabBar: React.FC<ChatTabBarProps> = ({
                   tab={tab}
                   index={index}
                   isActive={isActive}
-                  isAnalysisActive={isAnalysisActive}
                   resolvedStatus={resolvedStatus}
                   statusText={statusText}
                   ariaLabel={ariaLabel}

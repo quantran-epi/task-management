@@ -6,9 +6,8 @@ import type {
   ChatScopeType,
   ChatThread,
   ChatMessage,
-  ChatTokenUsage,
 } from '../../types/models';
-import { generateId, isValidUuid } from '../../utils/uuid';
+import { generateId } from '../../utils/uuid';
 import {
   buildScopeKey,
   createOrGetThread,
@@ -76,7 +75,6 @@ import { SshFsSettingsModal } from './SshFsSettingsModal';
 import { getSshFsToolConfig } from '../../services/ai/sshFsToolService';
 import { logAiChatError } from './aiChatDiagnostics';
 import { aiDebugService } from '../../services/ai/aiDebugService';
-import { IntentRouterUnavailableError } from '../../services/ai/intentRouter';
 import { APP_NAME } from '../../constants/app';
 import { useAIChat } from '../../context/AIChatContext';
 import { openAiPopout } from '../../utils/aiPopout';
@@ -87,9 +85,7 @@ import {
 } from '../../utils/desktopNotification';
 import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import { useOptionalKnowledgeConfig } from '../../services/knowledge/knowledgeConfig';
-import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import {
-  executeGroundedTurn as runGroundedTurn,
   executeSynthesizeFromStoredEvidence as synthesizeFromStoredEvidence,
   createDefaultGroundedTurnDeps,
 } from '../../services/ai/groundedTurnDeps';
@@ -171,7 +167,6 @@ function tryParseToolArgs(raw: string | undefined): Record<string, unknown> {
 
 export const AI_CHAT_WIDTH_KEY = 'planner:ai_chat_width';
 export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations';
-export const AI_ANALYSIS_MODE_KEY = 'planner:ai_analysis_mode';
 export const AI_TAB_ANALYSIS_MODES_KEY = 'planner:ai_tab_analysis_modes';
 
 /**
@@ -202,6 +197,27 @@ export const STANDALONE_EMPTY_STATE = {
   heading: 'Chưa có hội thoại',
   body: 'Nhập tin nhắn bên dưới để bắt đầu. Enter để gửi, Shift+Enter để xuống dòng.',
 };
+
+const ANALYSIS_PROMPT_SEGMENT = `\n\n[ANALYSIS MODE ACTIVE]:
+PREFER READ-ONLY:
+This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
+Rules:
+1. A mutation (task, change request, timer, note, capacity, document link, MCP-backed data) is allowed when the user asks for it; it is always shown to the user for approval before it is applied — never claim a change was made before the approval card is accepted.
+2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
+3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
+4. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+5. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
+6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`;
+
+const STANDALONE_ANALYSIS_PROMPT_SEGMENT = `\n\n[ANALYSIS MODE ACTIVE]:
+PREFER READ-ONLY:
+This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
+Rules:
+1. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
+2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
+3. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+4. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
+5. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`;
 
 export const DEFAULT_AI_CHAT_WIDTH = 380;
 export const MIN_AI_CHAT_WIDTH = 320;
@@ -906,30 +922,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         if (cancelled) return;
 
         if (isCrScope && currentScope.id) {
-          // One-shot migration: a legacy global analysis-mode flag seeds durable per-tab config,
-          // then the key is removed so it can never override per-tab state again (D-07).
-          let legacyAnalysisMode = false;
-          try {
-            legacyAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
-          } catch {
-            legacyAnalysisMode = false;
-          }
-          if (legacyAnalysisMode) {
-            for (const tab of existing) {
-              if (tab.type !== 'chat' || tab.config?.analysisMode !== undefined) continue;
-              try {
-                await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), analysisMode: true } }, db);
-              } catch (err) {
-                logAiChatError('Failed to migrate tab analysis mode', err);
-              }
-            }
-            try {
-              localStorage.removeItem(AI_ANALYSIS_MODE_KEY);
-            } catch {
-              // ignore storage error
-            }
-          }
-
           const ordinary = existing.filter((t) => t.type === 'chat');
           if (!existing.some((tab) => tab.active) && ordinary[0]) {
             await setActiveTab(scopeKey, ordinary[0].id, db);
@@ -1101,67 +1093,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [open, pendingDraft, clearPendingDraft]);
 
-  // Auto-approve mutation toggle: isolated per-tab in activeTab.config.autoApproveMutations
-  const autoApproveMutations = Boolean(activeTab?.config?.autoApproveMutations);
-
-  const handleToggleAutoApproveMutations = useCallback(async (tabId?: string) => {
-    const targetId = tabId || activeTabIdRef.current;
-    if (!targetId || targetId === 'default') return;
-    const tab = await db.chatTabs.get(targetId);
-    if (!tab) return;
-    const currentVal = Boolean(tab.config?.autoApproveMutations);
-    const nextVal = !currentVal;
-    try {
-      await updateChatTab(
-        targetId,
-        {
-          config: { ...(tab.config || {}), autoApproveMutations: nextVal },
-        },
-        db
-      );
-    } catch (err) {
-      logAiChatError('Failed to update tab autoApproveMutations', err);
-    }
-    if (nextVal) {
-      appMessage.warning(
-        'Đã bật tự động duyệt thay đổi dữ liệu cho tab này. AI sẽ tự động thực thi và báo cáo chi tiết.'
-      );
-    } else {
-      appMessage.info(
-        'Đã tắt tự động duyệt cho tab này. AI sẽ hỏi xác nhận trước khi thực hiện thay đổi dữ liệu.'
-      );
-    }
-  }, [db]);
-
-  // Analysis mode: durable per-tab state via ChatTab.config.
-  // The legacy global key never feeds this expression; it only seeds durable config once (D-07).
-  const currentTabAnalysisMode = Boolean(activeTab?.config?.analysisMode);
-
-  const handleToggleAnalysisMode = useCallback(async (tabId?: string) => {
-    const targetId = tabId || activeTabIdRef.current;
-    if (!targetId || targetId === 'default') return;
-    const tab = await db.chatTabs.get(targetId);
-    if (!tab) return;
-    const currentVal = Boolean(tab.config?.analysisMode);
-    const nextVal = !currentVal;
-    try {
-      await updateChatTab(
-        targetId,
-        {
-          config: { ...(tab.config || {}), analysisMode: nextVal },
-        },
-        db
-      );
-    } catch (err) {
-      logAiChatError('Failed to update tab analysis mode', err);
-    }
-    appMessage.info(
-      nextVal
-        ? 'Đã bật chế độ phân tích cho tab này. AI sẽ tra cứu tri thức và CSDL bằng công cụ.'
-        : 'Đã tắt chế độ phân tích cho tab này. Quay lại chế độ hội thoại thông thường.'
-    );
-  }, [db]);
-
   // MCP toggle: isolated per-tab in activeTab.config.mcpEnabled (defaults to true)
   const currentTabMcpEnabled = activeTab?.config?.mcpEnabled !== false;
 
@@ -1189,14 +1120,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         : 'Đã tắt công cụ MCP cho tab này. AI chỉ sử dụng công cụ nội bộ.'
     );
   }, [db]);
-
-  const tabAnalysisModes = useMemo(() => {
-    const modes: Record<string, boolean> = {};
-    for (const t of durableTabs) {
-      modes[t.id] = Boolean(t.config?.analysisMode);
-    }
-    return modes;
-  }, [durableTabs]);
 
   const tabStatuses = useMemo(() => {
     const statuses: Record<string, TabRuntimeStatus> = {};
@@ -1324,10 +1247,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     });
   };
 
-  // Every transient write is keyed by the tab that owns the turn, never by whichever tab is visible.
-  const patchGroundedLoading = (value: string | null, ownerTabId = turnTabIdRef.current) => {
-    tabRuntimes.patch(ownerTabId, { groundedLoadingStatus: value });
-  };
   const patchTurnError = (
     code: 'request_failed' | 'invalid_response' | 'timeout',
     message: string,
@@ -1433,7 +1352,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     // Clarification continuation (D-06): only the owning tab's pending clarify counts.
     const clarifyState = clarifyByTab[turnTabId];
-    let effectiveQuery = trimmed;
     let nextClarifyTurnCount = 1;
     if (clarifyState) {
       nextClarifyTurnCount = clarifyState.turnCount + 1;
@@ -1446,7 +1364,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         );
         return;
       }
-      effectiveQuery = `${clarifyState.originalQuery}\n[Thông tin bổ sung]: ${trimmed}`;
     }
 
     // Slash command aliases stay a Drawer affordance; standalone sends the literal command.
@@ -1469,7 +1386,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
 
     // Grounded routing reads the same prompt the user sent; a clarification continuation keeps
     // its composite query so the extra answer is not lost.
-    if (!clarifyState) effectiveQuery = effectivePrompt;
 
     // Each send gets its own prelude token; the stale one may not touch the tab afterwards.
     const preludeToken = (preludeSeqRef.current += 1);
@@ -1540,17 +1456,6 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const historyMsgs = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
       const historyTurns = sanitizeHistoryTurns(historyMsgs, userMessageId ?? undefined);
 
-      let turnAnalysisMode = Boolean(turnTab.config?.analysisMode);
-      if (!turnAnalysisMode) {
-        try {
-          turnAnalysisMode = localStorage.getItem(AI_ANALYSIS_MODE_KEY) === 'true';
-        } catch {
-          turnAnalysisMode = false;
-        }
-      }
-      // Per-tab config is the only source. A global fallback would let a stale localStorage
-      // key auto-approve CR mutations with no prompt.
-      const turnAutoApprove = Boolean(turnTab.config?.autoApproveMutations);
       const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
 
       // 261125-u4w: read the global standing instruction ONCE per turn, before the grounded
@@ -1558,280 +1463,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // stays editable in settings but is not injected into prompts. Repo conventions stay
       // on the ordinary-turn path below.
       let globalConvText = '';
-      let globalConventionsSegment = '';
       if (!isStandaloneChat) {
         globalConvText = await getGlobalConventions(db).catch(() => '');
-        globalConventionsSegment = buildConventionsSegment({ global: globalConvText });
-      }
-
-      // Analysis Mode bypasses grounded routing and goes straight to the tool loop.
-      if (!turnAnalysisMode) {
-        try {
-        // Best-effort scope input only: an empty or failing local catalog must
-        // never gate or precede query-only server retrieval.
-        const catalog = await fetchSetCatalog(db).catch(() => []);
-        const groundedDeps = createDefaultGroundedTurnDeps({
-          knowledgeBaseUrl: knowledgeConfig.baseUrl,
-          knowledgeToken: knowledgeConfig.token,
-          db,
-        });
-        const baseRouteScope = groundedDeps.routeScope;
-        groundedDeps.routeScope = (input, routeDeps) => {
-          patchGroundedLoading('Đang xác định phạm vi tài liệu...', turnTabId);
-          return baseRouteScope(input, routeDeps);
-        };
-        const baseRetrieve = groundedDeps.retrieveFederated;
-        groundedDeps.retrieveFederated = (request, signal) => {
-          patchGroundedLoading('Đang truy xuất tài liệu và đồ thị liên quan...', turnTabId);
-          return baseRetrieve(request, signal);
-        };
-        const baseBm25 = groundedDeps.runLocalBm25;
-        groundedDeps.runLocalBm25 = (input, localDeps) => {
-          patchGroundedLoading('Đang tìm kiếm trong tài liệu cục bộ...', turnTabId);
-          return baseBm25(input, localDeps);
-        };
-        const baseSynthesize = groundedDeps.synthesizeGroundedAnswer;
-        groundedDeps.synthesizeGroundedAnswer = (input) => {
-          patchGroundedLoading('Đang tổng hợp câu trả lời từ bằng chứng...', turnTabId);
-          return baseSynthesize(input);
-        };
-
-        patchGroundedLoading('Đang phân tích ý định câu hỏi...', turnTabId);
-        const groundedResult = await runGroundedTurn(
-          {
-            query: effectiveQuery,
-            recentTurns: historyTurns,
-            signal: hostSignal(turnTabId),
-            capabilities: {
-              serverEnabled: Boolean(knowledgeConfig.enabled && knowledgeConfig.baseUrl),
-              modelConfigured: Boolean(apiKey && config.endpoint && resolveActiveModel()),
-            },
-            config: {
-              endpoint: config.endpoint,
-              apiKey: apiKey ?? '',
-              model: resolveActiveModel(),
-              promptVersion: 'grounded-v1',
-              routerVersion: 'router-v1',
-            },
-            catalog,
-            recentSessionId: threadId,
-            ...(globalConventionsSegment ? { instructions: globalConventionsSegment } : {}),
-          },
-          groundedDeps
-        );
-
-        // A cancelled prompt must not persist clarify state, evidence rows or routed scope.
-        if (preludeIsStale()) {
-          patchGroundedLoading(null, turnTabId);
-          return;
-        }
-
-        if (groundedResult.kind === 'clarify_intent') {
-          setTransientClarifyMessage(turnTabId, {
-            id: `transient-${Date.now()}`,
-            originalQuery: clarifyState ? clarifyState.originalQuery : trimmed,
-            clarifyQuestion:
-              groundedResult.clarifyQuestion ||
-              'Bạn có thể cung cấp thêm chi tiết để tôi hỗ trợ chính xác hơn không?',
-            turnCount: nextClarifyTurnCount,
-          });
-          patchGroundedLoading(null, turnTabId);
-          return;
-        }
-        setTransientClarifyMessage(turnTabId, null);
-        patchGroundedLoading(null, turnTabId);
-
-        if (groundedResult.kind === 'clarify_entity') {
-          const entityCitations: PersistedCitation[] = groundedResult.candidates.map((candidate, index) => {
-            const rawId = candidate.urn.split(':').pop() || '';
-            return {
-              citationId: `S${index + 1}`,
-              documentId: isValidUuid(rawId) ? rawId : generateId(),
-              documentTitle: candidate.canonicalName,
-              sectionAnchor: candidate.urn,
-              lineStart: 1,
-              lineEnd: 1,
-              authority: 'server' as const,
-              evidenceClass: 'OBSERVED' as const,
-              snapshotId: 'gsnap_00000000',
-              publishedContentHash: '0'.repeat(64),
-              citedExcerpt: candidate.urn,
-            };
-          });
-          await saveMessage(
-            {
-              threadId,
-              role: 'assistant',
-              content: '',
-              grounding: {
-                schemaVersion: 1,
-                authority: 'server',
-                outcome: 'NEEDS_CLARIFICATION',
-                answer: null,
-                citations: entityCitations,
-                paths: [],
-                conflicts: [],
-                scope: {
-                  setIds: catalog.map((entry) => entry.setId).filter(isValidUuid),
-                  routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
-                },
-                modalityDiagnostics: {
-                  fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                  vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                  graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                },
-                coverageWarnings: ['Cần xác định rõ đối tượng tra cứu'],
-                fallbackReason: 'NONE',
-                routerVersion: 'router-v1',
-                promptVersion: 'grounded-v1',
-                modelId: resolveActiveModel(),
-                createdAt: new Date().toISOString(),
-              },
-            },
-            db
-          );
-          return;
-        }
-
-        // D-12/D-13: the app renders the canonical empty-server notice itself.
-        // It is a system transcript row, so no model-authored prose owns it.
-        if (groundedResult.kind === 'server_empty') {
-          await saveMessage(
-            {
-              threadId,
-              role: 'system',
-              content: groundedResult.notice || KNOWLEDGE_SERVER_EMPTY_NOTICE,
-            },
-            db
-          );
-          // D-14: local evidence, when present, follows the notice in its own
-          // row with authority 'local' — never merged with server evidence.
-          if (groundedResult.localFallback) {
-            await saveMessage(
-              {
-                threadId,
-                role: 'assistant',
-                content: '',
-                grounding: groundedResult.localFallback,
-              },
-              db
-            );
-          }
-          return;
-        }
-
-        if (groundedResult.kind === 'refine') {
-          await saveMessage(
-            {
-              threadId,
-              role: 'assistant',
-              content: '',
-              grounding: {
-                schemaVersion: 1,
-                authority: 'server',
-                outcome: groundedResult.outcome,
-                answer: null,
-                citations: [],
-                paths: [],
-                conflicts: [],
-                scope: {
-                  setIds: catalog.map((entry) => entry.setId).filter(isValidUuid),
-                  routedScope: { domain: null, environment: null, version: null, comparisonMode: null },
-                },
-                modalityDiagnostics: {
-                  fulltext: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                  vector: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                  graph: { status: 'ok', latencyMs: 0, itemCount: 0 },
-                },
-                coverageWarnings: [...groundedResult.refinementChips],
-                fallbackReason: 'NONE',
-                routerVersion: 'router-v1',
-                promptVersion: 'grounded-v1',
-                modelId: resolveActiveModel(),
-                createdAt: new Date().toISOString(),
-              },
-            },
-            db
-          );
-          return;
-        }
-
-        if (
-          groundedResult.kind === 'grounded_answer' ||
-          groundedResult.kind === 'local_fallback_results' ||
-          groundedResult.kind === 'evidence_only'
-        ) {
-          if (groundedResult.grounding.scope) {
-            setRoutedScopeByTab((prev) => ({ ...prev, [turnTabId]: groundedResult.grounding.scope }));
-          }
-          await saveMessage(
-            {
-              threadId,
-              role: 'assistant',
-              content: '',
-              tokenUsage: (groundedResult as { tokenUsage?: ChatTokenUsage }).tokenUsage,
-              grounding: groundedResult.grounding,
-            },
-            db
-          );
-          if (
-            groundedResult.kind !== 'grounded_answer' ||
-            !groundedResult.requiresOperationalContinuation
-          ) {
-            return;
-          }
-        }
-
-        if (groundedResult.kind === 'error') {
-          await saveMessage(
-            { threadId, role: 'assistant', content: '', grounding: groundedResult.grounding },
-            db
-          );
-          return;
-        }
-
-        if (groundedResult.kind !== 'operational') {
-          return;
-        }
-        } catch (groundedErr) {
-          // `hostSignal` mints a fresh controller after Stop deletes the old one, so its abort
-          // flag is useless here — the token is the only reliable cancel record.
-          if (preludeIsStale()) {
-            patchGroundedLoading(null, turnTabId);
-            return;
-          }
-          if (hostSignal(turnTabId).aborted) {
-            patchGroundedLoading(null, turnTabId);
-            return;
-          }
-          logAiChatError('Grounded pipeline or persistence error', groundedErr);
-          patchGroundedLoading(null, turnTabId);
-
-          const isRouterUnavailable =
-            groundedErr instanceof IntentRouterUnavailableError ||
-            (groundedErr as { name?: string })?.name === 'IntentRouterUnavailableError' ||
-            (groundedErr as { message?: string })?.message?.includes('intent routing is unavailable');
-
-          const errorContent = isRouterUnavailable
-            ? 'Trợ lý AI tạm thời không khả dụng. Vui lòng kiểm tra lại cấu hình kết nối AI.'
-            : 'Đã xảy ra lỗi khi truy xuất hoặc kết nối 9router. Vui lòng thử lại.';
-
-          if (userMessageId) {
-            try {
-              await saveMessage({ threadId, role: 'assistant', content: errorContent }, db);
-            } catch {
-              // Best effort error recording to prevent orphan user turns
-            }
-          }
-
-          // Fail-closed gate per D-04: an unavailable intent router stops the turn immediately.
-          if (isRouterUnavailable) {
-            patchTurnError('request_failed', errorContent, turnTabId);
-            return;
-          }
-          patchTurnError('invalid_response', errorContent, turnTabId);
-          return;
-        }
       }
 
       if (!apiKey) {
@@ -2028,7 +1661,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       // team tool — git_read — so cross-file git reads work from this ordinary chat path. The
       // gating is a pure helper so it is unit-testable (chatTurnTools.getToolsForTurnWithRemote).
       const toolsForTurn = getToolsForTurnWithRemote({
-        effectiveAnalysisMode: turnAnalysisMode,
+        effectiveAnalysisMode: true,
         dynamicMcpTools,
         standaloneCapability: isStandaloneChat,
         globalSshConfigReady: Boolean(sshFsCfg?.sshConfigId),
@@ -2061,8 +1694,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const now = dayjs();
       // Quick 261126-1od: standalone chat must not claim TaskMate DB capabilities — the
       // payload no longer carries those tools. Legacy prompt stays byte-identical below.
-      const systemPromptContent = isStandaloneChat
-        ? `You are an expert AI assistant embedded inside ${APP_NAME}.
+      const standalonePrompt = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
 AVAILABLE CAPABILITIES:
@@ -2074,20 +1706,8 @@ CRITICAL ANTI-HALLUCINATION RULES:
 1. NEVER GUESS, ASSUME, OR INVENT DATA.
 2. When breaking down goals or proposing steps, output clear actionable bullet points.
 3. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). ${APP_NAME} will automatically render interactive diagrams from these blocks.
-${graphitiSkillSegment}${
-          turnAnalysisMode
-            ? `\n\n[ANALYSIS MODE ACTIVE]:
-PREFER READ-ONLY:
-This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
-Rules:
-1. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
-2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-3. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
-4. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
-5. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
-            : ''
-        }`
-        : `You are an expert AI assistant embedded inside ${APP_NAME}.
+${graphitiSkillSegment}${STANDALONE_ANALYSIS_PROMPT_SEGMENT}`;
+      const ordinaryPrompt = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
 CRITICAL ANTI-HALLUCINATION RULES:
@@ -2097,32 +1717,9 @@ CRITICAL ANTI-HALLUCINATION RULES:
 4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
 6. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). TaskMate will automatically render interactive diagrams from these blocks.
-7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, change requests, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool.${
-        turnAutoApprove
-          ? `\n\n[AUTO-EXECUTION & REPORTING MODE ACTIVE]:
-The user has EXPLICITLY authorized automatic execution of mutations without confirmation prompts.
-MANDATORY REPORTING REQUIREMENT:
-Because mutations run automatically without manual confirmation, your final response MUST provide a clear, comprehensive, and itemized report of EVERY SINGLE MUTATION you performed:
-- Detail every created, updated, scheduled, or deleted item (name/title, ID, type).
-- Specify exact field changes (e.g. status, priority, estimate, progress, deadline, allocated minutes).
-- Highlight the outcome of each action clearly.
-Never perform mutations silently without providing this full change summary in your final reply.`
-          : ' The system will prompt the user to confirm the mutation before applying it.'
-      }${graphitiSkillSegment}
-${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${
-        turnAnalysisMode
-          ? `\n\n[ANALYSIS MODE ACTIVE]:
-PREFER READ-ONLY:
-This turn prioritizes retrieval, reasoning, comparison, and artifact generation with \`generate_file\`, \`generate_pptx\`, or \`generate_image\`.
-Rules:
-1. Prefer read-only tools. A mutation (task, change request, timer, note, capacity, document link, MCP-backed data) is allowed when the user asks for it; unless auto-approve is on, it is shown to the user for approval before it is applied — never claim a change was made before the approval card is accepted.
-2. Use the \`retrieve_knowledge\` tool repeatedly to gather evidence. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
-3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-4. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
-5. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
-6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`
-          : ''
-      }${conventionsSegment ? `\n\n${conventionsSegment}` : ''}`;
+7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, change requests, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool. The system will prompt the user to confirm the mutation before applying it.${graphitiSkillSegment}
+${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${ANALYSIS_PROMPT_SEGMENT}${conventionsSegment ? `\n\n${conventionsSegment}` : ''}`;
+      const systemPromptContent = isStandaloneChat ? standalonePrompt : ordinaryPrompt;
 
       // Cancelled (Stop) or superseded (a newer send) while staging: nothing may be committed,
       // and nothing may be patched either. Stop already released the staged UI; a newer send
@@ -2152,8 +1749,7 @@ Rules:
         scopeKey,
         text: promptText,
         ...(userMessageId ? { retryUserMessageId: userMessageId } : {}),
-        analysisMode: turnAnalysisMode,
-        autoApprove: turnAutoApprove,
+        autoApprove: false,
         model: resolveActiveModel(),
         endpoint: config.endpoint,
         apiKey,
@@ -2624,7 +2220,6 @@ Rules:
           onCloseTab={handleCloseTab}
           onRenameTab={handleRenameTab}
           onReorderTabs={handleReorderTabs}
-          tabAnalysisModes={tabAnalysisModes}
           tabStatuses={tabStatuses}
         />
       )}
@@ -2729,10 +2324,6 @@ Rules:
             onModelChange: handleModelChange,
             onRefreshModels: handleRefreshModels,
             isRefreshingModels,
-            analysisMode: currentTabAnalysisMode,
-            onToggleAnalysisMode: (tabId) => { void handleToggleAnalysisMode(tabId); },
-            autoApproveMutations,
-            onToggleAutoApproveMutations: (tabId) => { void handleToggleAutoApproveMutations(tabId); },
             mcpEnabled: currentTabMcpEnabled,
             onToggleMcpEnabled: (tabId) => { void handleToggleMcpEnabled(tabId); },
             mcpServers,

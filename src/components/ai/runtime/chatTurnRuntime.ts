@@ -58,7 +58,6 @@ export interface ChatTurnRequest {
   scopeKey: string;
   text: string;
   retryUserMessageId?: string;
-  analysisMode: boolean;
   autoApprove: boolean;
   model: string;
   endpoint: string;
@@ -357,10 +356,9 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
         ...(request.beforeToolRound
           ? { beforeToolRound: (r: number) => request.beforeToolRound!(r, turnController.signal) }
           : {}),
-        ...(request.analysisMode
-          ? { keepRecentToolOutputs: 20, maxOldToolChars: 100_000 }
-          : {}),
-        compactAtRatio: request.analysisMode ? 0.9 : 0.75,
+        keepRecentToolOutputs: 20,
+        maxOldToolChars: 100_000,
+        compactAtRatio: 0.9,
         ...(request.contextWindowTokens ? { contextWindowTokens: request.contextWindowTokens } : {}),
         executeToolFn: (name, args, toolDb, signal, _options, loopCallId) => {
           // Post-approve execution returns the exact prepared proposal, never a recompute
