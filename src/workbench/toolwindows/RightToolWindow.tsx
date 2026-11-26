@@ -27,6 +27,7 @@ export function RightToolWindow({
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleCollapse = () => {
+    setSettingsOpen(false);
     if (rightActiveId) {
       if (rightActiveId === 'ai_chat') {
         closeChat();

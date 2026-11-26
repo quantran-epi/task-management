@@ -43,7 +43,6 @@ export interface TabRuntime {
   wizardState: unknown;
   exportState: unknown;
   model: string;
-  analysisMode: boolean;
   mcpEnabled: boolean;
   knowledgeEnabled: boolean;
   promptOptions: Record<string, unknown>;
@@ -84,7 +83,6 @@ export function createTabRuntime(
     wizardState: null,
     exportState: null,
     model: '',
-    analysisMode: false,
     mcpEnabled: true,
     knowledgeEnabled: false,
     promptOptions: {},

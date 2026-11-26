@@ -981,7 +981,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             </div>
           </div>
         }
-        destroyOnClose={false}
+        destroyOnHidden={false}
       >
         <TextArea
           autoFocus

@@ -62,7 +62,7 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     cleanup();
   });
 
-  it('renders neutral tool-limit with warning, retry, retained tools and 12px details', () => {
+  it('renders neutral tool-limit with warning, retry, retained tools and token-sized details', () => {
     const onRetry = vi.fn();
     render(<AiChatWidget {...makeProps({ onRetry,
       messages: [makeMessage('user', 'Narrow question')],
@@ -78,7 +78,7 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(tag).toHaveClass('ant-tag-default');
     expect(tag).not.toHaveClass('ant-tag-warning', 'ant-tag-error');
     expect(tag?.querySelector('[aria-label="stop"]')).toBeInTheDocument();
-    expect((tag as HTMLElement | null)?.style.fontSize || getComputedStyle(tag!).fontSize).toBeTruthy();
+    expect(tag).toHaveStyle({ fontSize: 'var(--font-size-small)' });
     expect(screen.getByRole('alert')).toHaveClass('ant-alert-warning');
     expect(screen.getByRole('alert')).toHaveTextContent('Đã dừng thu thập bằng chứng sau 7 vòng.');
     expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
@@ -91,8 +91,8 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     fireEvent.click(screen.getByRole('button', { name: /2 công cụ đã gọi/ }));
     expect(screen.getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: /\[Công cụ\] query_notes/ }));
-    expect(screen.getByText('Tham số').getAttribute('style')).toContain('font-size');
-    expect(screen.getByText('{"query":"one"}').getAttribute('style')).toContain('font-size');
+    expect(screen.getByText('Tham số')).toHaveStyle({ fontSize: 'var(--font-size-small)' });
+    expect(screen.getByText('{"query":"one"}')).toHaveStyle({ fontSize: 'var(--font-size-small)' });
     expect(screen.getByText('Audit result')).toBeInTheDocument();
   });
 

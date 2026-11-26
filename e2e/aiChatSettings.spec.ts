@@ -54,13 +54,22 @@ test.describe('AI chat settings and composer modals', () => {
     const errors: string[] = [];
     // Model discovery is a best-effort background fetch to localhost:20128; a missing
     // local daemon is expected in CI and must not be confused with a UI error.
-    // AntD 6 logs deprecation notices via console.error app-wide; they are not UI failures.
+    // Known AntD 6 deprecation notices from pre-existing components; scoped to exact messages
+    // so a new deprecation in this flow still fails the smoke test.
+    const knownNotices = [
+      '[antd: Tooltip] `overlayStyle` is deprecated',
+      '[antd: Modal] `destroyOnClose` is deprecated',
+      '[antd: Drawer] `destroyOnClose` is deprecated',
+      '[antd: InputNumber] `addonAfter` is deprecated',
+      '[antd: Notification] `message` is deprecated',
+      '[antd: Dropdown] `overlayStyle` is deprecated',
+      '[rc-collapse] `children` will be removed in next major version',
+    ];
     const expectedNoise = (text: string) =>
       text.includes('localhost:20128') ||
       text.includes('net::ERR_FAILED') ||
       text.includes('net::ERR_NAME_NOT_RESOLVED') ||
-      text.startsWith('Warning:') &&
-      (text.includes('deprecated') || text.includes('will be removed in next major version'));
+      knownNotices.some((notice) => text.includes(notice));
     page.on('console', (msg) => {
       if (msg.type() === 'error' && !expectedNoise(msg.text())) errors.push(`console: ${msg.text()}`);
     });
