@@ -1406,4 +1406,34 @@ describe('AIChatDrawer', () => {
     const tasksInDb = await db.tasks.toArray();
     expect(tasksInDb.some((t) => t.name === 'Task cho duyet trong analysis mode')).toBe(true);
   });
+
+  it('stamps the configured default model on bootstrap and newly added tabs without overwriting a choice', async () => {
+    vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
+      endpoint: 'https://example.invalid', defaultModel: 'ky8-default-model', charLimit: 12000,
+    } as any);
+    await db.settings.put({ key: 'ninerouter_default_model', value: 'ky8-default-model' });
+
+    render(<AIChatDrawer open onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />);
+
+    await waitFor(async () => {
+      const tabs = await db.chatTabs.where('scopeKey').equals('global').toArray();
+      expect(tabs.length).toBeGreaterThan(0);
+      expect(tabs.every((tab) => tab.config?.model === 'ky8-default-model')).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mở tab chat AI mới' }));
+    await waitFor(async () => {
+      const tabs = await db.chatTabs.where('scopeKey').equals('global').toArray();
+      expect(tabs).toHaveLength(2);
+      expect(tabs.every((tab) => tab.config?.model === 'ky8-default-model')).toBe(true);
+    });
+
+    const first = (await db.chatTabs.where('scopeKey').equals('global').sortBy('order'))[0]!;
+    await updateChatTab(first.id, { config: { model: 'user-picked-model' } }, db);
+    fireEvent.click(screen.getByRole('button', { name: 'Mở tab chat AI mới' }));
+    await waitFor(async () => {
+      expect(await db.chatTabs.count()).toBe(3);
+    });
+    expect((await db.chatTabs.get(first.id))?.config?.model).toBe('user-picked-model');
+  });
 });

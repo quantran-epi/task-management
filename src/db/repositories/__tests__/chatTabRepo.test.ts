@@ -110,6 +110,36 @@ describe('chatTabRepo', () => {
     expect(tab.threadId).not.toBe('claimed-thread');
   });
 
+  it('persists the caller-supplied default model on both tab creation paths', async () => {
+    const created = await createChatTab(
+      { scopeType: 'global', scopeKey: 'global', config: { model: 'create-model' } },
+      db
+    );
+    expect((await db.chatTabs.get(created.id))?.config?.model).toBe('create-model');
+
+    const bootstrapScope = `task:${taskId}`;
+    const bootstrapped = await getOrCreateActiveChatTab(
+      { scopeType: 'task', scopeKey: bootstrapScope, entityId: taskId, config: { model: 'bootstrap-model' } },
+      db
+    );
+    expect((await db.chatTabs.get(bootstrapped.id))?.config?.model).toBe('bootstrap-model');
+    expect((await db.chatThreads.get(bootstrapped.threadId))?.scopeType).toBe('task');
+  });
+
+  it('does not overwrite a user-chosen model on an existing active tab', async () => {
+    const existing = await createChatTab(
+      { scopeType: 'global', scopeKey: 'global', config: { model: 'user-choice' } },
+      db
+    );
+    const returned = await getOrCreateActiveChatTab(
+      { scopeType: 'global', scopeKey: 'global', config: { model: 'default-model' } },
+      db
+    );
+
+    expect(returned.id).toBe(existing.id);
+    expect((await db.chatTabs.get(existing.id))?.config?.model).toBe('user-choice');
+  });
+
   it('persists active tab independently by scope', async () => {
     const first = await createChatTab({ scopeType: 'cr', scopeKey: `cr:${crId}` }, db);
     const second = await createChatTab({ scopeType: 'cr', scopeKey: `cr:${crId}` }, db);
