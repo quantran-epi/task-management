@@ -5,7 +5,9 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppIntelliJ } from '../../src/AppIntelliJ';
 
-const initializeDatabaseDefaults = vi.fn().mockResolvedValue(undefined);
+const { initializeDatabaseDefaults } = vi.hoisted(() => ({
+  initializeDatabaseDefaults: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('../../src/db/seeds', () => ({ initializeDatabaseDefaults }));
 vi.mock('../../src/services/storage/storagePersistence', () => ({

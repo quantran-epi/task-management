@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAntdToken } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
+import { chatWindowDb } from '../db/chatWindowDb';
 import { AIChatDrawer, type ActiveScope } from '../components/ai/AIChatDrawer';
 import { AISettingsDrawer } from '../components/ai/AISettingsDrawer';
 import {
@@ -23,7 +24,8 @@ export interface AIPopoutViewProps {
   standaloneChat?: boolean | undefined;
 }
 
-export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb, standaloneChat = false }) => {
+export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat = false }) => {
+  const activeDb = db ?? (standaloneChat ? chatWindowDb : defaultDb);
   const { token } = useAntdToken();
   const { setPendingDraft } = useAIChat();
   const [pinned, setPinned] = useState<boolean>(true);
@@ -226,9 +228,9 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db = defaultDb, stan
         isPopoutWindow={true}
         isStandaloneChat={standaloneChat}
         onOpenSettings={standaloneChat ? () => setSettingsOpen(true) : undefined}
-        db={db}
+        db={activeDb}
       />
-      <AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={db} />
+      <AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={activeDb} />
     </div>
   );
 };

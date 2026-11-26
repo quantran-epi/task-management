@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import './utils/date';
 import { initializeDatabaseDefaults } from './db/seeds';
+import { db as defaultDb } from './db';
+import { chatWindowDb } from './db/chatWindowDb';
 import { checkAndRequestStoragePersistence } from './services/storage/storagePersistence';
 import { ThemeAppHolder } from './components/ui';
 import { AntdThemeAdapter } from './workbench/AntdThemeAdapter';
@@ -60,7 +62,7 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
   useTelegramHeadlessWorker();
 
   useEffect(() => {
-    initializeDatabaseDefaults().catch((err) => {
+    initializeDatabaseDefaults(standaloneChat ? chatWindowDb : defaultDb).catch((err) => {
       console.error('Failed to initialize database defaults:', err);
     });
     checkAndRequestStoragePersistence().catch((err) => {

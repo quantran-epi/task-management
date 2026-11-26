@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db as defaultDb } from '../../src/db';
 import { chatWindowDb } from '../../src/db/chatWindowDb';
 import { initializeDatabaseDefaults } from '../../src/db/seeds';
-import { createChatTab, getOrCreateActiveChatTab } from '../../src/db/repositories/chatTabRepo';
+import { createChatTab } from '../../src/db/repositories/chatTabRepo';
 
 const REQUIRED_TABLES = [
   'settings',
@@ -65,7 +65,7 @@ describe('chatWindowDb (D-01)', () => {
       { scopeType: 'global', scopeKey: 'global', config: { model: 'taskmate-model' } },
       defaultDb
     );
-    const standalone = await getOrCreateActiveChatTab(
+    const standalone = await createChatTab(
       { scopeType: 'global', scopeKey: 'global', config: { model: 'chat-model' } },
       chatWindowDb
     );
