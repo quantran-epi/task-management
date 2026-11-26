@@ -129,6 +129,8 @@ import { stageLabelFor } from './runtime/useChatTurn';
 import { aiTurnManager, ACTIVE_AI_STATUSES } from '../../services/ai/aiTurnManager';
 import { cancelToolCall } from '../../services/sshService';
 
+import type { TelegramDevicePolicy } from '../../services/telegram/telegramDevicePolicy';
+
 // Module-level registry so background AI turns survive drawer unmounts and view navigation
 let globalTabTurnRegistry: TabTurnRegistry | null = null;
 let globalDbInstance: TaskPlannerDatabase | null = null;
@@ -244,6 +246,8 @@ export interface AIChatDrawerProps {
   isPopoutWindow?: boolean;
   isDockedPanel?: boolean;
   isStandaloneChat?: boolean;
+  devicePolicy?: TelegramDevicePolicy | undefined;
+  policyState?: 'unmanaged' | 'active' | 'blocked' | undefined;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -261,6 +265,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isPopoutWindow = false,
   isDockedPanel = false,
   isStandaloneChat = false,
+  devicePolicy,
+  policyState = 'unmanaged',
 }) => {
   const appMessage = useMessage();
   const { modal, contextHolder } = useTaskMateModal();
@@ -802,12 +808,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
 
   // Runtime mirror first (patched synchronously), then durable config, then the persisted global default.
-  const resolveActiveModel = () =>
-    tabRuntimes.get(activeTabId)?.model ||
-    tabRuntimes.get(turnTabIdRef.current)?.model ||
-    activeTab?.config?.model ||
-    persistedDefaultModel ||
-    persistedDefaultModelRef.current;
+  const resolveActiveModel = () => {
+    const current =
+      tabRuntimes.get(activeTabId)?.model ||
+      tabRuntimes.get(turnTabIdRef.current)?.model ||
+      activeTab?.config?.model ||
+      persistedDefaultModel ||
+      persistedDefaultModelRef.current;
+    if (policyState === 'active' && devicePolicy?.allowedModels.length) {
+      return devicePolicy.allowedModels.includes(current) ? current : devicePolicy.allowedModels[0]!;
+    }
+    return current;
+  };
 
   const writeTabModel = useCallback(
     async (tab: ChatTab | undefined, model: string) => {
@@ -895,6 +907,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [db, open, scopeKey]);
 
   const handleModelChange = async (model: string) => {
+    if (policyState === 'active' && !devicePolicy?.allowedModels.includes(model)) {
+      appMessage.error('Model nằm ngoài whitelist chính sách thiết bị.');
+      return;
+    }
     await writeTabModel(activeTab, model);
   };
 
@@ -1305,6 +1321,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (policyState === 'blocked') {
+      appMessage.error('Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.');
+      return;
+    }
 
     // A yes/no answer belongs to the tab that is waiting on a mutation, not the visible one.
     const approvalOwner = Object.entries(turnRegistryRef.current?.getSnapshot() ?? {}).find(
@@ -2346,7 +2367,10 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           error={activeRuntime?.error ? { code: activeRuntime.error.code, message: activeRuntime.error.message } : null}
           toolbox={{
             selectedModel: resolveActiveModel(),
-            availableModels,
+            availableModels:
+              policyState === 'active' && devicePolicy?.allowedModels.length
+                ? availableModels.filter((model) => devicePolicy.allowedModels.includes(model))
+                : availableModels,
             onModelChange: handleModelChange,
             onRefreshModels: handleRefreshModels,
             isRefreshingModels,

@@ -16,6 +16,10 @@ import {
 } from '../utils/aiPopout';
 import type { ChatScopeType } from '../types/models';
 import { useAIChat } from '../context/AIChatContext';
+import {
+  loadDevicePolicy,
+  type TelegramDevicePolicy,
+} from '../services/telegram/telegramDevicePolicy';
 
 const AI_GEOMETRY_STORAGE_KEY = 'planner:ai_popout_geometry';
 
@@ -31,6 +35,7 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [devicePolicy, setDevicePolicy] = useState<TelegramDevicePolicy | undefined>();
   const [activeScope, setActiveScope] = useState<ActiveScope>(() => {
     if (standaloneChat || typeof window === 'undefined') return { type: 'global' };
     const hash = window.location.hash || '';
@@ -46,6 +51,23 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
     }
     return { type: 'global' };
   });
+
+  useEffect(() => {
+    if (!standaloneChat) return undefined;
+    let mounted = true;
+    loadDevicePolicy(activeDb).then((stored) => {
+      if (mounted) setDevicePolicy(stored);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [activeDb, standaloneChat, settingsOpen]);
+
+  const policyState = !devicePolicy
+    ? 'unmanaged'
+    : devicePolicy.status === 'approved' && Date.parse(devicePolicy.expiresAt) > Date.now()
+      ? 'active'
+      : 'blocked';
 
   // Tauri window listeners and geometry persistence
   useEffect(() => {
@@ -227,6 +249,8 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
         activeScope={activeScope}
         isPopoutWindow={true}
         isStandaloneChat={standaloneChat}
+        devicePolicy={devicePolicy}
+        policyState={policyState}
         onOpenSettings={standaloneChat ? () => setSettingsOpen(true) : undefined}
         db={activeDb}
       />

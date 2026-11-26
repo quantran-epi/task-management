@@ -31,9 +31,9 @@ describe('Telegram device enrollment', () => {
   let testDb: TaskPlannerDatabase;
   const testDbName = 'TestTelegramDeviceEnrollmentDB';
   let replies: string[];
-  let mockSendReply: ReturnType<typeof vi.fn>;
-  let mockSendAction: ReturnType<typeof vi.fn>;
-  let mockSendDirect: ReturnType<typeof vi.fn>;
+  let mockSendReply: ReturnType<typeof vi.fn<(_token: string, _chatId: string, text: string) => Promise<void>>>;
+  let mockSendAction: ReturnType<typeof vi.fn<() => Promise<void>>>;
+  let mockSendDirect: ReturnType<typeof vi.fn<() => Promise<void>>>;
 
   beforeEach(async () => {
     testDb = new TaskPlannerDatabase(testDbName);
