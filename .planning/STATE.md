@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-26T02:01:02.393Z"
+last_updated: "2026-11-26T02:03:38.850Z"
 last_activity: 2026-11-26
-last_activity_desc: Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers
-state_head: 7b7578281e531dd7f84014bda1e4d583f138c038
+last_activity_desc: "Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers"
+state_head: ae3cfd3c8492f1d8b4840fa28e981c4e2006bf63
 progress:
   total_phases: 2
   completed_phases: 2
@@ -146,6 +146,7 @@ Progress: [██████████] 100%
 | 261125-ulp | Ẩn toàn bộ trigger và cấu hình Ghost Dev khỏi UI (TaskDrawer, TaskTable, Settings, Config Profiles), giữ code/data/runtime | 2026-11-25 | d71cd62a | — | [261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-](./quick/261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-/) |
 | 261125-u4w | Fix pin context team đọc fresh từ roster mỗi turn và global conventions trên grounded turn của AI Chat panel | 2026-11-25 | f8caef68, 0058409f, 2f431183, 180c3f21 | Needs UAT | [261125-u4w-fix-stale-pin-context-and-grounded-globa](./quick/261125-u4w-fix-stale-pin-context-and-grounded-globa/) |
 | 261126-cff | Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds. | 2026-11-26 | 7b757828 | — | [261126-cff-add-a-github-actions-workflow-that-build](./quick/261126-cff-add-a-github-actions-workflow-that-build/) |
+| 59 | Add ui-task-insight-toolbar and pre-v1.6-baseline to Windows installer workflow push triggers. | 2026-11-26 | ae3cfd3c | — | — |
 
 ## Accumulated Context
 
