@@ -6,6 +6,7 @@ mod desktop_notification;
 mod jira_proxy;
 mod keyring_store;
 mod sqlite_persistence;
+mod ssh_pool;
 mod ssh_pty_service;
 mod ssh_service;
 mod telegram_gateway;
@@ -80,6 +81,7 @@ pub fn run() {
             ssh_service::ssh_rename,
             ssh_service::ssh_exec_command,
             ssh_service::ssh_exec_stream,
+            ssh_pool::ssh_invalidate_pool,
             ssh_service::ssh_kill_process,
             tool_cancel::cancel_tool_call,
             ssh_pty_service::ssh_pty_start,
@@ -102,6 +104,7 @@ pub fn run() {
                 if let Some(task_registry) = app_handle.try_state::<tool_cancel::ToolTaskRegistry>() {
                     tool_cancel::cleanup_on_exit(&task_registry);
                 }
+                ssh_pool::cleanup_on_exit(ssh_pool::runtime());
             }
         });
 }

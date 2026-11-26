@@ -26,8 +26,9 @@ use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter};
 
-use crate::ssh_service::{connect_and_auth_tool_task, connect_and_auth_without_socket_timeout};
+use crate::ssh_service::connect_and_auth_without_socket_timeout;
 use crate::ssh_service::SshConfig;
+use crate::ssh_pool::{SocketTimeout, SshRuntimeState};
 
 /// How often the command thread wakes up only to check the cancel token. This is NOT a
 /// termination condition: a `Timeout` simply loops again. Cancellation is signalled by the
@@ -194,6 +195,14 @@ const SHUTDOWN_KILL_WAIT: Duration = Duration::from_secs(3);
 /// SIGTERM the remote process group on a detached thread so explicit Cancel never waits on
 /// SSH. The returned receiver fires when the kill attempt finishes, letting app shutdown
 /// wait briefly instead of exiting while the remote job is still alive.
+pub(crate) fn spawn_kill_remote_process_group_for_sqlcl(
+    config: &SshConfig,
+    secret: Option<&str>,
+    pgid: u32,
+) -> Result<mpsc::Receiver<()>, String> {
+    spawn_kill_remote_process_group(config, secret, pgid)
+}
+
 fn spawn_kill_remote_process_group(
     config: &SshConfig,
     secret: Option<&str>,
@@ -313,6 +322,7 @@ pub fn build_remote_command(command: &str) -> String {
 /// numeric lines; only a line with this exact prefix is the `setsid` leader id.
 pub(crate) const PGID_LINE_PREFIX: &str = "TASKMATE_PGID:";
 
+
 /// Read a PGID from one output chunk. Only the sentinel-prefixed line is accepted; arbitrary
 /// numeric banner lines can no longer be mistaken for the process-group leader.
 fn read_pgid_line(text: &str) -> Option<u32> {
@@ -348,6 +358,7 @@ fn take_reader_pair<A, B>(a: &mut Option<A>, b: &mut Option<B>) -> Option<(A, B)
 pub fn run_cancellable_remote_command(
     registry: &ToolTaskRegistry,
     app: AppHandle,
+    runtime: &SshRuntimeState,
     config: &SshConfig,
     secret: Option<&str>,
     call_id: String,
@@ -383,7 +394,9 @@ pub fn run_cancellable_remote_command(
 
     // Wake-up-only socket timeout: lets the reader check the cancel token every 250ms, but
     // a timeout NEVER ends the task. Only explicit cancel/app exit may end it.
-    let session = match connect_and_auth_tool_task(config, secret) {
+    // Reuse the authenticated SSH transport for every tool command; a fresh channel is still
+    // opened below, so cancellation semantics are unchanged.
+    let session = match runtime.pool.acquire(config, secret, SocketTimeout::Wakeup) {
         Ok(session) => session,
         Err(e) => {
             registry.remove(&call_id);
@@ -393,6 +406,7 @@ pub fn run_cancellable_remote_command(
     let mut channel = match session.channel_session() {
         Ok(channel) => channel,
         Err(e) => {
+            runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
             registry.remove(&call_id);
             return Err(format!("Không thể mở channel session: {}", e));
         }
@@ -400,6 +414,7 @@ pub fn run_cancellable_remote_command(
 
     let remote_command = build_remote_command(&command);
     if let Err(e) = channel.exec(&remote_command) {
+        runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
         registry.remove(&call_id);
         return Err(format!("Thực thi lệnh thất bại: {}", e));
     }
@@ -627,6 +642,9 @@ pub fn run_cancellable_remote_command(
             stdout_coalescer.flush();
             stderr_coalescer.flush();
             let errors: Vec<String> = [stdout_error, stderr_error].into_iter().flatten().collect();
+            if !errors.is_empty() {
+                runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
+            }
             let finish_reason = if was_cancelled || cancelled.load(Ordering::SeqCst) {
                 "cancelled"
             } else if !errors.is_empty() {

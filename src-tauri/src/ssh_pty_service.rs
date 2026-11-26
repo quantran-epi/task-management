@@ -57,7 +57,7 @@ pub fn ssh_pty_start(
     }
 
     // Authenticate SSH session
-    let session = ssh_service::connect_and_auth(&config, secret.as_deref())?;
+    let session = ssh_service::connect_and_auth_dedicated(&config, secret.as_deref())?;
 
     // Open channel session
     let mut channel = session

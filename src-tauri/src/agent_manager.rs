@@ -371,7 +371,7 @@ pub async fn start_ssh_ghost_dev_session(
     payload: StartSessionPayload,
     ssh_cfg: crate::ssh_service::SshConfig,
 ) -> Result<AgentSessionState, String> {
-    let session = crate::ssh_service::connect_and_auth(&ssh_cfg, payload.ssh_secret.as_deref())?;
+    let session = crate::ssh_service::connect_and_auth_dedicated(&ssh_cfg, payload.ssh_secret.as_deref())?;
 
     let remote_dir = if !payload.repo_path.trim().is_empty() {
         payload.repo_path.trim().to_string()

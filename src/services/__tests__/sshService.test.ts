@@ -146,3 +146,57 @@ describe('execRemoteCommandStream', () => {
     ).rejects.toThrow('Tính năng SSH chỉ hoạt động trên môi trường Desktop Tauri.');
   });
 });
+
+describe('SSH pool invalidation on config changes', () => {
+  const config: SshConfig = {
+    id: 'ssh-invalidate-1',
+    name: 'Pool',
+    host: '10.0.0.2',
+    port: 22,
+    username: 'oracle',
+    authType: 'password',
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  function fakeDb() {
+    const store = new Map<string, unknown>();
+    return {
+      settings: {
+        get: vi.fn(async (key: string) => ({ key, value: store.get(key) })),
+        put: vi.fn(async ({ key, value }: { key: string; value: unknown }) => {
+          store.set(key, value);
+        }),
+      },
+    } as any;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(timerPopout, 'isTauriApp').mockReturnValue(true);
+  });
+
+  it('saving config invalidates pooled SSH sessions', async () => {
+    const core = await import('@tauri-apps/api/core');
+    vi.mocked(core.invoke).mockResolvedValue(undefined);
+    const db = fakeDb();
+    await sshService.saveSshConfig(config, undefined, db);
+    expect(core.invoke).toHaveBeenCalledWith('ssh_invalidate_pool');
+  });
+
+  it('deleting config invalidates pooled SSH sessions', async () => {
+    const core = await import('@tauri-apps/api/core');
+    vi.mocked(core.invoke).mockResolvedValue(undefined);
+    const db = fakeDb();
+    await sshService.deleteSshConfig(config.id, db);
+    expect(core.invoke).toHaveBeenCalledWith('ssh_invalidate_pool');
+  });
+
+  it('invalidation failure does not fail config save', async () => {
+    const core = await import('@tauri-apps/api/core');
+    vi.mocked(core.invoke).mockRejectedValueOnce(new Error('IPC down'));
+    const db = fakeDb();
+    await expect(sshService.saveSshConfig(config, undefined, db)).resolves.toBeUndefined();
+  });
+});
+

@@ -35,6 +35,17 @@ export async function getSshConfigById(
   return configs.find((c) => c.id === id) ?? null;
 }
 
+/** Best-effort: a stale pooled session must never survive a config/keyring change. */
+async function invalidateSshPool(): Promise<void> {
+  if (!isTauriApp()) return;
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('ssh_invalidate_pool');
+  } catch {
+    // Invalidation is cache maintenance — never fail a config save because of it.
+  }
+}
+
 /** Save (create or update) an SSH configuration and optionally store its secret in OS Keyring */
 export async function saveSshConfig(
   config: SshConfig,
@@ -69,6 +80,7 @@ export async function saveSshConfig(
       await deleteKeyringCredential(`${SSH_SECRET_PREFIX}${config.id}`);
     }
   }
+  await invalidateSshPool();
 }
 
 /** Delete an SSH configuration and its stored keyring secret */
@@ -85,6 +97,7 @@ export async function deleteSshConfig(
   });
 
   await deleteKeyringCredential(`${SSH_SECRET_PREFIX}${id}`);
+  await invalidateSshPool();
 }
 
 /** Get the saved secret (password or passphrase) for a configuration from OS Keyring */

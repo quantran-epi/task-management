@@ -91,8 +91,20 @@ pub struct SshStreamExitEvent {
     pub error: Option<String>,
 }
 
+/// Short one-shot commands (FS, test, git) reuse the pooled authenticated transport. Each
+/// command still opens a fresh channel, so no two calls share stream state.
 pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2::Session, String> {
-    connect_and_auth_inner(config, secret, SocketTimeout::Interactive)
+    crate::ssh_pool::runtime().pool.acquire(config, secret, SocketTimeout::Interactive)
+}
+
+/// Long-lived consumers (PTY, ghost-dev, kill threads) need a dedicated transport: they call
+/// `set_blocking(false)` or hold a channel open forever and must not share libssh2's session
+/// mutex with short tools.
+pub fn connect_and_auth_dedicated(
+    config: &SshConfig,
+    secret: Option<&str>,
+) -> Result<ssh2::Session, String> {
+    connect_and_auth_inner(config, secret, SocketTimeout::None)
 }
 
 /// Variant for long-running tool tasks: NO socket read timeout. A 30s socket error used to
@@ -102,26 +114,27 @@ pub fn connect_and_auth_without_socket_timeout(
     config: &SshConfig,
     secret: Option<&str>,
 ) -> Result<ssh2::Session, String> {
-    connect_and_auth_inner(config, secret, SocketTimeout::None)
+    connect_and_auth_dedicated(config, secret)
 }
 
-/// Tool-task reader path: a SHORT socket read timeout is only a wake-up so the reader can
-/// observe the cancel token. It is NOT a deadline — a timeout error is ignored and the loop
-/// continues. No `Done{error}` may ever come from this wake-up.
-pub fn connect_and_auth_tool_task(
-    config: &SshConfig,
-    secret: Option<&str>,
-) -> Result<ssh2::Session, String> {
-    connect_and_auth_inner(config, secret, SocketTimeout::Wakeup)
-}
-
-enum SocketTimeout {
+#[derive(Clone, Copy)]
+pub(crate) enum SocketTimeout {
     None,
     Interactive,
     Wakeup,
 }
 
-fn connect_and_auth_inner(
+impl SocketTimeout {
+    pub(crate) fn class(&self) -> u8 {
+        match self {
+            SocketTimeout::None => 0,
+            SocketTimeout::Interactive => 1,
+            SocketTimeout::Wakeup => 2,
+        }
+    }
+}
+
+pub(crate) fn connect_and_auth_inner(
     config: &SshConfig,
     secret: Option<&str>,
     socket_timeout: SocketTimeout,
@@ -496,9 +509,53 @@ pub async fn ssh_exec_command(
     // freezes while a heavy tool runs (ai-chat-input-lag, user criterion 3).
     let out = tauri::async_runtime::spawn_blocking(move || {
         let registry = handle.state::<crate::tool_cancel::ToolTaskRegistry>();
+        let runtime = crate::ssh_pool::runtime();
+        // SQLcl heredocs are handled by a persistent remote session (sentinel parsing stays in
+        // Rust). All other commands keep the existing channel-per-call runner.
+        if let Some((env, bin, conn, sql)) = crate::ssh_pool::parse_sqlcl_command(&command) {
+            let outcome = crate::ssh_pool::run_persistent_sqlcl(
+                &runtime,
+                &config,
+                secret.as_deref(),
+                &bin,
+                &conn,
+                &env,
+                &sql,
+                &cancelled,
+            );
+            let finish_call = |result: crate::tool_cancel::ToolExecOutput| {
+                registry.remove(&call_id);
+                let status = if result.finish_reason == "cancelled" { "cancelled" }
+                    else if result.finish_reason == "error" { "error" } else { "done" };
+                let _ = handle.emit(
+                    "tool-task-status",
+                    crate::tool_cancel::ToolTaskStatusEvent {
+                        call_id: call_id.clone(),
+                        status: status.to_string(),
+                        finish_reason: Some(result.finish_reason.clone()),
+                    },
+                );
+                result
+            };
+            return match outcome {
+                Ok((stdout, stderr, was_cancelled)) => Ok(finish_call(crate::tool_cancel::ToolExecOutput {
+                    stdout,
+                    stderr,
+                    exit_status: if was_cancelled { -1 } else { 0 },
+                    finish_reason: if was_cancelled { "cancelled" } else { "complete" }.to_string(),
+                })),
+                Err(e) => Ok(finish_call(crate::tool_cancel::ToolExecOutput {
+                    stdout: String::new(),
+                    stderr: e,
+                    exit_status: -1,
+                    finish_reason: "error".to_string(),
+                })),
+            };
+        }
         crate::tool_cancel::run_cancellable_remote_command(
             &registry,
             handle.clone(),
+            &runtime,
             &config,
             secret.as_deref(),
             call_id,
