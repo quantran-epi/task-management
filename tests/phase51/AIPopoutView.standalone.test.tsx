@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIChatProvider, useAIChat } from '../../src/context/AIChatContext';
@@ -120,5 +122,12 @@ describe('standalone chat shell', () => {
     const modal = screen.getByText('AI Settings · tất cả').closest('.ant-modal') as HTMLElement | null;
     expect(modal).not.toBeNull();
     expect(modal?.style.width).toBe('calc(100vw - 48px)');
+  });
+
+  it('routes every AI surface to the standalone chat DB singleton', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
+    expect(source).toContain("import { chatWindowDb } from '../db/chatWindowDb'");
+    expect(source).toMatch(/standaloneChat\s*\?\s*chatWindowDb\s*:\s*defaultDb/);
+    expect(source).toContain('db={activeDb}');
   });
 });

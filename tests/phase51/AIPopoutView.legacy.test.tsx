@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIChatProvider, useAIChat } from '../../src/context/AIChatContext';
@@ -117,5 +119,12 @@ describe('legacy AI popout behaviour', () => {
     await waitFor(() => {
       expect(screen.getByTestId('draft-probe')).toHaveTextContent('legacy draft');
     });
+  });
+
+  it('keeps the default TaskMate DB on the legacy popout path', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
+    expect(source).toMatch(/standaloneChat\s*\?\s*chatWindowDb\s*:\s*defaultDb/);
+    expect(source).toContain('interface AIPopoutViewProps');
+    expect(source).toMatch(/db\??:\s*TaskPlannerDatabase\s*\|\s*undefined/);
   });
 });
