@@ -1,0 +1,65 @@
+name: Build Windows Installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - staging
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      CI: 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TaskMate Windows installer
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target x86_64-pc-windows-msvc --bundles nsis
+
+      - name: Upload TaskMate Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskmate-windows-nsis
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Build TaskMate Chat Windows installer
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --target x86_64-pc-windows-msvc --bundles nsis --config src-tauri/tauri.conf.chat.json
+
+      - name: Upload TaskMate Chat Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskmate-chat-windows-nsis
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/TaskMate Chat*.exe
+          if-no-files-found: error
