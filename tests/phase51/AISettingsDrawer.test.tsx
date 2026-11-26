@@ -5,6 +5,7 @@ import Dexie from 'dexie';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db';
+import { SSH_CONFIGS_SETTING_KEY } from '../../src/types/ssh';
 import { generateId } from '../../src/utils/uuid';
 import { KnowledgeConfigProvider } from '../../src/services/knowledge/knowledgeConfig';
 import { AIChatProvider } from '../../src/context/AIChatContext';
@@ -22,6 +23,17 @@ const GROUP_LABELS = [
   'Tool Catalog',
 ] as const;
 
+const STANDALONE_GROUP_LABELS = [
+  'Provider',
+  'Knowledge Server',
+  'MCP',
+  'Graphiti',
+  'Oracle SQLcl',
+  'SSH Connections',
+  'SSH File System',
+  'Tool Catalog',
+] as const;
+
 type CardProps = { db?: TaskPlannerDatabase };
 
 const cardMocks = vi.hoisted(() => ({
@@ -31,6 +43,7 @@ const cardMocks = vi.hoisted(() => ({
   graphiti: vi.fn((_props: CardProps) => null),
   oracle: vi.fn((_props: CardProps) => null),
   sshFs: vi.fn((_props: CardProps) => null),
+  sshConnections: vi.fn((_props: CardProps) => null),
   catalog: vi.fn((_props: CardProps) => null),
 }));
 
@@ -88,6 +101,13 @@ vi.mock('../../src/components/settings/SshFsAiToolConfigCard', () => ({
     maxLinesPerRead: 100,
     maxListEntries: 100,
     maxGrepMatches: 50,
+  },
+}));
+
+vi.mock('../../src/components/settings/SshConfigCard', () => ({
+  SshConfigCard: (props: CardProps) => {
+    cardMocks.sshConnections(props);
+    return <div data-testid="card-ssh-connections" />;
   },
 }));
 
@@ -199,6 +219,56 @@ describe('phase 51 AI settings drawer', () => {
       if (cardKey !== 'knowledge') {
         expect(cardMock.mock.calls.at(-1)?.[0]?.db?.name).toBe(db.name);
       }
+    }
+  });
+
+  it('Test 9: standalone adds SSH Connections before SSH File System and passes the same db', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
+    render(<AISettingsDrawerBody db={db} standalone />);
+
+    const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent)).toEqual(STANDALONE_GROUP_LABELS);
+    fireEvent.click(within(nav).getByRole('button', { name: 'SSH Connections' }));
+    expect(screen.getByTestId('card-ssh-connections')).toBeInTheDocument();
+    expect(cardMocks.sshConnections).toHaveBeenCalledWith({ db });
+    expect(screen.getByRole('button', { name: 'SSH Connections' })).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('Test 10: docked settings keeps the seven locked groups with no SSH Connections', () => {
+    const { AISettingsDrawerBody } = require('../../src/components/ai/AISettingsDrawer') as typeof import('../../src/components/ai/AISettingsDrawer');
+    render(<AISettingsDrawerBody db={db} />);
+
+    const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });
+    expect(within(nav).getAllByRole('button').map((button) => button.textContent)).toEqual(GROUP_LABELS);
+    expect(within(nav).queryByRole('button', { name: 'SSH Connections' })).not.toBeInTheDocument();
+    const popoutSource = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
+    expect(popoutSource).toContain('<AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={activeDb} standalone={standaloneChat} />');
+  });
+
+  it('Test 11: SSH configs live in the selected DB and are invisible from another', async () => {
+    const { saveSshConfig, getSshConfigs } = await import('../../src/services/sshService');
+    const otherName = `AISettingsDrawerOther_${generateId()}`;
+    const other = new TaskPlannerDatabase(otherName);
+    await other.open();
+    try {
+      await saveSshConfig({
+        id: 'ky8-ssh-connection',
+        name: 'Ky8 fixture',
+        host: '127.0.0.1',
+        port: 22,
+        username: 'test',
+        authType: 'password',
+        createdAt: '2026-11-26T00:00:00.000Z',
+        updatedAt: '2026-11-26T00:00:00.000Z',
+      }, undefined, db);
+
+      expect((await getSshConfigs(db)).map((config) => config.id)).toEqual(['ky8-ssh-connection']);
+      expect(await getSshConfigs(other)).toEqual([]);
+      expect((await db.settings.get(SSH_CONFIGS_SETTING_KEY))?.value).toHaveLength(1);
+      expect(await other.settings.get(SSH_CONFIGS_SETTING_KEY)).toBeUndefined();
+    } finally {
+      other.close();
+      await Dexie.delete(otherName);
     }
   });
 
