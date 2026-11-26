@@ -344,6 +344,7 @@ test.describe('AI chat settings and composer modals', () => {
   test('standalone theme toggle: 360px header geometry, no overlap, light/dark screenshots', async ({ page }) => {
     const errors = watchErrors(page);
     await page.setViewportSize({ width: 360, height: 720 });
+    await page.addInitScript(() => window.localStorage.setItem('taskmate_theme', 'light'));
     await page.goto('/task-management/e2e/aiChatStandalone.html?rfx=ui');
     await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
 
@@ -768,12 +769,14 @@ test.describe('AI chat embedded document images', () => {
     await page.getByTestId('chat-settings-gear').click();
     const settings = page.locator('.ant-modal').filter({ has: page.getByText('AI Settings · tất cả') });
     await expect(settings).toBeVisible();
-    const keyInput = settings.getByPlaceholder('Nhập 9router API Key (sk-...)');
-    // Keychain read is async: wait for either settled view before touching the input,
-    // otherwise count() sees the input before it is replaced by "đã được cấu hình".
-    await expect.poll(() => keyInput.count().then(async (count) =>
-      count > 0 || await settings.getByText('API Key đã được cấu hình').count() > 0)).toBe(true);
-    if (await keyInput.count()) await keyInput.fill('sk-uat-embedded-images');
+    // loadData() is async (keychain + config reads). The key input exists on first
+    // render, so wait for the endpoint value committed by loadData before touching it.
+    await expect.poll(async () =>
+      settings.getByPlaceholder('http://localhost:20128').first().inputValue()
+    ).not.toBe('');
+    // The standalone harness always seeds a key via get_credential, so the settled
+    // view shows the configured badge; never fill an input React is about to unmount.
+    await expect(settings.getByText('API Key đã được cấu hình')).toBeVisible();
     await settings.getByPlaceholder('http://localhost:20128').first().fill('http://localhost:3000');
     await settings.getByRole('button', { name: 'Lưu tất cả cấu hình' }).click();
     await settings.locator('.ant-modal-close').click();
