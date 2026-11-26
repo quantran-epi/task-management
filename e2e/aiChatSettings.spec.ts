@@ -38,7 +38,8 @@ test.describe('AI chat settings and composer modals', () => {
   }
 
   async function toggleTheme(page: Page): Promise<void> {
-    // Modal overlay blocks the title-bar switch; close it before toggling.
+    // Dùng control theme đang visible (TitleBar ở workbench, header ở standalone).
+    // Modal overlay blocks the switch; close it before toggling.
     const dialog = settingsDialog(page);
     await dialog.locator('.ant-modal-close').click();
     await expect(page.locator('.ant-modal-container')).toHaveCount(0);
@@ -316,9 +317,11 @@ test.describe('AI chat settings and composer modals', () => {
     const lightAccent = await cssVar(page, '--accent');
     const lightRadius = await cssVar(page, '--radius-control');
     const lightFont = await cssVar(page, '--font-size-ui');
+    await expect(page.getByTestId('chat-theme-toggle')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Chuyển đổi giao diện sáng/tối' })).toHaveCount(1);
     await page.locator('.ant-modal-close').click();
     await expect(page.locator('.ant-modal-container')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Chuyển đổi giao diện sáng/tối' }).click();
+    await page.getByTestId('chat-theme-toggle').click();
     expect(await themeMode(page)).not.toBe(lightTheme);
     expect(await cssVar(page, '--accent')).not.toBe(lightAccent);
     expect(await cssVar(page, '--radius-control')).toBe(lightRadius);
@@ -329,12 +332,56 @@ test.describe('AI chat settings and composer modals', () => {
     );
     await page.locator('.ant-modal-close').click();
     await expect(page.locator('.ant-modal-container')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Chuyển đổi giao diện sáng/tối' }).click();
+    await page.getByTestId('chat-theme-toggle').click();
     await openStandaloneSettings();
     const lightBg = await settingsDialog(page).locator('.ant-modal-container').evaluate(
       (el) => getComputedStyle(el).backgroundColor,
     );
     expect(darkBg).not.toBe(lightBg);
+    await expectNoErrors(errors);
+  });
+
+  test('standalone theme toggle: 360px header geometry, no overlap, light/dark screenshots', async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.goto('/task-management/e2e/aiChatStandalone.html?rfx=ui');
+    await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
+
+    const header = page.getByTestId('chat-standalone-header');
+    const toggle = page.getByTestId('chat-theme-toggle');
+    await expect(header).toBeVisible();
+    await expect(toggle).toBeVisible();
+
+    const headerBox = await header.boundingBox();
+    const toggleBox = await toggle.boundingBox();
+    expect(headerBox?.height).toBe(34);
+    expect(toggleBox?.width).toBe(28);
+    expect(toggleBox?.height).toBe(28);
+
+    const rects = await page.evaluate(() => {
+      const chip = document.querySelector('[data-testid="chat-global-scope-chip"]')!.getBoundingClientRect();
+      const control = document.querySelector('[data-testid="chat-theme-toggle"]')!.getBoundingClientRect();
+      return { chipRight: chip.right, controlLeft: control.left };
+    });
+    expect(rects.chipRight).toBeLessThanOrEqual(rects.controlLeft);
+
+    const lightTheme = await themeMode(page);
+    await page.screenshot({ path: 'test-results/ai-chat-theme-light-360.png' });
+    await toggle.click();
+    expect(await themeMode(page)).not.toBe(lightTheme);
+
+    const darkHeaderBox = await header.boundingBox();
+    const darkToggleBox = await toggle.boundingBox();
+    expect(darkHeaderBox?.height).toBe(34);
+    expect(darkToggleBox?.width).toBe(28);
+    expect(darkToggleBox?.height).toBe(28);
+    const darkRects = await page.evaluate(() => {
+      const chip = document.querySelector('[data-testid="chat-global-scope-chip"]')!.getBoundingClientRect();
+      const control = document.querySelector('[data-testid="chat-theme-toggle"]')!.getBoundingClientRect();
+      return { chipRight: chip.right, controlLeft: control.left };
+    });
+    expect(darkRects.chipRight).toBeLessThanOrEqual(darkRects.controlLeft);
+    await page.screenshot({ path: 'test-results/ai-chat-theme-dark-360.png' });
     await expectNoErrors(errors);
   });
 
@@ -587,6 +634,11 @@ test.describe('AI chat settings and composer modals', () => {
               ['chatThreads', 'chatTabs', 'chatMessages', 'settings'],
               'readwrite'
             );
+            // The rfx harness seeds a default global thread at boot; drop it before
+            // inserting the fixture's own unique scopeKey rows.
+            tx.objectStore('chatThreads').clear();
+            tx.objectStore('chatTabs').clear();
+            tx.objectStore('chatMessages').clear();
             tx.objectStore('chatThreads').put({
               id: threadId, scopeKey: 'global', scopeType: 'global', createdAt: ts, updatedAt: ts,
             });
@@ -717,6 +769,10 @@ test.describe('AI chat embedded document images', () => {
     const settings = page.locator('.ant-modal').filter({ has: page.getByText('AI Settings · tất cả') });
     await expect(settings).toBeVisible();
     const keyInput = settings.getByPlaceholder('Nhập 9router API Key (sk-...)');
+    // Keychain read is async: wait for either settled view before touching the input,
+    // otherwise count() sees the input before it is replaced by "đã được cấu hình".
+    await expect.poll(() => keyInput.count().then(async (count) =>
+      count > 0 || await settings.getByText('API Key đã được cấu hình').count() > 0)).toBe(true);
     if (await keyInput.count()) await keyInput.fill('sk-uat-embedded-images');
     await settings.getByPlaceholder('http://localhost:20128').first().fill('http://localhost:3000');
     await settings.getByRole('button', { name: 'Lưu tất cả cấu hình' }).click();
