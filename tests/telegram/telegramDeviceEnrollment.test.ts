@@ -5,6 +5,7 @@ import {
   recordPendingTelegramUser,
   upsertDeviceEnrollment,
   getWhitelistUser,
+  blockPendingUser,
 } from '../../src/services/telegram/telegramSettingsService';
 import { processTelegramInboundMessage } from '../../src/services/telegram/telegramHeadlessWorker';
 import { parsePolicyPayload } from '../../src/services/telegram/telegramDevicePolicy';
@@ -91,6 +92,15 @@ describe('Telegram device enrollment', () => {
     expect(legacy?.status).toBe('pending');
   });
 
+  it('reads numeric from_id from Rust legacy payload as string identity', async () => {
+    await dispatch('/start', { chat_id: 'legacy-chat', fromUserId: undefined, from_id: 555666777 });
+
+    const legacy = await findWhitelistByIdentity('555666777', testDb);
+    expect(legacy?.chatId).toBe('legacy-chat');
+    expect(legacy?.telegramUserId).toBe('555666777');
+    expect(legacy?.status).toBe('pending');
+  });
+
   it('rejects /policy for unknown and pending users without emitting a token', async () => {
     await dispatch('/policy');
     expect(replies[0]).toContain('123456789');
@@ -134,6 +144,27 @@ describe('Telegram device enrollment', () => {
     await dispatch('/policy');
     const second = await findWhitelistByIdentity('123456789', testDb);
     expect(second?.pairingCode).not.toBe(first?.pairingCode);
+  });
+
+  it('blocks /policy for a legacy whitelist row blocked by status without telegramUserId', async () => {
+    // Admin-added legacy row: no telegramUserId, deviceStatus stayed 'approved'.
+    await upsertDeviceEnrollment(
+      {
+        telegramUserId: '',
+        chatId: 'legacy-chat',
+        deviceStatus: 'approved',
+        allowedModels: ['model-a'],
+      },
+      testDb
+    );
+    await blockPendingUser('legacy-chat', testDb);
+
+    await dispatch('/policy', { chat_id: 'legacy-chat', fromUserId: undefined });
+    expect(replies[0]).toContain('Chưa thể phát chính sách');
+    expect(replies[0]).not.toContain('TMMATE_POLICY_V1:');
+    const row = await getWhitelistUser('legacy-chat', testDb);
+    expect(row?.status).toBe('blocked');
+    expect(row?.deviceStatus).toBe('revoked');
   });
 
   it('blocks /policy after revoke regardless of active chat status', async () => {

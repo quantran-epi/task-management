@@ -90,6 +90,8 @@ export function isModelAllowed(policy: TelegramDevicePolicy | undefined, model: 
   return policy.allowedModels.includes(model.trim());
 }
 
+// standalone hiện chưa áp dụng remoteSettings (defaultModel/maxHistoryTurns/dataScope); helper
+// chỉ trả config để sau này wired vào send boundary. Policy vẫn khóa model qua isModelAllowed.
 export function resolveEffectiveChatConfig<T extends { defaultModel: string }>(
   local: T,
   policy: TelegramDevicePolicy | undefined

@@ -63,7 +63,8 @@ export interface TelegramInboundEvent {
   from_name: string;
   text: string;
   date: number;
-  fromUserId?: string | undefined; // Telegram from.id; payload cũ không có thì fallback chat_id
+  fromUserId?: string | undefined; // Telegram from.id (Rust phát dạng string); payload cũ dùng from_id
+  from_id?: number | string | undefined; // payload Rust cũ: from_id dạng số
 }
 
 export interface TelegramConflictEvent {

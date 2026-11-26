@@ -18,8 +18,9 @@ pub struct TelegramInboundPayload {
     pub update_id: i64,
     pub message_id: i64,
     pub chat_id: String,
-    // from.id là định danh thiết bị; chat_id chỉ là địa chỉ reply. Thiếu from -> 0.
-    pub from_id: i64,
+    // from.id là định danh thiết bị; chat_id chỉ là địa chỉ reply. Phát đúng tên/kiểu TS đọc.
+    #[serde(rename = "fromUserId")]
+    pub from_id: String,
     pub from_name: String,
     pub text: String,
     pub date: i64,
@@ -203,7 +204,11 @@ pub async fn start_telegram_polling(
 
                                         if let Some(msg) = update.message {
                                             if let Some(text) = msg.text {
-                                                let from_id = msg.from.as_ref().map(|u| u.id).unwrap_or(0);
+                                                let from_id = msg
+                                                    .from
+                                                    .as_ref()
+                                                    .map(|u| u.id.to_string())
+                                                    .unwrap_or_default();
                                                 let from_name = if let Some(from) = msg.from {
                                                     from.first_name.unwrap_or_else(|| {
                                                         from.username.unwrap_or_else(|| "User".to_string())
@@ -426,7 +431,27 @@ pub async fn send_telegram_action(
 
 #[cfg(test)]
 mod tests {
-    use super::strip_html_tags;
+    use super::{strip_html_tags, TelegramInboundPayload};
+
+    #[test]
+    fn inbound_event_emits_from_user_id_as_string() {
+        let payload = TelegramInboundPayload {
+            update_id: 1,
+            message_id: 2,
+            chat_id: "chat-abc".to_string(),
+            from_id: "123456789".to_string(),
+            from_name: "Device A".to_string(),
+            text: "/policy".to_string(),
+            date: 3,
+        };
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["fromUserId"], "123456789");
+        assert!(json.get("from_id").is_none());
+        assert_eq!(
+            json["fromUserId"].as_str().unwrap().trim(),
+            "123456789"
+        );
+    }
 
     #[test]
     fn strips_tags_with_attributes() {

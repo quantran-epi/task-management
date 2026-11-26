@@ -705,8 +705,11 @@ export async function processTelegramInboundMessage(
   sendDirectFn?: (token: string, chatId: string, text: string) => Promise<void>
 ): Promise<void> {
   const { update_id, chat_id, from_name, text, message_id } = event;
-  // Payload cũ không có fromUserId thì fallback chat_id, không cấp quyền mới.
-  const identity = event.fromUserId?.trim() ? event.fromUserId.trim() : chat_id;
+  // Rust phát fromUserId dạng string; payload cũ dùng from_id (number) thì vẫn đọc được.
+  // Thiếu cả hai thì fallback chat_id, không cấp quyền mới.
+  const rawIdentity = event.fromUserId ?? event.from_id;
+  const rawIdentityText = rawIdentity === undefined || rawIdentity === null ? '' : String(rawIdentity).trim();
+  const identity = rawIdentityText || chat_id;
 
   // Deduplicate incoming update_id
   if (update_id && processedUpdateIds.has(update_id)) {
@@ -939,9 +942,9 @@ export async function processTelegramInboundMessage(
   if (lowerText === '/policy') {
     const device = await findWhitelistByIdentity(identity, db);
     const statusText =
-      device?.deviceStatus === 'revoked'
+      device?.status === 'blocked' || device?.deviceStatus === 'revoked'
         ? 'đã bị thu hồi'
-        : device?.deviceStatus === 'pending'
+        : device?.status === 'pending' || device?.deviceStatus === 'pending'
           ? 'Chờ duyệt'
           : 'chưa đăng ký';
     const rawMsg = [
@@ -951,7 +954,11 @@ export async function processTelegramInboundMessage(
       '',
       'Nhờ admin duyệt trong TaskMate, sau đó gõ /policy để nhận chính sách.',
     ].join('\n');
-    const isEligible = device?.deviceStatus === 'approved' && Boolean(device.allowedModels?.length);
+    const isEligible =
+      device?.deviceStatus === 'approved' &&
+      device.status !== 'blocked' &&
+      device.status !== 'pending' &&
+      Boolean(device.allowedModels?.length);
     if (!isEligible) {
       await sendReply(botToken, chat_id, markdownToTelegramHtml(rawMsg), message_id);
       await logTelegramSession(
@@ -1034,16 +1041,21 @@ export async function processTelegramInboundMessage(
     if (lowerText === '/policy') {
       const device = await findWhitelistByIdentity(identity, db);
       const statusLine =
-        device?.deviceStatus === 'approved'
-          ? 'đã được duyệt'
-          : device?.deviceStatus === 'revoked'
-            ? 'đã bị thu hồi'
-            : device?.deviceStatus === 'pending'
-              ? 'đang chờ duyệt'
+        device?.status === 'blocked' || device?.deviceStatus === 'revoked'
+          ? 'đã bị thu hồi'
+          : device?.status === 'pending' || device?.deviceStatus === 'pending'
+            ? 'đang chờ duyệt'
+            : device?.deviceStatus === 'approved'
+              ? 'đã được duyệt'
               : 'chưa đăng ký';
       const userLine = `🆔 Telegram User ID: \`${identity}\`\n\nTrạng thái thiết bị: ${statusLine}.`;
 
-      if (device?.deviceStatus === 'approved' && device.allowedModels?.length) {
+      if (
+        device?.deviceStatus === 'approved' &&
+        device.status !== 'blocked' &&
+        device.status !== 'pending' &&
+        device.allowedModels?.length
+      ) {
         const rotated = await rotateDevicePairingCode(identity, db);
         const policy = buildPolicyPayload(
           { ...device, pairingCode: rotated.pairingCode, pairingCodeExpiresAt: rotated.pairingCodeExpiresAt },
@@ -1077,7 +1089,7 @@ export async function processTelegramInboundMessage(
         return;
       }
 
-      const guidance = device?.deviceStatus === 'revoked'
+      const guidance = device?.status === 'blocked' || device?.deviceStatus === 'revoked'
         ? 'Nhờ admin cấp lại quyền trong TaskMate trước khi yêu cầu /policy.'
         : 'Nhờ admin duyệt trong TaskMate, sau đó gõ /policy để nhận chính sách.';
       const rawMsg = [`⚠️ **Chưa thể phát chính sách**`, userLine, '', guidance].join('\n');

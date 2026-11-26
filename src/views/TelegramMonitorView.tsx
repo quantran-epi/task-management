@@ -1116,12 +1116,17 @@ export const TelegramMonitorView: React.FC = () => {
                             type="primary"
                             disabled={row.deviceStatus === 'approved'}
                             onClick={async () => {
+                              const models = modelDrafts[row.chatId] ?? row.allowedModels ?? [];
+                              if (!models.length) {
+                                message.error('Chọn ít nhất một model trước khi duyệt.');
+                                return;
+                              }
                               try {
                                 await upsertDeviceEnrollment({
                                   telegramUserId: row.telegramUserId ?? '',
                                   chatId: row.chatId,
                                   deviceStatus: 'approved',
-                                  allowedModels: modelDrafts[row.chatId] ?? row.allowedModels ?? [],
+                                  allowedModels: models,
                                 });
                                 message.success('Đã duyệt thiết bị và phát mã ghép cặp.');
                               } catch (err) {

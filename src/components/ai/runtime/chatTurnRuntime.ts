@@ -110,10 +110,22 @@ export interface ChatTurnOutcome {
   error?: ChatTurnErrorInfo;
 }
 
+export const POLICY_BLOCKED_TURN_ERROR: ChatTurnErrorInfo = {
+  code: 'policy_blocked',
+  message:
+    'Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.',
+};
+
 export interface ChatTurnRuntimeDeps {
   runLoop: typeof runAiOrchestratorLoop;
   saveMessage: typeof saveMessage;
   describeMutation: typeof describeToolMutationWithContext;
+  /**
+   * Single request choke point: applied inside start() to every turn, including retry and
+   * programmatic starts. Returns a possibly-rewritten request (policy model clamp), or null
+   * to refuse the turn before any provider call or persistence.
+   */
+  enforceRequest?: ((request: ChatTurnRequest) => ChatTurnRequest | null) | undefined;
   /** Prepares the artifact patch shown before approval; injectable for tests. */
   preparePatch?: typeof preparePatch;
   db: TaskPlannerDatabase;
@@ -261,8 +273,18 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
     publish('aborted');
   };
 
-  const start = async (request: ChatTurnRequest): Promise<ChatTurnOutcome> => {
+  const start = async (rawRequest: ChatTurnRequest): Promise<ChatTurnOutcome> => {
     if (running) throw new Error('TURN_IN_PROGRESS');
+
+    // Single choke point for send AND retry: no turn reaches the LLM with a model or
+    // authorization state that policy refused. Refusal happens before any persistence.
+    const request = deps.enforceRequest?.(rawRequest) ?? (deps.enforceRequest ? null : rawRequest);
+    if (!request) {
+      const requestId = crypto.randomUUID();
+      publish('error');
+      deps.onError?.(POLICY_BLOCKED_TURN_ERROR);
+      return { phase: 'error', requestId, userMessageId: null, error: POLICY_BLOCKED_TURN_ERROR };
+    }
 
     running = true;
     toolLimitRounds = null;

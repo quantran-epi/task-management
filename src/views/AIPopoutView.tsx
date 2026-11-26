@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useAntdToken } from '../components/ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { chatWindowDb } from '../db/chatWindowDb';
@@ -17,7 +18,9 @@ import {
 import type { ChatScopeType } from '../types/models';
 import { useAIChat } from '../context/AIChatContext';
 import {
-  loadDevicePolicy,
+  DEVICE_POLICY_SETTINGS_KEY,
+  devicePolicySchema,
+  resolveEffectiveChatConfig,
   type TelegramDevicePolicy,
 } from '../services/telegram/telegramDevicePolicy';
 
@@ -35,7 +38,13 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
   const [pinned, setPinned] = useState<boolean>(true);
   const [isTauri] = useState<boolean>(() => isTauriApp());
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [devicePolicy, setDevicePolicy] = useState<TelegramDevicePolicy | undefined>();
+  // Live query: policy applied/revoked in settings propagates to chat without close/reopen.
+  const policyRecord = useLiveQuery(
+    () => activeDb.settings.get(DEVICE_POLICY_SETTINGS_KEY),
+    [activeDb]
+  );
+  const parsed = devicePolicySchema.safeParse(policyRecord?.value);
+  const devicePolicy: TelegramDevicePolicy | undefined = parsed.success ? parsed.data : undefined;
   const [activeScope, setActiveScope] = useState<ActiveScope>(() => {
     if (standaloneChat || typeof window === 'undefined') return { type: 'global' };
     const hash = window.location.hash || '';
@@ -52,22 +61,9 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
     return { type: 'global' };
   });
 
-  useEffect(() => {
-    if (!standaloneChat) return undefined;
-    let mounted = true;
-    loadDevicePolicy(activeDb).then((stored) => {
-      if (mounted) setDevicePolicy(stored);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [activeDb, standaloneChat, settingsOpen]);
-
-  const policyState = !devicePolicy
-    ? 'unmanaged'
-    : devicePolicy.status === 'approved' && Date.parse(devicePolicy.expiresAt) > Date.now()
-      ? 'active'
-      : 'blocked';
+  const effectiveChat = resolveEffectiveChatConfig({ defaultModel: '' }, devicePolicy);
+  // UI has no separate 'expired' state: treat it as blocked (no sends until renewed).
+  const policyState = effectiveChat.policyState === 'expired' ? 'blocked' : effectiveChat.policyState;
 
   // Tauri window listeners and geometry persistence
   useEffect(() => {

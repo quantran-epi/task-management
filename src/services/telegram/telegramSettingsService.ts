@@ -150,6 +150,7 @@ export async function upsertDeviceEnrollment(input: {
     const current = await db.telegramWhitelist.get(targetChatId);
     const now = new Date().toISOString();
     const record: TelegramWhitelistUser = {
+      ...current,
       chatId: targetChatId,
       name: current?.name ?? `User_${targetChatId}`,
       status: approved ? 'active' : current?.status ?? 'active',
@@ -160,7 +161,6 @@ export async function upsertDeviceEnrollment(input: {
       maxHistoryTurns: current?.maxHistoryTurns ?? 5,
       overQuotaCommandsUsed: current?.overQuotaCommandsUsed ?? 0,
       overQuotaAttempts: current?.overQuotaAttempts ?? 0,
-      aiModel: current?.aiModel,
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
       ...(existing ? { telegramUserId: identity } : {}),
@@ -172,11 +172,13 @@ export async function upsertDeviceEnrollment(input: {
             pairingCode: createPairingCode(),
             pairingCodeExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           }
-        : {
-            pairingCode: current?.pairingCode,
-            pairingCodeExpiresAt: current?.pairingCodeExpiresAt,
-          }),
+        : {}),
     };
+    // Revoke/pending: stale pairing fields must be removed from the indexed row, not set undefined.
+    if (!approved) {
+      delete record.pairingCode;
+      delete record.pairingCodeExpiresAt;
+    }
     await db.telegramWhitelist.put(record);
     return record;
   });
@@ -265,13 +267,8 @@ export async function blockPendingUser(
   chatId: string,
   db: TaskPlannerDatabase = defaultDb
 ): Promise<TelegramWhitelistUser> {
-  const existing = await db.telegramWhitelist.get(chatId);
   return await upsertWhitelistUser(
-    {
-      chatId,
-      status: 'blocked',
-      ...(existing?.telegramUserId ? { deviceStatus: 'revoked' as const } : {}),
-    },
+    { chatId, status: 'blocked', deviceStatus: 'revoked' },
     db
   );
 }
