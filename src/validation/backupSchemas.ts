@@ -869,6 +869,7 @@ export const BackupTeamMessageRecordSchema = z.strictObject({
   to: z.array(z.string().min(1)).min(1),
   content: z.string(),
   kind: z.enum(['chat', 'instruction', 'report', 'synthesis']),
+  attachments: z.array(z.string()).optional(),
   assignmentId: uuidSchema.optional(),
   deliversMessageId: uuidSchema.optional(),
   replyToId: uuidSchema.optional(),

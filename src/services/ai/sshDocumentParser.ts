@@ -254,10 +254,27 @@ function textFromXml(xml: string): string {
     .join('');
 }
 
-async function loadPdfDocument(buffer: ArrayBuffer): Promise<pdfjsLib.PDFDocumentProxy> {
+interface LoadedPdfDocument {
+  pdf: pdfjsLib.PDFDocumentProxy;
+  destroy: () => Promise<void>;
+}
+
+async function loadPdfDocument(buffer: ArrayBuffer): Promise<LoadedPdfDocument> {
   const loadingTask = pdfjsLib.getDocument({ data: toBytes(buffer) });
   try {
-    return await loadingTask.promise;
+    const pdf = await loadingTask.promise;
+    const destroy = async (): Promise<void> => {
+      // PDFDocumentProxy.destroy exists in some pdfjs releases; loadingTask.destroy is the
+      // stable teardown path across releases. Prefer the proxy when present, but always
+      // fall through to the task so the worker is released even if the proxy has no destroy.
+      const proxyDestroy = (pdf as unknown as { destroy?: () => Promise<void> }).destroy;
+      if (typeof proxyDestroy === 'function') {
+        await proxyDestroy.call(pdf);
+        return;
+      }
+      await loadingTask.destroy();
+    };
+    return { pdf, destroy };
   } catch (err) {
     await loadingTask.destroy();
     throw err;
@@ -287,12 +304,11 @@ export async function getSshDocumentInfo(
   const base = { format, sizeBytes: buffer.byteLength };
 
   if (format === 'pdf') {
-    const pdf = await loadPdfDocument(buffer);
+    const { pdf, destroy } = await loadPdfDocument(buffer);
     try {
       return { ...base, pageCount: pdf.numPages, nextRange: { pageStart: 1, pageCount: Math.min(pdf.numPages, MAX_PDF_PAGES_PER_READ) } };
     } finally {
-      // pdfjs-dist 6 exposes destroy() on loadingTask (not on the proxy).
-      await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.();
+      await destroy();
     }
   }
 
@@ -341,7 +357,7 @@ export async function readSshDocumentRegion(
     if (range.pageCount === undefined || !Number.isFinite(requested) || requested < 1 || requested > MAX_PDF_PAGES_PER_READ) {
       throw new Error(`PDF mỗi lần chỉ đọc tối đa ${MAX_PDF_PAGES_PER_READ} trang; hãy cung cấp pageCount hợp lệ.`);
     }
-    const pdf = await loadPdfDocument(buffer);
+    const { pdf, destroy } = await loadPdfDocument(buffer);
     try {
       const pageStart = positive(range.pageStart, 1, pdf.numPages);
       const pageCount = Math.min(Math.floor(requested), pdf.numPages - pageStart + 1);
@@ -361,7 +377,7 @@ export async function readSshDocumentRegion(
         ...(hasText ? {} : { note: SCAN_NOTE }),
       };
     } finally {
-      await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.();
+      await destroy();
     }
   }
 

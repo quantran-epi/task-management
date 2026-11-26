@@ -146,17 +146,22 @@ describe('sshDocumentParser', () => {
   });
 
   describe('progressive document API', () => {
-    function mockPdf(pageTexts: string[]) {
-      const destroy = vi.fn().mockResolvedValue(undefined);
+    function mockPdf(pageTexts: string[], options?: { proxyDestroy?: boolean }) {
+      const proxyDestroy = vi.fn().mockResolvedValue(undefined);
+      const loadingTaskDestroy = vi.fn().mockResolvedValue(undefined);
       const getPage = vi.fn(async (pageNo: number) => ({
         getTextContent: vi.fn().mockResolvedValue({ items: [{ str: pageTexts[pageNo - 1] ?? '' }] }),
         cleanup: vi.fn(),
       }));
       getDocumentMock.mockImplementation(() => ({
-        promise: Promise.resolve({ numPages: pageTexts.length, getPage, destroy }),
-        destroy: vi.fn().mockResolvedValue(undefined),
+        promise: Promise.resolve({
+          numPages: pageTexts.length,
+          getPage,
+          ...(options?.proxyDestroy === false ? {} : { destroy: proxyDestroy }),
+        }),
+        destroy: loadingTaskDestroy,
       }));
-      return getPage;
+      return { getPage, proxyDestroy, loadingTaskDestroy };
     }
 
     function mockWorkbook(sheets: Record<string, string[][]>) {
@@ -194,7 +199,7 @@ describe('sshDocumentParser', () => {
     });
 
     it('reads only the requested PDF pages and rejects pageCount > 20', async () => {
-      const getPage = mockPdf(Array.from({ length: 25 }, (_, i) => `Trang ${i + 1}`));
+      const { getPage, proxyDestroy } = mockPdf(Array.from({ length: 25 }, (_, i) => `Trang ${i + 1}`));
       const region = await readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', {
         pageStart: 3,
         pageCount: 2,
@@ -206,6 +211,7 @@ describe('sshDocumentParser', () => {
       expect(region.text).toContain('Trang 4');
       expect(region.text).not.toContain('Trang 5');
       expect(region.format).toBe('pdf');
+      expect(proxyDestroy).toHaveBeenCalledTimes(1);
 
       const callsBefore = getDocumentMock.mock.calls.length;
       await expect(
@@ -213,6 +219,10 @@ describe('sshDocumentParser', () => {
       ).rejects.toThrow(/20/);
       expect(getPage).toHaveBeenCalledTimes(2);
       expect(getDocumentMock).toHaveBeenCalledTimes(callsBefore);
+
+      const noProxyDestroy = mockPdf([''], { proxyDestroy: false });
+      await getSshDocumentInfo(new ArrayBuffer(2), 'scan.pdf');
+      expect(noProxyDestroy.loadingTaskDestroy).toHaveBeenCalledTimes(1);
 
       mockPdf(['']);
       const scan = await readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', {

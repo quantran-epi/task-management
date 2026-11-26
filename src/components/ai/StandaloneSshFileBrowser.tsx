@@ -297,6 +297,7 @@ export const StandaloneSshFileBrowser: React.FC<
           }
           treeData={entriesToShow.map((entry) => ({
             key: entry.path,
+            checkable: !entry.isDir,
             title: (
               <span
                 role="button"

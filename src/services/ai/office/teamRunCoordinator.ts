@@ -727,6 +727,8 @@ export function createTeamRunCoordinator(
   interface PendingLeadReply {
     message: TeamMessage;
     epoch: number;
+    /** 261126-rfx: attachment identities belong to THIS queued turn, not the latest send(). */
+    attachments?: string[] | undefined;
   }
   const pendingLeadReplies: PendingLeadReply[] = [];
   /** id → claim epoch. Claims are permanent for the coordinator: a queued row is only ever
@@ -752,9 +754,13 @@ export function createTeamRunCoordinator(
     leadReplyStopEpoch += 1;
   };
   /** Claim immediately after the log append; the message is now owned by a lead turn. */
-  const claimLeadReply = (message: TeamMessage): void => {
+  const claimLeadReply = (message: TeamMessage, attachments?: string[]): void => {
     claimedLeadReplyIds.set(message.id, leadReplyStopEpoch);
-    pendingLeadReplies.push({ message, epoch: leadReplyStopEpoch });
+    pendingLeadReplies.push({
+      message,
+      epoch: leadReplyStopEpoch,
+      ...(attachments && attachments.length > 0 ? { attachments: [...attachments] } : {}),
+    });
   };
   /** A claimed row that starts its OWN turn directly (lead was idle after preps). */
   const takeLeadReply = (id: string): void => {
@@ -1083,7 +1089,9 @@ export function createTeamRunCoordinator(
     announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking',
     triggerMessageId?: string,
     /** Queued follow-up only: rechecked AFTER the chain wait, so a later Stop still cancels. */
-    requiredStopEpoch?: number
+    requiredStopEpoch?: number,
+    /** Attachment snapshot captured when the queued message was claimed. */
+    queuedAttachments?: readonly string[]
   ): Promise<void> {
     if (disposed) return;
     registerTeamTurn();
@@ -1093,7 +1101,7 @@ export function createTeamRunCoordinator(
       await withLeadRuntime(async () => {
         if (disposed) return;
         if (requiredStopEpoch !== undefined && requiredStopEpoch !== leadReplyStopEpoch) return;
-        await startLeadTurn(text, batchResults, announcedPhase, triggerMessageId);
+        await startLeadTurn(text, batchResults, announcedPhase, triggerMessageId, queuedAttachments);
       });
     } finally {
       // D-24: one team turn spans dispatch + batch + synthesis. An open batch owns the turn,
@@ -1118,7 +1126,7 @@ export function createTeamRunCoordinator(
     void (async () => {
       try {
         while (!disposed && pendingLeadReplies.length > 0) {
-          const { message, epoch } = pendingLeadReplies.shift()!;
+          const { message, epoch, attachments: queuedAttachments } = pendingLeadReplies.shift()!;
           // A Stop between shift() and this check must reject this task without touching a
           // legitimately newer turn's markers. Drop the claim when rejected so the row can be
           // answered by a later message/retry, not silently marked "seen" forever.
@@ -1129,7 +1137,7 @@ export function createTeamRunCoordinator(
           // The claim is now owned by this turn: release it synchronously so `drainInbox`
           // accepts the row as consumed. No await between the epoch check and the release.
           takeLeadReply(message.id);
-          await runLeadTurn(message.content, undefined, 'lead-thinking', message.id, epoch);
+          await runLeadTurn(message.content, undefined, 'lead-thinking', message.id, epoch, queuedAttachments);
         }
       } finally {
         leadReplyDrainScheduled = false;
@@ -2705,7 +2713,9 @@ export function createTeamRunCoordinator(
      */
     announcedPhase: 'lead-thinking' | 'lead-synthesizing' = 'lead-thinking',
     /** CR-01: the row already rendered as this turn's prompt; its drain must skip it. */
-    triggerMessageId?: string
+    triggerMessageId?: string,
+    /** 261126-rfx: queued turn's attachment snapshot; never read from mutable latest-send state. */
+    turnAttachments?: readonly string[]
   ): Promise<void> {
     // D-05: an empty group has no lead — a silent no-op, not a throw.
     const lead = roster.lead;
@@ -2779,8 +2789,8 @@ export function createTeamRunCoordinator(
         messageKind: 'synthesis',
         agentId: lead.id,
         agentName: lead.name,
-        ...(attachmentsByAgent.get(lead.id)?.length
-          ? { attachedPaths: attachmentsByAgent.get(lead.id)! }
+        ...((turnAttachments?.length ? turnAttachments : attachmentsByAgent.get(lead.id))?.length
+          ? { attachedPaths: [...(turnAttachments?.length ? turnAttachments : attachmentsByAgent.get(lead.id)!)] }
           : {}),
         beforeToolRound: beforeToolRoundFor(lead.id, triggerMessageId),
       };
@@ -3292,7 +3302,7 @@ export function createTeamRunCoordinator(
     // Claim synchronously: any await here would let the busy turn's `drainInbox` inject the
     // row into its own prompt and double-answer it.
     const plainToLead = targets.length === 0 && recipients.includes(roster.lead!.id);
-    if (plainToLead) claimLeadReply(logRow);
+    if (plainToLead) claimLeadReply(logRow, attachments);
     notify();
     if (disposed) return 'steered';
 

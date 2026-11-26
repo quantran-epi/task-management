@@ -28,6 +28,7 @@ vi.mock("../../src/services/sshService", async (importOriginal) => {
     })),
     listRemoteDir: vi.fn(async () => [
       { name: ".", isDir: true, size: 0 },
+      { name: "folder", isDir: true, size: 0 },
       { name: "a.pdf", isDir: false, size: 10 },
     ]),
     execRemoteCommand: vi.fn(async () => ({
@@ -157,6 +158,7 @@ describe("261126-rfx persistent attachment chips", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /Tìm/ }));
     await waitFor(() => expect(screen.getByText("b.pdf")).toBeInTheDocument());
+    // Search rows are files only. Directory rows in browse mode must not be checkable.
     const checkboxes = document.body.querySelectorAll(".ant-tree-checkbox");
     expect(checkboxes.length).toBe(2);
     fireEvent.click(checkboxes[0]!);
@@ -166,6 +168,15 @@ describe("261126-rfx persistent attachment chips", () => {
     expect(onAttach).toHaveBeenCalledWith(["/repo/a.pdf", "/repo/b.pdf"]);
     expect(ssh.readRemoteFileBytes).not.toHaveBeenCalled();
     expect(ssh.readRemoteFileSlice).not.toHaveBeenCalled();
+  });
+
+  it("browser không cho Check thư mục", async () => {
+    render(
+      <StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
+    const folderRow = screen.getByText("folder/").closest(".ant-tree-treenode");
+    expect(folderRow?.querySelector(".ant-tree-checkbox")).toBeNull();
   });
 
   it("saveMessage ghi attachments trước khi lưu; team gửi kèm attachments", () => {

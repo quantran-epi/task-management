@@ -7,6 +7,7 @@ import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
 import {
   BackupChatMessageRecordSchema,
   BackupChatTabRecordSchema,
+  BackupTeamMessageRecordSchema,
 } from '../../src/validation/backupSchemas';
 import { createOrGetThread, saveMessage, getMessagesByThreadId } from '../../src/db/repositories/chatRepo';
 import type { ChatMessageGrounding, PersistedCitation } from '../../src/services/ai/groundedAnswerSchemas';
@@ -358,6 +359,23 @@ describe('Backup Chat Grounding (Plan 19-10 Task 2, D-46, D-48)', () => {
       updatedAt: '2026-11-26T12:00:00.000Z',
     };
     expect(BackupChatTabRecordSchema.safeParse(tab).success).toBe(false);
+  });
+
+  it('10. Team message attachments survive strict backup validation', () => {
+    const teamRecord = {
+      id: generateId(),
+      teamId: generateId(),
+      seq: 1,
+      from: 'user',
+      to: ['lead'],
+      content: 'Tin nhan team co chip dinh kem',
+      kind: 'chat',
+      attachments: ['/repo/team.pdf'],
+      createdAt: '2026-11-26T12:00:00.000Z',
+    };
+    const parsed = BackupTeamMessageRecordSchema.safeParse(teamRecord);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.attachments).toEqual(['/repo/team.pdf']);
   });
 
   it('8. Backup payload with server-authority grounding missing publishedContentHash on any citation fails', () => {
