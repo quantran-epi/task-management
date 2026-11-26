@@ -71,14 +71,19 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
 
   return (
     <div
+      data-testid="task-filter-bar"
       style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
         display: 'flex',
         flexDirection: 'column',
         gap: 'var(--gap-12)',
         padding: '12px 16px',
-        backgroundColor: token.colorFillAlter,
+        backgroundColor: token.colorBgElevated,
         borderRadius: 'var(--radius-control)',
         border: `1px solid ${token.colorBorderSecondary}`,
+        boxShadow: token.boxShadowTertiary,
       }}
     >
       {/* Top row: Search, Scope, CR, Subsystem, Advanced Toggle, Reset */}

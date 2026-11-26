@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Button, Dropdown, Popconfirm, Modal, Select, Space, useAntdToken, useMessage } from '../ui';
+import { Button, Dropdown, Popconfirm, Modal, Select, useAntdToken, useMessage } from '../ui';
 import type { MenuProps } from 'antd';
 import { DeleteOutlined, CheckCircleOutlined, FolderOutlined, CloseOutlined } from '../ui/icon';
 import type { TaskStatus, ChangeRequest, System } from '../../types/models';
@@ -143,35 +143,42 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
         data-testid="batch-action-bar"
         style={{
           position: 'fixed',
-          bottom: 24,
+          bottom: 16,
           left: '50%',
           transform: 'translateX(-50%)',
+          maxWidth: 'calc(100vw - 32px)',
           backgroundColor: token.colorBgElevated,
           boxShadow: token.boxShadowSecondary,
           borderRadius: 'var(--radius-control)',
-          padding: '8px 20px',
+          padding: '6px 12px',
           display: 'flex',
           alignItems: 'center',
-          gap: 'var(--gap-16)',
+          flexWrap: 'wrap',
+          gap: 'var(--gap-8)',
           zIndex: 1000,
           border: `1px solid ${token.colorBorderSecondary}`,
         }}
       >
-        <span style={{ fontWeight: 600, fontSize: 14, color: token.colorText }}>
+        <span style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', color: token.colorText, whiteSpace: 'nowrap' }}>
           Đã chọn {selectedCount} tác vụ
         </span>
 
-        <Space orientation="horizontal" size="small">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--gap-8)' }}>
           <Dropdown
             menu={{ items: statusMenuItems, onClick: handleStatusMenuClick }}
             trigger={['click']}
             disabled={loading}
           >
-            <Button icon={<CheckCircleOutlined />}>Trạng thái ▾</Button>
+            <Button type="text" size="small" icon={<CheckCircleOutlined />} style={{ color: token.colorText }}>
+              Trạng thái ▾
+            </Button>
           </Dropdown>
 
           <Button
+            type="text"
+            size="small"
             icon={<FolderOutlined />}
+            style={{ color: token.colorText }}
             onClick={() => setMoveModalOpen(true)}
             disabled={loading}
           >
@@ -186,21 +193,23 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
             cancelText="Hủy"
             okButtonProps={{ danger: true, loading }}
           >
-            <Button danger icon={<DeleteOutlined />} loading={loading}>
+            <Button danger size="small" icon={<DeleteOutlined />} loading={loading}>
               Xóa
             </Button>
           </Popconfirm>
 
           <Button
             type="text"
+            size="small"
             icon={<CloseOutlined />}
+            style={{ color: token.colorText }}
             onClick={onClearSelection}
             disabled={loading}
             aria-label="Bỏ chọn"
           >
             Bỏ chọn
           </Button>
-        </Space>
+        </div>
       </div>
 
       <Modal

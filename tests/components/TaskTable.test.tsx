@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { Modal } from 'antd';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
@@ -140,6 +139,46 @@ describe('TaskTable Component', () => {
     expect(await screen.findByText('Payment Service')).toBeInTheDocument();
   }, 15000);
 
+  it('TaskFilterBar anchors itself at the top with an opaque token background', () => {
+    render(
+      <TaskFilterBar
+        filters={DEFAULT_TASK_FILTER_STATE}
+        onFilterChange={vi.fn()}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+      />
+    );
+
+    const bar = screen.getByTestId('task-filter-bar');
+    expect(bar).toHaveStyle({ position: 'sticky', top: '0px' });
+    expect(bar.getAttribute('style') ?? '').toContain('background');
+  });
+
+  it('BatchActionBar renders only when rows are selected and keeps its labels', () => {
+    const { rerender } = render(
+      <BatchActionBar
+        selectedCount={0}
+        selectedRowKeys={[]}
+        onClearSelection={vi.fn()}
+      />
+    );
+    expect(screen.queryByTestId('batch-action-bar')).not.toBeInTheDocument();
+
+    rerender(
+      <BatchActionBar
+        selectedCount={2}
+        selectedRowKeys={['task-1', 'task-2']}
+        onClearSelection={vi.fn()}
+      />
+    );
+    const bar = screen.getByTestId('batch-action-bar');
+    expect(bar.textContent).toContain('Đã chọn 2 tác vụ');
+    expect(screen.getByRole('button', { name: /Trạng thái/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Di chuyển/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Xóa/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bỏ chọn/ })).toBeInTheDocument();
+  });
+
   it('TaskTable renders the leading columns in the order Task, CR, Subsystem, Status, Ước lượng, Hạn', () => {
     render(
       <TaskTable
@@ -199,7 +238,7 @@ describe('TaskTable Component', () => {
 
     const crTags = screen.getAllByText('CR-2026-001');
     expect(crTags.length).toBeGreaterThan(0);
-    expect(crTags[0]).toHaveStyle({ color: '#1677ff' });
+    expect(crTags[0]).toHaveStyle({ color: 'var(--accent)' });
     expect(crTags[0]!.closest('[title]')).toHaveAttribute('title', 'Thanh toán QR');
   }, 15000);
 
@@ -293,7 +332,6 @@ describe('TaskTable Component', () => {
   });
 
   it('clicking delete option in task dropdown triggers confirmation modal', async () => {
-    const confirmSpy = vi.spyOn(Modal, 'confirm');
     render(
       <TaskTable
         tasks={sampleTasks}
@@ -312,13 +350,10 @@ describe('TaskTable Component', () => {
     const deleteOption = await screen.findByText('Xóa');
     fireEvent.click(deleteOption);
 
-    expect(confirmSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Xóa tác vụ',
-        content: expect.stringContaining('Alpha Task One'),
-      })
-    );
-    confirmSpy.mockRestore();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText('Xóa tác vụ').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText(/Bạn có chắc muốn xóa "Alpha Task One"/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Hủy' })).toBeInTheDocument();
   });
 
   it('renders Jira Key tag and clicking it opens Jira issue with stopPropagation without opening drawer (JIRA-04, D-12)', async () => {
@@ -401,7 +436,10 @@ describe('TaskTable Component', () => {
     expect(docLinkAnchor).toHaveAttribute('title', 'Mở trong File Explorer');
 
     fireEvent.click(docLinkAnchor);
-    expect(openDocSpy).toHaveBeenCalledWith('/Users/test/workspace/project');
+    expect(openDocSpy).toHaveBeenCalledWith('/Users/test/workspace/project', {
+      notify: expect.any(Function),
+      confirm: expect.any(Function),
+    });
 
     openDocSpy.mockRestore();
   });

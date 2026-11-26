@@ -141,6 +141,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const [ghostDevTask, setGhostDevTask] = useState<Task | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // The filter bar pins at top:0; pin the table header just below it instead of behind it.
+  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(0);
+  useEffect(() => {
+    const bar = document.querySelector<HTMLElement>('[data-testid="task-filter-bar"]');
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setStickyHeaderOffset(Math.ceil(bar.getBoundingClientRect().height)));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   // Synchronous localStorage initialization to prevent FOUC per D-16, T-12.2-07
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -919,7 +928,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       onKeyDown={handleKeyDown}
       style={{ outline: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}
     >
-      {/* Table Toolbar Header */}
+      {/* Table Toolbar Header — stays in flow: the filter bar above owns the sticky layer. */}
       <div
         style={{
           display: 'flex',
@@ -974,7 +983,9 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         </Space>
       </div>
 
+      {/* AntD owns header stickiness; offset clears the pinned filter bar above. */}
       <Table
+        sticky={{ offsetHeader: stickyHeaderOffset }}
         rowKey="id"
         columns={activeColumns}
         dataSource={tasks}
@@ -1080,6 +1091,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           value={standupFallbackText}
           readOnly
           rows={10}
+          autoSize={false}
           style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)' }}
           onFocus={(e) => e.target.select()}
         />
