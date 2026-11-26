@@ -298,6 +298,7 @@ export interface ChatMessage {
   durationMs?: number | undefined; // Total execution time in milliseconds
   tokenUsage?: ChatTokenUsage | undefined; // Model token usage metrics
   generatedFiles?: ChatGeneratedFile[] | undefined; // AI-generated downloadable files
+  attachments?: string[] | undefined; // 261126-rfx: SSH file paths attached to the message
   grounding?: ChatMessageGrounding | undefined; // Structured grounding (Plan 19-10 D-46)
   // Phase 34 D-31: AI Office attribution. All optional so existing rows stay valid.
   agentId?: string | undefined;

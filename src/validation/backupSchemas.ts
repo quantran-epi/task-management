@@ -320,6 +320,7 @@ export const BackupChatMessageRecordSchema = z
         })
       )
       .optional(),
+    attachments: z.array(z.string()).optional(),
     grounding: z.unknown().optional() as z.ZodType<ChatMessageGrounding | undefined>,
     // Phase 34 D-31: AI Office attribution. Declared explicitly — this is a plain z.object,
     // so an undeclared key is silently stripped and restored messages render unattributed.

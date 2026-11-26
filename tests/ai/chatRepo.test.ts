@@ -9,6 +9,7 @@ import {
   clearThreadContext,
   deleteThreadByScope,
 } from '../../src/db/repositories/chatRepo';
+import { saveTeamMessage } from '../../src/db/repositories/teamTranscriptRepo';
 
 describe('chatRepo scope keys (CR/System axis)', () => {
   let db: TaskPlannerDatabase;
@@ -103,6 +104,42 @@ describe('chatRepo scope keys (CR/System axis)', () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]?.content).toBe('Xin chào AI');
     expect(messages[1]?.content).toBe('Tôi có thể giúp gì cho bạn?');
+  });
+
+  it('saveMessage persists attachments and omits the key when absent', async () => {
+    const thread = await createOrGetThread({ scopeType: 'global' }, db);
+    const saved = await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'user',
+        content: 'Doc dinh kem',
+        attachments: ['/repo/a.pdf'],
+      },
+      db
+    );
+    await saveMessage({ threadId: thread.id, role: 'user', content: 'Khong dinh kem' }, db);
+
+    const rows = await getMessagesByThreadId(thread.id, db);
+    const withAttachment = rows.find((row) => row.id === saved.id)!;
+    const plain = rows.find((row) => row.content === 'Khong dinh kem')!;
+    expect(withAttachment.attachments).toEqual(['/repo/a.pdf']);
+    expect(Object.hasOwn(plain, 'attachments')).toBe(false);
+  });
+
+  it('saveTeamMessage persists attachments on the team thread message', async () => {
+    const thread = await createOrGetThread({ scopeType: 'team', entityId: 'team-attach' }, db);
+    const saved = await saveTeamMessage(
+      {
+        threadId: thread.id,
+        role: 'user',
+        content: 'Team doc dinh kem',
+        attachments: ['/repo/b.docx'],
+      },
+      db
+    );
+
+    const rows = await getMessagesByThreadId(thread.id, db);
+    expect(rows.find((row) => row.id === saved.id)?.attachments).toEqual(['/repo/b.docx']);
   });
 
   it('clearThreadContext appends context boundary marker and respects it', async () => {

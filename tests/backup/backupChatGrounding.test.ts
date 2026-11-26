@@ -4,7 +4,10 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import { exportBackupPayload } from '../../src/services/backup/exportBackup';
 import { validateBackupPayload } from '../../src/services/backup/validateBackup';
 import { restoreBackupPayload } from '../../src/services/backup/restoreBackup';
-import { BackupChatMessageRecordSchema } from '../../src/validation/backupSchemas';
+import {
+  BackupChatMessageRecordSchema,
+  BackupChatTabRecordSchema,
+} from '../../src/validation/backupSchemas';
 import { createOrGetThread, saveMessage, getMessagesByThreadId } from '../../src/db/repositories/chatRepo';
 import type { ChatMessageGrounding, PersistedCitation } from '../../src/services/ai/groundedAnswerSchemas';
 import { generateId } from '../../src/utils/uuid';
@@ -313,6 +316,48 @@ describe('Backup Chat Grounding (Plan 19-10 Task 2, D-46, D-48)', () => {
 
     const result = BackupChatMessageRecordSchema.safeParse(msg);
     expect(result.success).toBe(true);
+  });
+
+  it('9. Attachments survive export -> schema -> restore, while tab config still rejects them', async () => {
+    const thread = await createOrGetThread({ scopeType: 'global' }, db);
+    const saved = await saveMessage(
+      {
+        threadId: thread.id,
+        role: 'user',
+        content: 'Tin nhan co chip dinh kem',
+        attachments: ['/repo/a.pdf', '/repo/report.xlsx'],
+      },
+      db
+    );
+
+    const backupPayload = await exportBackupPayload(db);
+    const exported = backupPayload.tables.chatMessages?.find((m) => m.id === saved.id);
+    expect(exported?.attachments).toEqual(['/repo/a.pdf', '/repo/report.xlsx']);
+    expect(BackupChatMessageRecordSchema.safeParse(exported).success).toBe(true);
+    expect(validateBackupPayload(backupPayload).valid).toBe(true);
+
+    const restoreDb = new TaskPlannerDatabase('TestRestoreAttachmentsDB_' + Math.random().toString(36).slice(2));
+    await restoreDb.open();
+    try {
+      await restoreBackupPayload(backupPayload, restoreDb);
+      const restored = await getMessagesByThreadId(thread.id, restoreDb);
+      expect(restored[0]?.attachments).toEqual(['/repo/a.pdf', '/repo/report.xlsx']);
+    } finally {
+      await restoreDb.delete();
+    }
+
+    const tab = {
+      id: generateId(),
+      threadId: thread.id,
+      scopeKey: thread.scopeKey,
+      type: 'chat' as const,
+      title: 'Tab',
+      order: 0,
+      config: { attachments: ['/repo/a.pdf'] },
+      createdAt: '2026-11-26T12:00:00.000Z',
+      updatedAt: '2026-11-26T12:00:00.000Z',
+    };
+    expect(BackupChatTabRecordSchema.safeParse(tab).success).toBe(false);
   });
 
   it('8. Backup payload with server-authority grounding missing publishedContentHash on any citation fails', () => {

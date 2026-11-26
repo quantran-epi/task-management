@@ -37,6 +37,7 @@ export interface SaveTeamMessageInput {
   /** CR-06: the employee an instruction row is assigned to (display attribution stays the lead). */
   targetAgentId?: string | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
+  attachments?: string[] | undefined;
   // Phase 37 D-22 links; each is spread only when defined so existing rows stay byte-identical.
   batchId?: string | undefined;
   assignmentId?: string | undefined;
@@ -121,6 +122,9 @@ export async function saveTeamMessage(
     ...(input.targetAgentId ? { targetAgentId: input.targetAgentId } : {}),
     ...(input.replyToId ? { replyToId: input.replyToId } : {}),
     ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
+    ...(input.attachments && input.attachments.length > 0
+      ? { attachments: [...input.attachments] }
+      : {}),
     ...linkFields(input),
   };
 

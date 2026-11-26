@@ -28,6 +28,7 @@ export interface SaveMessageInput {
   durationMs?: number | undefined;
   tokenUsage?: ChatTokenUsage | undefined;
   generatedFiles?: ChatGeneratedFile[] | undefined;
+  attachments?: string[] | undefined;
   grounding?: ChatMessageGrounding | undefined;
   /** Phase 34 D-31: AI Office attribution, forwarded into the stored row. */
   agentId?: string | undefined;
@@ -109,6 +110,9 @@ export async function saveMessage(
     ...(input.tokenUsage ? { tokenUsage: input.tokenUsage } : {}),
     ...(input.generatedFiles && input.generatedFiles.length > 0
       ? { generatedFiles: input.generatedFiles }
+      : {}),
+    ...(input.attachments && input.attachments.length > 0
+      ? { attachments: [...input.attachments] }
       : {}),
     ...(input.grounding ? { grounding: input.grounding } : {}),
     ...(input.agentId ? { agentId: input.agentId } : {}),
