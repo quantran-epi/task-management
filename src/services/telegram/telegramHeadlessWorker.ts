@@ -1472,10 +1472,8 @@ export async function processTelegramInboundMessage(
     const turnResult = await runTelegramChatTurn(
       {
         chatId: chat_id,
-        userName: from_name,
         text: trimmedText,
         dataScope,
-        routedIntent,
         history: chatHistory,
         contextText: scoped.contextText,
         endpoint: aiConfig.endpoint,

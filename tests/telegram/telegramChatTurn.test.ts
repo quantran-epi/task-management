@@ -22,10 +22,8 @@ describe('Telegram chat turn adapter', () => {
   function params(overrides: Partial<Parameters<typeof runTelegramChatTurn>[0]> = {}) {
     return {
       chatId: 'telegram-parity-1',
-      userName: 'Parity User',
       text: 'Tóm tắt task đang mở',
       dataScope: 'full' as const,
-      routedIntent: null,
       history: [
         { role: 'user' as const, content: 'câu cũ' },
         { role: 'assistant' as const, content: 'trả lời cũ' },
@@ -75,6 +73,7 @@ describe('Telegram chat turn adapter', () => {
     expect(options.keepRecentToolOutputs).toBe(20);
     expect(options.maxOldToolChars).toBe(100_000);
     expect(options.compactAtRatio).toBe(0.9);
+    expect(options.maxLoops).toBe(30);
     expect(options.tools.some((t: any) => t.function.name === 'generate_pptx')).toBe(true);
     expect(options.tools.some((t: any) => t.function.name === 'generate_file')).toBe(false);
     expect(options.tools.some((t: any) => t.function.name === 'create_task')).toBe(false);
@@ -85,7 +84,7 @@ describe('Telegram chat turn adapter', () => {
   it('applies scope hint and refuses mutations in the shared loop', async () => {
     mockLoopResult();
     await runTelegramChatTurn(
-      params({ dataScope: 'tasks_only', routedIntent: { intent: 'query_taskmate' } as any }),
+      params({ dataScope: 'tasks_only' }),
       runLoop as any
     );
     const options = loopOptions();
@@ -117,5 +116,30 @@ describe('Telegram chat turn adapter', () => {
     expect(threadId).toBeTruthy();
     const search = await options.executeToolFn('search_chat_history', { query: 'Tóm tắt task đang mở' }, db, undefined, undefined, 'call-2');
     expect(search).toContain('Tóm tắt task đang mở');
+  });
+
+  it('isolates transcripts between Telegram chats and the desktop global thread', async () => {
+    mockLoopResult();
+    await runTelegramChatTurn(params({ chatId: 'chat-A', text: 'bí mật A' }), runLoop as any);
+    mockLoopResult();
+    await runTelegramChatTurn(params({ chatId: 'chat-B', text: 'bí mật B' }), runLoop as any);
+
+    const threads = await db.chatThreads.toArray();
+    expect(threads).toHaveLength(2);
+    expect(new Set(threads.map((t) => t.id)).size).toBe(2);
+    expect(threads.every((t) => t.scopeKey !== 'global')).toBe(true);
+
+    const optionsA = runLoop.mock.calls[0]?.[0] as any;
+    const searchA = await optionsA.executeToolFn('search_chat_history', { query: 'bí mật B' }, db, undefined, undefined, 'c1');
+    expect(searchA).not.toContain('bí mật B');
+    expect(searchA).toContain('bí mật A');
+  });
+
+  it('strips saveToDocId from generate_image to keep the turn read-only', async () => {
+    mockLoopResult();
+    await runTelegramChatTurn(params(), runLoop as any);
+    const options = loopOptions();
+    const result = await options.executeToolFn('generate_image', { prompt: 'cat', saveToDocId: 'note-1' }, db, undefined, undefined, 'c2');
+    expect(result).toBeDefined();
   });
 });

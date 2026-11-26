@@ -13,7 +13,6 @@ import {
   discoverAllMcpTools,
   discoverGatedMcpTools,
   discoverGraphitiSqlMcpTools,
-  getMcpServers,
   invalidateMcpDiscovery,
 } from '../ai/mcpClient';
 import { getOracleToolConfig } from '../ai/oracleSqlclService';
@@ -125,9 +124,8 @@ export async function readTelegramToolConfig(
     getOracleToolConfig(db).catch(() => null),
     getSshFsToolConfig(db).catch(() => null),
   ]);
-  const servers = await getMcpServers(db).catch(() => []);
   return {
-    sshConfigReady: Boolean(sshCfg?.sshConfigId) || servers.some((s) => s.enabled),
+    sshConfigReady: Boolean(sshCfg?.sshConfigId),
     oracleConfigReady: Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString),
   };
 }
