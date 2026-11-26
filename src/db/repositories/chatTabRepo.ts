@@ -135,6 +135,7 @@ export async function getOrCreateActiveChatTab(
       title: thread.title || `${DEFAULT_CHAT_TITLE} #1`,
       order: 0,
       active: true,
+      ...(input.config ? { config: input.config } : {}),
       createdAt: thread.createdAt,
       updatedAt: now,
     };

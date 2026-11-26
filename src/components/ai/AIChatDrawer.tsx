@@ -987,12 +987,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleAddTab = useCallback(async () => {    try {
       const ordinaryCount = durableTabs.filter((t) => t.type === 'chat').length;
       const title = `💬 Cuộc trò chuyện #${ordinaryCount + 1}`;
+      const defaultModel = persistedDefaultModelRef.current;
       const newTab = await createChatTab(
         {
           scopeType: currentScope.type,
           scopeKey,
           entityId: currentScope.id,
           title,
+          ...(defaultModel ? { config: { model: defaultModel } } : {}),
         },
         db
       );
@@ -1219,12 +1221,14 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const ensureTurnTab = () => {
     const inFlight = ensureTabPromiseRef.current;
     if (inFlight && inFlight.scopeKey === scopeKey) return inFlight.promise;
+    const defaultModel = persistedDefaultModelRef.current;
     const promise = getOrCreateActiveChatTab(
       {
         scopeType: currentScope.type,
         scopeKey,
         entityId: currentScope.id,
         title: currentScope.title,
+        ...(defaultModel ? { config: { model: defaultModel } } : {}),
       },
       db
     ).finally(() => {
