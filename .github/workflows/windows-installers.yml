@@ -6,6 +6,8 @@ on:
     branches:
       - master
       - staging
+      - ui-task-insight-toolbar
+      - pre-v1.6-baseline
     tags:
       - 'v*'
 
