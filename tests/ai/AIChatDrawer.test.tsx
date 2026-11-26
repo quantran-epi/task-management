@@ -268,6 +268,9 @@ describe('AIChatDrawer', () => {
 
   it('clearing context confirms, then removes only the active thread messages (D-05)', async () => {
     const clearSpy = vi.spyOn(chatRepo, 'clearThreadMessages');
+    // The hook has no AntD App holder in this test; stub the imperative message API.
+    const ui = await import('../../src/components/ui');
+    vi.spyOn(ui, 'useMessage').mockReturnValue({ success: vi.fn() } as never);
 
     render(
       <AIChatDrawer
@@ -1421,7 +1424,7 @@ describe('AIChatDrawer', () => {
       expect(tabs.every((tab) => tab.config?.model === 'ky8-default-model')).toBe(true);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mở tab chat AI mới' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở tab chat AI mới' }));
     await waitFor(async () => {
       const tabs = await db.chatTabs.where('scopeKey').equals('global').toArray();
       expect(tabs).toHaveLength(2);
@@ -1430,7 +1433,7 @@ describe('AIChatDrawer', () => {
 
     const first = (await db.chatTabs.where('scopeKey').equals('global').sortBy('order'))[0]!;
     await updateChatTab(first.id, { config: { model: 'user-picked-model' } }, db);
-    fireEvent.click(screen.getByRole('button', { name: 'Mở tab chat AI mới' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở tab chat AI mới' }));
     await waitFor(async () => {
       expect(await db.chatTabs.count()).toBe(3);
     });
