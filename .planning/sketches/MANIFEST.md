@@ -19,3 +19,4 @@ Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench g�
 | 006 | profile-review-controls | Làm rõ secret/path máy khi sửa profile cho người khác thế nào? | B — Review panel dính | states, review, checklist, secrets, profiles |
 | 007 | chat-only-shell | Shell app chat-only nên gọn thế nào mà vẫn để đủ AI settings? | A — Chat full-bleed + gear | chat-only, shell, layout, ant-design |
 | 008 | chat-ai-settings | Gom toàn bộ AI settings (provider, knowledge, MCP, Graphiti, Oracle, SSH, tool catalog) thế nào? | C — Side nav + accordion | settings, chat-only, tabs, ant-design |
+| 009 | cr-detail-fast-scan | Màn hình chi tiết CR nên gom thông tin thế nào để quét nhanh mà không cuộn nhiều? | pending | cr-detail, layout, workbench, density |

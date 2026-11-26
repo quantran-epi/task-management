@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 009 · CR Detail Fast Scan</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:52px 16px 64px; background:var(--color-bg); color:var(--color-text); font-family:var(--font-sans); font-size:var(--text-base); }
+  #variant-nav { position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:8px 14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family:system-ui; }
+  .variant-tab { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-muted); border-radius:var(--radius-md); padding:5px 10px; font-size:var(--text-sm); cursor:pointer; }
+  .variant-tab:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .variant-tab.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
+  .hint { margin-left:auto; color:var(--color-text-tertiary); font-size:var(--text-xs); }
+  .frame { max-width:1280px; margin:0 auto; }
+  .pane { background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .variant { display:none; }
+  .variant.active { display:block; }
+
+  .tabbar { display:flex; align-items:center; gap:var(--space-2); padding:6px var(--space-3); background:var(--color-surface-soft); border-bottom:1px solid var(--color-border); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .tabbar .active-tab { background:var(--color-surface); border:1px solid var(--color-border); border-bottom-color:var(--color-surface); border-radius:var(--radius-sm) var(--radius-sm) 0 0; padding:5px 10px; color:var(--color-text); font-size:var(--text-sm); }
+  .tabbar .badge { color:var(--color-danger); font-family:var(--font-mono); }
+
+  .content { padding:var(--space-3) var(--space-4) var(--space-5); }
+  .breadcrumb { font-size:var(--text-sm); color:var(--color-text-muted); margin-bottom:var(--space-3); display:flex; align-items:center; gap:6px; }
+  .breadcrumb a { color:var(--color-primary); cursor:pointer; }
+  .breadcrumb .sep { color:var(--color-text-tertiary); }
+  .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); margin-bottom:var(--space-3); }
+  .row { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap; }
+  h2.title { margin:0; font-size:var(--text-xl); line-height:1.3; }
+  .subtitle { color:var(--color-text-muted); font-size:var(--text-sm); margin-top:var(--space-1); }
+  .tag { display:inline-flex; align-items:center; gap:4px; font-size:var(--text-xs); border-radius:var(--radius-sm); padding:2px 6px; border:1px solid var(--color-border); white-space:nowrap; color:var(--color-text-muted); }
+  .tag.blue { color:var(--color-primary); border-color:color-mix(in srgb,var(--color-primary) 35%,transparent); background:var(--color-primary-soft); }
+  .tag.green { color:var(--color-success); border-color:color-mix(in srgb,var(--color-success) 35%,transparent); background:color-mix(in srgb,var(--color-success) 6%,var(--color-surface)); }
+  .tag.amber { color:var(--color-warning); border-color:color-mix(in srgb,var(--color-warning) 35%,transparent); background:var(--color-warning-bg); }
+  .tag.mono { font-family:var(--font-mono); }
+  .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+  .btn { height:var(--control-h); padding:0 9px; border-radius:var(--radius-sm); border:1px solid var(--color-border-strong); background:var(--color-surface); color:var(--color-text); font-size:var(--text-sm); font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; transition:all .15s ease; }
+  .btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .btn.primary { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .btn.primary:hover { background:var(--color-primary-hover); color:#fff; }
+  .btn.text { border-color:transparent; background:transparent; color:var(--color-primary); }
+  .btn.small { height:24px; font-size:var(--text-xs); }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+
+  .stats { display:flex; align-items:center; gap:var(--space-4); padding:var(--space-2) var(--space-3); margin-top:var(--space-3); border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-surface-soft); flex-wrap:wrap; }
+  .stats .stat { display:flex; flex-direction:column; gap:2px; }
+  .stats .stat .k { font-size:var(--text-xs); color:var(--color-text-muted); }
+  .stats .stat .v { font-family:var(--font-mono); font-size:var(--text-base); }
+  .stats .stat .v.warn { color:var(--color-warning); }
+  .stats .stat .v.good { color:var(--color-success); }
+  .stats .sep { width:1px; height:24px; background:var(--color-border); }
+  .meta-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-2) var(--space-4); font-size:var(--text-sm); margin-top:var(--space-3); }
+  .meta-grid .k { color:var(--color-text-muted); font-size:var(--text-xs); }
+  .meta-grid .v { font-family:var(--font-mono); }
+
+  .sec-title { font-size:var(--text-sm); font-weight:600; margin:0 0 var(--space-2); display:flex; align-items:center; gap:6px; }
+  .sec-title .count { font-size:var(--text-xs); color:var(--color-text-tertiary); font-family:var(--font-mono); font-weight:400; }
+  .sec-title .btn { margin-left:auto; }
+  .cols { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr); gap:var(--space-3); }
+
+  table.grid { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+  table.grid th { text-align:left; font-size:var(--text-xs); color:var(--color-text-muted); font-weight:500; padding:6px 8px; border-bottom:1px solid var(--color-border); white-space:nowrap; }
+  table.grid td { padding:7px 8px; border-bottom:1px solid var(--color-border); vertical-align:middle; }
+  table.grid tr:last-child td { border-bottom:0; }
+  table.grid tbody tr { transition:background .15s ease; cursor:pointer; }
+  table.grid tbody tr:hover { background:var(--color-primary-soft); }
+  table.grid .name { font-weight:500; }
+  table.grid .mono { font-family:var(--font-mono); font-size:var(--text-xs); }
+  table.grid .muted { color:var(--color-text-muted); }
+  table.grid .overdue { color:var(--color-danger); font-family:var(--font-mono); font-size:var(--text-xs); }
+  .select-inline { height:24px; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:var(--text-xs); color:var(--color-text); padding:0 4px; cursor:pointer; transition:all .15s ease; }
+  .select-inline:hover, .select-inline:focus { border-color:var(--color-border-strong); background:var(--color-surface); }
+
+  .callout { border-left:3px solid var(--color-warning); background:var(--color-warning-bg); border-radius:var(--radius-sm); padding:var(--space-2) var(--space-3); font-size:var(--text-sm); display:flex; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2); }
+  .callout.ok { border-left-color:var(--color-success); background:color-mix(in srgb,var(--color-success) 6%,var(--color-surface)); }
+  .callout .btn { margin-left:auto; }
+  .link-row { display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px solid var(--color-border); font-size:var(--text-sm); flex-wrap:wrap; }
+  .link-row:last-child { border-bottom:0; }
+  .link-row .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--font-mono); font-size:var(--text-xs); flex:1; }
+  .link-row .btn { margin-left:auto; }
+  .check { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-bottom:1px solid var(--color-border); font-size:var(--text-sm); }
+  .check:last-child { border-bottom:0; }
+  .check.done span { text-decoration:line-through; color:var(--color-text-tertiary); }
+  .empty-inline { color:var(--color-text-tertiary); font-size:var(--text-sm); padding:var(--space-4) 0; text-align:center; }
+
+  /* B: tabbed detail */
+  .subtabs { display:flex; gap:2px; border-bottom:1px solid var(--color-border); margin-bottom:var(--space-3); }
+  .subtab { border:0; background:transparent; padding:8px 12px; font-family:inherit; font-size:var(--text-sm); color:var(--color-text-muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .15s ease; }
+  .subtab:hover { color:var(--color-primary); }
+  .subtab.active { color:var(--color-primary); border-bottom-color:var(--color-primary); font-weight:600; }
+  .subview { display:none; }
+  .subview.active { display:block; }
+
+  /* C: rail */
+  .crshell { display:grid; grid-template-columns:220px minmax(0,1fr); min-height:520px; }
+  .rail { border-right:1px solid var(--color-border); background:var(--color-surface-soft); padding:var(--space-2); }
+  .rail .rail-item { display:flex; flex-direction:column; gap:2px; padding:8px; border-radius:var(--radius-sm); cursor:pointer; transition:all .15s ease; font-size:var(--text-sm); }
+  .rail .rail-item:hover { background:var(--color-surface); }
+  .rail .rail-item.active { background:var(--color-surface); box-shadow:var(--shadow-sm); border-left:2px solid var(--color-primary); }
+  .rail .rail-item .code { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .rail .rail-item .cnt { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-tertiary); }
+  .main { padding:var(--space-4); min-width:0; }
+
+  #sketch-tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.7); color:white; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; }
+  #sketch-tools:hover { opacity:1; }
+  .toast { position:fixed; bottom:56px; right:12px; background:var(--color-text); color:white; padding:8px 12px; border-radius:var(--radius-md); font-size:var(--text-sm); opacity:0; transform:translateY(8px); transition:all .2s; pointer-events:none; z-index:9997; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  @media (max-width:900px) { .cols, .meta-grid { grid-template-columns:1fr; } .crshell { grid-template-columns:1fr; } .rail { display:none; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" onclick="showVariant('a',this)">A: Header nén + 2 cột ★ Recommended</button>
+  <button class="variant-tab" onclick="showVariant('b',this)">B: Tab thu gọn</button>
+  <button class="variant-tab" onclick="showVariant('c',this)">C: Rail CR + main</button>
+  <span class="hint">Dữ liệu giả theo ChangeRequestDetailView.tsx</span>
+</div>
+
+<!-- ============ A ============ -->
+<div class="frame variant active" id="variant-a">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">CR-18 · Triển khai knowledge sync</span><span class="badge" id="a-status">● Đang mở</span></div>
+    <div class="content">
+      <div class="breadcrumb"><a onclick="toast('Về Change Requests')">Change Requests</a><span class="sep">›</span><span>CR-18</span></div>
+
+      <div class="card">
+        <div class="row">
+          <div style="min-width:280px;flex:1">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--space-2)">
+              <span class="tag blue">Delivery</span>
+              <span class="tag green"><i class="dot"></i> In Progress</span>
+              <span class="tag amber">CR-18</span>
+              <span class="tag mono">Jira: PLM-221</span>
+            </div>
+            <h2 class="title">Triển khai API sync knowledge</h2>
+            <div class="subtitle">Thêm endpoint sync có client-side preview + DLP approval trước khi gửi Markdown tới daemon.</div>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="toast('Đã tải lại')">↻ Tải lại</button>
+            <button class="btn" onclick="toast('Mở form sửa CR')">✎ Sửa</button>
+            <button class="btn" onclick="toast('Xác nhận xóa CR')">✕ Xóa</button>
+            <button class="btn primary" onclick="toast('Tạo task placeholder + mở drawer')">+ Thêm tác vụ</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="k">TASK</span><span class="v">7</span></div>
+          <div class="sep"></div>
+          <div class="stat"><span class="k">MỞ / PENDING</span><span class="v warn">4</span></div>
+          <div class="sep"></div>
+          <div class="stat"><span class="k">ƯỚC TÍNH</span><span class="v">42.5h</span></div>
+          <div class="sep"></div>
+          <div class="stat"><span class="k">HOÀN THÀNH</span><span class="v good">3/7</span></div>
+          <div class="sep"></div>
+          <div class="stat"><span class="k">GHI CHÚ</span><span class="v">2</span></div>
+          <div class="sep"></div>
+          <div class="stat"><span class="k">DOC / REMINDER</span><span class="v">3 / 1</span></div>
+        </div>
+        <div class="meta-grid">
+          <div><div class="k">Hệ thống đích</div><div class="v">Knowledge Daemon</div></div>
+          <div><div class="k">Subsystem</div><div class="v" id="a-system-label">API · Local Index</div></div>
+          <div><div class="k">Jira Epic</div><div class="v">PLM-221</div></div>
+          <div><div class="k">Cập nhật</div><div class="v">2026-11-25</div></div>
+        </div>
+      </div>
+
+      <div class="cols">
+        <div class="card">
+          <div class="sec-title">Tác vụ <span class="count">7 · 4 mở</span><button class="btn small text" onclick="toast('Thêm task')">+ Thêm</button></div>
+          <table class="grid">
+            <thead><tr><th>Tác vụ</th><th>Subsystem</th><th>Trạng thái</th><th>Ước lượng</th><th>Hạn</th></tr></thead>
+            <tbody id="a-task-rows">
+              <tr onclick="toast('Mở TaskDrawer: task-1')"><td class="name">Định nghĩa schema request/response</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: API')"><option>API</option><option>Local Index</option></select></td><td><span class="tag green">Done</span></td><td class="mono">4h</td><td class="muted mono">2026-11-20</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-2')"><td class="name">Viết endpoint /index</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: API')"><option>API</option><option>Local Index</option></select></td><td><span class="tag blue">In Progress</span></td><td class="mono">12h</td><td class="mono">2026-11-28</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-3')"><td class="name">Preview + DLP approval UI</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: Local Index')"><option>API</option><option selected>Local Index</option></select></td><td><span class="tag blue">Open</span></td><td class="mono">8h</td><td class="mono">2026-11-29</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-4')"><td class="name">Fallback khi daemon không chạy</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: API')"><option>API</option><option>Local Index</option></select></td><td><span class="tag">Pending</span></td><td class="mono">6h</td><td class="overdue">2026-11-24</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-5')"><td class="name">Test offline IndexedDB</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: Local Index')"><option>API</option><option selected>Local Index</option></select></td><td><span class="tag">Open</span></td><td class="mono">5.5h</td><td class="mono">2026-12-01</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-6')"><td class="name">Cập nhật docs hướng dẫn</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: API')"><option>API</option><option>Local Index</option></select></td><td><span class="tag green">Done</span></td><td class="mono">3h</td><td class="muted mono">2026-11-21</td></tr>
+              <tr onclick="toast('Mở TaskDrawer: task-7')"><td class="name">Đo hiệu năng index 50k docs</td><td><select class="select-inline" onclick="event.stopPropagation()" onchange="toast('Đổi subsystem: Local Index')"><option>API</option><option selected>Local Index</option></select></td><td><span class="tag green">Done</span></td><td class="mono">4h</td><td class="muted mono">2026-11-22</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card">
+            <div class="sec-title">Ngữ cảnh <span class="count">collapse sẵn trong code</span></div>
+            <div class="callout"><span>⚠ 2 task quá hạn (task-4, task-5)</span><button class="btn small" onclick="toast('Mở Tasks tab lọc theo CR-18')">Xem</button></div>
+            <div class="callout ok"><span>✓ 3 doc liên kết đã index locally</span><button class="btn small" onclick="toast('Mở DocSet')">Xem</button></div>
+            <div class="link-row"><span class="name">docs/arch/knowledge-sync.md</span><button class="btn small" onclick="toast('Mở doc')">Mở</button></div>
+            <div class="link-row"><span class="name">docs/api/endpoints.md</span><button class="btn small" onclick="toast('Mở doc')">Mở</button></div>
+            <div class="link-row"><span class="name">notes/dlp-review.md</span><button class="btn small" onclick="toast('Mở doc')">Mở</button></div>
+          </div>
+          <div class="card">
+            <div class="sec-title">Ghi chú <span class="count">2</span><button class="btn small text" onclick="toast('Thêm note')">+ Thêm</button></div>
+            <div class="check done"><input type="checkbox" checked onchange="toast('Toggle note')"><span>Protocol preview · 24/11</span></div>
+            <div class="check"><input type="checkbox" onchange="toast('Toggle note')"><span>Fallback behavior · 22/11</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ B ============ -->
+<div class="frame variant" id="variant-b">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">CR-18 · Triển khai API sync knowledge</span></div>
+    <div class="content">
+      <div class="breadcrumb"><a onclick="toast('Về Change Requests')">Change Requests</a><span class="sep">›</span><span>CR-18</span></div>
+      <div class="card">
+        <div class="row">
+          <div><h2 class="title" style="font-size:var(--text-xl)">Triển khai API sync knowledge</h2>
+          <div class="subtitle"><span class="tag blue">Delivery</span> <span class="tag green">In Progress</span> <span class="tag mono">CR-18</span> · 7 task · 42.5h · hạn 2026-11-29</div></div>
+          <div class="actions"><button class="btn" onclick="toast('Mở form sửa')">✎ Sửa</button><button class="btn primary" onclick="toast('Thêm task')">+ Task</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="subtabs">
+          <button class="subtab active" onclick="switchSubtab(this,'bt')">Tác vụ (7)</button>
+          <button class="subtab" onclick="switchSubtab(this,'bn')">Ghi chú (2)</button>
+          <button class="subtab" onclick="switchSubtab(this,'bd')">Docs & Jira (4)</button>
+          <button class="subtab" onclick="switchSubtab(this,'br')">Nhắc hạn (1)</button>
+        </div>
+        <div class="subview active" id="bt">
+          <table class="grid"><thead><tr><th>Tác vụ</th><th>Subsystem</th><th>Trạng thái</th><th>Ước lượng</th><th>Hạn</th></tr></thead><tbody>
+            <tr onclick="toast('Mở task-1')"><td class="name">Định nghĩa schema request/response</td><td class="muted">API</td><td><span class="tag green">Done</span></td><td class="mono">4h</td><td class="muted mono">2026-11-20</td></tr>
+            <tr onclick="toast('Mở task-4')"><td class="name">Fallback khi daemon không chạy</td><td class="muted">API</td><td><span class="tag">Pending</span></td><td class="mono">6h</td><td class="overdue">2026-11-24</td></tr>
+            <tr onclick="toast('Mở task-2')"><td class="name">Viết endpoint /index</td><td class="muted">API</td><td><span class="tag blue">In Progress</span></td><td class="mono">12h</td><td class="mono">2026-11-28</td></tr>
+          </tbody></table>
+          <div class="empty-inline" style="padding:var(--space-2)">4 task khác ẩn · bấm để mở rộng</div>
+        </div>
+        <div class="subview" id="bn"><div class="check done"><input type="checkbox" checked><span>Protocol preview · 24/11</span></div><div class="check"><input type="checkbox"><span>Fallback behavior · 22/11</span></div></div>
+        <div class="subview" id="bd"><div class="link-row"><span class="name">PLM-221 · Jira Epic</span><button class="btn small" onclick="toast('Mở Jira')">Mở</button></div><div class="link-row"><span class="name">docs/arch/knowledge-sync.md</span><button class="btn small" onclick="toast('Mở doc')">Mở</button></div></div>
+        <div class="subview" id="br"><div class="callout"><span>⚠ Nhắc hạn: review DLP trước 2026-11-28</span><button class="btn small" onclick="toast('Sửa reminder')">Sửa</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ C ============ -->
+<div class="frame variant" id="variant-c">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">CR-18 · Triển khai API sync knowledge</span></div>
+    <div class="crshell">
+      <div class="rail">
+        <div class="sec-title" style="padding:6px">Change Requests <span class="count">12</span></div>
+        <div class="rail-item active" onclick="toast('Chọn CR-18')"><span class="code">CR-18</span><span>Knowledge sync</span><span class="cnt">7 task · 4 mở</span></div>
+        <div class="rail-item" onclick="toast('Chọn CR-17')"><span class="code">CR-17</span><span>Jira proxy decode</span><span class="cnt">3 task · 1 mở</span></div>
+        <div class="rail-item" onclick="toast('Chọn CR-16')"><span class="code">CR-16</span><span>Profile export</span><span class="cnt">5 task · 0 mở</span></div>
+        <div class="rail-item" onclick="toast('Chọn CR-15')"><span class="code">CR-15</span><span>Docset index</span><span class="cnt">9 task · 2 mở</span></div>
+      </div>
+      <div class="main">
+        <div class="row"><div><div style="display:flex;gap:6px;margin-bottom:6px"><span class="tag blue">Delivery</span><span class="tag green">In Progress</span><span class="tag mono">CR-18</span></div><h2 class="title" style="font-size:var(--text-xl)">Triển khai API sync knowledge</h2></div><div class="actions"><button class="btn" onclick="toast('Sửa')">✎ Sửa</button><button class="btn primary" onclick="toast('Thêm task')">+ Task</button></div></div>
+        <div class="stats"><div class="stat"><span class="k">TASK</span><span class="v">7</span></div><div class="sep"></div><div class="stat"><span class="k">MỞ</span><span class="v warn">4</span></div><div class="sep"></div><div class="stat"><span class="k">ƯỚC TÍNH</span><span class="v">42.5h</span></div></div>
+        <div class="card" style="margin-top:var(--space-3)"><div class="sec-title">Tác vụ <span class="count">7</span></div>
+          <table class="grid"><thead><tr><th>Tác vụ</th><th>Trạng thái</th><th>Ước lượng</th><th>Hạn</th></tr></thead><tbody>
+            <tr onclick="toast('Mở task-2')"><td class="name">Viết endpoint /index</td><td><span class="tag blue">In Progress</span></td><td class="mono">12h</td><td class="mono">2026-11-28</td></tr>
+            <tr onclick="toast('Mở task-4')"><td class="name">Fallback khi daemon không chạy</td><td><span class="tag">Pending</span></td><td class="mono">6h</td><td class="overdue">2026-11-24</td></tr>
+            <tr onclick="toast('Mở task-3')"><td class="name">Preview + DLP approval UI</td><td><span class="tag blue">Open</span></td><td class="mono">8h</td><td class="mono">2026-11-29</td></tr>
+          </tbody></table>
+        </div>
+        <div class="callout ok"><span>✓ 3 doc liên kết · 2 ghi chú · 1 reminder</span><button class="btn small" onclick="toast('Mở rộng')">Xem</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="sketch-tools"><span>Mockup tĩnh · không sửa code</span></div>
+<div class="toast" id="toast"></div>
+<script>
+  function showVariant(id, btn) {
+    document.querySelectorAll('.variant').forEach(v => v.classList.toggle('active', v.id === 'variant-' + id));
+    document.querySelectorAll('.variant-tab').forEach(t => t.classList.toggle('active', t === btn));
+  }
+  function switchSubtab(btn, id) {
+    btn.parentElement.querySelectorAll('.subtab').forEach(t => t.classList.toggle('active', t === btn));
+    btn.closest('.card').querySelectorAll('.subview').forEach(v => v.classList.toggle('active', v.id === id));
+  }
+  function toast(text) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+</script>
+</body>
+</html>
