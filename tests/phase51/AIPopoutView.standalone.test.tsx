@@ -115,7 +115,7 @@ describe('standalone chat shell', () => {
       expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument();
     });
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('giữ nháp khi mở cài đặt');
-    expect(document.querySelector('.ant-modal-content')).not.toBeNull();
+    expect(document.querySelector('.ant-modal-container')).not.toBeNull();
     expect(document.querySelector('.ant-drawer')).toBeNull();
     const modal = screen.getByText('AI Settings · tất cả').closest('.ant-modal') as HTMLElement | null;
     expect(modal).not.toBeNull();

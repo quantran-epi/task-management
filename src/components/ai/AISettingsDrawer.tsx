@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, Collapse, CollapsePanel, Drawer } from '../ui';
+import { Button, Collapse, CollapsePanel, Modal } from '../ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { NineRouterConfigCard } from '../settings/NineRouterConfigCard';
 import { KnowledgeServerConfigCard } from '../settings/KnowledgeServerConfigCard';
@@ -95,7 +95,7 @@ export const AISettingsDrawer: React.FC<AISettingsDrawerProps> = ({
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const wasOpenRef = React.useRef(false);
 
-  // Capture during render: child Drawer autofocuses its panel in a layout effect,
+  // Capture during render: the Modal autofocuses its panel in a layout effect,
   // so an effect here would record the panel instead of the gear trigger.
   if (open && !wasOpenRef.current) {
     triggerRef.current = document.activeElement as HTMLElement | null;
@@ -103,20 +103,26 @@ export const AISettingsDrawer: React.FC<AISettingsDrawerProps> = ({
   wasOpenRef.current = open;
 
   return (
-    <Drawer
+    <Modal
       title="AI Settings · tất cả"
-      width={460}
-      placement="right"
+      width="calc(100vw - 48px)"
+      style={{ top: 24, maxWidth: 1200 }}
+      styles={{ body: { padding: 0, height: 'min(72vh, 760px)' } }}
       mask
-      closable
       open={open}
-      onClose={onClose}
-      closeIcon={<span aria-label="Đóng Cài đặt AI">✕</span>}
-      afterOpenChange={(visible) => {
-        if (!visible) triggerRef.current?.focus();
+      onCancel={(event) => {
+        // Event type differs by close path (mouse, keyboard); route every path through
+        // the same callback so React state and focus restoration stay in one place.
+        void event;
+        onClose();
+        queueMicrotask(() => triggerRef.current?.focus());
       }}
+      afterClose={() => triggerRef.current?.focus()}
+      closeIcon={<span aria-label="Đóng Cài đặt AI">✕</span>}
+      destroyOnHidden
+      footer={null}
     >
       <AISettingsDrawerBody db={db} />
-    </Drawer>
+    </Modal>
   );
 };

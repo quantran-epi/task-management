@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Tooltip } from '../../components/ui';
 import { MinusOutlined, BellOutlined, FormOutlined } from '../../components/ui/icon';
 import { QuickNotesPanel } from '../../components/notes/QuickNotesPanel';
@@ -7,6 +7,7 @@ import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
 import { useAIChat } from '../../context/AIChatContext';
 import { AIChatDrawer } from '../../components/ai/AIChatDrawer';
+import { AISettingsDrawer } from '../../components/ai/AISettingsDrawer';
 import { NotificationPanel } from './NotificationPanel';
 import { ToolExplorerPanel } from './ToolExplorerPanel';
 import type { TaskPlannerDatabase } from '../../db';
@@ -23,6 +24,7 @@ export function RightToolWindow({
   const rightActiveId = useLayoutStore((s) => s.rightActiveId);
   const toggleToolWindow = useLayoutStore((s) => s.toggleToolWindow);
   const { closeChat, activeScope } = useAIChat();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleCollapse = () => {
     if (rightActiveId) {
@@ -140,6 +142,12 @@ export function RightToolWindow({
               isPinned={true}
               isDockedPanel={true}
               activeScope={activeScope}
+              onOpenSettings={() => setSettingsOpen(true)}
+              {...(db ? { db } : {})}
+            />
+            <AISettingsDrawer
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
               {...(db ? { db } : {})}
             />
           </div>

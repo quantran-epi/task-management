@@ -2594,6 +2594,7 @@ Rules:
 
       {/* Chat Header with Drawer-level Scope */}
       <ChatHeader
+        isStandalone={isStandaloneChat}
         currentScope={currentScope}
         onOpenScopePicker={isStandaloneChat ? undefined : () => setScopeModalOpen(true)}
         onDetachScope={isStandaloneChat ? undefined : () => {

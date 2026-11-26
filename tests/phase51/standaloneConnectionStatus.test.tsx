@@ -31,6 +31,7 @@ describe('phase 51 standalone connection status (WR-06)', () => {
     const onOpenSettings = vi.fn();
     render(
       <ChatHeader
+        isStandalone={false}
         isPinned={false}
         onTogglePin={vi.fn()}
         onClose={vi.fn()}
@@ -42,8 +43,7 @@ describe('phase 51 standalone connection status (WR-06)', () => {
     expect(gear).toHaveAccessibleName('Mở Cài đặt AI');
     fireEvent.click(gear);
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    expect(screen.queryByTestId('chat-global-scope-chip')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('chat-connection-status')).not.toBeInTheDocument();
+    expect(screen.getByText('Trợ lý AI')).toBeInTheDocument();
   });
 
   it('explicit isStandalone keeps standalone header even when other host props are present', () => {

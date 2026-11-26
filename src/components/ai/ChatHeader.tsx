@@ -6,6 +6,8 @@ import { JetBrainsAIIcon } from '../icons/JetBrainsIcons';
 import type { ActiveScope } from '../../context/AIChatContext';
 
 export interface ChatHeaderProps {
+  /** Explicit standalone flag; without it the header still infers standalone from onOpenSettings. */
+  isStandalone?: boolean | undefined;
   currentScope?: ActiveScope | undefined;
   onOpenScopePicker?: (() => void) | undefined;
   onDetachScope?: (() => void) | undefined;
@@ -22,6 +24,7 @@ export interface ChatHeaderProps {
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
+  isStandalone: isStandaloneProp,
   currentScope,
   onOpenScopePicker,
   onDetachScope,
@@ -37,7 +40,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   connectionStatus,
 }) => {
   const { token } = useAntdToken();
-  const isStandalone = Boolean(onOpenSettings);
+  const isStandalone = isStandaloneProp ?? Boolean(onOpenSettings);
 
   if (isStandalone) {
     return (
@@ -263,6 +266,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             />
           </Tooltip>
         </Dropdown>
+
+        {onOpenSettings && (
+          <Tooltip title="Mở Cài đặt AI">
+            <IconButton
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={onOpenSettings}
+              aria-label="Mở Cài đặt AI"
+              data-testid="chat-settings-gear"
+              style={{ minWidth: 28, minHeight: 28 }}
+            />
+          </Tooltip>
+        )}
 
         <Tooltip title="Đóng ngăn trò chuyện">
           <Button
