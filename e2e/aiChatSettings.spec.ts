@@ -466,3 +466,95 @@ test.describe('AI chat settings and composer modals', () => {
     await expectNoErrors(errors);
   });
 });
+
+/**
+ * Quick 261126-skl Chrome UAT: natural-language request produces DOCX/PPTX with real embedded media.
+ */
+test.describe('AI chat embedded document images', () => {
+  const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const DATA_URL = `data:image/png;base64,${PNG_1X1}`;
+  const DOCX_CONTENT = `# Report\n![plane](${DATA_URL})`;
+  const PPTX_CONTENT = `# Deck\n\n## Slide\n![plane](${DATA_URL})`;
+  const errorsFrom = (page: Page) => {
+    const errors: string[] = [];
+    page.on('pageerror', (err) => errors.push(err.message));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error' && !msg.text().includes('localhost:20128')) errors.push(msg.text());
+    });
+    return errors;
+  };
+
+  test('generates DOCX and PPTX with embedded media from one prompt', async ({ page }) => {
+    const errors = errorsFrom(page);
+    let requestCount = 0;
+    await page.route('**/v1/models', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ id: 'uat-image-model' }] }) });
+    });
+    await page.route('**/v1/images/generations', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ b64_json: PNG_1X1 }] }) });
+    });
+    await page.route('**/v1/chat/completions', async (route) => {
+      requestCount += 1;
+      const toolCall = (id: string, name: string, args: object) =>
+        `{"index":0,"id":"${id}","type":"function","function":{"name":"${name}","arguments":${JSON.stringify(JSON.stringify(args))}}}`;
+      let sse: string;
+      if (requestCount === 1) {
+        sse = `data: {"choices":[{"delta":{"tool_calls":[${toolCall('call-image','generate_image',{prompt:'A blue paper plane'})}]}}]}\n\ndata: [DONE]\n\n`;
+      } else if (requestCount === 2) {
+        sse = `data: {"choices":[{"delta":{"tool_calls":[${toolCall('call-docx','generate_file',{filename:'image-report.docx',format:'docx',content:DOCX_CONTENT})}]}}]}\n\ndata: [DONE]\n\n`;
+      } else if (requestCount === 3) {
+        sse = `data: {"choices":[{"delta":{"tool_calls":[${toolCall('call-pptx','generate_pptx',{filename:'image-deck.pptx',markdownContent:PPTX_CONTENT})}]}}]}\n\ndata: [DONE]\n\n`;
+      } else {
+        sse = 'data: {"choices":[{"delta":{"content":"Xong."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+      }
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+    });
+
+    await page.goto('/task-management/e2e/aiChatStandalone.html');
+    await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
+    await page.getByTestId('chat-settings-gear').click();
+    const settings = page.locator('.ant-modal').filter({ has: page.getByText('AI Settings · tất cả') });
+    await expect(settings).toBeVisible();
+    await settings.getByPlaceholder('Nhập 9router API Key (sk-...)').fill('sk-uat-embedded-images');
+    await settings.getByRole('button', { name: 'Lưu tất cả cấu hình' }).click();
+    await settings.locator('.ant-modal-close').click();
+    await expect(page.locator('.ant-modal-container')).toHaveCount(0);
+
+    await page.getByRole('textbox', { name: 'Nội dung tin nhắn trò chuyện AI' })
+      .fill('Tạo báo cáo Word và slide PowerPoint có ảnh máy bay giấy');
+    await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+    for (let i = 0; i < 3; i++) {
+      const approve = page.getByRole('button', { name: 'Chấp thuận' });
+      if (await approve.count()) await approve.first().click();
+      await page.waitForTimeout(2500);
+    }
+    await expect(page.getByText('image-report.docx', { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    // Verify real browser export output (same modules the chat tool uses) in Chrome.
+    const exported = await page.evaluate(async ({ dataUrl }) => {
+      const resolver = await import('/task-management/src/utils/documentImageResolver.ts');
+      const sandbox = await import('/task-management/src/utils/dynamicFileSandbox.ts');
+      const pptx = await import('/task-management/src/utils/pptxExport.ts');
+      const prepared = await resolver.prepareDocumentImages(`![plane](${dataUrl})`);
+      const docxBlob = await sandbox.generateDocxBlobWithDocx(prepared.markdown, undefined, prepared.images);
+      const pptxBlob = await pptx.generatePptxFromMarkdown(prepared.markdown, undefined, prepared.images);
+      const toBase64 = (blob: Blob) => new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+      return { docx: await toBase64(docxBlob), pptx: await toBase64(pptxBlob.blob) };
+    }, { dataUrl: DATA_URL });
+    const JSZip = (await import('jszip')).default;
+    for (const [label, base64, prefix] of [
+      ['docx', exported.docx, 'word/media/'],
+      ['pptx', exported.pptx, 'ppt/media/'],
+    ] as const) {
+      const zip = await JSZip.loadAsync(Buffer.from(base64, 'base64'));
+      const media = Object.keys(zip.files).filter((name) => name.startsWith(prefix));
+      expect(media.length, `${label} phải có ảnh nhúng`).toBeGreaterThan(0);
+    }
+    expect(errors.filter((e) => !e.includes('deprecated') && !e.includes('rc-collapse'))).toEqual([]);
+  });
+});
+

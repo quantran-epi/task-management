@@ -48,6 +48,7 @@ import {
   getNoteWithAttachments,
 } from '../../db/repositories/noteRepo';
 import { stripAnsiSequences, extractMermaidBlocks } from '../diagramSaveBridge';
+import { prepareDocumentImages } from '../../utils/documentImageResolver';
 import {
   linkEntitiesToDoc,
   unlinkEntityFromDoc,
@@ -1838,7 +1839,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting.',
+        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting. DOCX/PPTX embed images written as ![alt](src) in content, including data: URLs returned by generate_image, http(s) URLs, attachment:/a: tokens, and ```mermaid blocks which are rasterized automatically. When the user asks for a document with illustrations, call generate_image first in the same turn and paste its "markdown" value into content.',
       parameters: {
         type: 'object',
         properties: {
@@ -1873,7 +1874,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_pptx',
       description:
-        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content.',
+        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content. Markdown images ![alt](src) are embedded as real slide images (data: URLs from generate_image, http(s) URLs, attachment:/a: tokens); ```mermaid blocks are rendered to PNG automatically. For illustration requests, call generate_image first in the same turn and insert its "markdown" value into markdownContent.',
       parameters: {
         type: 'object',
         properties: {
@@ -1920,7 +1921,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_image',
       description:
-        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation.',
+        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation. When the user also asks for a document, pass the returned "markdown" value into generate_file "content" or generate_pptx "markdownContent" in the SAME turn so the image is embedded in the file.',
       parameters: {
         type: 'object',
         properties: {
@@ -4916,6 +4917,16 @@ export async function executeAiTool(
 
         const format = (args.format as ExportFormat) || inferFormatFromFilename(String(args.filename));
 
+        let resolvedContent: string | undefined;
+        let resolvedImages: Awaited<ReturnType<typeof prepareDocumentImages>>['images'] | undefined;
+        if (args.content && (format === 'docx' || format === 'pptx')) {
+          const prepared = await prepareDocumentImages(String(args.content), db);
+          resolvedContent = prepared.markdown;
+          resolvedImages = prepared.images;
+          if (resolvedImages.size === 0) resolvedImages = undefined;
+        }
+        const contentForExport = resolvedContent ?? String(args.content ?? '');
+
         if (args.script) {
           try {
             const blob = await executeDynamicFileScript(String(args.script), format, String(args.filename));
@@ -4936,10 +4947,11 @@ export async function executeAiTool(
 
         if (format === 'pptx') {
           const exportResult = await exportPresentationAsFile(
-            String(args.content),
+            contentForExport,
             String(args.filename),
             args.title ? { presentationTitle: String(args.title) } : undefined,
-            false // Do not auto-download silently in background
+            false, // Do not auto-download silently in background
+            resolvedImages
           );
           return JSON.stringify({
             success: true,
@@ -4953,10 +4965,11 @@ export async function executeAiTool(
         }
 
         const exportResult = await exportContentAsFile(
-          String(args.content),
+          contentForExport,
           String(args.filename),
           format,
-          false // Do not auto-download silently in background
+          false, // Do not auto-download silently in background
+          resolvedImages
         );
 
         return JSON.stringify({
@@ -4984,11 +4997,19 @@ export async function executeAiTool(
           return JSON.stringify({ error: 'Either slides array or markdownContent/content is required' });
         }
 
+        let pptxImages: Awaited<ReturnType<typeof prepareDocumentImages>>['images'] | undefined;
+        if (typeof contentOrSlides === 'string') {
+          const prepared = await prepareDocumentImages(contentOrSlides, db);
+          contentOrSlides = prepared.markdown;
+          if (prepared.images.size > 0) pptxImages = prepared.images;
+        }
+
         const exportResult = await exportPresentationAsFile(
           contentOrSlides,
           filename,
           presentationTitle ? { presentationTitle } : undefined,
-          false // Do not auto-download silently in background
+          false, // Do not auto-download silently in background
+          pptxImages
         );
 
         let serializedPptxContent = '';

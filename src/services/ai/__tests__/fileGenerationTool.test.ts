@@ -74,7 +74,8 @@ describe('aiTools generate_file', () => {
       '# Project Report\nEverything is on schedule.',
       'project-report.docx',
       'docx',
-      false
+      false,
+      undefined
     );
 
     const result = JSON.parse(resultStr);
@@ -83,6 +84,40 @@ describe('aiTools generate_file', () => {
     expect(result.format).toBe('docx');
     expect(result.sizeBytes).toBeGreaterThan(100);
     expect(result.message).toContain('project-report.docx');
+  });
+
+  it('resolves image markdown before DOCX export and advertises image orchestration', async () => {
+    const exportSpy = vi.spyOn(fileExportModule, 'exportContentAsFile');
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    const content = `# Report\n![illustration](${png})`;
+    await executeAiTool('generate_file', { filename: 'report.docx', content }, {} as any);
+    expect(exportSpy).toHaveBeenCalledWith(
+      content,
+      'report.docx',
+      'docx',
+      false,
+      expect.any(Map)
+    );
+    const images = exportSpy.mock.calls[0]![4]!;
+    expect(images.get(png)?.extension).toBe('png');
+
+    const generateFile = AI_DATABASE_TOOLS.find((t) => t.function.name === 'generate_file');
+    const generatePptx = AI_DATABASE_TOOLS.find((t) => t.function.name === 'generate_pptx');
+    const generateImage = AI_DATABASE_TOOLS.find((t) => t.function.name === 'generate_image');
+    expect(generateFile?.function.description).toContain('mermaid');
+    expect(generateFile?.function.description).toContain('generate_image');
+    expect(generatePptx?.function.description).toContain('generate_image');
+    expect(generateImage?.function.description).toContain('generate_file');
+  });
+
+  it('does not resolve images for xlsx exports', async () => {
+    const exportSpy = vi.spyOn(fileExportModule, 'exportContentAsFile');
+    await executeAiTool(
+      'generate_file',
+      { filename: 'data.xlsx', content: '| Task | Hours |\n| A | 1 |' },
+      {} as any
+    );
+    expect(exportSpy.mock.calls[0]![4]).toBeUndefined();
   });
 
   it('executes generate_file for xlsx table and respects explicit format param', async () => {
@@ -103,7 +138,8 @@ describe('aiTools generate_file', () => {
       '| Task | Hours |\n| Task A | 10 |\n| Task B | 20 |',
       'workload-data',
       'xlsx',
-      false
+      false,
+      undefined
     );
 
     const result = JSON.parse(resultStr);

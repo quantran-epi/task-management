@@ -1714,6 +1714,7 @@ CRITICAL ANTI-HALLUCINATION RULES:
 1. NEVER GUESS, ASSUME, OR INVENT DATA.
 2. When breaking down goals or proposing steps, output clear actionable bullet points.
 3. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). ${APP_NAME} will automatically render interactive diagrams from these blocks.
+9. ILLUSTRATED DOCUMENTS: When the user asks for a DOCX/PPTX with pictures or diagrams, call \`generate_image\` (and/or write \`\`\`mermaid blocks) and then \`generate_file\`/\`generate_pptx\` in the SAME turn. Insert the returned image markdown \`![alt](data:...)\` into the document content. Never just describe the document in prose.
 ${graphitiSkillSegment}${STANDALONE_ANALYSIS_PROMPT_SEGMENT}`;
       const ordinaryPrompt = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
@@ -1726,7 +1727,8 @@ CRITICAL ANTI-HALLUCINATION RULES:
 5. When breaking down goals or proposing steps, output clear actionable bullet points that can be converted into checklist items.
 6. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). TaskMate will automatically render interactive diagrams from these blocks.
 7. YOU HAVE FULL DATABASE MUTATION CAPABILITIES: You can create, update, reparent, or delete tasks, change requests, planned allocations, work sessions, active timers, capacity rules/overrides, and notes using mutation tools. When the user asks you to perform an action or change anything in the app, call the appropriate action tool. The system will prompt the user to confirm the mutation before applying it.
-8. Turns older than the current context window: use \`search_chat_history\` to find them and \`read_chat_turn\` to read the full text. Never guess their content.${graphitiSkillSegment}
+8. Turns older than the current context window: use \`search_chat_history\` to find them and \`read_chat_turn\` to read the full text. Never guess their content.
+9. ILLUSTRATED DOCUMENTS: When the user asks for a DOCX/PPTX with pictures or diagrams, call \`generate_image\` (and/or write \`\`\`mermaid blocks) and then \`generate_file\`/\`generate_pptx\` in the SAME turn. Insert the returned image markdown \`![alt](data:...)\` into the document content. Never just describe the document in prose.${graphitiSkillSegment}
 ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the currently active item or workspace:\n${systemInstruction}\n` : ''}${ANALYSIS_PROMPT_SEGMENT}${conventionsSegment ? `\n\n${conventionsSegment}` : ''}`;
       const systemPromptContent = isStandaloneChat ? standalonePrompt : ordinaryPrompt;
 
