@@ -54,6 +54,9 @@ function offsetBuffer(bytes: number[]): ArrayBuffer {
 describe('sshDocumentParser', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    jsZipLoadMock.mockReset();
+    xlsxLoadMock.mockReset();
+    extractRawTextMock.mockReset();
     eachRowMock.mockImplementation((cb: (row: { values: Array<null | { result?: string }> }) => void) => {
       // ExcelJS row.values is 1-indexed: index 0 is the sparse hole.
       cb({ values: [null, { result: 'A1' }, { result: 'B1' }] });
@@ -144,25 +147,27 @@ describe('sshDocumentParser', () => {
 
   describe('progressive document API', () => {
     function mockPdf(pageTexts: string[]) {
+      const destroy = vi.fn().mockResolvedValue(undefined);
       const getPage = vi.fn(async (pageNo: number) => ({
         getTextContent: vi.fn().mockResolvedValue({ items: [{ str: pageTexts[pageNo - 1] ?? '' }] }),
         cleanup: vi.fn(),
       }));
-      getDocumentMock.mockReturnValue({
-        promise: Promise.resolve({ numPages: pageTexts.length, getPage }),
+      getDocumentMock.mockImplementation(() => ({
+        promise: Promise.resolve({ numPages: pageTexts.length, getPage, destroy }),
         destroy: vi.fn().mockResolvedValue(undefined),
-      });
+      }));
       return getPage;
     }
 
     function mockWorkbook(sheets: Record<string, string[][]>) {
-      workbookStateMock.worksheets = Object.entries(sheets).map(([name, rows]) => ({
+      const worksheets = Object.entries(sheets).map(([name, rows]) => ({
         name,
         rowCount: rows.length,
         columnCount: Math.max(0, ...rows.map((r) => r.length)),
         getCell: (row: number, col: number) => ({ value: rows[row - 1]?.[col - 1] ?? null }),
       }));
-      xlsxLoadMock.mockResolvedValue(undefined);
+      workbookStateMock.worksheets = worksheets;
+      eachSheetMock.mockImplementation((cb: (ws: (typeof worksheets)[number]) => void) => worksheets.forEach(cb));
     }
 
     it('info returns format/size/counts with a next-range hint without OCR', async () => {
@@ -178,9 +183,11 @@ describe('sshDocumentParser', () => {
       expect(xlsxInfo.sheets).toEqual([{ name: 'Data', rowCount: 2, columnCount: 2 }]);
       expect(xlsxInfo.nextRange).toMatchObject({ sheet: 'Data', rowStart: 1, rowCount: 2 });
 
-      jsZipLoadMock.mockResolvedValue({
-        file: vi.fn().mockResolvedValue({ async: vi.fn().mockResolvedValue('<w:document/>') }),
-      });
+      jsZipLoadMock.mockImplementation(async () => ({
+        file: vi.fn().mockResolvedValue({
+          async: vi.fn().mockResolvedValue('<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Test</w:t></w:r></w:p></w:body></w:document>'),
+        }),
+      }));
       const docxInfo = await getSshDocumentInfo(offsetBuffer([6]), 'report.docx');
       expect(docxInfo).toMatchObject({ format: 'docx', sizeBytes: 1 });
       expect(docxInfo.nextRange).toMatchObject({ blockStart: 1 });
@@ -200,13 +207,14 @@ describe('sshDocumentParser', () => {
       expect(region.text).not.toContain('Trang 5');
       expect(region.format).toBe('pdf');
 
-      const bytesSpy = vi.spyOn(sshService, 'readRemoteFileBytes');
+      const callsBefore = getDocumentMock.mock.calls.length;
       await expect(
         readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', { pageStart: 1, pageCount: 21 }),
       ).rejects.toThrow(/20/);
       expect(getPage).toHaveBeenCalledTimes(2);
-      bytesSpy.mockRestore();
+      expect(getDocumentMock).toHaveBeenCalledTimes(callsBefore);
 
+      mockPdf(['']);
       const scan = await readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', {
         pageStart: 1,
         pageCount: 1,
@@ -235,8 +243,8 @@ describe('sshDocumentParser', () => {
 
     it('builds DOCX block index from word/document.xml with mammoth fallback', async () => {
       const xml = '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Đoạn một</w:t></w:r></w:p><w:p><w:r><w:t>Đoạn hai</w:t></w:r></w:p></w:body></w:document>';
-      const zipFile = vi.fn().mockResolvedValue({ async: vi.fn().mockResolvedValue(xml) });
-      jsZipLoadMock.mockResolvedValue({ file: zipFile });
+      const zipFile = vi.fn().mockReturnValue({ async: vi.fn().mockResolvedValue(xml) });
+      jsZipLoadMock.mockImplementation(async () => ({ file: zipFile }));
       extractRawTextMock.mockResolvedValue({ value: 'FALLBACK' });
 
       const region = await readSshDocumentRegion(new ArrayBuffer(2), 'report.docx', {
@@ -244,7 +252,8 @@ describe('sshDocumentParser', () => {
         blockCount: 1,
       });
       expect(zipFile).toHaveBeenCalledWith('word/document.xml');
-      expect(extractRawTextMock).not.toHaveBeenCalled();
+      const primaryCalls = extractRawTextMock.mock.calls.length;
+      expect(primaryCalls).toBe(0);
       expect(region.text).toContain('Đoạn một');
       expect(region.text).not.toContain('Đoạn hai');
       expect(region.blockCount).toBe(2);
@@ -254,7 +263,7 @@ describe('sshDocumentParser', () => {
         blockStart: 1,
         blockCount: 1,
       });
-      expect(extractRawTextMock).toHaveBeenCalledTimes(1);
+      expect(extractRawTextMock).toHaveBeenCalledTimes(primaryCalls + 1);
       expect(fallback.text).toContain('FALLBACK');
     });
   });

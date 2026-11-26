@@ -7,6 +7,10 @@ import {
   type SshGrepFilesArgs,
   type SshFsToolResult,
   type RemoteToolTarget,
+  type AttachmentScope,
+  type SshAttachedFileInfoArgs,
+  type SshAttachedFileSearchArgs,
+  type SshAttachedFileReadArgs,
   SSH_FS_TOOL_CONFIG_KEY,
 } from '../../types/sshFsTool';
 import {
@@ -18,7 +22,7 @@ import {
   testSshConnection,
 } from '../sshService';
 import type { SshConfig } from '../../types/ssh';
-import { parseSshDocument } from './sshDocumentParser';
+import { getSshDocumentInfo, parseSshDocument, readSshDocumentRegion } from './sshDocumentParser';
 import { wrapField } from './untrustedData';
 import { sanitizeBrowserFileText } from './browserFileReader';
 
@@ -447,6 +451,234 @@ export async function executeSshGrepFiles(
       executionTimeMs: Math.round(performance.now() - start),
     };
     return JSON.stringify(result);
+  }
+}
+
+/**
+ * Validate attachment identity AFTER remote path resolution and normalization.
+ * A model-supplied path must land in the turn's attached set exactly — no host fallback,
+ * no nearest-match substitution.
+ */
+function resolveAttachedPathValue(
+  inputPath: string,
+  fsConfig: SshFsToolConfig,
+  remoteTarget: RemoteToolTarget | undefined,
+): string {
+  return resolveRemoteToolPath(inputPath, fsConfig.defaultBasePath, remoteTarget);
+}
+
+function resolveAttachedPath(
+  args: { path: string },
+  fsConfig: SshFsToolConfig,
+  remoteTarget: RemoteToolTarget | undefined,
+  scope: AttachmentScope | undefined,
+): string {
+  if (!args.path || !args.path.trim()) {
+    throw new Error('Tham số "path" không được để trống.');
+  }
+  const resolved = resolveAttachedPathValue(args.path, fsConfig, remoteTarget);
+  const allowed = (scope?.attachedPaths ?? []).map((p) => {
+    try {
+      // normalizePosixPath alone handles `data/../report.pdf`; no base injection on identity.
+      return normalizePosixPath(resolveRemotePath(p));
+    } catch {
+      return normalizePosixPath(p);
+    }
+  });
+  if (!allowed.includes(resolved)) {
+    throw new Error('Đường dẫn không nằm trong tập file đã đính kèm của hội thoại.');
+  }
+  return resolved;
+}
+
+function attachFailure(
+  action: SshFsToolResult['action'],
+  start: number,
+  err: unknown,
+): string {
+  const result: SshFsToolResult = {
+    success: false,
+    action,
+    error: err instanceof Error ? err.message : String(err),
+    executionTimeMs: Math.round(performance.now() - start),
+  };
+  return JSON.stringify(result);
+}
+
+function wrapAttachedContent(label: string, text: string): string {
+  return wrapField(label, sanitizeBrowserFileText(text)) as string;
+}
+
+/** Info for an attached file: format/size/count + suggested next range. */
+export async function executeSshAttachedFileInfo(
+  args: SshAttachedFileInfoArgs,
+  db: TaskPlannerDatabase = defaultDb,
+  remoteTarget?: RemoteToolTarget,
+  scope?: AttachmentScope,
+): Promise<string> {
+  const start = performance.now();
+  try {
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
+    const targetPath = resolveAttachedPath(args, fsConfig, remoteTarget, scope);
+    const bytes = await readRemoteFileBytes(sshConfig, targetPath);
+    const info = await getSshDocumentInfo(bytes, targetPath);
+    const result: SshFsToolResult = {
+      success: true,
+      action: 'attached_file_info',
+      executionTimeMs: Math.round(performance.now() - start),
+      data: { path: targetPath, ...info },
+    };
+    return JSON.stringify(result);
+  } catch (err) {
+    return attachFailure('attached_file_info', start, err);
+  }
+}
+
+/** Search inside attached files: filename search via quoted `find`, content via grep. */
+export async function executeSshAttachedFileSearch(
+  args: SshAttachedFileSearchArgs,
+  db: TaskPlannerDatabase = defaultDb,
+  callId?: string,
+  remoteTarget?: RemoteToolTarget,
+  scope?: AttachmentScope,
+): Promise<string> {
+  const start = performance.now();
+  try {
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
+    const targetPath = resolveAttachedPath(args, fsConfig, remoteTarget, scope);
+
+    if (args.kind === 'content') {
+      if (!args.pattern?.trim()) throw new Error('Tham số "pattern" là bắt buộc khi kind="content".');
+      // executeSshGrepFiles re-resolves and re-validates the same identity, then emits a
+      // grep_files action. Re-wrap as the attached-family action without re-running SSH.
+      const delegate = JSON.parse(await executeSshGrepFiles(
+        {
+          path: targetPath,
+          pattern: args.pattern,
+          recursive: false,
+          ...(args.limit !== undefined ? { limit: args.limit } : {}),
+        },
+        db,
+        callId,
+        remoteTarget,
+      )) as SshFsToolResult;
+      if (!delegate.success) {
+        return attachFailure('attached_file_search', start, delegate.error ?? 'Tìm kiếm nội dung thất bại.');
+      }
+      const data = delegate.data as Record<string, unknown>;
+      const result: SshFsToolResult = {
+        success: true,
+        action: 'attached_file_search',
+        count: delegate.count,
+        truncated: delegate.truncated,
+        executionTimeMs: Math.round(performance.now() - start),
+        data: {
+          ...data,
+          content: wrapAttachedContent(
+            `KẾT QUẢ TÌM KIẾM NỘI DUNG ${targetPath}`,
+            (data.matches as Array<{ file: string; line: number; text: string }> ?? [])
+              .map((m) => `${m.file}:${m.line}:${m.text}`)
+              .join('\n'),
+          ),
+        },
+      };
+      return JSON.stringify(result);
+    }
+
+    if (args.kind !== 'name') throw new Error('Tham số "kind" phải là "name" hoặc "content".');
+    if (!args.query?.trim()) throw new Error('Tham số "query" là bắt buộc khi kind="name".');
+
+    const command = `find ${shellQuote(targetPath)} -type f -iname ${shellQuote(args.query)} | head -n 201`;
+    const output = await execRemoteCommand(sshConfig, command, undefined, callId);
+    if (output.exitStatus !== 0 && output.exitStatus !== 1) {
+      throw new Error(output.stderr.trim() || `Lệnh find thất bại với mã lỗi ${output.exitStatus}`);
+    }
+    const paths = output.stdout.split('\n').map((line) => line.trim()).filter(Boolean);
+    const truncated = paths.length > 200;
+    const result: SshFsToolResult = {
+      success: true,
+      action: 'attached_file_search',
+      count: paths.length,
+      truncated,
+      executionTimeMs: Math.round(performance.now() - start),
+      data: {
+        path: targetPath,
+        query: args.query,
+        paths,
+        content: wrapAttachedContent(`KẾT QUẢ TÌM TÊN FILE ${targetPath}`, paths.join('\n')),
+      },
+    };
+    return JSON.stringify(result);
+  } catch (err) {
+    return attachFailure('attached_file_search', start, err);
+  }
+}
+
+/** Range read for an attached file: text slice, PDF pages, XLSX sheet rows/cols, DOCX blocks. */
+export async function executeSshAttachedFileRead(
+  args: SshAttachedFileReadArgs,
+  db: TaskPlannerDatabase = defaultDb,
+  remoteTarget?: RemoteToolTarget,
+  scope?: AttachmentScope,
+): Promise<string> {
+  const start = performance.now();
+  try {
+    const { fsConfig, sshConfig } = await resolveSshConfig(db, remoteTarget);
+    const targetPath = resolveAttachedPath(args, fsConfig, remoteTarget, scope);
+
+    let format: string = 'text';
+    let text: string;
+    let truncated: boolean;
+    let textLinesCount: number | undefined;
+    let extra: Record<string, unknown> = {};
+
+    if (isLikelyBinaryPath(targetPath) || ['docx', 'xlsx', 'pdf'].includes(targetPath.split('.').pop()?.toLowerCase() ?? '')) {
+      const ext = targetPath.split('.').pop()?.toLowerCase() ?? '';
+      if (!['docx', 'xlsx', 'pdf'].includes(ext)) {
+        throw new Error('Định dạng tệp không được hỗ trợ. Chỉ hỗ trợ .docx, .xlsx, .pdf.');
+      }
+      const bytes = await readRemoteFileBytes(sshConfig, targetPath);
+      const region = await readSshDocumentRegion(bytes, targetPath, {
+        pageStart: args.pageStart,
+        pageCount: args.pageCount,
+        sheet: args.sheet,
+        rowStart: args.rowStart,
+        rowCount: args.rowCount,
+        colStart: args.colStart,
+        colCount: args.colCount,
+        blockStart: args.blockStart,
+        blockCount: args.blockCount,
+      });
+      format = region.format;
+      text = region.text;
+      truncated = region.truncated;
+      extra = { note: region.note, pageCount: region.pageCount, blockCount: region.blockCount };
+    } else {
+      const offset = Math.max(1, Number(args.offset) || 1);
+      const limit = Math.min(Math.max(1, Number(args.limit) || fsConfig.maxLinesPerRead || 100), 500);
+      const slice = await readRemoteFileSlice(sshConfig, targetPath, offset, limit);
+      text = slice.lines.map((line, idx) => `${offset + idx}: ${line}`).join('\n');
+      textLinesCount = slice.lines.length;
+      truncated = slice.hasMore;
+      extra = { offset, limit, totalLines: slice.totalLines, hasMore: slice.hasMore };
+    }
+
+    const result: SshFsToolResult = {
+      success: true,
+      action: 'attached_file_read',
+      truncated,
+      count: textLinesCount,
+      executionTimeMs: Math.round(performance.now() - start),
+      data: {
+        path: targetPath,
+        format,
+        ...extra,
+        content: wrapAttachedContent(`NỘI DUNG FILE ĐÍNH KÈM ${targetPath}`, text),
+      },
+    };
+    return JSON.stringify(result);
+  } catch (err) {
+    return attachFailure('attached_file_read', start, err);
   }
 }
 

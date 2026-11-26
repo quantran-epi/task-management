@@ -6,6 +6,7 @@
 
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import * as pdfjsLib from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
@@ -25,8 +26,47 @@ export interface ParsedDocument {
 }
 
 const DEFAULT_MAX_CHARS = 24000;
+const MAX_PDF_PAGES_PER_READ = 20;
+const MAX_XLSX_ROWS_PER_READ = 200;
+const MAX_XLSX_COLS_PER_READ = 50;
+const MAX_DOCX_BLOCKS_PER_READ = 200;
 const SUPPORTED_FORMATS: SshDocumentFormat[] = ['docx', 'xlsx', 'pdf'];
 const SCAN_NOTE = 'PDF không có text layer (có thể là ảnh scan); không hỗ trợ OCR.';
+
+/** 1-based ranges returned by `info` and consumed by `read`. */
+export interface SshDocumentRegion {
+  pageStart?: number | undefined;
+  pageCount?: number | undefined;
+  sheet?: string | undefined;
+  rowStart?: number | undefined;
+  rowCount?: number | undefined;
+  colStart?: number | undefined;
+  colCount?: number | undefined;
+  blockStart?: number | undefined;
+  blockCount?: number | undefined;
+}
+
+export interface SshDocumentInfo extends SshDocumentRegion {
+  format: SshDocumentFormat;
+  sizeBytes: number;
+  sheetCount?: number;
+  pageCount?: number;
+  blockCount?: number;
+  sheets?: Array<{ name: string; rowCount: number; columnCount: number }>;
+  note?: string;
+  nextRange: SshDocumentRegion;
+}
+
+export interface SshDocumentRegionResult {
+  format: SshDocumentFormat;
+  text: string;
+  truncated: boolean;
+  note?: string | undefined;
+  pageCount?: number | undefined;
+  blockCount?: number | undefined;
+  /** Set when word/document.xml index failed and mammoth recovery was used. */
+  fallbackUsed?: boolean | undefined;
+}
 
 /** Truncate before sending to the AI context; cap must be independent of file size. */
 function truncateText(text: string, maxChars: number): { text: string; truncated: boolean } {
@@ -120,6 +160,260 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
     // pdfjs-dist 6 exposes loadingTask.destroy(); `clearResources` does not exist.
     await loadingTask.destroy();
   }
+}
+
+function requireFormat(filename: string): SshDocumentFormat {
+  const ext = extOf(filename);
+  if (!SUPPORTED_FORMATS.includes(ext as SshDocumentFormat)) {
+    throw new Error('Định dạng tệp không được hỗ trợ. Chỉ hỗ trợ .docx, .xlsx, .pdf.');
+  }
+  return ext as SshDocumentFormat;
+}
+
+function positive(value: number | undefined, fallback: number, max: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(Math.floor(parsed), max);
+}
+
+async function loadWorkbook(buffer: ArrayBuffer): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(
+    toBytes(buffer) as unknown as Parameters<typeof workbook.xlsx.load>[0],
+  );
+  return workbook;
+}
+
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object' && value !== null && 'result' in value) {
+    return String((value as { result?: unknown }).result ?? '');
+  }
+  if (typeof value === 'object' && value !== null && 'text' in value) {
+    return String((value as { text?: unknown }).text ?? '');
+  }
+  if (typeof value === 'object' && value !== null && 'richText' in value) {
+    return (value as { richText?: Array<{ text?: string }> }).richText
+      ?.map((part) => part.text ?? '')
+      .join('') ?? '';
+  }
+  if (typeof value === 'object') return '';
+  return String(value);
+}
+
+function sheetsOf(workbook: ExcelJS.Workbook): Array<ExcelJS.Worksheet & { getCell?: (r: number, c: number) => { value: unknown } }> {
+  if (workbook.worksheets?.length) return workbook.worksheets;
+  const legacy = workbook as unknown as { eachSheet?: (cb: (ws: ExcelJS.Worksheet) => void) => void };
+  if (!legacy.eachSheet) return [];
+  const collected: ExcelJS.Worksheet[] = [];
+  legacy.eachSheet((ws) => collected.push(ws));
+  return collected;
+}
+
+function sheetInfo(workbook: ExcelJS.Workbook) {
+  return sheetsOf(workbook).map((ws) => ({
+    name: ws.name,
+    rowCount: ws.rowCount,
+    columnCount: ws.columnCount,
+  }));
+}
+
+function decodeXmlText(raw: string): string {
+  return raw
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+async function loadDocxBlocks(buffer: ArrayBuffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(toBytes(buffer));
+  const xmlFile = zip.file('word/document.xml');
+  if (!xmlFile) throw new Error('DOCX thiếu word/document.xml');
+  const xml = await xmlFile.async('string');
+  const blocks: string[] = [];
+  const blockPattern = /<w:p\b[\s\S]*?<\/w:p>|<w:tbl\b[\s\S]*?<\/w:tbl>/g;
+  for (const match of xml.match(blockPattern) ?? []) {
+    if (match.startsWith('<w:tbl')) {
+      // A wide table would blow the context; one block per row keeps ranges meaningful.
+      for (const row of match.match(/<w:tr\b[\s\S]*?<\/w:tr>/g) ?? []) {
+        blocks.push(textFromXml(row));
+      }
+    } else {
+      blocks.push(textFromXml(match));
+    }
+  }
+  if (blocks.length === 0) throw new Error('Không dựng được block index từ word/document.xml');
+  return blocks;
+}
+
+function textFromXml(xml: string): string {
+  return [...xml.matchAll(/<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>/g)]
+    .map((m) => decodeXmlText(m[1] ?? ''))
+    .join('');
+}
+
+async function loadPdfDocument(buffer: ArrayBuffer): Promise<pdfjsLib.PDFDocumentProxy> {
+  const loadingTask = pdfjsLib.getDocument({ data: toBytes(buffer) });
+  try {
+    return await loadingTask.promise;
+  } catch (err) {
+    await loadingTask.destroy();
+    throw err;
+  }
+}
+
+async function pdfPageText(pdf: pdfjsLib.PDFDocumentProxy, pageNo: number): Promise<string> {
+  const page = await pdf.getPage(pageNo);
+  try {
+    const content = await page.getTextContent();
+    return content.items
+      .map((item) => (item && typeof item === 'object' && 'str' in item
+        ? String((item as { str?: unknown }).str ?? '')
+        : ''))
+      .join('');
+  } finally {
+    page.cleanup();
+  }
+}
+
+/** Info-first contract: counts and a suggested range, never the whole document body. */
+export async function getSshDocumentInfo(
+  buffer: ArrayBuffer,
+  filename: string,
+): Promise<SshDocumentInfo> {
+  const format = requireFormat(filename);
+  const base = { format, sizeBytes: buffer.byteLength };
+
+  if (format === 'pdf') {
+    const pdf = await loadPdfDocument(buffer);
+    try {
+      return { ...base, pageCount: pdf.numPages, nextRange: { pageStart: 1, pageCount: Math.min(pdf.numPages, MAX_PDF_PAGES_PER_READ) } };
+    } finally {
+      // pdfjs-dist 6 exposes destroy() on loadingTask (not on the proxy).
+      await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.();
+    }
+  }
+
+  if (format === 'xlsx') {
+    const workbook = await loadWorkbook(buffer);
+    const sheets = sheetInfo(workbook);
+    const first = sheets[0];
+    return {
+      ...base,
+      sheetCount: sheets.length,
+      sheets,
+      nextRange: first ? { sheet: first.name, rowStart: 1, rowCount: Math.min(first.rowCount, MAX_XLSX_ROWS_PER_READ) } : {},
+    };
+  }
+
+  try {
+    const blocks = await loadDocxBlocks(buffer);
+    return {
+      ...base,
+      blockCount: blocks.length,
+      nextRange: { blockStart: 1, blockCount: Math.min(blocks.length, MAX_DOCX_BLOCKS_PER_READ) },
+    };
+  } catch {
+    // Fallback only when the XML block index cannot be built; still info-only.
+    const result = await mammoth.extractRawText({ arrayBuffer: toBytes(buffer).buffer as ArrayBuffer });
+    const blocks = (result?.value ?? '').split('\n').filter((line) => line.trim().length > 0);
+    return {
+      ...base,
+      blockCount: blocks.length,
+      nextRange: { blockStart: 1, blockCount: Math.min(blocks.length || 1, MAX_DOCX_BLOCKS_PER_READ) },
+      note: 'Block index từ word/document.xml không dùng được; dùng mammoth fallback.',
+    };
+  }
+}
+
+/** Range-only read: no whole-document join-and-cut. Text/code ranges use readRemoteFileSlice in the executor. */
+export async function readSshDocumentRegion(
+  buffer: ArrayBuffer,
+  filename: string,
+  range: SshDocumentRegion,
+): Promise<SshDocumentRegionResult> {
+  const format = requireFormat(filename);
+
+  if (format === 'pdf') {
+    const requested = Number(range.pageCount);
+    if (range.pageCount === undefined || !Number.isFinite(requested) || requested < 1 || requested > MAX_PDF_PAGES_PER_READ) {
+      throw new Error(`PDF mỗi lần chỉ đọc tối đa ${MAX_PDF_PAGES_PER_READ} trang; hãy cung cấp pageCount hợp lệ.`);
+    }
+    const pdf = await loadPdfDocument(buffer);
+    try {
+      const pageStart = positive(range.pageStart, 1, pdf.numPages);
+      const pageCount = Math.min(Math.floor(requested), pdf.numPages - pageStart + 1);
+      const sections: string[] = [];
+      let hasText = false;
+      for (let i = 0; i < pageCount; i += 1) {
+        const pageNo = pageStart + i;
+        const text = await pdfPageText(pdf, pageNo);
+        if (text.trim()) hasText = true;
+        sections.push(`--- Trang ${pageNo} ---\n${text}`);
+      }
+      const capped = truncateText(sections.join('\n\n'), DEFAULT_MAX_CHARS);
+      return {
+        format,
+        text: capped.text,
+        truncated: capped.truncated,
+        ...(hasText ? {} : { note: SCAN_NOTE }),
+      };
+    } finally {
+      await (pdf as unknown as { destroy?: () => Promise<void> }).destroy?.();
+    }
+  }
+
+  if (format === 'xlsx') {
+    const workbook = await loadWorkbook(buffer);
+    if (!range.sheet) throw new Error('Tham số "sheet" là bắt buộc khi đọc XLSX.');
+    const ws = workbook.getWorksheet?.(range.sheet) ?? sheetsOf(workbook).find((s) => s.name === range.sheet);
+    if (!ws) throw new Error(`Không tìm thấy sheet "${range.sheet}".`);
+    const rowStart = positive(range.rowStart, 1, ws.rowCount);
+    const colStart = positive(range.colStart, 1, ws.columnCount);
+    const rowCount = positive(range.rowCount, Math.min(MAX_XLSX_ROWS_PER_READ, ws.rowCount - rowStart + 1), MAX_XLSX_ROWS_PER_READ);
+    const colCount = positive(range.colCount, Math.min(MAX_XLSX_COLS_PER_READ, ws.columnCount - colStart + 1), MAX_XLSX_COLS_PER_READ);
+    const rows: string[] = [];
+    for (let rowNo = rowStart; rowNo < rowStart + rowCount && rowNo <= ws.rowCount; rowNo += 1) {
+      const cells: string[] = [];
+      for (let colNo = colStart; colNo < colStart + colCount && colNo <= ws.columnCount; colNo += 1) {
+        cells.push(cellText(ws.getCell(rowNo, colNo).value));
+      }
+      rows.push(`${rowNo}: ${cells.join(' | ')}`);
+    }
+    const capped = truncateText(rows.join('\n'), DEFAULT_MAX_CHARS);
+    return {
+      format,
+      text: `=== Sheet: ${ws.name} (rows ${rowStart}-${rowStart + rowCount - 1}, cols ${colStart}-${colStart + colCount - 1}) ===\n${capped.text}`,
+      truncated: capped.truncated,
+    };
+  }
+
+  let blocks: string[] | null = null;
+  let fallbackUsed = false;
+  try {
+    blocks = await loadDocxBlocks(buffer);
+  } catch {
+    // Corrupt/missing XML index: mammoth is a recovery path, not the primary reader.
+    fallbackUsed = true;
+  }
+  if (!blocks) {
+    const result = await mammoth.extractRawText({ arrayBuffer: toBytes(buffer).buffer as ArrayBuffer });
+    blocks = (result.value ?? '').split('\n').filter((line) => line.trim().length > 0);
+  }
+  const blockStart = positive(range.blockStart, 1, Math.max(blocks.length, 1));
+  const blockCount = positive(range.blockCount, Math.min(MAX_DOCX_BLOCKS_PER_READ, blocks.length - blockStart + 1), MAX_DOCX_BLOCKS_PER_READ);
+  const selected = blocks.slice(blockStart - 1, blockStart - 1 + blockCount)
+    .map((text, idx) => `[${blockStart + idx}] ${text}`);
+  const capped = truncateText(selected.join('\n'), DEFAULT_MAX_CHARS);
+  return {
+    format,
+    text: capped.text,
+    truncated: capped.truncated,
+    blockCount: blocks.length,
+    fallbackUsed: fallbackUsed || undefined,
+  };
 }
 
 /** Dispatch by filename extension and cap the resulting text for AI context safety. */

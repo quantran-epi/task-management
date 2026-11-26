@@ -65,12 +65,60 @@ export interface SshGrepFilesArgs {
   limit?: number;
 }
 
+/** Attachment identity for a turn. Shared by standalone, dock and team chat; never a UI capability flag. */
+export interface AttachmentScope {
+  attachedPaths: string[];
+  teamId?: string;
+  taskIds?: string[];
+}
+
+export interface SshAttachedFileInfoArgs {
+  /** Attached file identity as shown to the user; host/config selectors are forbidden. */
+  path: string;
+}
+
+export interface SshAttachedFileSearchArgs {
+  path: string;
+  kind: 'name' | 'content';
+  /** Required for kind='name': filename fragment, shell-quoted before reaching `find`. */
+  query?: string;
+  /** Required for kind='content': regex/text passed to the existing grep executor. */
+  pattern?: string;
+  limit?: number;
+}
+
+export interface SshAttachedFileReadArgs {
+  path: string;
+  /** 1-based line range for text/code files. */
+  offset?: number;
+  limit?: number;
+  /** 1-based page range for PDF files, pageCount <= 20. */
+  pageStart?: number;
+  pageCount?: number;
+  /** Sheet + 1-based row/column range for XLSX files. */
+  sheet?: string;
+  rowStart?: number;
+  rowCount?: number;
+  colStart?: number;
+  colCount?: number;
+  /** 1-based block range for DOCX files (paragraph/table blocks). */
+  blockStart?: number;
+  blockCount?: number;
+}
+
 export interface SshFsToolResult {
   success: boolean;
-  action: 'list_dir' | 'read_file' | 'grep_files' | 'read_document';
+  action:
+    | 'list_dir'
+    | 'read_file'
+    | 'grep_files'
+    | 'read_document'
+    | 'attached_file_info'
+    | 'attached_file_search'
+    | 'attached_file_read';
   data?: unknown;
-  count?: number;
-  truncated?: boolean;
-  error?: string;
-  executionTimeMs?: number;
+  count?: number | undefined;
+  truncated?: boolean | undefined;
+  error?: string | undefined;
+  executionTimeMs?: number | undefined;
 }

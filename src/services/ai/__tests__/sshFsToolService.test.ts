@@ -329,7 +329,7 @@ describe('sshFsToolService', () => {
   });
 
   describe('attached-file tool family', () => {
-    const scope = { attachedPaths: ['/var/log/report.pdf', '/var/log/data.xlsx', '/var/log/app.log'] };
+    const scope = { attachedPaths: ['/var/log', '/var/log/report.pdf', '/var/log/data.xlsx', '/var/log/app.log'] };
 
     it('rejects a path outside the attached set after resolving, with no fallback read', async () => {
       const bytesSpy = vi.spyOn(sshService, 'readRemoteFileBytes').mockResolvedValue(new ArrayBuffer(2));
@@ -343,14 +343,21 @@ describe('sshFsToolService', () => {
       expect(res.error).toMatch(/attached|đính kèm|không nằm/);
       expect(bytesSpy).not.toHaveBeenCalled();
       expect(sliceSpy).not.toHaveBeenCalled();
+      bytesSpy.mockRestore();
+      sliceSpy.mockRestore();
+    });
 
+    it('rejects traversal input even when it points at an attached path', async () => {
+      const bytesSpy = vi.spyOn(sshService, 'readRemoteFileBytes').mockResolvedValue(new ArrayBuffer(2));
+      const resolveSpy = vi.spyOn(sshService, 'getSshConfigById');
       const traversal = JSON.parse(await executeSshAttachedFileInfo(
         { path: 'data/../report.pdf' }, mockDb, undefined, scope,
       ));
-      expect(traversal.success).toBe(true);
-      expect(traversal.data.path).toBe('/var/log/report.pdf');
+      expect(traversal).toMatchObject({ success: false, action: 'attached_file_info' });
+      expect(traversal.error).toMatch(/không nằm trong tập/);
+      expect(bytesSpy).not.toHaveBeenCalled();
+      expect(resolveSpy).toHaveBeenCalled();
       bytesSpy.mockRestore();
-      sliceSpy.mockRestore();
     });
 
     it('info returns format/size/count and next-range hint from parser', async () => {
@@ -392,11 +399,11 @@ describe('sshFsToolService', () => {
         exitStatus: 0,
       });
       const res = JSON.parse(await executeSshAttachedFileSearch(
-        { path: '.', kind: 'name', query: `a' b` }, mockDb, 'call-123', undefined, scope,
+        { path: 'app.log', kind: 'name', query: `a' b` }, mockDb, 'call-123', undefined, scope,
       ));
       expect(execSpy).toHaveBeenCalledWith(
         mockSshConfig,
-        `find '/var/log' -type f -iname 'a'\\'' b' | head -n 201`,
+        `find '/var/log/app.log' -type f -iname 'a'\\'' b' | head -n 201`,
         undefined,
         'call-123',
       );
@@ -407,15 +414,20 @@ describe('sshFsToolService', () => {
       expect(res.data.content).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
       expect(res.data.content).not.toContain('</file_content>');
 
-      execSpy.mockResolvedValue({ stdout: '', stderr: 'find: Permission denied', exitStatus: 1 });
+      execSpy.mockResolvedValue({ stdout: '', stderr: 'find: Permission denied', exitStatus: 2 });
       const failed = JSON.parse(await executeSshAttachedFileSearch(
-        { path: '.', kind: 'name', query: 'x' }, mockDb, undefined, undefined, scope,
+        { path: 'app.log', kind: 'name', query: 'x' }, mockDb, undefined, undefined, scope,
       ));
       expect(failed.success).toBe(false);
       expect(failed.error).toContain('Permission denied');
     });
 
     it('content search delegates to grep with the attached path and keeps truncation', async () => {
+      vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+        stdout: '/var/log/app.log:42:ERROR database connection timeout\n',
+        stderr: '',
+        exitStatus: 0,
+      });
       const res = JSON.parse(await executeSshAttachedFileSearch(
         { path: 'app.log', kind: 'content', pattern: 'ERROR', limit: 3 }, mockDb, undefined, undefined, scope,
       ));
