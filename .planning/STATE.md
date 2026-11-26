@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 51 (TaskMate Chat standalone) — COMPLETE
 Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
-Last activity: 2026-11-26 - Completed quick task 261126-ky8: standalone chat DB split, SSH connection settings, default model seeding.
+Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -151,6 +151,7 @@ Progress: [██████████] 100%
 | 261126-diw | Fix AI chat window: convert settings drawer to full-width modal, remove auto-approve button (chat is Q&A only, no TaskMate data mutation) | 2026-11-26 | 5bd75c29 | — | [261126-diw-fix-ai-chat-window-convert-settings-draw](./quick/261126-diw-fix-ai-chat-window-convert-settings-draw/) |
 | 261126-m1v | CR detail page: move right-side sections below table so table is full width; add task filtering in CR detail page. | 2026-11-26 | 31928a99 | — | [261126-m1v-cr-detail-page-move-right-side-sections-](./quick/261126-m1v-cr-detail-page-move-right-side-sections-/) |
 | 261126-ky8 | Split standalone chat window onto its own database, add SSH connection config, fix default model for new tabs | 2026-11-26 | 7809e6c6 | — | [261126-ky8-split-standalone-chat-window-onto-its-ow](./quick/261126-ky8-split-standalone-chat-window-onto-its-ow/) |
+| 261126-qag | Điều tra AI doc read + thiết kế SSH remote browse/multi-attach + AI read tool cho standalone chat | 2026-11-26 | e4053a7e | — | [261126-qag-them-ssh-remote-file-browser-va-multi-se](./quick/261126-qag-them-ssh-remote-file-browser-va-multi-se/) |
 
 ## Accumulated Context
 
