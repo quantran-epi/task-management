@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Empty, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Empty, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -16,6 +16,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
+import { searchIncludes } from '../utils/searchText';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
 
 export interface ChangeRequestDetailViewProps {
@@ -67,6 +68,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const { modal, contextHolder } = useTaskMateModal();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [taskSearch, setTaskSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
   // ponytail: placeholderTaskIdRef tracks in-memory creation; upgrade when TaskDrawer supports unpersisted creation.
@@ -112,6 +115,16 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     docCount: cr?.documentLinks?.length ?? 0,
     reminderCount: Math.max(cr?.reminders?.length ?? 0, cr?.reminderDate ? 1 : 0),
   }), [tasks, crNotesCount, cr]);
+
+  // Filter only the table source — stats above always use the full task array.
+  const filteredTasks = useMemo(() => {
+    const needle = taskSearch.trim();
+    return tasks.filter(
+      (t) =>
+        (!needle || searchIncludes(t.name, needle)) &&
+        (statusFilter === 'ALL' || t.status === statusFilter)
+    );
+  }, [tasks, taskSearch, statusFilter]);
 
   if (!cr) {
     return (
@@ -410,15 +423,51 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           </Button>
         </div>
 
+        {tasks.length > 0 && (
+          <Space style={{ marginBottom: 8, width: '100%' }} wrap>
+            <InputSearch
+              data-testid="cr-detail-task-search"
+              placeholder="Tìm tác vụ"
+              allowClear
+              value={taskSearch}
+              onChange={(e) => setTaskSearch(e.target.value)}
+              style={{ width: 240 }}
+            />
+            <Select
+              data-testid="cr-detail-status-filter"
+              size="small"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'ALL', label: 'Tất cả' },
+                ...Object.entries(TASK_STATUS_LABEL).map(([value, meta]) => ({ value, label: meta.label })),
+              ]}
+              style={{ width: 160 }}
+            />
+          </Space>
+        )}
+
         {tasks.length === 0 ? (
           <Empty description="CR này chưa có tác vụ nào" style={{ margin: '16px 0' }}>
             <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCreateTask}>
               Thêm tác vụ
             </Button>
           </Empty>
+        ) : filteredTasks.length === 0 ? (
+          <Empty description="Không có tác vụ phù hợp" style={{ margin: '16px 0' }}>
+            <Button
+              size="small"
+              onClick={() => {
+                setTaskSearch('');
+                setStatusFilter('ALL');
+              }}
+            >
+              Xóa lọc
+            </Button>
+          </Empty>
         ) : (
           <Table
-            dataSource={tasks}
+            dataSource={filteredTasks}
             rowKey="id"
             size="small"
             pagination={false}

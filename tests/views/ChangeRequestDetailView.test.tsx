@@ -341,6 +341,102 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     });
   }, 30000);
 
+  async function seedFilterTasks() {
+    const seeded = await seed();
+    const inProgress = await createTask(
+      {
+        crId: seeded.cr.id,
+        name: 'Nghiệm Thu',
+        status: 'In Progress',
+        priority: 'Medium',
+        estimateMinutes: 30,
+      },
+      db
+    );
+    return { ...seeded, inProgress };
+  }
+
+  function taskRows(): HTMLElement[] {
+    return Array.from(document.querySelectorAll('table tbody tr.ant-table-row')) as HTMLElement[];
+  }
+
+  function openStatusFilter() {
+    const root = screen.getByTestId('cr-detail-status-filter');
+    const target = root.matches('.ant-select') ? root : (root.querySelector('.ant-select') ?? root);
+    fireEvent.mouseDown(target);
+  }
+
+  function changeSearch(value: string) {
+    const input = screen.getByTestId('cr-detail-task-search').querySelector('input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value } });
+  }
+
+  it('filters tasks by name without diacritics through cr-detail-task-search', async () => {
+    const { cr } = await seedFilterTasks();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+    await screen.findByText('Implement OAuth callback');
+    expect(taskRows()).toHaveLength(2);
+
+    changeSearch('oauth');
+
+    await waitFor(() => expect(taskRows()).toHaveLength(1));
+    expect(screen.getByText('Implement OAuth callback')).toBeInTheDocument();
+    expect(screen.queryByText('Nghiệm Thu')).not.toBeInTheDocument();
+  }, 30000);
+
+  it('filters tasks by status and combines name and status with AND', async () => {
+    const { cr } = await seedFilterTasks();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+    await screen.findByText('Implement OAuth callback');
+
+    openStatusFilter();
+    await waitFor(() => expect(optionTexts()).toContain('Đang làm'));
+    clickOption('Đang làm');
+
+    await waitFor(() => expect(taskRows()).toHaveLength(1));
+    expect(screen.getByText('Nghiệm Thu')).toBeInTheDocument();
+    expect(screen.queryByText('Implement OAuth callback')).not.toBeInTheDocument();
+
+    changeSearch('nghiem thu');
+    await waitFor(() => expect(taskRows()).toHaveLength(1));
+    expect(screen.getByText('Nghiệm Thu')).toBeInTheDocument();
+
+    changeSearch('oauth');
+    await waitFor(() => expect(screen.getByText('Không có tác vụ phù hợp')).toBeInTheDocument());
+  }, 30000);
+
+  it('shows a filter-only empty state with stats from all tasks and a clear-filter button', async () => {
+    const { cr } = await seedFilterTasks();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+    const strip = await screen.findByTestId('cr-detail-stats');
+    expect(strip.textContent).toContain('TASK2');
+
+    changeSearch('không khớp');
+
+    expect(await screen.findByText('Không có tác vụ phù hợp')).toBeInTheDocument();
+    expect(screen.getByTestId('cr-detail-stats').textContent).toContain('TASK2');
+    expect(screen.getByTestId('cr-detail-block-notes')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa lọc' }));
+    await waitFor(() => expect(taskRows()).toHaveLength(2));
+  }, 30000);
+
+  it('restores all tasks when the status filter returns to Tất cả', async () => {
+    const { cr } = await seedFilterTasks();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+    await screen.findByText('Implement OAuth callback');
+
+    openStatusFilter();
+    await waitFor(() => expect(optionTexts()).toContain('Đang làm'));
+    clickOption('Đang làm');
+    await waitFor(() => expect(taskRows()).toHaveLength(1));
+
+    openStatusFilter();
+    await waitFor(() => expect(optionTexts()).toContain('Tất cả'));
+    clickOption('Tất cả');
+    await waitFor(() => expect(taskRows()).toHaveLength(2));
+  }, 30000);
+
   it('renders Tải lại button and triggers reloadTab', async () => {
     const { cr } = await seed();
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
