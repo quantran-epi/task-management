@@ -1,9 +1,10 @@
 import React from 'react';
 import { Button, IconButton, Tooltip, Dropdown, useAntdToken } from '../ui';
 import type { MenuProps } from 'antd';
-import { PushpinOutlined, PushpinFilled, CloseOutlined, BugOutlined, ExportOutlined, MoreOutlined, BookOutlined, DeleteOutlined, DisconnectOutlined, SettingOutlined } from '../ui/icon';
+import { PushpinOutlined, PushpinFilled, CloseOutlined, BugOutlined, ExportOutlined, MoreOutlined, BookOutlined, DeleteOutlined, DisconnectOutlined, SettingOutlined, SunOutlined, MoonOutlined } from '../ui/icon';
 import { JetBrainsAIIcon } from '../icons/JetBrainsIcons';
 import type { ActiveScope } from '../../context/AIChatContext';
+import { useThemeMode } from '../../hooks/useThemeMode';
 
 export interface ChatHeaderProps {
   /** Explicit standalone flag; without it the header still infers standalone from onOpenSettings. */
@@ -40,11 +41,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   connectionStatus,
 }) => {
   const { token } = useAntdToken();
+  const { mode, toggle } = useThemeMode();
   const isStandalone = isStandaloneProp ?? Boolean(onOpenSettings);
 
   if (isStandalone) {
     return (
       <div
+        data-testid="chat-standalone-header"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -68,6 +71,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               fontSize: 'var(--font-size-xs)',
               color: token.colorTextSecondary,
               whiteSpace: 'nowrap',
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
             Global · không có ngữ cảnh TaskMate
@@ -81,21 +87,46 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 fontSize: 'var(--font-size-xs)',
                 color: 'var(--fg-muted, #6b7280)',
                 whiteSpace: 'nowrap',
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
               {connectionStatus}
             </span>
           )}
         </div>
-        <Tooltip title="AI settings">
-          <IconButton
-            type="text"
-            icon={<SettingOutlined />}
-            onClick={onOpenSettings}
-            aria-label="Mở Cài đặt AI"
-            data-testid="chat-settings-gear"
-          />
-        </Tooltip>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-4)', flexShrink: 0 }}>
+          <Tooltip title={mode === 'dark' ? 'Giao diện: Sáng' : 'Giao diện: Tối'}>
+            <IconButton
+              type="text"
+              size="small"
+              icon={mode === 'dark' ? <SunOutlined /> : <MoonOutlined />}
+              onClick={toggle}
+              aria-label="Chuyển đổi giao diện sáng/tối"
+              data-testid="chat-theme-toggle"
+              style={{
+                width: 28,
+                height: 28,
+                minWidth: 28,
+                padding: 0,
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="AI settings">
+            <IconButton
+              type="text"
+              icon={<SettingOutlined />}
+              onClick={onOpenSettings}
+              aria-label="Mở Cài đặt AI"
+              data-testid="chat-settings-gear"
+            />
+          </Tooltip>
+        </div>
       </div>
     );
   }
