@@ -6,6 +6,7 @@ import { KnowledgeServerConfigCard } from '../settings/KnowledgeServerConfigCard
 import { McpConfigCard } from '../settings/McpConfigCard';
 import { GraphitiSqlConfigCard } from '../settings/GraphitiSqlConfigCard';
 import { OracleAiToolConfigCard } from '../settings/OracleAiToolConfigCard';
+import { SshConfigCard } from '../settings/SshConfigCard';
 import { SshFsAiToolConfigCard } from '../settings/SshFsAiToolConfigCard';
 import { AiToolCatalogCard } from '../settings/AiToolCatalogCard';
 import { GlobalConventionsCard } from '../settings/GlobalConventionsCard';
@@ -14,6 +15,7 @@ export interface AISettingsDrawerProps {
   open: boolean;
   onClose: () => void;
   db?: TaskPlannerDatabase | undefined;
+  standalone?: boolean | undefined;
 }
 
 interface SettingsGroup {
@@ -42,12 +44,20 @@ const GROUPS: SettingsGroup[] = [
   { label: 'Tool Catalog', header: 'Tool Catalog', render: (db) => <AiToolCatalogCard db={db} /> },
 ];
 
-export const AISettingsDrawerBody: React.FC<{ db?: TaskPlannerDatabase | undefined }> = ({
-  db = defaultDb,
-}) => {
+const STANDALONE_GROUPS: SettingsGroup[] = [
+  ...GROUPS.slice(0, 5),
+  { label: 'SSH Connections', header: 'SSH Connections', render: (db) => <SshConfigCard db={db} /> },
+  ...GROUPS.slice(5),
+];
+
+export const AISettingsDrawerBody: React.FC<{
+  db?: TaskPlannerDatabase | undefined;
+  standalone?: boolean | undefined;
+}> = ({ db = defaultDb, standalone = false }) => {
+  const groups = standalone ? STANDALONE_GROUPS : GROUPS;
   const [activeIndex, setActiveIndex] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
-  const group = GROUPS[activeIndex] ?? GROUPS[0]!;
+  const group = groups[activeIndex] ?? groups[0]!;
 
   const selectGroup = (index: number) => {
     setActiveIndex(index);
@@ -60,7 +70,7 @@ export const AISettingsDrawerBody: React.FC<{ db?: TaskPlannerDatabase | undefin
         aria-label="Cài đặt AI"
         style={{ width: 190, flex: '0 0 190px', borderRight: '1px solid var(--border)', padding: 'var(--spacing-sm, 8px) 0' }}
       >
-        {GROUPS.map((item, index) => (
+        {groups.map((item, index) => (
           <Button
             key={item.label}
             type="text"
@@ -91,6 +101,7 @@ export const AISettingsDrawer: React.FC<AISettingsDrawerProps> = ({
   open,
   onClose,
   db = defaultDb,
+  standalone = false,
 }) => {
   const triggerRef = React.useRef<HTMLElement | null>(null);
   const wasOpenRef = React.useRef(false);
@@ -122,7 +133,7 @@ export const AISettingsDrawer: React.FC<AISettingsDrawerProps> = ({
       destroyOnHidden
       footer={null}
     >
-      <AISettingsDrawerBody db={db} />
+      <AISettingsDrawerBody db={db} standalone={standalone} />
     </Modal>
   );
 };

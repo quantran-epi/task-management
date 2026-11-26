@@ -137,6 +137,8 @@ describe('phase 51 AI settings drawer', () => {
 
   afterEach(async () => {
     cleanup();
+    // Let AntD/AIChat effects finish their in-flight settings reads before closing Dexie.
+    await new Promise((resolve) => setTimeout(resolve, 200));
     db.close();
     await Dexie.delete(dbName);
   });
@@ -231,11 +233,11 @@ describe('phase 51 AI settings drawer', () => {
     fireEvent.click(within(nav).getByRole('button', { name: 'SSH Connections' }));
     expect(screen.getByTestId('card-ssh-connections')).toBeInTheDocument();
     expect(cardMocks.sshConnections).toHaveBeenCalledWith({ db });
-    expect(screen.getByRole('button', { name: 'SSH Connections' })).toHaveAttribute('aria-current', 'true');
+    expect(within(nav).getByRole('button', { name: 'SSH Connections' })).toHaveAttribute('aria-current', 'true');
   });
 
-  it('Test 10: docked settings keeps the seven locked groups with no SSH Connections', () => {
-    const { AISettingsDrawerBody } = require('../../src/components/ai/AISettingsDrawer') as typeof import('../../src/components/ai/AISettingsDrawer');
+  it('Test 10: docked settings keeps the seven locked groups with no SSH Connections', async () => {
+    const { AISettingsDrawerBody } = await import('../../src/components/ai/AISettingsDrawer');
     render(<AISettingsDrawerBody db={db} />);
 
     const nav = screen.getByRole('navigation', { name: 'Cài đặt AI' });

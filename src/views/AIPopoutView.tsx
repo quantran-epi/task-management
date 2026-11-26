@@ -230,7 +230,7 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
         onOpenSettings={standaloneChat ? () => setSettingsOpen(true) : undefined}
         db={activeDb}
       />
-      <AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={activeDb} />
+      <AISettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} db={activeDb} standalone={standaloneChat} />
     </div>
   );
 };
