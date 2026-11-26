@@ -989,6 +989,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           onChange={(e) => setFullscreenDraft(e.target.value)}
           placeholder={placeholder}
           aria-label="Soạn thảo tin nhắn mở rộng"
+          // The shared TextArea wrapper defaults to autoSize; disable it so `rows` governs height.
+          autoSize={false}
           rows={16}
           showCount
           onKeyDown={(e) => {

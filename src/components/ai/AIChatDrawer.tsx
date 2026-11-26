@@ -2206,7 +2206,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
         onPopout={isStandaloneChat || isPopoutWindow ? undefined : handlePopoutAction}
         onOpenInstructions={isStandaloneChat ? undefined : () => setIsInstructionsOpen(true)}
         onClose={onClose}
-        onOpenSettings={isStandaloneChat ? onOpenSettings : undefined}
+        onOpenSettings={onOpenSettings}
         connectionStatus={isStandaloneChat ? standaloneConnectionStatus : undefined}
       />
 
