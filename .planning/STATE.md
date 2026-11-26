@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-26T02:03:38.850Z"
+last_updated: "2026-11-26T06:34:20.991Z"
 last_activity: 2026-11-26
 last_activity_desc: "Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers"
-state_head: ae3cfd3c8492f1d8b4840fa28e981c4e2006bf63
+state_head: 5bd75c296305a4169df4c701fa4b473c81caddc0
 progress:
   total_phases: 2
   completed_phases: 2
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 51 (TaskMate Chat standalone) — COMPLETE
 Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
-Last activity: 2026-11-26 - Completed quick task 261126-cid: Refactor CR detail + task list theo sketch A; fix mọi critical/warning.
+Last activity: 2026-11-26 - Completed quick task 261126-diw: Full-width AI settings Modal, remove self-approve and analysis toggle, always-analysis chat.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -148,6 +148,7 @@ Progress: [██████████] 100%
 | 261126-cff | Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds. | 2026-11-26 | 7b757828 | — | [261126-cff-add-a-github-actions-workflow-that-build](./quick/261126-cff-add-a-github-actions-workflow-that-build/) |
 | 59 | Add ui-task-insight-toolbar and pre-v1.6-baseline to Windows installer workflow push triggers. | 2026-11-26 | ae3cfd3c | — | — |
 | 261126-cid | Refactor CR detail + task list theo sketch A; fix mọi critical/warning | 2026-11-26 | 5b21c2e8 | Verified | [261126-cid-refactor-changerequestdetailview-theo-sk](./quick/261126-cid-refactor-changerequestdetailview-theo-sk/) |
+| 261126-diw | Fix AI chat window: convert settings drawer to full-width modal, remove auto-approve button (chat is Q&A only, no TaskMate data mutation) | 2026-11-26 | 5bd75c29 | — | [261126-diw-fix-ai-chat-window-convert-settings-draw](./quick/261126-diw-fix-ai-chat-window-convert-settings-draw/) |
 
 ## Accumulated Context
 
