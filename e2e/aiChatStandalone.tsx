@@ -1,14 +1,10 @@
 /**
- * Quick 261126-ky8 browser harness. Mounts the REAL standalone chat shell with its own DB
- * and the app's theme wrapper/tokens. No DB or component mocks; not part of the production bundle.
+ * Quick 261126-ky8 browser harness. Mounts the REAL standalone AppIntelliJ boot path
+ * with its own DB and the app's theme tokens. No DB or component mocks; not in production bundle.
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { ThemeAppHolder } from '../src/components/ui';
-import { AntdThemeAdapter } from '../src/workbench/AntdThemeAdapter';
-import { AIChatProvider } from '../src/context/AIChatContext';
-import { KnowledgeConfigProvider } from '../src/services/knowledge/knowledgeConfig';
-import { AIPopoutView } from '../src/views/AIPopoutView';
+import AppIntelliJ from '../src/AppIntelliJ';
 import { broadcastThemeMode, THEME_STORAGE_KEY } from '../src/workbench/themeBroadcast';
 import '../src/styles/workbench-tokens.css';
 
@@ -24,20 +20,11 @@ function HarnessShell() {
         Chuyển đổi giao diện
       </button>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <AIPopoutView standaloneChat />
+        <AppIntelliJ standaloneChat />
       </div>
     </div>
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <AntdThemeAdapter>
-    <ThemeAppHolder>
-      <KnowledgeConfigProvider>
-        <AIChatProvider>
-          <HarnessShell />
-        </AIChatProvider>
-      </KnowledgeConfigProvider>
-    </ThemeAppHolder>
-  </AntdThemeAdapter>
-);
+window.location.hash = '#ai-popout';
+createRoot(document.getElementById('root')!).render(<HarnessShell />);

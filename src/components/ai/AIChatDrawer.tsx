@@ -987,7 +987,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const handleAddTab = useCallback(async () => {    try {
       const ordinaryCount = durableTabs.filter((t) => t.type === 'chat').length;
       const title = `💬 Cuộc trò chuyện #${ordinaryCount + 1}`;
-      const defaultModel = persistedDefaultModelRef.current;
+      // Read fresh at creation time so a settings save without remount is picked up.
+      const defaultModel = (await getNineRouterConfig(db)).defaultModel;
       const newTab = await createChatTab(
         {
           scopeType: currentScope.type,
@@ -1221,16 +1222,18 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const ensureTurnTab = () => {
     const inFlight = ensureTabPromiseRef.current;
     if (inFlight && inFlight.scopeKey === scopeKey) return inFlight.promise;
-    const defaultModel = persistedDefaultModelRef.current;
-    const promise = getOrCreateActiveChatTab(
-      {
-        scopeType: currentScope.type,
-        scopeKey,
-        entityId: currentScope.id,
-        title: currentScope.title,
-        ...(defaultModel ? { config: { model: defaultModel } } : {}),
-      },
-      db
+    // Await the fresh config before insert so bootstrap cannot beat first-boot settings load.
+    const promise = getNineRouterConfig(db).then((cfg) =>
+      getOrCreateActiveChatTab(
+        {
+          scopeType: currentScope.type,
+          scopeKey,
+          entityId: currentScope.id,
+          title: currentScope.title,
+          ...(cfg.defaultModel ? { config: { model: cfg.defaultModel } } : {}),
+        },
+        db
+      )
     ).finally(() => {
       if (ensureTabPromiseRef.current?.promise === promise) ensureTabPromiseRef.current = null;
     });

@@ -37,6 +37,20 @@ export interface AppIntelliJProps {
   standaloneChat?: boolean | undefined;
 }
 
+/** TaskMate-only runtime: never mounted by the standalone chat build (D-01). */
+const TaskMateRuntime: React.FC = () => {
+  const { sessions: ghostDevSessions } = useGhostDevSessions();
+  useGhostDevNotifications(ghostDevSessions);
+  const notifications = useNotifications(defaultDb);
+  useDesktopNotification({ notifications });
+  useTimerAlertMonitor();
+  useLocalSqlitePersistence(defaultDb);
+  useTeamRunTeardown();
+  useGitHubAutoSync({ db: defaultDb });
+  useTelegramHeadlessWorker(defaultDb);
+  return null;
+};
+
 export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STANDALONE_CHAT }) => {
   const { route } = useHashRoute();
   const isPopout =
@@ -45,21 +59,6 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
     route === 'ai-popout' ||
     route === 'coding-zone-popout';
   const [showSplash, setShowSplash] = useState(!isPopout);
-
-  // Ghost-dev sessions outlive the retired agents page. Mount their OS notifications at the
-  // app root so the IntelliJ/Tauri workbench receives them.
-  const { sessions: ghostDevSessions } = useGhostDevSessions();
-  useGhostDevNotifications(ghostDevSessions);
-
-  // Runtime hooks previously owned by the deleted AntD shell. They must survive at the
-  // single workbench root: OS notifications, SQLite mirror, run teardown, backup sync, worker.
-  const notifications = useNotifications();
-  useDesktopNotification({ notifications });
-  useTimerAlertMonitor();
-  useLocalSqlitePersistence();
-  useTeamRunTeardown();
-  useGitHubAutoSync();
-  useTelegramHeadlessWorker();
 
   useEffect(() => {
     initializeDatabaseDefaults(standaloneChat ? chatWindowDb : defaultDb).catch((err) => {
@@ -114,10 +113,11 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
   }
 
   if (route === 'ai-popout') {
+    const popoutDb = standaloneChat ? chatWindowDb : defaultDb;
     return (
       <AntdThemeAdapter>
         <ThemeAppHolder>
-          <KnowledgeConfigProvider>
+          <KnowledgeConfigProvider db={popoutDb}>
             <AIChatProvider>
               <AIPopoutView standaloneChat={standaloneChat} />
             </AIChatProvider>
@@ -140,6 +140,7 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
   return (
     <AntdThemeAdapter>
       <ThemeAppHolder>
+        <TaskMateRuntime />
         {showSplash && <AppSplashScreen onReady={() => setShowSplash(false)} minDuration={1900} />}
         <KnowledgeConfigProvider>
           <FormGuardProvider>

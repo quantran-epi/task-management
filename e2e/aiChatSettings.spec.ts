@@ -83,6 +83,26 @@ test.describe('AI chat settings and composer modals', () => {
     return page.locator('.ant-modal').filter({ has: page.getByText('AI Settings · tất cả') });
   }
 
+  async function settingValue(targetPage: Page, name: string, key: string): Promise<unknown> {
+    return targetPage.evaluate(async ({ name: dbName, settingKey }) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open(dbName);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        if (!db.objectStoreNames.contains('settings')) return undefined;
+        return await new Promise<unknown>((resolve, reject) => {
+          const request = db.transaction('settings', 'readonly').objectStore('settings').get(settingKey);
+          request.onsuccess = () => resolve(request.result?.value);
+          request.onerror = () => reject(request.error);
+        });
+      } finally {
+        db.close();
+      }
+    }, { name, settingKey: key });
+  }
+
   async function activeStandaloneModel(page: Page): Promise<string | undefined> {
     return page.evaluate(async () => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -256,6 +276,10 @@ test.describe('AI chat settings and composer modals', () => {
     await page.getByLabel('Mật khẩu SSH').fill('fake-e2e-secret');
     await page.getByRole('button', { name: 'Lưu cấu hình' }).click();
     await expect(page.getByText('Ky8 fixture')).toBeVisible();
+    expect(await settingValue(page, 'TaskMateChatWindowDB', 'ssh_configurations')).toEqual([
+      expect.objectContaining({ name: 'Ky8 fixture', host: '127.0.0.1' }),
+    ]);
+    expect(await settingValue(page, 'PersonalTaskPlannerDB', 'ssh_configurations')).toBeUndefined();
 
     await page.reload();
     await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
