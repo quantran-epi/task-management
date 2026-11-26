@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 51 (TaskMate Chat standalone) — COMPLETE
 Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
-Last activity: 2026-11-26 - Completed quick task 261126-cff: Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds.
+Last activity: 2026-11-26 - Completed quick task 261126-cid: Refactor CR detail + task list theo sketch A; fix mọi critical/warning.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -147,6 +147,7 @@ Progress: [██████████] 100%
 | 261125-u4w | Fix pin context team đọc fresh từ roster mỗi turn và global conventions trên grounded turn của AI Chat panel | 2026-11-25 | f8caef68, 0058409f, 2f431183, 180c3f21 | Needs UAT | [261125-u4w-fix-stale-pin-context-and-grounded-globa](./quick/261125-u4w-fix-stale-pin-context-and-grounded-globa/) |
 | 261126-cff | Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds. | 2026-11-26 | 7b757828 | — | [261126-cff-add-a-github-actions-workflow-that-build](./quick/261126-cff-add-a-github-actions-workflow-that-build/) |
 | 59 | Add ui-task-insight-toolbar and pre-v1.6-baseline to Windows installer workflow push triggers. | 2026-11-26 | ae3cfd3c | — | — |
+| 261126-cid | Refactor CR detail + task list theo sketch A; fix mọi critical/warning | 2026-11-26 | 5b21c2e8 | Verified | [261126-cid-refactor-changerequestdetailview-theo-sk](./quick/261126-cid-refactor-changerequestdetailview-theo-sk/) |
 
 ## Accumulated Context
 
