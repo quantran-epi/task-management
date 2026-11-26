@@ -334,4 +334,135 @@ test.describe('AI chat settings and composer modals', () => {
     expect(darkBg).not.toBe(lightBg);
     await expectNoErrors(errors);
   });
+
+  test('chat history tools:advertise, wrapUntrusted, cross-thread refusal', async ({ page }) => {
+    const errors = watchErrors(page);
+    const THREAD_ID = '7a3f1c22-9d14-4a21-8d2e-1f4b6a7c9e01';
+    const OLD_TURN_ID = '5b2e8d11-4c37-4a0b-9f13-2d6e7a8b4c02';
+    const FOREIGN_THREAD_ID = '9c1d4e33-8a25-4b16-8e30-3f7a9b2c1d04';
+    const FOREIGN_TURN_ID = '2d8f7a44-1b36-4c29-9e51-4a8b3c2d1e05';
+    const TAB_ID = '3e6a9b55-2c47-4d18-af62-5b9c4d3e2f06';
+    const createdAt = new Date().toISOString();
+    const completionRequests: Array<{ body: any }> = [];
+
+    await page.route('**/v1/models', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [{ id: 'q7j-model' }] }),
+      });
+    });
+
+    let requestCount = 0;
+    await page.route('**/v1/chat/completions', async (route) => {
+      requestCount += 1;
+      const body = JSON.parse(route.request().postData() ?? '{}');
+      completionRequests.push({ body });
+      let sse: string;
+      if (requestCount === 1) {
+        sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-search","type":"function","function":{"name":"search_chat_history","arguments":"{\\"query\\":\\"Bí mật Q7J\\"}"}}]}}]}\n\ndata: [DONE]\n\n';
+      } else if (requestCount === 2) {
+        sse = 'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-read","type":"function","function":{"name":"read_chat_turn","arguments":"{\\"turnId\\":\\"' + OLD_TURN_ID + '\\",\\"threadId\\":\\"' + FOREIGN_THREAD_ID + '\\"}"}}]}}]}\n\ndata: [DONE]\n\n';
+      } else {
+        sse = 'data: {"choices":[{"delta":{"content":"Kết luận Q7J."},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+      }
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+    });
+
+    await page.goto('/task-management/e2e/aiChatStandalone.html');
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+    await expect(page.getByTestId('chat-settings-gear')).toBeVisible();
+    // Seed after boot: Dexie owns the schema upgrade to v28, so all stores exist here.
+    await page.evaluate(
+      async ({ threadId, oldTurnId, foreignThreadId, foreignTurnId, tabId, createdAt: ts }) => {
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('TaskMateChatWindowDB');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(
+              ['chatThreads', 'chatTabs', 'chatMessages', 'settings'],
+              'readwrite'
+            );
+            tx.objectStore('chatThreads').put({
+              id: threadId, scopeKey: 'global', scopeType: 'global', createdAt: ts, updatedAt: ts,
+            });
+            tx.objectStore('chatThreads').put({
+              id: foreignThreadId, scopeKey: 'cr:e2e-foreign', scopeType: 'cr',
+              entityId: 'e2e-foreign', createdAt: ts, updatedAt: ts,
+            });
+            tx.objectStore('chatTabs').put({
+              id: tabId, threadId, scopeKey: 'global', type: 'chat', title: 'Q7J',
+              order: 0, active: true, config: { model: 'q7j-model' }, createdAt: ts, updatedAt: ts,
+            });
+            tx.objectStore('chatMessages').put({
+              id: oldTurnId, threadId, role: 'user',
+              content: 'Bí mật Q7J nằm trong lượt cũ.', createdAt: ts,
+            });
+            tx.objectStore('chatMessages').put({
+              id: foreignTurnId, threadId: foreignThreadId, role: 'user',
+              content: 'Tuyệt mật thread khác.', createdAt: ts,
+            });
+            tx.objectStore('settings').put({ key: 'ninerouter_api_key', value: 'sk-q7j-e2e' });
+            tx.objectStore('settings').put({
+              key: 'ninerouter_endpoint', value: 'https://q7j.invalid/v1',
+            });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+          });
+        } finally {
+          db.close();
+        }
+      },
+      { threadId: THREAD_ID, oldTurnId: OLD_TURN_ID, foreignThreadId: FOREIGN_THREAD_ID,
+        foreignTurnId: FOREIGN_TURN_ID, tabId: TAB_ID, createdAt }
+    );
+    await expect
+      .poll(async () => (await settingValue(page, 'TaskMateChatWindowDB', 'ninerouter_endpoint')))
+      .toBe('https://q7j.invalid/v1');
+    // Reload so the drawer adopts the seeded tab/thread instead of racing its own bootstrap.
+    await page.reload();
+    await expect(page.locator('.taskmate-workbench-theme').first()).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Q7J' })).toBeVisible();
+    const seededThread = await page.evaluate(async (threadId: string) => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('TaskMateChatWindowDB');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        return await new Promise<{ id: string } | undefined>((resolve, reject) => {
+          const request = db.transaction('chatThreads', 'readonly').objectStore('chatThreads').get(threadId);
+          request.onsuccess = () => resolve(request.result as { id: string } | undefined);
+          request.onerror = () => reject(request.error);
+        });
+      } finally { db.close(); }
+    }, THREAD_ID);
+    expect(seededThread?.id).toBe(THREAD_ID);
+
+    await page.getByRole('textbox', { name: 'Nội dung tin nhắn trò chuyện AI' })
+      .fill('Tìm lại lượt cũ');
+    await page.getByRole('button', { name: 'Gửi tin nhắn' }).click();
+    await expect(page.getByText('Kết luận Q7J.').first()).toBeVisible({ timeout: 20_000 });
+    expect(requestCount).toBe(3);
+
+    const toolNames = (completionRequests[0]?.body?.tools ?? []).map(
+      (tool: { function?: { name?: string } }) => tool.function?.name
+    );
+    expect(toolNames).toContain('search_chat_history');
+    expect(toolNames).toContain('read_chat_turn');
+
+    const searchResult = completionRequests[1]?.body?.messages?.at(-1)?.content;
+    expect(searchResult).toContain('Bí mật Q7J');
+    expect(searchResult).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+
+    const readResult = completionRequests[2]?.body?.messages?.at(-1)?.content;
+    expect(readResult).toContain('Bí mật Q7J');
+    expect(readResult).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN');
+    expect(readResult).not.toContain('Tuyệt mật thread khác');
+
+    await expectNoErrors(errors);
+  });
 });
