@@ -392,8 +392,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         ))}
       </div>
 
-      {/* 2-column grid: task table left, secondary cards right */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(280px,.65fr)', gap: 'var(--gap-12)', alignItems: 'start' }}>
+      {/* Task table full width, secondary cards stacked below */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
       {/* 3c. Flat task table */}
       <div
         style={{
@@ -505,30 +505,28 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       </div>
 
       {/* 3d. Secondary blocks always visible */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
-        {secondaryBlocks.map((block) => (
-          <div
-            key={block.key}
-            style={{
-              background: 'var(--bg-island)',
-              borderRadius: 'var(--radius-control)',
-              border: '1px solid var(--border)',
-              padding: 'var(--gap-12)',
-              minWidth: 0,
-            }}
-          >
-            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600, marginBottom: 'var(--gap-8)' }}>
-              {block.header}
-              {block.count > 0 && (
-                <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
-                  {block.count}
-                </Tag>
-              )}
-            </span>
-            <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
-          </div>
-        ))}
-      </div>
+      {secondaryBlocks.map((block) => (
+        <div
+          key={block.key}
+          style={{
+            background: 'var(--bg-island)',
+            borderRadius: 'var(--radius-control)',
+            border: '1px solid var(--border)',
+            padding: 'var(--gap-12)',
+            minWidth: 0,
+          }}
+        >
+          <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600, marginBottom: 'var(--gap-8)' }}>
+            {block.header}
+            {block.count > 0 && (
+              <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
+                {block.count}
+              </Tag>
+            )}
+          </span>
+          <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
+        </div>
+      ))}
       </div>
 
       <ChangeRequestModal

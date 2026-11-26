@@ -110,6 +110,41 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(headers).toEqual(['Task', 'Subsystem', 'Status', 'Ước lượng', 'Hạn']);
   }, 30000);
 
+  it('renders the task table full width with four secondary blocks in one stacked column', async () => {
+    const { cr } = await seed();
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    await screen.findByRole('columnheader', { name: 'Task' });
+    expect(screen.getByTestId('cr-detail-stats')).toBeInTheDocument();
+
+    const table = screen.getByRole('columnheader', { name: 'Task' }).closest('table') as HTMLTableElement;
+    const blockIds = [
+      'cr-detail-block-notes',
+      'cr-detail-block-jira',
+      'cr-detail-block-documents',
+      'cr-detail-block-reminders',
+    ];
+    const blocks = blockIds.map((id) => screen.getByTestId(id));
+
+    let stack: HTMLElement | null = table;
+    while (stack && !blocks.every((block) => stack!.contains(block))) {
+      stack = stack.parentElement;
+    }
+    expect(stack).not.toBeNull();
+    expect(stack!.getAttribute('style') ?? '').toContain('flex-direction: column');
+    expect(stack!.querySelector('[style*="grid-template-columns"]')).toBeNull();
+
+    const children = Array.from(stack!.children) as HTMLElement[];
+    const tableIndex = children.findIndex((node) => node.contains(table));
+    expect(tableIndex).toBeGreaterThanOrEqual(0);
+    expect(blocks.map((block) => children.findIndex((node) => node.contains(block)))).toEqual([
+      tableIndex + 1,
+      tableIndex + 2,
+      tableIndex + 3,
+      tableIndex + 4,
+    ]);
+  }, 30000);
+
   it('offers only the CR targets plus Chung (không gắn) in the Subsystem cell', async () => {
     const { cr, task } = await seed({ taskSystemId: 'a' });
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
