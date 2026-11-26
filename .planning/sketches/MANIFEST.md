@@ -20,3 +20,4 @@ Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench g�
 | 007 | chat-only-shell | Shell app chat-only nên gọn thế nào mà vẫn để đủ AI settings? | A — Chat full-bleed + gear | chat-only, shell, layout, ant-design |
 | 008 | chat-ai-settings | Gom toàn bộ AI settings (provider, knowledge, MCP, Graphiti, Oracle, SSH, tool catalog) thế nào? | C — Side nav + accordion | settings, chat-only, tabs, ant-design |
 | 009 | cr-detail-fast-scan | Màn hình chi tiết CR nên gom thông tin thế nào để quét nhanh mà không cuộn nhiều? | pending | cr-detail, layout, workbench, density |
+| 010 | task-list-triage | Danh sách task từ nút Task trên taskbar nên lọc/chọn/cập nhật hàng loạt thế nào? | pending | task-list, triage, batch, workbench, density |

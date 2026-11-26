@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 010 · Task List Triage</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding:52px 16px 76px; background:var(--color-bg); color:var(--color-text); font-family:var(--font-sans); font-size:var(--text-base); }
+  #variant-nav { position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--color-surface); border-bottom:1px solid var(--color-border); padding:8px 14px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-family:system-ui; }
+  .variant-tab { border:1px solid var(--color-border); background:var(--color-surface); color:var(--color-text-muted); border-radius:var(--radius-md); padding:5px 10px; font-size:var(--text-sm); cursor:pointer; }
+  .variant-tab:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .variant-tab.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); font-weight:600; }
+  .hint { margin-left:auto; color:var(--color-text-tertiary); font-size:var(--text-xs); }
+  .frame { max-width:1280px; margin:0 auto; }
+  .pane { background:var(--color-bg); border:1px solid var(--color-border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .variant { display:none; }
+  .variant.active { display:block; }
+
+  .tabbar { display:flex; align-items:center; gap:var(--space-2); padding:6px var(--space-3); background:var(--color-surface-soft); border-bottom:1px solid var(--color-border); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .tabbar .active-tab { background:var(--color-surface); border:1px solid var(--color-border); border-bottom-color:var(--color-surface); border-radius:var(--radius-sm) var(--radius-sm) 0 0; padding:5px 10px; color:var(--color-text); font-size:var(--text-sm); }
+  .content { padding:var(--space-3) var(--space-4) var(--space-5); }
+  .headline { display:flex; justify-content:space-between; align-items:center; gap:var(--space-3); margin-bottom:var(--space-3); flex-wrap:wrap; }
+  h2.title { margin:0; font-size:var(--text-xl); }
+  .subtitle { color:var(--color-text-muted); font-size:var(--text-sm); margin-top:2px; }
+
+  .toolbar { position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); flex-wrap:wrap; margin-bottom:var(--space-2); }
+  .toolbar .search { flex:1; min-width:200px; height:var(--control-h); border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); padding:0 var(--space-2); font-family:inherit; font-size:var(--text-sm); color:var(--color-text); background:var(--color-surface); }
+  .toolbar .search:focus, .select:focus, .btn:focus { outline:2px solid var(--color-primary-soft); border-color:var(--color-primary); }
+  .select { height:var(--control-h); border:1px solid var(--color-border-strong); border-radius:var(--radius-sm); background:var(--color-surface); color:var(--color-text); font-family:inherit; font-size:var(--text-sm); padding:0 6px; }
+  .btn { height:var(--control-h); padding:0 9px; border-radius:var(--radius-sm); border:1px solid var(--color-border-strong); background:var(--color-surface); color:var(--color-text); font-size:var(--text-sm); font-family:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; transition:all .15s ease; }
+  .btn:hover { border-color:var(--color-primary); color:var(--color-primary); }
+  .btn.primary { background:var(--color-primary); border-color:var(--color-primary); color:#fff; }
+  .btn.primary:hover { background:var(--color-primary-hover); color:#fff; }
+  .btn.small { height:24px; font-size:var(--text-xs); padding:0 7px; }
+  .btn.active { background:var(--color-primary-soft); border-color:var(--color-primary); color:var(--color-primary); }
+  .count-pill { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); white-space:nowrap; }
+
+  .card { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); overflow:hidden; }
+  table.grid { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+  table.grid th { text-align:left; font-size:var(--text-xs); color:var(--color-text-muted); font-weight:500; padding:7px 8px; border-bottom:1px solid var(--color-border); background:var(--color-surface-soft); white-space:nowrap; position:sticky; top:0; }
+  table.grid th.sel, table.grid td.sel { width:32px; text-align:center; }
+  table.grid td { padding:7px 8px; border-bottom:1px solid var(--color-border); vertical-align:middle; }
+  table.grid tr:last-child td { border-bottom:0; }
+  table.grid tbody tr { transition:background .15s ease; cursor:pointer; }
+  table.grid tbody tr:hover { background:var(--color-primary-soft); }
+  table.grid tbody tr.checked { background:var(--color-primary-soft); }
+  table.grid .name { font-weight:500; }
+  table.grid .mono { font-family:var(--font-mono); font-size:var(--text-xs); }
+  table.grid .muted { color:var(--color-text-muted); }
+  table.grid .overdue { color:var(--color-danger); font-family:var(--font-mono); font-size:var(--text-xs); }
+  .tag { display:inline-flex; align-items:center; gap:4px; font-size:var(--text-xs); border-radius:var(--radius-sm); padding:2px 6px; border:1px solid var(--color-border); white-space:nowrap; color:var(--color-text-muted); }
+  .tag.blue { color:var(--color-primary); border-color:color-mix(in srgb,var(--color-primary) 35%,transparent); background:var(--color-primary-soft); }
+  .tag.green { color:var(--color-success); border-color:color-mix(in srgb,var(--color-success) 35%,transparent); background:color-mix(in srgb,var(--color-success) 6%,var(--color-surface)); }
+  .tag.amber { color:var(--color-warning); border-color:color-mix(in srgb,var(--color-warning) 35%,transparent); background:var(--color-warning-bg); }
+  .tag.red { color:var(--color-danger); border-color:color-mix(in srgb,var(--color-danger) 35%,transparent); background:color-mix(in srgb,var(--color-danger) 6%,var(--color-surface)); }
+  .inline-edit { width:100%; min-width:90px; height:24px; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:var(--text-xs); color:var(--color-text); padding:0 4px; transition:all .15s ease; }
+  .inline-edit:hover, .inline-edit:focus { border-color:var(--color-border-strong); background:var(--color-surface); }
+  .meter { display:inline-block; width:52px; height:5px; border-radius:3px; background:var(--color-border); overflow:hidden; vertical-align:middle; }
+  .meter i { display:block; height:100%; background:var(--color-primary); }
+  .meter i.warn { background:var(--color-warning); }
+  .sec-title { font-size:var(--text-sm); font-weight:600; margin:0 0 var(--space-2); display:flex; align-items:center; gap:6px; }
+  .sec-title .count { font-size:var(--text-xs); color:var(--color-text-tertiary); font-family:var(--font-mono); font-weight:400; }
+  .empty { color:var(--color-text-tertiary); font-size:var(--text-sm); padding:var(--space-6); text-align:center; }
+
+  /* Batch bar */
+  .batchbar { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:9990; display:none; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--color-text); color:white; border-radius:var(--radius-md); box-shadow:var(--shadow-md); font-size:var(--text-sm); flex-wrap:wrap; }
+  .batchbar.show { display:flex; }
+  .batchbar .count { font-family:var(--font-mono); }
+  .batchbar .btn { background:transparent; color:white; border-color:rgba(255,255,255,.35); height:26px; }
+  .batchbar .btn:hover { background:rgba(255,255,255,.14); color:white; border-color:white; }
+  .batchbar .close { border:0; background:transparent; color:white; cursor:pointer; font-size:var(--text-lg); line-height:1; padding:0 4px; }
+
+  /* B: kanban */
+  .board { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--space-2); align-items:start; }
+  .lane { background:var(--color-surface); border:1px solid var(--color-border); border-radius:var(--radius-md); min-height:320px; overflow:hidden; }
+  .lane .lane-head { display:flex; justify-content:space-between; align-items:center; padding:var(--space-2); border-bottom:1px solid var(--color-border); background:var(--color-surface-soft); font-size:var(--text-sm); font-weight:600; }
+  .lane .lane-head .cnt { font-family:var(--font-mono); font-size:var(--text-xs); color:var(--color-text-muted); }
+  .lane .item { padding:var(--space-2); border-bottom:1px solid var(--color-border); cursor:pointer; transition:background .15s ease; font-size:var(--text-sm); }
+  .lane .item:hover { background:var(--color-primary-soft); }
+  .lane .item .n { font-weight:500; }
+  .lane .item .m { display:flex; justify-content:space-between; gap:6px; margin-top:6px; color:var(--color-text-muted); font-size:var(--text-xs); }
+
+  /* C: dense rows */
+  .dense-row { display:grid; grid-template-columns:32px minmax(240px,2fr) minmax(90px,.7fr) minmax(90px,.7fr) 90px 100px 90px 80px; align-items:center; gap:var(--space-2); padding:5px var(--space-3); border-bottom:1px solid var(--color-border); font-size:var(--text-sm); cursor:pointer; transition:background .15s ease; }
+  .dense-row:last-child { border-bottom:0; }
+  .dense-row:hover, .dense-row.checked { background:var(--color-primary-soft); }
+  .dense-row .head { font-size:var(--text-xs); color:var(--color-text-muted); background:var(--color-surface-soft); cursor:default; }
+  .dense-row .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+  .dense-row .mono { font-family:var(--font-mono); font-size:var(--text-xs); }
+
+  #sketch-tools { position:fixed; bottom:12px; right:12px; z-index:9999; font-family:system-ui; font-size:12px; background:rgba(0,0,0,.7); color:white; padding:8px 12px; border-radius:8px; opacity:.4; transition:opacity .2s; }
+  #sketch-tools:hover { opacity:1; }
+  .toast { position:fixed; bottom:58px; right:12px; background:var(--color-text); color:white; padding:8px 12px; border-radius:var(--radius-md); font-size:var(--text-sm); opacity:0; transform:translateY(8px); transition:all .2s; pointer-events:none; z-index:9997; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  @media (max-width:1000px) { .board { grid-template-columns:repeat(2,1fr); } .dense-row { grid-template-columns:28px minmax(180px,1.5fr) 90px 90px 80px; } .dense-row .col-hide { display:none; } }
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" onclick="showVariant('a',this)">A: Bảng dày + toolbar dính ★ Recommended</button>
+  <button class="variant-tab" onclick="showVariant('b',this)">B: Board theo trạng thái</button>
+  <button class="variant-tab" onclick="showVariant('c',this)">C: Row compact + inline edit</button>
+  <span class="hint">Dữ liệu giả theo TasksView.tsx / TaskTable.tsx</span>
+</div>
+
+<!-- ============ A ============ -->
+<div class="frame variant active" id="variant-a">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">Tasks</span><span class="count-pill" style="margin-left:auto">24 task · 6 quá hạn</span></div>
+    <div class="content">
+      <div class="headline"><div><h2 class="title">Tác vụ</h2><div class="subtitle">Lọc, chọn và cập nhật nhanh — nút Task trên taskbar mở tab này</div></div>
+        <div style="display:flex;gap:6px"><button class="btn" onclick="toast('Mở import nhanh')">↓ Import</button><button class="btn primary" onclick="toast('Focus QuickAddBar')">+ Task mới</button></div></div>
+      <div class="toolbar">
+        <input class="search" id="a-search" type="search" placeholder="Tìm task, CR, subsystem..." oninput="filterA()">
+        <select class="select" onchange="toast('Lọc theo CR: '+this.value)"><option>Tất cả CR</option><option>CR-18 · Knowledge sync</option><option>CR-17 · Jira proxy</option></select>
+        <select class="select" onchange="toast('Lọc trạng thái: '+this.value)"><option>Mọi trạng thái</option><option>Open</option><option>In Progress</option><option>Pending</option><option>Done</option></select>
+        <select class="select" onchange="toast('Sắp xếp: '+this.value)"><option>Hạn gần nhất</option><option>Ước lượng giảm dần</option><option>Ưu tiên</option></select>
+        <button class="btn small" onclick="toast('Mở advanced filters')">⚙ Bộ lọc</button>
+        <span class="count-pill" id="a-count">24 kết quả</span>
+      </div>
+      <div class="card">
+        <table class="grid">
+          <thead><tr><th class="sel"><input type="checkbox" onchange="toggleAllA(this.checked)" aria-label="Chọn tất cả"></th><th>Tác vụ</th><th>CR</th><th>Subsystem</th><th>Trạng thái</th><th>Ước lượng</th><th>Hạn</th><th>Tiến độ</th></tr></thead>
+          <tbody id="a-rows">
+            <tr data-name="Viết endpoint /index" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Viết endpoint /index</td><td class="mono">CR-18</td><td class="muted">API</td><td><span class="tag blue">In Progress</span></td><td class="mono">12h</td><td class="mono">2026-11-28</td><td><span class="meter"><i style="width:55%"></i></span> 55%</td></tr>
+            <tr data-name="Fallback daemon unavailable" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Fallback daemon unavailable</td><td class="mono">CR-18</td><td class="muted">API</td><td><span class="tag amber">Pending</span></td><td class="mono">6h</td><td class="overdue">2026-11-24</td><td><span class="meter"><i style="width:0%"></i></span> 0%</td></tr>
+            <tr data-name="Preview + DLP approval UI" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Preview + DLP approval UI</td><td class="mono">CR-18</td><td class="muted">Local Index</td><td><span class="tag blue">Open</span></td><td class="mono">8h</td><td class="mono">2026-11-29</td><td><span class="meter"><i style="width:10%"></i></span> 10%</td></tr>
+            <tr data-name="Jira proxy content decoding" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Jira proxy content decoding</td><td class="mono">CR-17</td><td class="muted">Integration</td><td><span class="tag blue">In Progress</span></td><td class="mono">5h</td><td class="overdue">2026-11-25</td><td><span class="meter"><i class="warn" style="width:70%"></i></span> 70%</td></tr>
+            <tr data-name="Cấu hình profile export" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Cấu hình profile export</td><td class="mono">CR-16</td><td class="muted">Settings</td><td><span class="tag green">Done</span></td><td class="mono">3h</td><td class="muted mono">2026-11-20</td><td><span class="meter"><i style="width:100%"></i></span> 100%</td></tr>
+            <tr data-name="Test offline IndexedDB" onclick="pickRowA(this)"><td class="sel"><input type="checkbox" onchange="syncA(this)"></td><td class="name">Test offline IndexedDB</td><td class="mono">CR-18</td><td class="muted">Local Index</td><td><span class="tag">Open</span></td><td class="mono">5.5h</td><td class="mono">2026-12-01</td><td><span class="meter"><i style="width:0%"></i></span> 0%</td></tr>
+          </tbody>
+        </table>
+        <div class="empty" id="a-empty" style="display:none">Không có task khớp bộ lọc. <button class="btn small" onclick="resetA()">Xóa bộ lọc</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ B ============ -->
+<div class="frame variant" id="variant-b">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">Tasks</span></div>
+    <div class="content">
+      <div class="headline"><div><h2 class="title">Tác vụ</h2><div class="subtitle">Kéo thả để đổi trạng thái · chọn nhiều để cập nhật hàng loạt</div></div><button class="btn primary" onclick="toast('Thêm task')">+ Task mới</button></div>
+      <div class="toolbar"><input class="search" placeholder="Tìm task..." oninput="toast('Lọc: '+this.value)"><select class="select"><option>Tất cả CR</option><option>CR-18</option><option>CR-17</option></select><button class="btn small" onclick="toast('Chọn tất cả')">☑ Chọn tất cả</button><span class="count-pill">24 task</span></div>
+      <div class="board">
+        <div class="lane"><div class="lane-head">Open <span class="cnt">6</span></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Preview + DLP approval UI</div><div class="m"><span>CR-18 · 8h</span><span>29/11</span></div></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Test offline IndexedDB</div><div class="m"><span>CR-18 · 5.5h</span><span>01/12</span></div></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Đo hiệu năng index 50k docs</div><div class="m"><span>CR-18 · 4h</span><span>02/12</span></div></div>
+        </div>
+        <div class="lane"><div class="lane-head">In Progress <span class="cnt">4</span></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Viết endpoint /index</div><div class="m"><span>CR-18 · 12h</span><span>28/11</span></div></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Jira proxy content decoding</div><div class="m"><span>CR-17 · 5h</span><span class="tag red">25/11</span></div></div>
+        </div>
+        <div class="lane"><div class="lane-head">Pending <span class="cnt">3</span></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Fallback daemon unavailable</div><div class="m"><span>CR-18 · 6h</span><span class="tag red">24/11</span></div></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Review DLP policy</div><div class="m"><span>CR-18 · 3h</span><span>28/11</span></div></div>
+        </div>
+        <div class="lane"><div class="lane-head">Done <span class="cnt">11</span></div>
+          <div class="item" onclick="toast('Mở task')"><div class="n">Cấu hình profile export</div><div class="m"><span>CR-16 · 3h</span><span>20/11</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ C ============ -->
+<div class="frame variant" id="variant-c">
+  <div class="pane">
+    <div class="tabbar"><span>Workbench</span><span class="sep">/</span><span class="active-tab">Tasks</span><span class="count-pill" style="margin-left:auto">virtual scroll · 24/2400</span></div>
+    <div class="content">
+      <div class="headline"><div><h2 class="title">Tác vụ</h2><div class="subtitle">Sửa trực tiếp trên row — ô focus là lưu</div></div><button class="btn primary" onclick="toast('Thêm task')">+ Task mới</button></div>
+      <div class="toolbar"><input class="search" placeholder="Tìm nhanh..." oninput="toast('Lọc: '+this.value)"><select class="select"><option>Mọi trạng thái</option><option>Open</option><option>In Progress</option></select><select class="select"><option>Hạn gần nhất</option></select><button class="btn small" onclick="toast('Bộ lọc nâng cao')">⚙</button><span class="count-pill">2400 task · render ~14 row</span></div>
+      <div class="card">
+        <div class="dense-row head"><span></span><span>Tác vụ</span><span>CR</span><span>Trạng thái</span><span>Ước lượng</span><span class="col-hide">Subsystem</span><span>Hạn</span><span>Tiến độ</span></div>
+        <div class="dense-row" onclick="toast('Mở TaskDrawer')"><input type="checkbox" onchange="syncC(this)" aria-label="Chọn task"><span class="name">Viết endpoint /index</span><span class="mono">CR-18</span><select class="inline-edit" onchange="toast('Đổi status')"><option>In Progress</option><option>Open</option><option>Done</option></select><span class="mono">12h</span><span class="col-hide muted">API</span><span class="mono">28/11</span><span class="mono">55%</span></div>
+        <div class="dense-row" onclick="toast('Mở TaskDrawer')"><input type="checkbox" onchange="syncC(this)" aria-label="Chọn task"><span class="name">Fallback daemon unavailable</span><span class="mono">CR-18</span><select class="inline-edit" onchange="toast('Đổi status')"><option>Pending</option><option>Open</option><option>Done</option></select><span class="mono">6h</span><span class="col-hide muted">API</span><span class="mono" style="color:var(--color-danger)">24/11</span><span class="mono">0%</span></div>
+        <div class="dense-row" onclick="toast('Mở TaskDrawer')"><input type="checkbox" onchange="syncC(this)" aria-label="Chọn task"><span class="name">Preview + DLP approval UI</span><span class="mono">CR-18</span><select class="inline-edit" onchange="toast('Đổi status')"><option>Open</option><option>In Progress</option><option>Done</option></select><span class="mono">8h</span><span class="col-hide muted">Local Index</span><span class="mono">29/11</span><span class="mono">10%</span></div>
+        <div class="dense-row" onclick="toast('Mở TaskDrawer')"><input type="checkbox" onchange="syncC(this)" aria-label="Chọn task"><span class="name">Jira proxy content decoding</span><span class="mono">CR-17</span><select class="inline-edit" onchange="toast('Đổi status')"><option>In Progress</option><option>Done</option></select><span class="mono">5h</span><span class="col-hide muted">Integration</span><span class="mono" style="color:var(--color-danger)">25/11</span><span class="mono">70%</span></div>
+        <div class="dense-row" onclick="toast('Mở TaskDrawer')"><input type="checkbox" onchange="syncC(this)" aria-label="Chọn task"><span class="name">Cấu hình profile export</span><span class="mono">CR-16</span><select class="inline-edit" onchange="toast('Đổi status')"><option>Done</option><option>Open</option></select><span class="mono">3h</span><span class="col-hide muted">Settings</span><span class="muted mono">20/11</span><span class="mono">100%</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="batchbar" id="batchbar"><span class="count" id="batch-count">0 task đã chọn</span><button class="btn" onclick="toast('Đổi trạng thái hàng loạt')">✓ Đổi trạng thái</button><button class="btn" onclick="toast('Phân bổ lịch')">▦ Phân bổ lịch</button><button class="btn" onclick="toast('Di chuyển CR')">↗ Di chuyển CR</button><button class="btn" onclick="toast('Gán owner')">◎ Gán owner</button><button class="close" onclick="clearSelection()" aria-label="Bỏ chọn">×</button></div>
+<div id="sketch-tools"><span>Mockup tĩnh · không sửa code</span></div>
+<div class="toast" id="toast"></div>
+<script>
+  function showVariant(id, btn) {
+    document.querySelectorAll('.variant').forEach(v => v.classList.toggle('active', v.id === 'variant-' + id));
+    document.querySelectorAll('.variant-tab').forEach(t => t.classList.toggle('active', t === btn));
+    clearSelection();
+  }
+  let selectedA = new Set(), selectedC = new Set();
+  function updateBatch() {
+    const n = selectedA.size + selectedC.size;
+    document.getElementById('batch-count').textContent = n + ' task đã chọn';
+    document.getElementById('batchbar').classList.toggle('show', n > 0);
+  }
+  function clearSelection() {
+    selectedA.clear(); selectedC.clear();
+    document.querySelectorAll('tr.checked, .dense-row.checked').forEach(r => r.classList.remove('checked'));
+    document.querySelectorAll('input[type=checkbox]:checked').forEach(c => c.checked = false);
+    updateBatch();
+  }
+  function pickRowA(row) {
+    const cb = row.querySelector('input[type=checkbox]');
+    cb.checked = !cb.checked;
+    syncA(cb);
+  }
+  function syncA(cb) {
+    const row = cb.closest('tr');
+    if (cb.checked) { selectedA.add(row); row.classList.add('checked'); } else { selectedA.delete(row); row.classList.remove('checked'); }
+    updateBatch();
+  }
+  function syncC(cb) {
+    const row = cb.closest('.dense-row');
+    if (cb.checked) { selectedC.add(row); row.classList.add('checked'); } else { selectedC.delete(row); row.classList.remove('checked'); }
+    updateBatch();
+  }
+  function toggleAllA(checked) {
+    document.querySelectorAll('#a-rows input[type=checkbox]').forEach(cb => { cb.checked = checked; syncA(cb); });
+  }
+  function filterA() {
+    const q = document.getElementById('a-search').value.toLowerCase().trim();
+    let visible = 0;
+    document.querySelectorAll('#a-rows tr').forEach(row => {
+      const match = row.dataset.name.toLowerCase().includes(q);
+      row.style.display = match ? '' : 'none';
+      if (match) visible++;
+      if (!match) { row.classList.remove('checked'); selectedA.delete(row); const cb = row.querySelector('input'); if (cb) cb.checked = false; }
+    });
+    document.getElementById('a-count').textContent = visible + ' kết quả';
+    document.getElementById('a-empty').style.display = visible ? 'none' : 'block';
+    updateBatch();
+  }
+  function resetA() { document.getElementById('a-search').value = ''; filterA(); }
+  function toast(text) {
+    const el = document.getElementById('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => el.classList.remove('show'), 1600);
+  }
+</script>
+</body>
+</html>
