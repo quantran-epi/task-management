@@ -588,10 +588,17 @@ export async function runAiOrchestratorLoop(
           const parsedRes = JSON.parse(toolResult);
           const imageUrl = typeof parsedRes.imageUrl === 'string' ? parsedRes.imageUrl : '';
           if (parsedRes.success !== false && imageUrl) {
+            const mime = typeof parsedRes.mimeType === 'string' ? parsedRes.mimeType : '';
+            const extension =
+              mime === 'image/jpeg' ? 'jpg'
+              : mime === 'image/gif' ? 'gif'
+              : mime === 'image/bmp' ? 'bmp'
+              : imageUrl.startsWith('data:image/jpeg') ? 'jpg'
+              : 'png';
             const generated: ChatGeneratedFile = {
               id: tc.id,
-              filename: `ai-image-${tc.id.slice(0, 8)}.png`,
-              format: 'png',
+              filename: `ai-image-${tc.id.slice(0, 8)}.${extension}`,
+              format: extension === 'jpg' ? 'jpeg' : extension,
               sizeBytes: imageUrl.startsWith('data:')
                 ? Math.round((imageUrl.length * 3) / 4)
                 : 0,

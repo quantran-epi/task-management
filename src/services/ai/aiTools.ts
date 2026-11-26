@@ -5064,6 +5064,12 @@ export async function executeAiTool(
         if (!imageSrc) {
           return JSON.stringify({ error: 'Không nhận được dữ liệu hình ảnh' });
         }
+        const imageMime = result.mimeType || 'image/png';
+        const imageExtension =
+          imageMime === 'image/jpeg' ? 'jpg'
+          : imageMime === 'image/gif' ? 'gif'
+          : imageMime === 'image/bmp' ? 'bmp'
+          : 'png';
 
         // If saveToDocId provided and noteAttachments table available, persist attachment
         let attachedDocTitle: string | null = null;
@@ -5080,16 +5086,16 @@ export async function executeAiTool(
                 byteNumbers[i] = byteCharacters.charCodeAt(i);
               }
               const byteArray = new Uint8Array(byteNumbers);
-              blobData = new Blob([byteArray], { type: 'image/png' });
+              blobData = new Blob([byteArray], { type: imageMime });
             } else {
-              blobData = new Blob([imageSrc], { type: 'image/png' });
+              blobData = new Blob([imageSrc], { type: imageMime });
             }
 
             await db.noteAttachments.put({
               id: attachmentId,
               noteId: doc.id,
-              fileName: `ai-gen-${Date.now()}.png`,
-              mimeType: 'image/png',
+              fileName: `ai-gen-${Date.now()}.${imageExtension}`,
+              mimeType: imageMime,
               sizeBytes: blobData.size,
               data: blobData,
               createdAt: new Date().toISOString(),
@@ -5106,6 +5112,7 @@ export async function executeAiTool(
           revisedPrompt: result.revisedPrompt,
           model: result.model,
           imageUrl: imageSrc,
+          mimeType: imageMime,
           markdown: markdownEmbed,
         });
       }
