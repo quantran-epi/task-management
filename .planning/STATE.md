@@ -1,19 +1,21 @@
 ---
-gsd_state_version: 1.0
+gsd_state_version: "1.0"
 milestone: v1.5
 milestone_name: Design System & UI Consistency
+current_phase: 51
+current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-25T18:48:35.000Z"
-last_activity: 2026-11-26 -- Phase 51 complete after review/verification quick fixes
+last_updated: "2026-11-26T02:01:02.393Z"
+last_activity: 2026-11-26
+last_activity_desc: Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers
+state_head: 7b7578281e531dd7f84014bda1e4d583f138c038
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 18
   completed_plans: 18
   percent: 100
-current_phase: 51
-current_phase_name: taskmate-chat-standalone
 ---
 
 # Project State: TaskMate — Milestone v1.5
@@ -28,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-11-21)
 Phase: 51 (TaskMate Chat standalone) — COMPLETE
 Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
-Last activity: 2026-11-26 -- Phase 51 complete after review/verification quick fixes
+Last activity: 2026-11-26 - Completed quick task 261126-cff: Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -61,7 +63,7 @@ Last session: 2026-11-25T15:47:32.730Z
 Stopped at: Phase 51 context gathered
 Resume file: .planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-CONTEXT.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100%
 
 ## Preserved Context — feature/intellij-workbench (phase 45 line)
 
@@ -143,6 +145,7 @@ Progress: [█████░░░░░] 50%
 | 261125-tp9 | Select thực thể trong panel ghi chú nhanh chỉ hiện option đúng loại Segmented, clear entity khi đổi loại | 2026-11-25 | b391bd11, 25f3c54f | — | [261125-tp9-khi-switch-segmented-ch-n-lo-i-th-c-th-g](./quick/261125-tp9-khi-switch-segmented-ch-n-lo-i-th-c-th-g/) |
 | 261125-ulp | Ẩn toàn bộ trigger và cấu hình Ghost Dev khỏi UI (TaskDrawer, TaskTable, Settings, Config Profiles), giữ code/data/runtime | 2026-11-25 | d71cd62a | — | [261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-](./quick/261125-ulp-n-ho-n-to-n-m-i-c-u-h-nh-v-trigger-li-n-/) |
 | 261125-u4w | Fix pin context team đọc fresh từ roster mỗi turn và global conventions trên grounded turn của AI Chat panel | 2026-11-25 | f8caef68, 0058409f, 2f431183, 180c3f21 | Needs UAT | [261125-u4w-fix-stale-pin-context-and-grounded-globa](./quick/261125-u4w-fix-stale-pin-context-and-grounded-globa/) |
+| 261126-cff | Add a GitHub Actions workflow that builds both TaskMate and TaskMate Chat Windows NSIS installers; skip macOS/iOS builds. | 2026-11-26 | 7b757828 | — | [261126-cff-add-a-github-actions-workflow-that-build](./quick/261126-cff-add-a-github-actions-workflow-that-build/) |
 
 ## Accumulated Context
 
