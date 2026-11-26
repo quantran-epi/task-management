@@ -2,7 +2,7 @@
 sketch: 009
 name: cr-detail-fast-scan
 question: "Màn hình chi tiết CR nên gom thông tin thế nào để quét nhanh mà không cuộn nhiều?"
-winner: null
+winner: "A"
 tags: [cr-detail, layout, workbench, density]
 ---
 

@@ -2,7 +2,7 @@
 sketch: 010
 name: task-list-triage
 question: "Danh sách task từ nút Task trên taskbar nên lọc/chọn/cập nhật hàng loạt thế nào?"
-winner: null
+winner: "A"
 tags: [task-list, triage, batch, workbench, density]
 ---
 
