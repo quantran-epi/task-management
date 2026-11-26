@@ -450,6 +450,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     tabRuntimesRef.current.patch(activeTabId, { references: [...current, filePath] });
   };
 
+  const handleAttachFiles = (filePaths: string[]) => {
+    const current = tabRuntimesRef.current.get(activeTabId)?.references ?? [];
+    tabRuntimesRef.current.patch(activeTabId, {
+      references: [...current, ...filePaths.filter((path) => !current.includes(path))],
+    });
+  };
+
   const handleRemoveFile = (filePath: string) => {
     const current = tabRuntimesRef.current.get(activeTabId)?.references ?? [];
     tabRuntimesRef.current.patch(activeTabId, { references: current.filter((p) => p !== filePath) });
@@ -2373,7 +2380,9 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           {...(onOpenSettings ? { onOpenSettings } : {})}
           {...(activeRuntime?.references ? { attachedFiles: activeRuntime.references } : {})}
           onAttachFile={handleAttachFile}
+          onAttachFiles={handleAttachFiles}
           onRemoveFile={handleRemoveFile}
+          {...(isStandaloneChat ? { isStandaloneChat } : {})}
           autoFocus={open}
           externalValue={externalInputValue ?? undefined}
           onExternalValueConsumed={() => setExternalInputValue(null)}

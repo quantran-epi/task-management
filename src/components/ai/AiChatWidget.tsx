@@ -89,7 +89,10 @@ export interface AiChatWidgetProps {
   headerSlot?: React.ReactNode;
   attachedFiles?: string[] | undefined;
   onAttachFile?: ((filePath: string) => void) | undefined;
+  onAttachFiles?: ((filePaths: string[]) => void) | undefined;
   onRemoveFile?: ((filePath: string) => void) | undefined;
+  /** Only standalone chat renders the SSH file browser affordance. */
+  isStandaloneChat?: boolean | undefined;
   autoFocus?: boolean | undefined;
   disabled?: boolean | undefined;
   emptyState: { heading: string; body: string };
@@ -257,7 +260,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
   headerSlot,
   attachedFiles,
   onAttachFile,
+  onAttachFiles,
   onRemoveFile,
+  isStandaloneChat = false,
   autoFocus,
   disabled,
   emptyState,
@@ -541,7 +546,9 @@ export const AiChatWidget: React.FC<AiChatWidgetProps> = ({
         disabled={disabled}
         {...(attachedFiles ? { attachedFiles } : {})}
         {...(onAttachFile ? { onAttachFile } : {})}
+        {...(onAttachFiles ? { onAttachFiles } : {})}
         {...(onRemoveFile ? { onRemoveFile } : {})}
+        isStandaloneChat={isStandaloneChat}
         {...(externalValue !== undefined ? { externalValue } : {})}
         {...(onExternalValueConsumed ? { onExternalValueConsumed } : {})}
         value={draft}

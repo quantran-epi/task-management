@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Mentions, Avatar, Button, Tooltip, Tag, Modal, useAntdToken, TextArea } from '../ui';
 import type { MentionsRef } from 'antd';
-import { SendOutlined, StopOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, ClearOutlined, CalendarOutlined, DashboardOutlined, WarningOutlined, QuestionCircleOutlined, PaperClipOutlined, FileTextOutlined, FullscreenOutlined } from '../ui/icon';
+import { SendOutlined, StopOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, ClearOutlined, CalendarOutlined, DashboardOutlined, WarningOutlined, QuestionCircleOutlined, PaperClipOutlined, FileTextOutlined, FullscreenOutlined, FolderOpenOutlined } from '../ui/icon';
+import { StandaloneSshFileBrowser } from './StandaloneSshFileBrowser';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
@@ -22,7 +23,10 @@ export interface ChatInputBarProps {
   db?: TaskPlannerDatabase | undefined;
   attachedFiles?: string[] | undefined;
   onAttachFile?: ((filePath: string) => void) | undefined;
+  onAttachFiles?: ((filePaths: string[]) => void) | undefined;
   onRemoveFile?: ((filePath: string) => void) | undefined;
+  /** Only standalone chat gets the SSH browser; dock/team leave this false. */
+  isStandaloneChat?: boolean | undefined;
   externalValue?: string | undefined;
   onExternalValueConsumed?: (() => void) | undefined;
   /** Controlled value owned by the tab runtime. Omit for uncontrolled mode. */
@@ -109,7 +113,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   db = defaultDb,
   attachedFiles = [],
   onAttachFile,
+  onAttachFiles,
   onRemoveFile,
+  isStandaloneChat = false,
   externalValue,
   onExternalValueConsumed,
   value,
@@ -128,6 +134,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     onValueChange?.(next);
   };
   const [isFullscreenModalOpen, setIsFullscreenModalOpen] = useState(false);
+  const [isSshBrowserOpen, setIsSshBrowserOpen] = useState(false);
   // Transient modal scratchpad, not a second draft store: switching tabs unmounts this component
   // (key={activeTabId}) and discards text typed here but never applied.
   const [fullscreenDraft, setFullscreenDraft] = useState('');
@@ -910,6 +917,18 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             style={{ height: 32, width: 32, padding: 0 }}
           />
         </Tooltip>
+        {isStandaloneChat && onAttachFile && (
+          <Tooltip title="Duyệt tệp SSH từ xa">
+            <Button
+              type="text"
+              icon={<FolderOpenOutlined />}
+              onClick={() => setIsSshBrowserOpen(true)}
+              disabled={disabled || isStreaming}
+              aria-label="Duyệt tệp SSH từ xa"
+              style={{ height: 32, width: 32, padding: 0 }}
+            />
+          </Tooltip>
+        )}
         {isStreaming ? (
           <Tooltip title="Dừng sinh phản hồi">
             <Button
@@ -1008,6 +1027,17 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }}
         />
       </Modal>
+      {isStandaloneChat && (
+        <StandaloneSshFileBrowser
+          open={isSshBrowserOpen}
+          onClose={() => setIsSshBrowserOpen(false)}
+          onAttach={(paths) => {
+            if (onAttachFiles) onAttachFiles(paths);
+            else for (const path of paths) onAttachFile?.(path);
+          }}
+          db={db}
+        />
+      )}
     </div>
   );
 };

@@ -174,6 +174,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [snapshot, setSnapshot] = useState<TeamRunSnapshot>(EMPTY_SNAPSHOT);
   const [configError, setConfigError] = useState<string | null>(null);
   const [draft, setDraftState] = useState(() => getTeamChatDraft(team.id));
+  const [attachedPaths, setAttachedPaths] = useState<string[]>([]);
   // Re-seed when the prop changes on the same instance (EditorArea keeps the tab mounted).
   useEffect(() => setDraftState(getTeamChatDraft(team.id)), [team.id]);
   // Stable identity: AiChatWidget is memoized; a raw React setter was already stable.
@@ -686,7 +687,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * invisible to the `team` prop. A failed lock surfaces an error instead of running silently.
    */
   const sendTurn = useCallback(
-    async (text: string): Promise<'started' | 'steered' | 'refused' | 'blocked'> => {
+    async (text: string, attachments: string[] = []): Promise<'started' | 'steered' | 'refused' | 'blocked'> => {
       // 37.1 D-12: every non-starting path states WHY, so the caller can restore the draft
       // instead of dropping the text.
       if (!coordinator) {
@@ -703,7 +704,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         setSendError({ code: 'LEADER_LOCK_FAILED', message: LEADER_LOCK_FAILED_COPY });
         return 'blocked';
       }
-      const outcome = await coordinator.send(text);
+      const outcome = await coordinator.send(text, attachments);
       if (outcome === 'blocked') {
         setSendError({
           code: 'COORDINATOR_DISPOSED',
@@ -730,12 +731,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
    * is already in the transcript, so the composer stays empty.
    */
   const runTurn = useCallback(
-    async (text: string) => {
+    async (text: string, attachments: string[] = []) => {
       setSendError(null);
       try {
-        const outcome = await sendTurn(text);
+        const outcome = await sendTurn(text, attachments);
         if (outcome === 'blocked') {
           setDraft(text);
+          setAttachedPaths(attachments);
         }
       } catch {
         // WR-10: a throw is a `blocked` submit with a different cause: keep the text, not the
@@ -743,6 +745,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
         // the UI (same channel discipline as ACTION_ERROR_COPY / RETRY_ERROR_COPY).
         setSendError({ code: 'TURN_FAILED', message: ACTION_ERROR_COPY });
         setDraft(text);
+        setAttachedPaths(attachments);
       }
     },
     [sendTurn]
@@ -759,18 +762,19 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       if (!text.trim()) return;
       lastUserTextRef.current = text;
       setDraft('');
+      setAttachedPaths([]);
       setScrollTrigger((prev) => prev + 1);
-      void runTurn(text);
+      void runTurn(text, attachedPaths);
     },
-    [runTurn]
+    [attachedPaths, runTurn]
   );
 
   /** Stable identity: an inline arrow re-rendered the whole transcript on every keystroke. */
   const handleRetry = useCallback(() => {
     // 37.1: the retry is a dispatch like any other — it goes through `runTurn`, so its text
     // lands in the draft on a `'blocked'` outcome.
-    if (lastUserTextRef.current) void runTurn(lastUserTextRef.current);
-  }, [runTurn]);
+    if (lastUserTextRef.current) void runTurn(lastUserTextRef.current, attachedPaths);
+  }, [attachedPaths, runTurn]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -1190,6 +1194,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   onClearThread={() => {}}
                   draft={draft}
                   onDraftChange={setDraft}
+                  attachedFiles={attachedPaths}
+                  onAttachFile={(path) => setAttachedPaths((prev) => prev.includes(path) ? prev : [...prev, path])}
+                  onRemoveFile={(path) => setAttachedPaths((prev) => prev.filter((p) => p !== path))}
                   placeholder="Nhắn cho lead hoặc @ một nhân viên..."
                   emptyState={TEAM_EMPTY_STATE}
                   messageListExtensions={messageListExtensions}

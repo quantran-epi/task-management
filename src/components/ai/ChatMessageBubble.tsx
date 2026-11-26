@@ -1295,6 +1295,20 @@ export const ChatMessageBubble: React.FC<ChatMessageBubbleProps> = ({
             </div>
           </div>
         )}
+        {msg.attachments && msg.attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+            {msg.attachments.map((filePath) => {
+              const fileName = filePath.split(/[/\\]/).pop() || filePath;
+              return (
+                <Tooltip key={filePath} title={filePath}>
+                  <Tag icon={<FileTextOutlined style={{ color: 'var(--success)' }} />} style={{ margin: 0, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} data-message-attachment={filePath}>
+                    {fileName}
+                  </Tag>
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
         {isUser ? (
           <div style={{ whiteSpace: 'pre-wrap' }}>{renderUserMessageWithMentions(msg.content)}</div>
         ) : isStreaming && !msg.content ? (
