@@ -253,7 +253,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       key: 'reminders',
       testId: 'cr-detail-block-reminders',
       header: 'Nhắc nhở',
-      count: cr.reminders?.length ?? (cr.reminderDate ? 1 : 0),
+      count: stats.reminderCount,
       body:
         cr.reminders && cr.reminders.length > 0 ? (
           <Space direction="vertical" size={2}>

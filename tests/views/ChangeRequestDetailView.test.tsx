@@ -228,6 +228,21 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(statValue('DOC / REMINDER')).toBe('1 / 1');
   }, 30000);
 
+  it('keeps reminder count consistent between stats strip and Nhắc nhở badge for legacy reminderDate', async () => {
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const cr = await createChangeRequest(
+      { status: 'Open', name: 'Legacy reminder', code: 'CR-2026-006', type: 'NEW_FEATURE',
+        targets: [{ systemId: sysA.id }], reminders: [], reminderDate: '2026-12-05' },
+      db
+    );
+
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+    await screen.findByTestId('cr-detail-stats');
+
+    expect(screen.getByTestId('cr-detail-block-reminders').textContent).toContain('1');
+    expect(screen.getByTestId('cr-detail-stats').textContent).toContain('DOC / REMINDER0 / 1');
+  }, 30000);
+
   it('counts only cr notes in the Ghi chú block and renders them without a click', async () => {
     const { cr } = await seed();
     await createNote({ body: 'Nội dung CR 1', title: 'Ghi chú CR một', entityType: 'cr', entityId: cr.id }, db);

@@ -43,6 +43,7 @@ export interface TaskTableProps {
   jiraDomain?: string;
   globalSort?: TaskSortKey;
   onGlobalSortChange?: (key: TaskSortKey) => void;
+  filterBarRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 /** CR type colours fixed by UI-SPEC §7 / D-32. */
@@ -129,6 +130,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   jiraDomain,
   globalSort,
   onGlobalSortChange,
+  filterBarRef,
 }) => {
   const { modal, contextHolder } = useTaskMateModal();
   const message = useMessage();
@@ -142,14 +144,17 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const tableRef = useRef<HTMLDivElement>(null);
   const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   // The filter bar pins at top:0; pin the table header just below it instead of behind it.
-  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(0);
+  // 96px is the bar's measured two-row height — fallback when ResizeObserver is absent.
+  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(96);
   useEffect(() => {
-    const bar = document.querySelector<HTMLElement>('[data-testid="task-filter-bar"]');
+    const bar = filterBarRef?.current;
     if (!bar || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => setStickyHeaderOffset(Math.ceil(bar.getBoundingClientRect().height)));
+    const measure = () => setStickyHeaderOffset(Math.max(1, Math.ceil(bar.getBoundingClientRect().height)));
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, []);
+  }, [filterBarRef]);
 
   // Synchronous localStorage initialization to prevent FOUC per D-16, T-12.2-07
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {

@@ -44,6 +44,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
   const [selectedCrIdForFeasibility, setSelectedCrIdForFeasibility] = useState<string | undefined>(undefined);
   const searchInputRef = useRef<InputRef>(null);
   const quickAddInputRef = useRef<InputRef>(null);
+  const filterBarRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!quickAddRequest) return;
@@ -323,6 +324,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         availableOpsOwners={availableOpsOwners}
         availableBAs={availableBAs}
         searchInputRef={searchInputRef}
+        containerRef={filterBarRef}
       />
 
       {/* 3. Main Tasks Table */}
@@ -338,6 +340,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         db={db}
         globalSort={globalSort}
         onGlobalSortChange={setGlobalSort}
+        filterBarRef={filterBarRef}
       />
 
       {/* 4. Floating Batch Action Bar */}

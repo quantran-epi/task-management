@@ -18,6 +18,7 @@ export interface TaskFilterBarProps {
   availableOpsOwners?: string[];
   availableBAs?: string[];
   searchInputRef?: React.Ref<InputRef>;
+  containerRef?: React.Ref<HTMLDivElement>;
 }
 
 const ALL_STATUSES: { label: string; value: TaskStatus }[] = [
@@ -46,6 +47,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
   availableOpsOwners = [],
   availableBAs = [],
   searchInputRef,
+  containerRef,
 }) => {
   const { token } = useAntdToken();
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
@@ -71,6 +73,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
 
   return (
     <div
+      ref={containerRef}
       data-testid="task-filter-bar"
       style={{
         position: 'sticky',

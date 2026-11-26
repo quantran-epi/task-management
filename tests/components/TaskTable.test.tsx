@@ -154,6 +154,23 @@ describe('TaskTable Component', () => {
     expect(bar.getAttribute('style') ?? '').toContain('background');
   });
 
+  it('TaskTable sticky header has a nonzero offset even without a mounted filter bar', () => {
+    render(
+      <TaskTable
+        tasks={sampleTasks}
+        changeRequests={sampleChangeRequests}
+        systems={sampleSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={db}
+      />
+    );
+
+    expect(screen.queryByTestId('task-filter-bar')).not.toBeInTheDocument();
+    expect(document.querySelector('[style*="top: 96px"]')).not.toBeNull();
+  }, 15000);
+
   it('BatchActionBar renders only when rows are selected and keeps its labels', () => {
     const { rerender } = render(
       <BatchActionBar
