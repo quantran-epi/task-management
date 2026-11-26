@@ -154,6 +154,7 @@ Progress: [██████████] 100%
 | 261126-ky8 | Split standalone chat window onto its own database, add SSH connection config, fix default model for new tabs | 2026-11-26 | 7809e6c6 | — | [261126-ky8-split-standalone-chat-window-onto-its-ow](./quick/261126-ky8-split-standalone-chat-window-onto-its-ow/) |
 | 261126-qag | Điều tra AI doc read + thiết kế SSH remote browse/multi-attach + AI read tool cho standalone chat | 2026-11-26 | e4053a7e | — | [261126-qag-them-ssh-remote-file-browser-va-multi-se](./quick/261126-qag-them-ssh-remote-file-browser-va-multi-se/) |
 | 261126-q7j | Add search_chat_history and read_chat_turn tools to AI chat panel, scoped to current thread | 2026-11-26 | 49b71e93, 6bc5f229, c8c851a3, 2e702ed9 | Verified | [261126-q7j-add-search-chat-history-and-read-chat-tu](./quick/261126-q7j-add-search-chat-history-and-read-chat-tu/) |
+| 261126-vra | Pool SSH sessions và giữ remote SQLcl persistent trong Tauri, bỏ handshake/spawn lặp lại | 2026-11-26 | 41949863, 3b1bfbef | Verified | [261126-vra-implement-ssh-connection-pool-persistent](./quick/261126-vra-implement-ssh-connection-pool-persistent/) |
 
 ## Accumulated Context
 
