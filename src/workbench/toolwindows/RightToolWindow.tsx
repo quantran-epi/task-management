@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Tooltip } from '../../components/ui';
-import { MinusOutlined, BellOutlined, FormOutlined } from '../../components/ui/icon';
-import { QuickNotesPanel } from '../../components/notes/QuickNotesPanel';
+import { MinusOutlined, BellOutlined } from '../../components/ui/icon';
 import { toolExplorerIcon } from '../toolExplorerIcon';
 import { JetBrainsAIIcon } from '../../components/icons/JetBrainsIcons';
 import { useLayoutStore } from '../store/layoutStore';
@@ -38,11 +37,6 @@ export function RightToolWindow({
 
   const getHeaderMeta = () => {
     switch (rightActiveId) {
-      case 'quick_notes':
-        return {
-          title: 'Ghi chú nhanh',
-          icon: <FormOutlined style={{ fontSize: 13, color: 'var(--accent, #3871e1)' }} />,
-        };
       case 'tool_explorer':
         return {
           title: 'Tool Explorer',
@@ -156,8 +150,6 @@ export function RightToolWindow({
           <NotificationPanel db={db} />
         ) : rightActiveId === 'tool_explorer' ? (
           <ToolExplorerPanel />
-        ) : rightActiveId === 'quick_notes' ? (
-          <QuickNotesPanel {...(db ? { db } : {})} />
         ) : (
           children || null
         )}

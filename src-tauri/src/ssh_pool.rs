@@ -570,6 +570,71 @@ pub fn run_persistent_sqlcl(
 }
 
 #[cfg(test)]
+mod live_uat_tests {
+    use super::*;
+
+    fn live_config() -> SshConfig {
+        let dir = std::env::var("VRA_UAT_DIR").expect("VRA_UAT_DIR");
+        SshConfig {
+            id: "live".into(),
+            name: "live".into(),
+            host: "127.0.0.1".into(),
+            port: 22222,
+            username: whoami(),
+            auth_type: "key_file".into(),
+            key_path: Some(format!("{dir}/.ssh/id_ed25519")),
+            default_remote_path: None,
+        }
+    }
+
+    fn whoami() -> String {
+        std::env::var("USER").unwrap_or_else(|_| "tranducquan".into())
+    }
+
+    #[test]
+    fn live_persistent_sqlcl_reuse_and_cancel() {
+        if std::env::var("VRA_LIVE_UAT").as_deref() != Ok("1") { return; }
+        let dir = std::env::var("VRA_UAT_DIR").expect("VRA_UAT_DIR");
+        let cfg = live_config();
+        let state = Arc::new(SshRuntimeState::default());
+        let env = format!("PATH={dir}/bin");
+        let bin = "sql";
+        let conn = "fake/fake@db";
+        let cancel = AtomicBool::new(false);
+
+        let (out1, err1, c1) = run_persistent_sqlcl(
+            &state, &cfg, None, bin, conn, &env, "SELECT 1 FROM dual;", &cancel,
+        ).expect("first query");
+        assert!(!c1, "out1={out1:?} err1={err1:?}");
+        assert!(out1.contains("[{\"N\":1,\"T\":\"ok\"}]"), "stdout={out1}");
+        assert_eq!(state.sqlcl.sessions.lock().unwrap().len(), 1);
+
+        let (out2, _err2, c2) = run_persistent_sqlcl(
+            &state, &cfg, None, bin, conn, &env, "SELECT 2 FROM dual;", &cancel,
+        ).expect("second query");
+        assert!(!c2);
+        assert!(out2.contains("[{\"N\":1,\"T\":\"ok\"}]"));
+        assert_eq!(state.sqlcl.sessions.lock().unwrap().len(), 1, "session must be reused");
+
+        let slow_cancel = Arc::new(AtomicBool::new(false));
+        let cancel_flag = Arc::clone(&slow_cancel);
+        let state2 = Arc::clone(&state);
+        let handle = std::thread::spawn(move || {
+            run_persistent_sqlcl(
+                &state2, &cfg, None, bin, conn, &env,
+                "SELECT /*SLEEP_LONG*/ 1 FROM dual;", &cancel_flag,
+            )
+        });
+        std::thread::sleep(Duration::from_millis(1200));
+        slow_cancel.store(true, Ordering::SeqCst);
+        let (out3, err3, c3) = handle.join().expect("slow query thread").expect("slow query");
+        assert!(c3, "cancel must be reported");
+        assert!(out3.is_empty() || out3.contains('['));
+        let _ = (err1, err3);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
