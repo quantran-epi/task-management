@@ -15,7 +15,6 @@ const request = (text: string): ChatTurnRequest => ({
   threadId: 'thread-a',
   scopeKey: 'global',
   text,
-  analysisMode: true,
   autoApprove: false,
   model: 'model-a',
   endpoint: 'http://localhost',

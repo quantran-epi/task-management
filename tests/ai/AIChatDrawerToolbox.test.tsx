@@ -81,8 +81,8 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     );
   };
 
-  it('renders ChatTabToolbox with tab-isolated controls', async () => {
-    await seedTabs({ analysisMode: false, autoApproveMutations: false, mcpEnabled: true, model: 'model-x' });
+  it('renders ChatTabToolbox without analysis or auto-approve affordances', async () => {
+    await seedTabs({ analysisMode: true, autoApproveMutations: true, mcpEnabled: true, model: 'model-x' });
 
     render(<AIChatDrawer open onClose={() => {}} db={db} activeScope={SCOPE} />);
 
@@ -90,20 +90,15 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     expect(toolbox).toBeInTheDocument();
 
     expect(screen.getByText('Toolbox Project')).toBeInTheDocument();
-
-    const analysisBtn = screen.getByRole('button', { name: /Phân tích/i });
-    expect(analysisBtn).toBeInTheDocument();
-
-    const autoApproveBtn = screen.getByRole('button', { name: /Tự duyệt/i });
-    expect(autoApproveBtn).toBeInTheDocument();
-
-    const mcpBtn = screen.getByTestId('tab-mcp-btn');
-    expect(mcpBtn).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Phân tích/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Tự duyệt/i })).toBeNull();
+    expect(toolbox.querySelector('[data-testid="tab-auto-approve-btn"]')).toBeNull();
+    expect(screen.getByTestId('tab-mcp-btn')).toBeInTheDocument();
   });
 
-  it('toggles analysis mode, auto-approve, and mcp independently per tab in storage', async () => {
+  it('assertTabFlagsAreIsolatedAfterMcpToggle', async () => {
     const { first, second } = await seedTabs(
-      { analysisMode: false, autoApproveMutations: false, mcpEnabled: true },
+      { analysisMode: true, autoApproveMutations: false, mcpEnabled: true },
       { analysisMode: true, autoApproveMutations: true, mcpEnabled: false }
     );
 
@@ -112,14 +107,9 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     await screen.findByTestId('chat-tab-toolbox');
     await openTab(CHAT_ONE);
 
-    // Toggle auto-approve on active Tab 1
-    const autoApproveBtn = await screen.findByTestId('tab-auto-approve-btn');
-    fireEvent.click(autoApproveBtn);
-
-    await waitFor(async () => {
-      const refreshedA = await db.chatTabs.get(first.id);
-      expect(refreshedA?.config?.autoApproveMutations).toBe(true);
-    });
+    // No UI can flip stored legacy flags; the tab-2 seed proves they stay untouched.
+    expect(screen.queryByTestId('tab-auto-approve-btn')).toBeNull();
+    expect(screen.queryByText(/Tự duyệt/)).toBeNull();
 
     // Clicking MCP button opens popover without toggling mcpEnabled
     const mcpBtn = await screen.findByTestId('tab-mcp-btn');
@@ -137,6 +127,7 @@ describe('ChatTabToolbox and Tab Isolation', () => {
     await waitFor(async () => {
       const refreshedA = await db.chatTabs.get(first.id);
       expect(refreshedA?.config?.mcpEnabled).toBe(false);
+      expect(refreshedA?.config?.autoApproveMutations).toBe(false);
     });
 
     // Verify Tab 2 configuration remains strictly isolated and unchanged

@@ -40,7 +40,6 @@ function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest 
     threadId: '',
     scopeKey: SCOPE_KEY,
     text: 'Xin chào',
-    analysisMode: false,
     autoApprove: false,
     model: 'model-x',
     endpoint: 'https://example.invalid/v1',
@@ -209,14 +208,14 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(statuses).toEqual(['preparing', 'streaming', 'tool', 'synthesizing', 'complete']);
   });
 
-  it('treats Analysis Mode as a prompt preference: autoApprove still wins', async () => {
+  it('keeps autoApprove precedence with the always-on analysis tool set', async () => {
     let checkedResult: { proceed: boolean } | undefined;
     const runtime = runtimeWith(async (options) => {
       checkedResult = await options.onMutationCheck?.('update_task', { id: 't-1' });
       return { fullResponse: 'updated turn', tokenUsage: {} };
     });
 
-    await runtime.start(makeRequest({ threadId, analysisMode: true, autoApprove: true }));
+    await runtime.start(makeRequest({ threadId, autoApprove: true }));
 
     expect(checkedResult?.proceed).toBe(true);
     expect(statuses).not.toContain('awaiting-approval');
@@ -700,7 +699,7 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
       },
       { preparePatch }
     );
-    const turn = runtime.start(makeRequest({ threadId, analysisMode: true }));
+    const turn = runtime.start(makeRequest({ threadId }));
     await waitForStatus(() => statuses.includes('awaiting-approval'));
     runtime.resolveApproval(true);
     await turn;

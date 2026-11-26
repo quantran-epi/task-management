@@ -16,7 +16,6 @@ function makeRequest(overrides: Partial<ChatTurnRequest> = {}): ChatTurnRequest 
     threadId: 'thread-1',
     scopeKey: SCOPE_KEY,
     text: 'Xin chào',
-    analysisMode: false,
     autoApprove: false,
     model: 'model-x',
     endpoint: 'https://example.invalid/v1',

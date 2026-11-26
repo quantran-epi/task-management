@@ -104,7 +104,7 @@ describe('AI tab runtime ownership gates', () => {
   });
 });
 
-describe('per-tab analysis mode is durable only (D-07)', () => {
+describe('analysis mode is always on for chat turns', () => {
   const PROJECT_ID = '11111111-1111-4111-8111-111111111111';
   const SCOPE = { type: 'cr' as const, id: PROJECT_ID, title: 'Analysis Project' };
   const SCOPE_KEY = `cr:${PROJECT_ID}`;
@@ -122,31 +122,16 @@ describe('per-tab analysis mode is durable only (D-07)', () => {
     return tab;
   };
 
-  it('ignores a stale global key when the durable tab config says false', async () => {
+  it('does not expose an analysis toggle or tab badge regardless of stored config', async () => {
     localStorage.setItem('planner:ai_analysis_mode', 'true');
-    const db = new TaskPlannerDatabase(`AnalysisIgnore_${Date.now()}`);
-    const tab = await mount(db, false);
-
-    await waitFor(async () => {
-      const row = await db.chatTabs.get(tab.id);
-      expect(row?.config?.analysisMode).toBe(false);
-    });
-    expect(screen.queryByTestId('analysis-mode-header-tag')).toBeNull();
-    expect(localStorage.getItem('planner:ai_analysis_mode')).toBeNull();
-    expect(within(screen.getByRole('tab', { name: /Chat/ })).queryByLabelText('Analysis Mode')).toBeNull();
-
-    cleanup();
-    await db.delete();
-  });
-
-  it('shows the analysis tag from durable config only', async () => {
-    localStorage.setItem('planner:ai_analysis_mode', 'true');
-    const db = new TaskPlannerDatabase(`AnalysisDurable_${Date.now()}`);
+    const db = new TaskPlannerDatabase(`AnalysisNoToggle_${Date.now()}`);
     const tab = await mount(db, true);
 
+    expect(screen.queryByTestId('analysis-mode-header-tag')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Phân tích/i })).toBeNull();
+    expect(within(screen.getByRole('tab', { name: /Chat/ })).queryByLabelText('Analysis Mode')).toBeNull();
     expect((await db.chatTabs.get(tab.id))?.config?.analysisMode).toBe(true);
-    expect(await screen.findByTestId('analysis-mode-header-tag')).toBeInTheDocument();
-    expect(within(screen.getByRole('tab', { name: /Chat/ })).getByLabelText('Analysis Mode')).toBeInTheDocument();
+    expect(localStorage.getItem('planner:ai_analysis_mode')).toBeTruthy();
 
     cleanup();
     await db.delete();

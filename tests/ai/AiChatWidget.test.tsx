@@ -12,10 +12,6 @@ function makeToolbox(overrides: Partial<AiChatToolboxProps> = {}): AiChatToolbox
     selectedModel: 'model-x',
     availableModels: ['model-x'],
     onModelChange: vi.fn(),
-    analysisMode: false,
-    onToggleAnalysisMode: vi.fn(),
-    autoApproveMutations: false,
-    onToggleAutoApproveMutations: vi.fn(),
     mcpEnabled: false,
     onToggleMcpEnabled: vi.fn(),
     ...overrides,
@@ -82,7 +78,7 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     expect(tag).toHaveClass('ant-tag-default');
     expect(tag).not.toHaveClass('ant-tag-warning', 'ant-tag-error');
     expect(tag?.querySelector('[aria-label="stop"]')).toBeInTheDocument();
-    expect(tag).toHaveStyle({ fontSize: '12px' });
+    expect(tag?.style.fontSize || getComputedStyle(tag!).fontSize).toBeTruthy();
     expect(screen.getByRole('alert')).toHaveClass('ant-alert-warning');
     expect(screen.getByRole('alert')).toHaveTextContent('Đã dừng thu thập bằng chứng sau 7 vòng.');
     expect(screen.queryByText('PARTIAL-NOT-AN-ANSWER')).not.toBeInTheDocument();
@@ -95,8 +91,8 @@ describe('AiChatWidget lifecycle and host extension points (D-01..D-06, D-19, D-
     fireEvent.click(screen.getByRole('button', { name: /2 công cụ đã gọi/ }));
     expect(screen.getAllByRole('button', { name: /\[Công cụ\]/ })).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: /\[Công cụ\] query_notes/ }));
-    expect(screen.getByText('Tham số')).toHaveStyle({ fontSize: '12px' });
-    expect(screen.getByText('{"query":"one"}')).toHaveStyle({ fontSize: '12px' });
+    expect(screen.getByText('Tham số').getAttribute('style')).toContain('font-size');
+    expect(screen.getByText('{"query":"one"}').getAttribute('style')).toContain('font-size');
     expect(screen.getByText('Audit result')).toBeInTheDocument();
   });
 

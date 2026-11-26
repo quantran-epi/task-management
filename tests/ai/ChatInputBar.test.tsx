@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState, useRef } from 'react';
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ChatInputBar } from '../../src/components/ai/ChatInputBar';
 import { TaskPlannerDatabase } from '../../src/db';
 import { extractMentionedEntityIds } from '../../src/services/ai/contextGrounding';
@@ -272,16 +272,19 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     expect(expandBtn).toBeInTheDocument();
     fireEvent.click(expandBtn);
 
-    // Modal should be opened
-    const modalTextarea = screen.getByLabelText('Soạn thảo tin nhắn mở rộng');
-    expect(modalTextarea).toBeInTheDocument();
+    // Modal should be opened with a tall scratchpad in a real dialog.
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('Soạn thảo tin nhắn AI toàn màn hình')).toBeInTheDocument();
+    const modalTextarea = within(dialog).getByLabelText('Soạn thảo tin nhắn mở rộng');
     expect(modalTextarea).toHaveValue('Prompt dài cần chỉnh sửa kỹ');
+    expect(Number(modalTextarea.getAttribute('rows'))).toBeGreaterThanOrEqual(15);
 
     // Edit in modal
     fireEvent.change(modalTextarea, { target: { value: 'Prompt dài đã được bổ sung thêm chi tiết' } });
 
     // Send from modal directly
-    const sendBtn = screen.getByRole('button', { name: /Gửi ngay/i });
+    const sendBtn = within(screen.getByRole('dialog')).getByRole('button', { name: /Gửi ngay/i });
     fireEvent.click(sendBtn);
 
     expect(handleSubmit).toHaveBeenCalledWith('Prompt dài đã được bổ sung thêm chi tiết');
@@ -293,10 +296,10 @@ describe('ChatInputBar - Mentions & Command Palette', () => {
     const expandBtn = screen.getByLabelText('Mở rộng soạn thảo');
     fireEvent.click(expandBtn);
 
-    const modalTextarea = screen.getByLabelText('Soạn thảo tin nhắn mở rộng');
+    const modalTextarea = within(screen.getByRole('dialog')).getByLabelText('Soạn thảo tin nhắn mở rộng');
     fireEvent.change(modalTextarea, { target: { value: 'Soạn thảo xong đóng lại' } });
 
-    const applyBtn = screen.getByRole('button', { name: /Xong \(Lưu vào ô chat\)/i });
+    const applyBtn = within(screen.getByRole('dialog')).getByRole('button', { name: /Xong \(Lưu vào ô chat\)/i });
     fireEvent.click(applyBtn);
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');

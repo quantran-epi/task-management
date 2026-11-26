@@ -907,8 +907,8 @@ describe('AIChatDrawer', () => {
     });
   });
 
-  it('bypasses confirmation prompt and automatically executes mutation when auto-approve is enabled', async () => {
-    // Auto-approve is durable per-tab config (the legacy global key never feeds a turn).
+  it('stored auto-approve flag cannot bypass the confirmation card', async () => {
+    // Legacy tab config may still carry the flag; chat turns must always require approval.
     const tab = await getOrCreateActiveChatTab({ scopeKey: 'global', scopeType: 'global' }, db);
     await updateChatTab(tab.id, { config: { ...(tab.config ?? {}), autoApproveMutations: true } }, db);
 
@@ -927,53 +927,41 @@ describe('AIChatDrawer', () => {
           type: 'tool_calls',
           calls: [
             {
-              id: 'call_auto_create_task',
+              id: 'call_stored_auto_create_task',
               type: 'function',
               function: {
                 name: 'create_task',
-                arguments: JSON.stringify({
-                  crId: CR_ID,
-                  name: 'Tác vụ tự động duyệt',
-                  priority: 'High',
-                }),
+                arguments: JSON.stringify({ crId: CR_ID, name: 'Tác vụ cần xác nhận', priority: 'High' }),
               },
             },
           ],
         };
       } else {
-        yield {
-          type: 'text',
-          delta: 'Báo cáo thay đổi: Đã tự động tạo tác vụ "Tác vụ tự động duyệt" [Ưu tiên: High].',
-        };
+        yield { type: 'text', delta: 'Đã xử lý xong.' };
       }
     }
     vi.spyOn(nineRouterClient, 'streamChatEvents').mockImplementation(mockEvents as any);
 
-    render(
-      <AIChatDrawer
-        open={true}
-        onClose={vi.fn()}
-        db={db}
-        activeScope={{ type: 'global' }}
-      />
-    );
+    render(<AIChatDrawer open={true} onClose={vi.fn()} db={db} activeScope={{ type: 'global' }} />);
 
-    // Verify auto-approve button in tab toolbox shows enabled state
-    expect(await screen.findByTestId('tab-auto-approve-btn')).toBeInTheDocument();
+    expect(await screen.findByTestId('chat-tab-toolbox')).toBeInTheDocument();
+    expect(screen.queryByTestId('tab-auto-approve-btn')).toBeNull();
+    expect(screen.queryByText(/Tự duyệt/)).toBeNull();
 
     const textarea = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
-    fireEvent.change(textarea, { target: { value: 'Tạo task tự động' } });
+    fireEvent.change(textarea, { target: { value: 'Tạo task có xác nhận' } });
     fireEvent.click(screen.getByLabelText('Gửi tin nhắn'));
 
-    // Should NOT show confirmation prompt
     await waitFor(() => {
-      expect(screen.queryByTestId('ai-mutation-approval')).not.toBeInTheDocument();
-      expect(screen.getByText(/Báo cáo thay đổi: Đã tự động tạo tác vụ/i)).toBeInTheDocument();
+      expect(screen.getByTestId('ai-mutation-approval')).toBeInTheDocument();
     });
+    expect((await db.tasks.toArray()).some((t) => t.name === 'Tác vụ cần xác nhận')).toBe(false);
 
-    // Verify mutation was committed to database directly
-    const tasksInDb = await db.tasks.toArray();
-    expect(tasksInDb.some((t) => t.name === 'Tác vụ tự động duyệt' && t.priority === 'High')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Chấp thuận' }));
+    await waitFor(() => {
+      expect(screen.getByText(/Đã xử lý xong/i)).toBeInTheDocument();
+    });
+    expect((await db.tasks.toArray()).some((t) => t.name === 'Tác vụ cần xác nhận')).toBe(true);
   });
 
   it('opens AI task planner instructions modal from dropdown menu', async () => {
@@ -1454,8 +1442,7 @@ describe('AIChatDrawer', () => {
     expect(streamSpy).not.toHaveBeenCalled();
   });
 
-  it('analysis mode skips the grounded turn and runs the tool loop with trimmed history pruning', async () => {
-    localStorage.setItem('planner:ai_analysis_mode', 'true');
+  it('always skips the grounded turn and runs the tool loop with trimmed history pruning', async () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
       endpoint: 'http://localhost:20128',
@@ -1495,8 +1482,7 @@ describe('AIChatDrawer', () => {
     expect(systemContents).toContain('[ANALYSIS MODE ACTIVE]');
   });
 
-  it('parks a database mutation behind the approval card in analysis mode and applies it only when approved', async () => {
-    localStorage.setItem('planner:ai_analysis_mode', 'true');
+  it('parks a database mutation behind the approval card and applies it only when approved', async () => {
     vi.spyOn(nineRouterTokenService, 'getNineRouterApiKey').mockResolvedValue('test-api-key');
     vi.spyOn(nineRouterTokenService, 'getNineRouterConfig').mockResolvedValue({
       endpoint: 'http://localhost:20128',
