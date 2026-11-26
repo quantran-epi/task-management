@@ -33,6 +33,7 @@ export interface AppendMessageInput {
   to: string[];
   content: string;
   kind?: TeamMessageKind | undefined;
+  attachments?: string[] | undefined;
   assignmentId?: string | undefined;
   deliversMessageId?: string | undefined;
   replyToId?: string | undefined;
@@ -76,6 +77,9 @@ export async function appendMessage(
       to: [...input.to],
       content: input.content,
       kind: input.kind ?? 'chat',
+      ...(input.attachments && input.attachments.length > 0
+        ? { attachments: [...input.attachments] }
+        : {}),
       ...(input.assignmentId !== undefined ? { assignmentId: input.assignmentId } : {}),
       ...(input.deliversMessageId !== undefined
         ? { deliversMessageId: input.deliversMessageId }
@@ -105,6 +109,7 @@ export async function appendForExistingMessage(
     to: string[];
     content: string;
     kind?: TeamMessageKind | undefined;
+    attachments?: string[] | undefined;
     assignmentId?: string | undefined;
     deliversMessageId?: string | undefined;
     replyToId?: string | undefined;
@@ -128,6 +133,9 @@ export async function appendForExistingMessage(
       to: [...input.to],
       content: input.content,
       kind: input.kind ?? 'chat',
+      ...(input.attachments && input.attachments.length > 0
+        ? { attachments: [...input.attachments] }
+        : {}),
       ...(input.assignmentId !== undefined ? { assignmentId: input.assignmentId } : {}),
       ...(input.deliversMessageId !== undefined
         ? { deliversMessageId: input.deliversMessageId }

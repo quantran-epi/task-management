@@ -3295,6 +3295,7 @@ export function createTeamRunCoordinator(
         to: recipients,
         content: text,
         kind: targets.length > 0 ? 'instruction' : 'chat',
+        ...(attachments && attachments.length > 0 ? { attachments: [...attachments] } : {}),
         createdAt: row.createdAt,
       },
       db

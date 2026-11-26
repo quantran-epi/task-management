@@ -52,6 +52,8 @@ export interface TeamMessage {
   content: string;
   /** Display only. Routing is `to[]`, never this. */
   kind: TeamMessageKind;
+  /** 261126-rfx: attached remote file identities bound to this message's turn. */
+  attachments?: string[] | undefined;
   /** The attempt this message opened, when it opened one. */
   assignmentId?: string | undefined;
   /**

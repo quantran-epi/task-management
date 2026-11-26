@@ -5373,6 +5373,39 @@ describe('teamRunCoordinator (AIO-TEAM-01..04, D-01..D-08, D-12..D-14, D-22)', (
       expect(leadPrompts.filter((row) => row === 'Câu hỏi riêng')).toHaveLength(1);
     });
 
+    it('keeps attachment identity on a queued lead reply after a newer send overwrites turn state', async () => {
+      const firstTurnStarted = deferred();
+      const firstTurnGate = deferred();
+      const attachedByPrompt = new Map<string, string[] | undefined>();
+      harness = await createHarness({
+        scripts: {
+          [LEAD_MODEL]: async (options) => {
+            const text = lastTextOf(options);
+            attachedByPrompt.set(text, options.attachedPaths as string[] | undefined);
+            if (text === 'Việc đầu tiên') {
+              firstTurnStarted.release();
+              await firstTurnGate.promise;
+            }
+            return loopResult('Xong.');
+          },
+        },
+      });
+      const current = harness;
+      const sent = current.coordinator.send('Việc đầu tiên');
+      await firstTurnStarted.promise;
+      await expect(
+        current.coordinator.send('Câu có file', ['/repo/queued.pdf'])
+      ).resolves.toBe('steered');
+      // A newer send mutates the shared per-recipient map; the queued turn must keep its own snapshot.
+      await expect(current.coordinator.send('Câu mới không file')).resolves.toBe('steered');
+      firstTurnGate.release();
+      await sent;
+      await waitFor(() => attachedByPrompt.has('Câu có file'), 5000);
+      await waitForReady(current.coordinator);
+      expect(attachedByPrompt.get('Câu có file')).toEqual(['/repo/queued.pdf']);
+      expect(attachedByPrompt.get('Câu mới không file')).toBeUndefined();
+    });
+
     it('a later Stop cancels a follow-up already shifted off the lead reply queue', async () => {
       const firstTurnStarted = deferred();
       const firstTurnGate = deferred();

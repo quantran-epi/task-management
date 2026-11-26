@@ -164,6 +164,23 @@ describe('teamEventLog — the unified message log', () => {
     expect(await listMessages(TEAM, db)).toHaveLength(1);
   });
 
+  it('projects attachment identities onto the team message log', async () => {
+    const projected = await appendForExistingMessage(
+      {
+        id: 'chat-message-attachments',
+        teamId: TEAM,
+        from: USER_PARTICIPANT_ID,
+        to: [LEAD],
+        content: 'attached',
+        attachments: ['/repo/team.pdf'],
+      },
+      db
+    );
+    expect(projected.attachments).toEqual(['/repo/team.pdf']);
+    expect((await listMessages(TEAM, db)).find((row) => row.id === projected.id)?.attachments)
+      .toEqual(['/repo/team.pdf']);
+  });
+
   it('lists messages in seq order', async () => {
     await appendMessage({ teamId: TEAM, from: USER_PARTICIPANT_ID, to: [LEAD], content: 'a' }, db);
     await appendMessage({ teamId: TEAM, from: LEAD, to: [USER_PARTICIPANT_ID], content: 'b' }, db);
