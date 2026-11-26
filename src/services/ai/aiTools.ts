@@ -48,6 +48,7 @@ import {
   getNoteWithAttachments,
 } from '../../db/repositories/noteRepo';
 import { stripAnsiSequences, extractMermaidBlocks } from '../diagramSaveBridge';
+import { prepareDocumentImages } from '../../utils/documentImageResolver';
 import {
   linkEntitiesToDoc,
   unlinkEntityFromDoc,
@@ -95,6 +96,7 @@ import {
   executeSshAttachedFileRead,
   executeSshAttachedFileSearch,
   executeSshListDir,
+  executeSshReadDocument,
   executeSshReadFile,
   executeSshGrepFiles,
 } from './sshFsToolService';
@@ -1840,7 +1842,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting.',
+        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting. DOCX/PPTX embed images written as ![alt](src) in content, including data: URLs returned by generate_image, http(s) URLs, attachment:/a: tokens, and ```mermaid blocks which are rasterized automatically. When the user asks for a document with illustrations, call generate_image first in the same turn and paste its "markdown" value into content.',
       parameters: {
         type: 'object',
         properties: {
@@ -1875,7 +1877,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_pptx',
       description:
-        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content.',
+        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content. Markdown images ![alt](src) are embedded as real slide images (data: URLs from generate_image, http(s) URLs, attachment:/a: tokens); ```mermaid blocks are rendered to PNG automatically. For illustration requests, call generate_image first in the same turn and insert its "markdown" value into markdownContent.',
       parameters: {
         type: 'object',
         properties: {
@@ -1922,7 +1924,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_image',
       description:
-        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation.',
+        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation. When the user also asks for a document, pass the returned "markdown" value into generate_file "content" or generate_pptx "markdownContent" in the SAME turn so the image is embedded in the file.',
       parameters: {
         type: 'object',
         properties: {
@@ -2264,6 +2266,24 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'ssh_read_document',
+      description:
+        'Read a remote .docx, .xlsx, or .pdf document over SSH and return its text for AI analysis. Returns format, sheetCount/pageCount when available, and a truncated flag. Cap 10 MB per file and ~24k characters of text output. Does NOT support scanned PDFs (no OCR).',
+      parameters: {
+        type: 'object',
+        properties: {
+          path: {
+            type: 'string',
+            description: 'Remote path of the .docx, .xlsx, or .pdf file to read.',
+          },
+        },
+        required: ['path'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'ssh_attached_file_info',
       description:
         'Inspect a file attached to this chat turn by its exact attached path (identity, not selector). Returns format, size and count metadata plus the next suggested range. Path must belong to the current attached set; no host/path fallback.',
@@ -2458,6 +2478,10 @@ export async function executeAiTool(
 
       case 'ssh_read_file_page': {
         return await executeSshReadFile(args as any, db, options?.remoteTarget);
+      }
+
+      case 'ssh_read_document': {
+        return await executeSshReadDocument(args as any, db, options?.remoteTarget);
       }
 
       case 'ssh_attached_file_info': {
@@ -5005,6 +5029,16 @@ export async function executeAiTool(
 
         const format = (args.format as ExportFormat) || inferFormatFromFilename(String(args.filename));
 
+        let resolvedContent: string | undefined;
+        let resolvedImages: Awaited<ReturnType<typeof prepareDocumentImages>>['images'] | undefined;
+        if (args.content && (format === 'docx' || format === 'pptx')) {
+          const prepared = await prepareDocumentImages(String(args.content), db);
+          resolvedContent = prepared.markdown;
+          resolvedImages = prepared.images;
+          if (resolvedImages.size === 0) resolvedImages = undefined;
+        }
+        const contentForExport = resolvedContent ?? String(args.content ?? '');
+
         if (args.script) {
           try {
             const blob = await executeDynamicFileScript(String(args.script), format, String(args.filename));
@@ -5025,10 +5059,11 @@ export async function executeAiTool(
 
         if (format === 'pptx') {
           const exportResult = await exportPresentationAsFile(
-            String(args.content),
+            contentForExport,
             String(args.filename),
             args.title ? { presentationTitle: String(args.title) } : undefined,
-            false // Do not auto-download silently in background
+            false, // Do not auto-download silently in background
+            resolvedImages
           );
           return JSON.stringify({
             success: true,
@@ -5042,10 +5077,11 @@ export async function executeAiTool(
         }
 
         const exportResult = await exportContentAsFile(
-          String(args.content),
+          contentForExport,
           String(args.filename),
           format,
-          false // Do not auto-download silently in background
+          false, // Do not auto-download silently in background
+          resolvedImages
         );
 
         return JSON.stringify({
@@ -5073,11 +5109,19 @@ export async function executeAiTool(
           return JSON.stringify({ error: 'Either slides array or markdownContent/content is required' });
         }
 
+        let pptxImages: Awaited<ReturnType<typeof prepareDocumentImages>>['images'] | undefined;
+        if (typeof contentOrSlides === 'string') {
+          const prepared = await prepareDocumentImages(contentOrSlides, db);
+          contentOrSlides = prepared.markdown;
+          if (prepared.images.size > 0) pptxImages = prepared.images;
+        }
+
         const exportResult = await exportPresentationAsFile(
           contentOrSlides,
           filename,
           presentationTitle ? { presentationTitle } : undefined,
-          false // Do not auto-download silently in background
+          false, // Do not auto-download silently in background
+          pptxImages
         );
 
         let serializedPptxContent = '';
@@ -5132,6 +5176,12 @@ export async function executeAiTool(
         if (!imageSrc) {
           return JSON.stringify({ error: 'Không nhận được dữ liệu hình ảnh' });
         }
+        const imageMime = result.mimeType || 'image/png';
+        const imageExtension =
+          imageMime === 'image/jpeg' ? 'jpg'
+          : imageMime === 'image/gif' ? 'gif'
+          : imageMime === 'image/bmp' ? 'bmp'
+          : 'png';
 
         // If saveToDocId provided and noteAttachments table available, persist attachment
         let attachedDocTitle: string | null = null;
@@ -5148,16 +5198,16 @@ export async function executeAiTool(
                 byteNumbers[i] = byteCharacters.charCodeAt(i);
               }
               const byteArray = new Uint8Array(byteNumbers);
-              blobData = new Blob([byteArray], { type: 'image/png' });
+              blobData = new Blob([byteArray], { type: imageMime });
             } else {
-              blobData = new Blob([imageSrc], { type: 'image/png' });
+              blobData = new Blob([imageSrc], { type: imageMime });
             }
 
             await db.noteAttachments.put({
               id: attachmentId,
               noteId: doc.id,
-              fileName: `ai-gen-${Date.now()}.png`,
-              mimeType: 'image/png',
+              fileName: `ai-gen-${Date.now()}.${imageExtension}`,
+              mimeType: imageMime,
               sizeBytes: blobData.size,
               data: blobData,
               createdAt: new Date().toISOString(),
@@ -5174,6 +5224,7 @@ export async function executeAiTool(
           revisedPrompt: result.revisedPrompt,
           model: result.model,
           imageUrl: imageSrc,
+          mimeType: imageMime,
           markdown: markdownEmbed,
         });
       }
@@ -5268,6 +5319,7 @@ export const SSH_READ_TOOLS: AiToolDefinition[] = AI_DATABASE_TOOLS.filter((tool
   [
     'ssh_list_dir',
     'ssh_read_file_page',
+    'ssh_read_document',
     'ssh_attached_file_info',
     'ssh_attached_file_search',
     'ssh_attached_file_read',

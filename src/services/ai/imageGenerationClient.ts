@@ -17,6 +17,21 @@ export interface ImageConnectionTestOptions {
   signal?: AbortSignal;
 }
 
+/** Detects the real MIME type from the first bytes — routers may return JPEG even for DALL-E-shaped requests. */
+export function detectImageMime(base64: string): string {
+  try {
+    const head = atob(base64.slice(0, 64));
+    const bytes = Uint8Array.from(head, (c) => c.charCodeAt(0));
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) return 'image/gif';
+    if (bytes[0] === 0x42 && bytes[1] === 0x4d) return 'image/bmp';
+  } catch {
+    // malformed base64 — fall through to the safe default
+  }
+  return 'image/png';
+}
+
 /**
  * Standard OpenAI-compatible client for /v1/images/generations.
  * Sends user prompt and receives either base64 image data or URL.
@@ -108,9 +123,11 @@ export async function generateImage(
     let b64Json: string | undefined = item.b64_json;
     let url: string | undefined = item.url;
     let dataUrl: string | undefined;
+    let mimeType: string | undefined;
 
     if (b64Json) {
-      dataUrl = `data:image/png;base64,${b64Json}`;
+      mimeType = detectImageMime(b64Json);
+      dataUrl = `data:${mimeType};base64,${b64Json}`;
     } else if (url) {
       dataUrl = url;
     }
@@ -119,6 +136,7 @@ export async function generateImage(
       b64Json,
       url,
       dataUrl,
+      mimeType,
       revisedPrompt: item.revised_prompt || options.prompt,
       model: payload.model,
     };

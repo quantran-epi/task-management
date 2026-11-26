@@ -761,7 +761,8 @@ export async function exportContentAsFile(
   content: string,
   filename: string,
   format?: ExportFormat,
-  autoDownload: boolean = true
+  autoDownload: boolean = true,
+  images?: Map<string, import('./documentImageResolver').ResolvedDocumentImage>
 ): Promise<FileExportResult> {
   const cleanFilename = sanitizeFilename(filename);
   const resolvedFormat = format || inferFormatFromFilename(cleanFilename);
@@ -770,7 +771,7 @@ export async function exportContentAsFile(
 
   switch (resolvedFormat) {
     case 'docx':
-      blob = await generateDocxBlobWithDocx(content);
+      blob = await generateDocxBlobWithDocx(content, undefined, images);
       break;
     case 'xlsx':
       blob = await generateXlsxBlobWithExcelJS(content);

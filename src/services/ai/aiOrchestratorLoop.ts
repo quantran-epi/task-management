@@ -12,6 +12,7 @@ import {
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
 import { executeTeamTool } from './office/teamTools';
+import { CHAT_HISTORY_TOOL_NAMES, executeChatHistoryTool } from './chatHistoryTools';
 import type { AttachmentScope, RemoteToolTarget } from '../../types/sshFsTool';
 
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
@@ -27,6 +28,8 @@ export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
   /** 261126-rfx: attached identities forwarded to the shared attached-file tool family. */
   attachedPaths?: string[];
   attachmentScope?: AttachmentScope;
+  /** Quick 261126-q7j: current chat thread, set by the drawer — never from model args. */
+  threadId?: string;
 }
 
 /**
@@ -55,6 +58,12 @@ export async function dispatchAiToolCall(
   options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
+
+  // 261126-q7j: transcript tools are bound to the request's thread id. Missing context refuses
+  // before any DB read; a model-supplied `args.threadId` is never consulted.
+  if (CHAT_HISTORY_TOOL_NAMES.has(normalized)) {
+    return executeChatHistoryTool(normalized, args, options?.threadId ?? '', db, signal);
+  }
 
   // Phase 47 D-13: on a remote turn, git_read goes through the team adapter with the explicit
   // scope target. The target overwrites model selectors so a remote turn can never read another
@@ -591,10 +600,17 @@ export async function runAiOrchestratorLoop(
           const parsedRes = JSON.parse(toolResult);
           const imageUrl = typeof parsedRes.imageUrl === 'string' ? parsedRes.imageUrl : '';
           if (parsedRes.success !== false && imageUrl) {
+            const mime = typeof parsedRes.mimeType === 'string' ? parsedRes.mimeType : '';
+            const extension =
+              mime === 'image/jpeg' ? 'jpg'
+              : mime === 'image/gif' ? 'gif'
+              : mime === 'image/bmp' ? 'bmp'
+              : imageUrl.startsWith('data:image/jpeg') ? 'jpg'
+              : 'png';
             const generated: ChatGeneratedFile = {
               id: tc.id,
-              filename: `ai-image-${tc.id.slice(0, 8)}.png`,
-              format: 'png',
+              filename: `ai-image-${tc.id.slice(0, 8)}.${extension}`,
+              format: extension === 'jpg' ? 'jpeg' : extension,
               sizeBytes: imageUrl.startsWith('data:')
                 ? Math.round((imageUrl.length * 3) / 4)
                 : 0,

@@ -1,6 +1,7 @@
 import pptxgenjs from 'pptxgenjs';
 import { APP_NAME } from '../constants/app';
 import { sanitizeFilename, downloadBlob } from './fileExport';
+import type { ResolvedDocumentImage } from './documentImageResolver';
 
 export interface SlideData {
   title?: string;
@@ -8,6 +9,7 @@ export interface SlideData {
   bullets?: string[];
   table?: string[][];
   notes?: string;
+  images?: ResolvedDocumentImage[];
   layout?: 'title' | 'content' | 'section';
 }
 
@@ -26,6 +28,14 @@ export interface PptxExportResult {
   blob: Blob;
 }
 
+function base64FromBytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(binary);
+}
+
 // TaskMate Theme Colors
 const THEME = {
   primary: '4F46E5', // Indigo
@@ -41,7 +51,10 @@ const THEME = {
  * Parses markdown text into an array of slide definitions.
  * Recognizes headings (#, ##), dividers (---), bullet points (- or *), and speaker notes.
  */
-export function parseMarkdownToSlides(markdown: string): { title: string; slides: SlideData[] } {
+export function parseMarkdownToSlides(
+  markdown: string,
+  images?: Map<string, ResolvedDocumentImage>
+): { title: string; slides: SlideData[] } {
   const lines = (markdown || '').split('\n');
   const slides: SlideData[] = [];
   let presentationTitle = 'Presentation';
@@ -50,7 +63,7 @@ export function parseMarkdownToSlides(markdown: string): { title: string; slides
   let inNotes = false;
 
   const pushCurrentSlide = () => {
-    if (currentSlide && (currentSlide.title || (currentSlide.bullets && currentSlide.bullets.length > 0) || currentSlide.subtitle)) {
+    if (currentSlide && (currentSlide.title || (currentSlide.bullets && currentSlide.bullets.length > 0) || currentSlide.subtitle || (currentSlide.images && currentSlide.images.length > 0))) {
       slides.push(currentSlide);
     }
     currentSlide = null;
@@ -158,6 +171,21 @@ export function parseMarkdownToSlides(markdown: string): { title: string; slides
           currentSlide = { title: 'Data Overview', layout: 'content', bullets: [] };
         }
         currentSlide.table = tableRows;
+      }
+      continue;
+    }
+
+    // Embedded image line: ![alt](src)
+    const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+    if (imageMatch) {
+      const [, alt = '', src = ''] = imageMatch;
+      const image = images?.get(src.trim());
+      if (image) {
+        if (!currentSlide) {
+          currentSlide = { title: presentationTitle, layout: 'content', bullets: [] };
+        }
+        currentSlide.images = currentSlide.images || [];
+        currentSlide.images.push({ ...image, alt });
       }
       continue;
     }
@@ -372,6 +400,31 @@ export function buildPptxPresentation(
         });
       }
 
+      // Embedded images: max two per row inside the content area
+      if (slideData.images && slideData.images.length > 0) {
+        const shown = slideData.images.slice(0, 4);
+        shown.forEach((image, idx) => {
+          const col = idx % 2;
+          const row = Math.floor(idx / 2);
+          const maxW = 5.1;
+          const maxH = 2.1;
+          const ratio = image.width > 0 && image.height > 0 ? image.width / image.height : 16 / 9;
+          let w = maxW;
+          let h = w / ratio;
+          if (h > maxH) {
+            h = maxH;
+            w = h * ratio;
+          }
+          slide.addImage({
+            data: `image/${image.extension};base64,${base64FromBytes(image.data)}`,
+            x: 1.1 + col * 5.6,
+            y: 1.8 + row * 2.3,
+            w,
+            h,
+          });
+        });
+      }
+
       // Bullets
       if (slideData.bullets && slideData.bullets.length > 0) {
         const bulletItems = slideData.bullets.map((b) => ({
@@ -436,9 +489,10 @@ export async function generatePptxBlob(
  */
 export async function generatePptxFromMarkdown(
   markdown: string,
-  options?: PptxOptions
+  options?: PptxOptions,
+  images?: Map<string, ResolvedDocumentImage>
 ): Promise<{ blob: Blob; slideCount: number; title: string }> {
-  const { title, slides } = parseMarkdownToSlides(markdown);
+  const { title, slides } = parseMarkdownToSlides(markdown, images);
   const resolvedTitle = options?.presentationTitle || title;
   const blob = await generatePptxBlob(slides, {
     ...options,
@@ -459,14 +513,15 @@ export async function exportPresentationAsFile(
   contentOrSlides: string | SlideData[],
   filename?: string,
   options?: PptxOptions,
-  autoDownload: boolean = true
+  autoDownload: boolean = true,
+  images?: Map<string, ResolvedDocumentImage>
 ): Promise<PptxExportResult> {
   let blob: Blob;
   let slideCount = 0;
   let defaultTitle = 'presentation';
 
   if (typeof contentOrSlides === 'string') {
-    const res = await generatePptxFromMarkdown(contentOrSlides, options);
+    const res = await generatePptxFromMarkdown(contentOrSlides, options, images);
     blob = res.blob;
     slideCount = res.slideCount;
     defaultTitle = res.title;

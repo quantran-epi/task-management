@@ -10,6 +10,17 @@ import ExcelJS from 'exceljs';
 import * as docx from 'docx';
 import pptxgen from 'pptxgenjs';
 import { extractGridFromText, parseMarkdownTable, type ExportFormat } from './fileExport';
+import type { ResolvedDocumentImage } from './documentImageResolver';
+
+export type DocumentImageMap = Map<string, ResolvedDocumentImage>;
+
+function fitWithin(width: number, height: number, maxW: number, maxH: number) {
+  const w = width > 0 ? width : maxW;
+  const h = height > 0 ? height : Math.round((maxW * 9) / 16);
+  const scale = Math.min(1, maxW / w, maxH / h);
+  return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+}
+
 
 export interface DynamicSandboxResult {
   blob: Blob;
@@ -244,7 +255,8 @@ export async function generateXlsxBlobFromGrid(
  */
 export async function generateDocxBlobWithDocx(
   content: string,
-  _title?: string
+  _title?: string,
+  images?: DocumentImageMap
 ): Promise<Blob> {
   const lines = (content || '').split('\n');
   const children: (docx.Paragraph | docx.Table)[] = [];
@@ -405,6 +417,45 @@ export async function generateDocxBlobWithDocx(
           spacing: { after: 80 },
         })
       );
+      i++;
+      continue;
+    }
+
+    // Embedded image: ![alt](src) on its own line. ponytail: raster images only; SVG/vector not in scope.
+    const imageMatch = line.match(/^!\[([^\]]*)\]\(([^)\s]+)\)$/);
+    if (imageMatch) {
+      const [, alt = '', src = ''] = imageMatch;
+      const image = images?.get(src.trim());
+      if (image) {
+        const { width, height } = fitWithin(image.width, image.height, 600, 400);
+        children.push(
+          new docx.Paragraph({
+            children: [
+              new docx.ImageRun({
+                data: image.data,
+                type: image.extension === 'jpeg' ? 'jpg' : image.extension,
+                transformation: { width, height },
+              }),
+            ],
+            spacing: { after: 60 },
+          })
+        );
+        if (alt) {
+          children.push(
+            new docx.Paragraph({
+              children: [new docx.TextRun({ text: alt, italics: true, color: '6B7280', size: 18 })],
+              spacing: { after: 120 },
+            })
+          );
+        }
+      } else {
+        children.push(
+          new docx.Paragraph({
+            children: [new docx.TextRun({ text: alt || src, color: '6B7280' })],
+            spacing: { after: 120 },
+          })
+        );
+      }
       i++;
       continue;
     }

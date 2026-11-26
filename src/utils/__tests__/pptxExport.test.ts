@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import JSZip from 'jszip';
 import {
   parseMarkdownToSlides,
   generatePptxBlob,
@@ -67,6 +68,30 @@ Note: Focus on Q1 timeline during speech
     const blob = await generatePptxBlob(slides, { presentationTitle: 'Project Kickoff' });
     expect(blob).toBeDefined();
     expect(blob.size).toBeGreaterThan(1000);
+  });
+
+  it('embeds resolved markdown images into PPTX media', async () => {
+    const src = 'data:image/png;base64,TEST';
+    const png = Uint8Array.from(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64'
+      )
+    );
+    const images = new Map([
+      [src, { data: png, extension: 'png' as const, alt: 'Flow', width: 800, height: 600 }],
+    ]);
+    const md = '# Deck\n\n## Overview\n![Flow](' + src + ')\n- Point 1';
+    const { title, slides } = parseMarkdownToSlides(md, images);
+    expect(title).toBe('Deck');
+    const imageSlides = slides.filter((s) => s.images?.length);
+    expect(imageSlides).toHaveLength(1);
+    expect(imageSlides[0]?.images).toHaveLength(1);
+    expect(imageSlides[0]?.bullets).toEqual(['Point 1']);
+
+    const blob = await generatePptxBlob(slides);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    expect(Object.keys(zip.files).some((name) => name.startsWith('ppt/media/'))).toBe(true);
   });
 
   it('generates a presentation directly from markdown', async () => {

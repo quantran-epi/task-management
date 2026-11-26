@@ -88,6 +88,7 @@ export interface ImageGenerationResult {
   url?: string | undefined;
   b64Json?: string | undefined;
   dataUrl?: string | undefined;
+  mimeType?: string | undefined;
   revisedPrompt?: string | undefined;
   model: string;
 }

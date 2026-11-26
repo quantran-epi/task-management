@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import JSZip from 'jszip';
 import {
   executeDynamicFileScript,
   generateXlsxBlobWithExcelJS,
@@ -49,6 +50,34 @@ describe('dynamicFileSandbox', () => {
     const blob = await generateDocxBlobWithDocx(markdown);
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(100);
+  });
+
+  it('embeds a real PNG image in DOCX and uses it as caption', async () => {
+    const png = Uint8Array.from(
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64'
+      )
+    );
+    const src = 'data:image/png;base64,TEST';
+    const images = new Map([
+      [src, { data: png, extension: 'png' as const, alt: 'Minimal', width: 1, height: 1 }],
+    ]);
+    const blob = await generateDocxBlobWithDocx(`# Report\n![Minimal](${src})`, undefined, images);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const media = Object.keys(zip.files).filter((name) => name.startsWith('word/media/'));
+    expect(media.length).toBeGreaterThan(0);
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    expect(documentXml).toContain('<w:drawing');
+    expect(documentXml).toContain('Minimal');
+  });
+
+  it('keeps alt text when image source is missing from the map', async () => {
+    const blob = await generateDocxBlobWithDocx('![Fallback](file:///secret)');
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    expect(Object.keys(zip.files).some((name) => name.startsWith('word/media/'))).toBe(false);
+    const documentXml = await zip.file('word/document.xml')!.async('string');
+    expect(documentXml).toContain('Fallback');
   });
 
   it('executes dynamic script returning an ExcelJS workbook', async () => {

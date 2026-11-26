@@ -144,7 +144,26 @@ describe('quick 261126-1od standalone chat tool capability', () => {
     });
     expect(namesOf(explicitFalse)).toEqual(namesOf(legacy));
     expect(namesOf(legacy)).toContain('query_tasks');
-    expect(namesOf(legacy)).toHaveLength(namesOf(getToolsForTurn(false, [MCP_TOOL])).length);
+    // 261126-q7j adds exactly two new definitions on every path; legacy identity/count is the
+    // remainder after removing them, not the raw total.
+    const historyNames = ['search_chat_history', 'read_chat_turn'];
+    expect(namesOf(legacy).filter((name) => !historyNames.includes(name))).toHaveLength(
+      namesOf(getToolsForTurn(false, [MCP_TOOL])).length
+    );
+  });
+
+  it('261126-q7j: always advertises the two chat history tools in standalone and ordinary payloads', () => {
+    const historyNames = ['search_chat_history', 'read_chat_turn'];
+    const standalone = getToolsForTurnWithRemote({ ...baseOptions, standaloneCapability: true });
+    const ordinary = getToolsForTurnWithRemote({ ...baseOptions, dynamicMcpTools: [MCP_TOOL] });
+    for (const payload of [standalone, ordinary]) {
+      const names = namesOf(payload);
+      for (const name of historyNames) expect(names).toContain(name);
+      expect(names.filter((name) => historyNames.includes(name))).toHaveLength(2);
+    }
+    // Legacy tool identity/count stays unchanged: only the two new definitions are added.
+    const legacyNames = namesOf(getToolsForTurn(false, [MCP_TOOL], undefined, new Set()));
+    expect(namesOf(ordinary).filter((name) => !historyNames.includes(name))).toEqual(legacyNames);
   });
 
   it('Test 3: option does not change analysis-mode, disabled-name or allowed-name behavior', () => {

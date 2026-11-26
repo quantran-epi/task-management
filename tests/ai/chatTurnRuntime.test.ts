@@ -676,6 +676,29 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
     expect(JSON.parse(returned[0]!)).toEqual(proposal);
   });
 
+  it('261126-q7j: chat history dispatch uses request.threadId, never the model-supplied selector', async () => {
+    const own = await saveMessage(
+      { threadId, role: 'user', content: 'Bí mật Q7J thuộc thread này' },
+      db
+    );
+    let toolResult = '';
+    const runtime = runtimeWith(async (options) => {
+      toolResult = (await options.executeToolFn?.(
+        'read_chat_turn',
+        { turnId: own.id, threadId: 'model-chosen-foreign-thread' },
+        db,
+        undefined,
+        undefined
+      )) ?? '';
+      return { fullResponse: 'Đã đọc', tokenUsage: {} };
+    });
+    await runtime.start(makeRequest({ threadId }));
+    const parsed = JSON.parse(toolResult);
+    expect(parsed.turnId).toBe(own.id);
+    expect(parsed.content).toContain('Bí mật Q7J thuộc thread này');
+    expect(parsed.refused).toBeUndefined();
+  });
+
   it('parks an unsolicited patch call in Analysis Mode instead of hard-blocking it', async () => {
     let checked: { proceed: boolean } | undefined;
     const preparePatch = vi.fn().mockResolvedValue({

@@ -375,6 +375,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
             ...(callId ? { callId } : {}),
             ...(request.remoteTarget ? { remoteTarget: request.remoteTarget } : {}),
             ...(request.attachedPaths ? { attachedPaths: request.attachedPaths } : {}),
+            ...(request.threadId ? { threadId: request.threadId } : {}),
           });
         },
         onTextChunk: (delta) => {

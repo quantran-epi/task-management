@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AI_DATABASE_TOOLS, executeAiTool } from '../aiTools';
 import * as imageClientModule from '../imageGenerationClient';
+import { detectImageMime } from '../imageGenerationClient';
 import * as tokenServiceModule from '../nineRouterTokenService';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -73,6 +74,31 @@ describe('aiTools generate_image', () => {
     expect(result.model).toBe('dall-e-3');
     expect(result.markdown).toContain('![A futuristic personal workspace dashboard with luminous widgets]');
     expect(result.markdown).toContain('data:image/png;base64,');
+  });
+
+  it('reports JPEG MIME from image bytes and keeps it through the tool result', async () => {
+    expect(detectImageMime('/9j/4AAQSkZJRg==')).toBe('image/jpeg');
+    expect(detectImageMime('iVBORw0KGgo=')).toBe('image/png');
+
+    const fakeDb = {} as any;
+    vi.spyOn(tokenServiceModule, 'getImageConfig').mockResolvedValue({
+      endpoint: 'http://localhost:3000',
+      defaultModel: 'ag/gemini-3.1-flash-image',
+    });
+    vi.spyOn(tokenServiceModule, 'getImageApiKey').mockResolvedValue('test-sk-key');
+    const jpegDataUrl = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    vi.spyOn(imageClientModule, 'generateImage').mockResolvedValue({
+      model: 'ag/gemini-3.1-flash-image',
+      dataUrl: jpegDataUrl,
+      b64Json: '/9j/4AAQSkZJRg==',
+      mimeType: 'image/jpeg',
+      revisedPrompt: 'paper plane',
+    });
+
+    const result = JSON.parse(await executeAiTool('generate_image', { prompt: 'paper plane' }, fakeDb));
+    expect(result.imageUrl).toBe(jpegDataUrl);
+    expect(result.mimeType).toBe('image/jpeg');
+    expect(result.markdown).toContain('data:image/jpeg;base64,');
   });
 
   it('redacts API key in client error scenarios', async () => {
