@@ -97,7 +97,7 @@ describe('standalone chat shell', () => {
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toBeInTheDocument();
   });
 
-  it('opens a right-side settings drawer without remounting chat or losing draft', async () => {
+  it('opens a full-width settings Modal without remounting chat or losing draft', async () => {
     render(
       <AIChatProvider>
         <AIPopoutView standaloneChat />
@@ -115,6 +115,10 @@ describe('standalone chat shell', () => {
       expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument();
     });
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('giữ nháp khi mở cài đặt');
-    expect(document.querySelector('.ant-drawer-right')).not.toBeNull();
+    expect(document.querySelector('.ant-modal-content')).not.toBeNull();
+    expect(document.querySelector('.ant-drawer')).toBeNull();
+    const modal = screen.getByText('AI Settings · tất cả').closest('.ant-modal') as HTMLElement | null;
+    expect(modal).not.toBeNull();
+    expect(modal?.style.width).toBe('calc(100vw - 48px)');
   });
 });

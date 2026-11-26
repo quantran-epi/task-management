@@ -202,11 +202,14 @@ describe('phase 51 AI settings drawer', () => {
     }
   });
 
-  it('Test 6: standalone host mounts AISettingsDrawer exactly once with db and open state', async () => {
+  it('Test 6: standalone host mounts one full-width settings Modal with db and open state', async () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
     expect(source.match(/<AISettingsDrawer\b/g)).toHaveLength(1);
     expect(source).not.toMatch(/<Drawer\b/);
     expect(source).toContain('onClose={() => setSettingsOpen(false)}');
+    const workbench = readFileSync(resolve(process.cwd(), 'src/workbench/toolwindows/RightToolWindow.tsx'), 'utf8');
+    expect(workbench).toContain('<AISettingsDrawer');
+    expect(workbench).toContain('onOpenSettings={() => setSettingsOpen(true)}');
 
     render(
       <AIChatProvider>
@@ -216,6 +219,8 @@ describe('phase 51 AI settings drawer', () => {
 
     fireEvent.click(screen.getByTestId('chat-settings-gear'));
     await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
+    expect(document.querySelector('.ant-modal-content')).not.toBeNull();
+    expect(document.querySelector('.ant-drawer')).toBeNull();
     expect(screen.getByRole('navigation', { name: 'Cài đặt AI' })).toBeInTheDocument();
   });
 
@@ -266,10 +271,10 @@ describe('phase 51 AI settings drawer', () => {
 
     fireEvent.click(gear);
     await waitFor(() => expect(screen.getByText('AI Settings · tất cả')).toBeInTheDocument());
-    const mask = document.querySelector('.ant-drawer-mask');
+    const mask = document.querySelector('.ant-modal-mask');
     expect(mask).not.toBeNull();
     fireEvent.click(mask!);
-    await waitFor(() => expect(document.querySelector('.ant-drawer-open')).toBeNull(), { timeout: 2000 });
+    await waitFor(() => expect(document.querySelector('.ant-modal-wrap')).toBeNull(), { timeout: 2000 });
     expect(screen.getByLabelText('Nội dung tin nhắn trò chuyện AI')).toHaveValue('giữ nháp qua đóng drawer');
     errorSpy.mockRestore();
   });
