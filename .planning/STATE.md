@@ -151,6 +151,7 @@ Progress: [██████████] 100%
 | 261126-diw | Fix AI chat window: convert settings drawer to full-width modal, remove auto-approve button (chat is Q&A only, no TaskMate data mutation) | 2026-11-26 | 5bd75c29 | — | [261126-diw-fix-ai-chat-window-convert-settings-draw](./quick/261126-diw-fix-ai-chat-window-convert-settings-draw/) |
 | 261126-m1v | CR detail page: move right-side sections below table so table is full width; add task filtering in CR detail page. | 2026-11-26 | 31928a99 | — | [261126-m1v-cr-detail-page-move-right-side-sections-](./quick/261126-m1v-cr-detail-page-move-right-side-sections-/) |
 | 261126-ky8 | Split standalone chat window onto its own database, add SSH connection config, fix default model for new tabs | 2026-11-26 | 7809e6c6 | — | [261126-ky8-split-standalone-chat-window-onto-its-ow](./quick/261126-ky8-split-standalone-chat-window-onto-its-ow/) |
+| 261126-q7j | Add search_chat_history and read_chat_turn tools to AI chat panel, scoped to current thread | 2026-11-26 | 49b71e93, 6bc5f229, c8c851a3, 2e702ed9 | Verified | [261126-q7j-add-search-chat-history-and-read-chat-tu](./quick/261126-q7j-add-search-chat-history-and-read-chat-tu/) |
 
 ## Accumulated Context
 
