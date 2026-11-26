@@ -1,12 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { extractRawTextMock, xlsxLoadMock, getDocumentMock, eachRowMock, eachSheetMock } = vi.hoisted(() => ({
+const {
+  extractRawTextMock,
+  xlsxLoadMock,
+  getDocumentMock,
+  eachRowMock,
+  eachSheetMock,
+  jsZipLoadMock,
+  workbookStateMock,
+} = vi.hoisted(() => ({
   extractRawTextMock: vi.fn(),
   xlsxLoadMock: vi.fn(),
   getDocumentMock: vi.fn(),
   eachRowMock: vi.fn(),
   eachSheetMock: vi.fn(),
+  jsZipLoadMock: vi.fn(),
+  workbookStateMock: { worksheets: [] as any[] },
 }));
+
+vi.mock('jszip', () => ({ default: { loadAsync: jsZipLoadMock } }));
 
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'pdf.worker.mock.mjs' }));
 
@@ -26,7 +38,9 @@ vi.mock('exceljs', () => {
 });
 
 import {
+  getSshDocumentInfo,
   parseSshDocument,
+  readSshDocumentRegion,
   type ParsedDocument,
 } from '../sshDocumentParser';
 
@@ -128,4 +142,120 @@ describe('sshDocumentParser', () => {
     expect(result.text.length).toBeLessThanOrEqual(100 + 60);
   });
 
+  describe('progressive document API', () => {
+    function mockPdf(pageTexts: string[]) {
+      const getPage = vi.fn(async (pageNo: number) => ({
+        getTextContent: vi.fn().mockResolvedValue({ items: [{ str: pageTexts[pageNo - 1] ?? '' }] }),
+        cleanup: vi.fn(),
+      }));
+      getDocumentMock.mockReturnValue({
+        promise: Promise.resolve({ numPages: pageTexts.length, getPage }),
+        destroy: vi.fn().mockResolvedValue(undefined),
+      });
+      return getPage;
+    }
+
+    function mockWorkbook(sheets: Record<string, string[][]>) {
+      workbookStateMock.worksheets = Object.entries(sheets).map(([name, rows]) => ({
+        name,
+        rowCount: rows.length,
+        columnCount: Math.max(0, ...rows.map((r) => r.length)),
+        getCell: (row: number, col: number) => ({ value: rows[row - 1]?.[col - 1] ?? null }),
+      }));
+      xlsxLoadMock.mockResolvedValue(undefined);
+    }
+
+    it('info returns format/size/counts with a next-range hint without OCR', async () => {
+      mockPdf(['Trang 1', 'Trang 2']);
+      const pdfInfo = await getSshDocumentInfo(offsetBuffer([1, 2, 3]), 'scan.pdf');
+      expect(pdfInfo).toMatchObject({ format: 'pdf', sizeBytes: 3, pageCount: 2 });
+      expect(pdfInfo.nextRange).toMatchObject({ pageStart: 1, pageCount: 2 });
+      expect(pdfInfo.note).toBeUndefined();
+
+      mockWorkbook({ Data: [['A1', 'B1'], ['A2', 'B2']] });
+      const xlsxInfo = await getSshDocumentInfo(offsetBuffer([4, 5]), 'data.xlsx');
+      expect(xlsxInfo).toMatchObject({ format: 'xlsx', sizeBytes: 2, sheetCount: 1 });
+      expect(xlsxInfo.sheets).toEqual([{ name: 'Data', rowCount: 2, columnCount: 2 }]);
+      expect(xlsxInfo.nextRange).toMatchObject({ sheet: 'Data', rowStart: 1, rowCount: 2 });
+
+      jsZipLoadMock.mockResolvedValue({
+        file: vi.fn().mockResolvedValue({ async: vi.fn().mockResolvedValue('<w:document/>') }),
+      });
+      const docxInfo = await getSshDocumentInfo(offsetBuffer([6]), 'report.docx');
+      expect(docxInfo).toMatchObject({ format: 'docx', sizeBytes: 1 });
+      expect(docxInfo.nextRange).toMatchObject({ blockStart: 1 });
+    });
+
+    it('reads only the requested PDF pages and rejects pageCount > 20', async () => {
+      const getPage = mockPdf(Array.from({ length: 25 }, (_, i) => `Trang ${i + 1}`));
+      const region = await readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', {
+        pageStart: 3,
+        pageCount: 2,
+      });
+      expect(getPage).toHaveBeenCalledTimes(2);
+      expect(getPage).toHaveBeenCalledWith(3);
+      expect(getPage).toHaveBeenCalledWith(4);
+      expect(region.text).toContain('Trang 3');
+      expect(region.text).toContain('Trang 4');
+      expect(region.text).not.toContain('Trang 5');
+      expect(region.format).toBe('pdf');
+
+      const bytesSpy = vi.spyOn(sshService, 'readRemoteFileBytes');
+      await expect(
+        readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', { pageStart: 1, pageCount: 21 }),
+      ).rejects.toThrow(/20/);
+      expect(getPage).toHaveBeenCalledTimes(2);
+      bytesSpy.mockRestore();
+
+      const scan = await readSshDocumentRegion(new ArrayBuffer(2), 'scan.pdf', {
+        pageStart: 1,
+        pageCount: 1,
+      });
+      expect(scan.note).toContain('không hỗ trợ OCR');
+    });
+
+    it('reads only requested XLSX sheet rows and columns', async () => {
+      mockWorkbook({
+        Data: [['A1', 'B1', 'C1'], ['A2', 'B2', 'C2'], ['A3', 'B3', 'C3']],
+        Other: [['Z1']],
+      });
+      const region = await readSshDocumentRegion(new ArrayBuffer(2), 'data.xlsx', {
+        sheet: 'Data',
+        rowStart: 2,
+        rowCount: 2,
+        colStart: 2,
+        colCount: 2,
+      });
+      expect(region.text).toContain('B2 | C2');
+      expect(region.text).toContain('B3 | C3');
+      expect(region.text).not.toContain('A2');
+      expect(region.text).not.toContain('Z1');
+      expect(region.truncated).toBe(false);
+    });
+
+    it('builds DOCX block index from word/document.xml with mammoth fallback', async () => {
+      const xml = '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Đoạn một</w:t></w:r></w:p><w:p><w:r><w:t>Đoạn hai</w:t></w:r></w:p></w:body></w:document>';
+      const zipFile = vi.fn().mockResolvedValue({ async: vi.fn().mockResolvedValue(xml) });
+      jsZipLoadMock.mockResolvedValue({ file: zipFile });
+      extractRawTextMock.mockResolvedValue({ value: 'FALLBACK' });
+
+      const region = await readSshDocumentRegion(new ArrayBuffer(2), 'report.docx', {
+        blockStart: 1,
+        blockCount: 1,
+      });
+      expect(zipFile).toHaveBeenCalledWith('word/document.xml');
+      expect(extractRawTextMock).not.toHaveBeenCalled();
+      expect(region.text).toContain('Đoạn một');
+      expect(region.text).not.toContain('Đoạn hai');
+      expect(region.blockCount).toBe(2);
+
+      jsZipLoadMock.mockRejectedValue(new Error('zip hỏng'));
+      const fallback = await readSshDocumentRegion(new ArrayBuffer(2), 'report.docx', {
+        blockStart: 1,
+        blockCount: 1,
+      });
+      expect(extractRawTextMock).toHaveBeenCalledTimes(1);
+      expect(fallback.text).toContain('FALLBACK');
+    });
+  });
 });

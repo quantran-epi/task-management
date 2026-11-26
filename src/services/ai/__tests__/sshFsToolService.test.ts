@@ -8,6 +8,9 @@ import {
   executeSshReadFile,
   executeSshReadDocument,
   executeSshGrepFiles,
+  executeSshAttachedFileInfo,
+  executeSshAttachedFileSearch,
+  executeSshAttachedFileRead,
   testSshFsConnection,
 } from '../sshFsToolService';
 import { SSH_FS_TOOL_CONFIG_KEY } from '../../../types/sshFsTool';
@@ -21,6 +24,17 @@ vi.mock('../sshDocumentParser', () => ({
     metadata: filename.endsWith('.pdf')
       ? { pageCount: 1, note: 'PDF không có text layer (có thể là ảnh scan); không hỗ trợ OCR.' }
       : { sheetCount: 1 },
+  })),
+  getSshDocumentInfo: vi.fn(async (_buffer: ArrayBuffer, filename: string) => ({
+    format: filename.endsWith('.pdf') ? 'pdf' : 'docx',
+    sizeBytes: 10,
+    ...(filename.endsWith('.pdf') ? { pageCount: 2 } : { blockCount: 3 }),
+    nextRange: filename.endsWith('.pdf') ? { pageStart: 1, pageCount: 2 } : { blockStart: 1, blockCount: 3 },
+  })),
+  readSshDocumentRegion: vi.fn(async (_buffer: ArrayBuffer, filename: string) => ({
+    format: filename.endsWith('.pdf') ? 'pdf' : 'docx',
+    text: `Nội dung vùng </file_content> của ${filename}`,
+    truncated: true,
   })),
 }));
 
@@ -311,6 +325,104 @@ describe('sshFsToolService', () => {
         undefined,
         undefined,
       );
+    });
+  });
+
+  describe('attached-file tool family', () => {
+    const scope = { attachedPaths: ['/var/log/report.pdf', '/var/log/data.xlsx', '/var/log/app.log'] };
+
+    it('rejects a path outside the attached set after resolving, with no fallback read', async () => {
+      const bytesSpy = vi.spyOn(sshService, 'readRemoteFileBytes').mockResolvedValue(new ArrayBuffer(2));
+      const sliceSpy = vi.spyOn(sshService, 'readRemoteFileSlice').mockResolvedValue({
+        lines: ['secret'], totalLines: 1, offset: 1, limit: 1, hasMore: false,
+      });
+      const res = JSON.parse(await executeSshAttachedFileInfo(
+        { path: '/etc/passwd' }, mockDb, undefined, scope,
+      ));
+      expect(res).toMatchObject({ success: false, action: 'attached_file_info' });
+      expect(res.error).toMatch(/attached|đính kèm|không nằm/);
+      expect(bytesSpy).not.toHaveBeenCalled();
+      expect(sliceSpy).not.toHaveBeenCalled();
+
+      const traversal = JSON.parse(await executeSshAttachedFileInfo(
+        { path: 'data/../report.pdf' }, mockDb, undefined, scope,
+      ));
+      expect(traversal.success).toBe(true);
+      expect(traversal.data.path).toBe('/var/log/report.pdf');
+      bytesSpy.mockRestore();
+      sliceSpy.mockRestore();
+    });
+
+    it('info returns format/size/count and next-range hint from parser', async () => {
+      vi.spyOn(sshService, 'readRemoteFileBytes').mockResolvedValue(new ArrayBuffer(4));
+      const res = JSON.parse(await executeSshAttachedFileInfo(
+        { path: 'report.pdf' }, mockDb, undefined, scope,
+      ));
+      expect(res.success).toBe(true);
+      expect(res.action).toBe('attached_file_info');
+      expect(res.data).toMatchObject({ path: '/var/log/report.pdf', format: 'pdf', sizeBytes: 10, pageCount: 2 });
+      expect(res.data.nextRange).toMatchObject({ pageStart: 1 });
+    });
+
+    it('reads text offsets via slice and progressive document regions, sanitized and wrapped', async () => {
+      const sliceSpy = vi.spyOn(sshService, 'readRemoteFileSlice').mockResolvedValue({
+        lines: ['line 5', 'line 6'], totalLines: 10, offset: 5, limit: 2, hasMore: true,
+      });
+      const textRes = JSON.parse(await executeSshAttachedFileRead(
+        { path: 'app.log', offset: 5, limit: 2 }, mockDb, undefined, scope,
+      ));
+      expect(textRes).toMatchObject({ success: true, action: 'attached_file_read', count: 2, truncated: true });
+      expect(textRes.data.content).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(textRes.data.content).not.toContain('</file_content>');
+      expect(sliceSpy).toHaveBeenCalledWith(mockSshConfig, '/var/log/app.log', 5, 2);
+
+      vi.spyOn(sshService, 'readRemoteFileBytes').mockResolvedValue(new ArrayBuffer(4));
+      const docRes = JSON.parse(await executeSshAttachedFileRead(
+        { path: 'data.xlsx', sheet: 'Data', rowStart: 2, rowCount: 5 }, mockDb, undefined, scope,
+      ));
+      expect(docRes).toMatchObject({ success: true, action: 'attached_file_read', truncated: true });
+      expect(docRes.data.content).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(docRes.data.content).not.toContain('</file_content>');
+    });
+
+    it('name search shells out to find with shellQuote, head -n 201, callId; errors stay visible', async () => {
+      const execSpy = vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValue({
+        stdout: `/var/log/report.pdf'\n/var/log/a.pdf\n`,
+        stderr: '',
+        exitStatus: 0,
+      });
+      const res = JSON.parse(await executeSshAttachedFileSearch(
+        { path: '.', kind: 'name', query: `a' b` }, mockDb, 'call-123', undefined, scope,
+      ));
+      expect(execSpy).toHaveBeenCalledWith(
+        mockSshConfig,
+        `find '/var/log' -type f -iname 'a'\\'' b' | head -n 201`,
+        undefined,
+        'call-123',
+      );
+      expect(res.success).toBe(true);
+      expect(res.action).toBe('attached_file_search');
+      expect(res.count).toBe(2);
+      expect(res.data.paths).toEqual(['/var/log/report.pdf\'', '/var/log/a.pdf']);
+      expect(res.data.content).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
+      expect(res.data.content).not.toContain('</file_content>');
+
+      execSpy.mockResolvedValue({ stdout: '', stderr: 'find: Permission denied', exitStatus: 1 });
+      const failed = JSON.parse(await executeSshAttachedFileSearch(
+        { path: '.', kind: 'name', query: 'x' }, mockDb, undefined, undefined, scope,
+      ));
+      expect(failed.success).toBe(false);
+      expect(failed.error).toContain('Permission denied');
+    });
+
+    it('content search delegates to grep with the attached path and keeps truncation', async () => {
+      const res = JSON.parse(await executeSshAttachedFileSearch(
+        { path: 'app.log', kind: 'content', pattern: 'ERROR', limit: 3 }, mockDb, undefined, undefined, scope,
+      ));
+      expect(res.success).toBe(true);
+      expect(res.action).toBe('attached_file_search');
+      expect(res.data.matches[0]).toEqual({ file: '/var/log/app.log', line: 42, text: 'ERROR database connection timeout' });
+      expect(res.truncated).toBe(false);
     });
   });
 
