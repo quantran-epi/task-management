@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Collapse, Empty, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Empty, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -101,6 +101,17 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     for (const sys of systems) map.set(sys.id, sys);
     return map;
   }, [systems]);
+
+  // Derived only from data already loaded in this tab — no new IndexedDB query.
+  const stats = useMemo(() => ({
+    taskCount: tasks.length,
+    openTaskCount: tasks.filter((t) => t.status !== 'Done' && t.status !== 'Cancelled').length,
+    doneCount: tasks.filter((t) => t.status === 'Done').length,
+    estimateLabel: formatMinutes(tasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0)),
+    noteCount: crNotesCount,
+    docCount: cr?.documentLinks?.length ?? 0,
+    reminderCount: cr?.reminders?.length ?? (cr?.reminderDate ? 1 : 0),
+  }), [tasks, crNotesCount, cr]);
 
   if (!cr) {
     return (
@@ -270,8 +281,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--gap-16)',
-        padding: '16px 20px',
+        gap: 'var(--gap-12)',
+        padding: '12px 16px',
         maxWidth: 1400,
         margin: '0 auto',
       }}
@@ -283,22 +294,22 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          gap: 'var(--gap-16)',
-          padding: '16px 20px',
+          gap: 'var(--gap-12)',
+          padding: '12px 16px',
           background: 'var(--bg-island)',
           borderRadius: 'var(--radius-control)',
           border: '1px solid var(--border)',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-10)', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
             <Tag
               color="blue"
               style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)', padding: '2px 8px', margin: 0 }}
             >
               {cr.code}
             </Tag>
-            <Title level={4} style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
+            <Title level={4} style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               {cr.name}
             </Title>
             <Tag color={typeMeta.color} icon={typeMeta.icon} style={{ margin: 0 }}>
@@ -327,6 +338,13 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
               </>
             )}
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-12)', flexWrap: 'wrap', ...mutedStyle }}>
+            <span>Jira Epic</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--fg)' }}>{cr.jiraEpicKey ?? 'Chưa có'}</span>
+            <span>Cập nhật</span>
+            <span style={{ fontFamily: 'monospace', color: 'var(--fg)' }}>{cr.updatedAt.slice(0, 10)}</span>
+          </div>
         </div>
 
         <Space wrap>
@@ -342,6 +360,40 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         </Space>
       </div>
 
+      {/* Stats from already-loaded data — no new query */}
+      <div
+        data-testid="cr-detail-stats"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--gap-16)',
+          flexWrap: 'wrap',
+          padding: 'var(--gap-8) var(--gap-12)',
+          background: 'var(--bg-island)',
+          borderRadius: 'var(--radius-control)',
+          border: '1px solid var(--border)',
+        }}
+      >
+        {([
+          ['TASK', String(stats.taskCount)],
+          ['MỞ / PENDING', String(stats.openTaskCount)],
+          ['ƯỚC TÍNH', stats.estimateLabel],
+          ['HOÀN THÀNH', `${stats.doneCount}/${stats.taskCount}`],
+          ['GHI CHÚ', String(stats.noteCount)],
+          ['DOC / REMINDER', `${stats.docCount} / ${stats.reminderCount}`],
+        ] as const).map(([label, value], index) => (
+          <React.Fragment key={label}>
+            {index > 0 && <span style={{ width: 1, height: 20, background: 'var(--border)' }} />}
+            <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+              <span style={mutedStyle}>{label}</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 'var(--font-size-small)', color: 'var(--fg)' }}>{value}</span>
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* 2-column grid: task table left, secondary cards right */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(280px,.65fr)', gap: 'var(--gap-12)', alignItems: 'start' }}>
       {/* 3c. Flat task table */}
       <div
         style={{
@@ -452,14 +504,20 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         )}
       </div>
 
-      {/* 3d. Collapsible secondary blocks */}
-      <Collapse
-        size="small"
-        ghost
-        items={secondaryBlocks.map((block) => ({
-          key: block.key,
-          label: (
-            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
+      {/* 3d. Secondary blocks always visible */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
+        {secondaryBlocks.map((block) => (
+          <div
+            key={block.key}
+            style={{
+              background: 'var(--bg-island)',
+              borderRadius: 'var(--radius-control)',
+              border: '1px solid var(--border)',
+              padding: 'var(--gap-12)',
+              minWidth: 0,
+            }}
+          >
+            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600, marginBottom: 'var(--gap-8)' }}>
               {block.header}
               {block.count > 0 && (
                 <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
@@ -467,10 +525,11 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 </Tag>
               )}
             </span>
-          ),
-          children: block.body,
-        }))}
-      />
+            <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
+          </div>
+        ))}
+      </div>
+      </div>
 
       <ChangeRequestModal
         open={editModalOpen}

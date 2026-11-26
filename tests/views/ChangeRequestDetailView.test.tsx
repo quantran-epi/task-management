@@ -163,7 +163,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await screen.findByText('CR này chưa có tác vụ nào')).toBeInTheDocument();
   }, 30000);
 
-  it('keeps the three secondary blocks collapsed by default and badges their counts', async () => {
+  it('shows all four secondary blocks expanded with counts and body content, plus header meta', async () => {
     const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
     const cr = await createChangeRequest(
       { status: 'Open',
@@ -185,11 +185,50 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(screen.getByTestId('cr-detail-block-documents').textContent).toContain('1');
     expect(screen.getByTestId('cr-detail-block-reminders').textContent).toContain('1');
 
-    // Collapsed: no panel body is mounted yet.
-    expect(screen.queryByText('Chưa có')).not.toBeInTheDocument();
+    // Bodies are mounted without any click.
+    expect(screen.getAllByText('EPIC-42').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'https://example.com/doc' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('link', { name: 'https://example.com/doc' })).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getAllByText(/2026-12-01/).length).toBeGreaterThan(0);
+    expect(screen.getByText(cr.updatedAt.slice(0, 10))).toBeInTheDocument();
   }, 30000);
 
-  it('counts only cr notes in the Ghi chú block and renders them when opened', async () => {
+  it('renders a stats strip from already-loaded tasks, notes, documents and reminders', async () => {
+    const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
+    const cr = await createChangeRequest(
+      { status: 'Open',
+        name: 'Thanh toán QR',
+        code: 'CR-2026-005',
+        type: 'NEW_FEATURE',
+        targets: [{ systemId: sysA.id }],
+        documentLinks: ['https://example.com/doc'],
+        reminders: [{ id: '11111111-1111-4111-8111-111111111111', date: '2026-12-01' }],
+      },
+      db
+    );
+    await createTask(
+      { crId: cr.id, name: 'Implement OAuth callback', status: 'Open', priority: 'High', estimateMinutes: 90, deadline: '2020-01-01' },
+      db
+    );
+    await createNote({ body: 'Nội dung CR 1', title: 'Ghi chú CR một', entityType: 'cr', entityId: cr.id }, db);
+    await createNote({ body: 'Nội dung CR 2', title: 'Ghi chú CR hai', entityType: 'cr', entityId: cr.id }, db);
+
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    const strip = await screen.findByTestId('cr-detail-stats');
+    const statValue = (label: string): string => {
+      const key = Array.from(strip.querySelectorAll('span')).find((node) => node.textContent === label);
+      return key?.parentElement?.textContent?.slice(label.length) ?? '';
+    };
+    expect(statValue('TASK')).toBe('1');
+    expect(statValue('MỞ / PENDING')).toBe('1');
+    expect(statValue('ƯỚC TÍNH')).toBe('1h 30m');
+    expect(statValue('HOÀN THÀNH')).toBe('0/1');
+    expect(statValue('GHI CHÚ')).toBe('2');
+    expect(statValue('DOC / REMINDER')).toBe('1 / 1');
+  }, 30000);
+
+  it('counts only cr notes in the Ghi chú block and renders them without a click', async () => {
     const { cr } = await seed();
     await createNote({ body: 'Nội dung CR 1', title: 'Ghi chú CR một', entityType: 'cr', entityId: cr.id }, db);
     await createNote({ body: 'Nội dung CR 2', title: 'Ghi chú CR hai', entityType: 'cr', entityId: cr.id }, db);
@@ -201,9 +240,6 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     const block = await screen.findByTestId('cr-detail-block-notes');
     await waitFor(() => expect(block.textContent).toContain('2'));
-    expect(screen.queryByText('Ghi chú liên kết')).not.toBeInTheDocument();
-
-    fireEvent.click(block);
     expect(await screen.findByText('Ghi chú liên kết')).toBeInTheDocument();
     expect(await screen.findByText('Ghi chú CR một')).toBeInTheDocument();
     expect(await screen.findByText('Ghi chú CR hai')).toBeInTheDocument();
