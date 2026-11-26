@@ -12,6 +12,7 @@ import {
 } from './aiTools';
 import { executeDynamicMcpTool, type ExecuteMcpToolOptions } from './mcpClient';
 import { executeTeamTool } from './office/teamTools';
+import { CHAT_HISTORY_TOOL_NAMES, executeChatHistoryTool } from './chatHistoryTools';
 import type { RemoteToolTarget } from '../../types/sshFsTool';
 
 export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
@@ -24,6 +25,8 @@ export interface DispatchAiToolCallOptions extends ExecuteMcpToolOptions {
    * tool options and the team-tool context so git_read/SSH reads use exactly this host/repo/branch.
    */
   remoteTarget?: RemoteToolTarget;
+  /** Quick 261126-q7j: current chat thread, set by the drawer — never from model args. */
+  threadId?: string;
 }
 
 /**
@@ -52,6 +55,12 @@ export async function dispatchAiToolCall(
   options?: DispatchAiToolCallOptions
 ): Promise<string> {
   const normalized = normalizeToolName(name);
+
+  // 261126-q7j: transcript tools are bound to the request's thread id. Missing context refuses
+  // before any DB read; a model-supplied `args.threadId` is never consulted.
+  if (CHAT_HISTORY_TOOL_NAMES.has(normalized)) {
+    return executeChatHistoryTool(normalized, args, options?.threadId ?? '', db, signal);
+  }
 
   // Phase 47 D-13: on a remote turn, git_read goes through the team adapter with the explicit
   // scope target. The target overwrites model selectors so a remote turn can never read another
