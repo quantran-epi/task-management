@@ -20,18 +20,9 @@ import {
   isCancellationMessage,
   executeAdminMutationTurn,
 } from './telegramMutationSession';
-import {
-  AI_DATABASE_TOOLS,
-  SSH_READ_TOOLS,
-  ORACLE_READ_TOOLS,
-  executeAiTool,
-  isMutationTool,
-  normalizeToolName,
-} from '../ai/aiTools';
-import { getGatedAddenda } from '../ai/chatTurnTools';
-import { getOracleToolConfig } from '../ai/oracleSqlclService';
-import { getSshFsToolConfig } from '../ai/sshFsToolService';
+import { executeAiTool } from '../ai/aiTools';
 import { runAiOrchestratorLoop } from '../ai/aiOrchestratorLoop';
+import { runTelegramChatTurn } from './telegramChatTurn';
 import { sendDesktopNotification } from '../../utils/desktopNotification';
 import { NotificationDeepLink } from '../../utils/notificationDeepLink';
 import type {
@@ -40,7 +31,6 @@ import type {
   TelegramDataScope,
   TelegramBroadcastResult,
 } from './telegramTypes';
-import type { ChatCompletionMessage } from '../ai/types';
 import { isTauriApp } from '../../utils/timerPopout';
 import { getNineRouterConfig, getNineRouterApiKey } from '../ai/nineRouterTokenService';
 import { stripThinkingBlocks } from '../ai/nineRouterClient';
@@ -50,21 +40,15 @@ import { rankBM25, tokenize, type BM25Document } from '../../utils/bm25';
 import type { Note } from '../../types/models';
 import { handleAdminCommand } from './telegramAdminWizard';
 import { routeIntent, type RouteIntentResult, type IntentLabel } from '../ai/intentRouter';
-import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 import { createDefaultGroundedTurnDeps } from '../ai/groundedTurnDeps';
 import { runGroundedTurn, type GroundedTurnResult } from '../ai/groundedTurn';
-import {
-  KNOWLEDGE_SERVER_EMPTY_NOTICE,
-  detectKnowledgeToolOutcome,
-} from '../ai/knowledgeOutcome';
+import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../ai/knowledgeOutcome';
 import { fetchSetCatalog } from '../../db/repositories/documentSetRepo';
 import type { ChatMessageGrounding } from '../ai/groundedAnswerSchemas';
 import {
   getEnabledMcpCapabilitySummaries,
   executeDynamicMcpTool,
-  discoverAllMcpTools,
-  invalidateMcpDiscovery,
 } from '../ai/mcpClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
@@ -1470,123 +1454,45 @@ export async function processTelegramInboundMessage(
     }
   }
 
-  // Step 7: Filter available read/query tools based on dataScope
-  // CRITICAL SECURITY: strictly exclude mutation tools and adhere to dataScope
-  // Quick cz2: disable SSH/Oracle at the payload when their shared connection is not configured.
-  const [telegramOracleCfg, telegramSshCfg] = await Promise.all([
-    getOracleToolConfig(db).catch(() => null),
-    getSshFsToolConfig(db).catch(() => null),
-  ]);
-  const telegramGatedAddenda = getGatedAddenda({
-    sshConfigReady: Boolean(telegramSshCfg?.sshConfigId),
-    oracleConfigReady: Boolean(telegramOracleCfg?.sshConfigId && telegramOracleCfg?.connectionString),
-  });
-  const telegramEnabledNames = new Set(telegramGatedAddenda.map((t) => normalizeToolName(t.function.name)));
-  const telegramDisabledNames = new Set(
-    [...SSH_READ_TOOLS, ...ORACLE_READ_TOOLS]
-      .map((t) => normalizeToolName(t.function.name))
-      .filter((name) => !telegramEnabledNames.has(name))
+  // Step 7-8: dedicated Telegram turn adapter. The shared loop owns tool iteration,
+  // compaction, synthesis, and dispatch; the adapter owns Telegram prompt/context/tool
+  // policy and the per-chat transcript. No other AI surface is touched.
+  const scoped = await resolveScopedContext(
+    dataScope,
+    trimmedText,
+    db,
+    routedIntent?.intent,
+    routedIntent?.entities
   );
-  let availableTools = AI_DATABASE_TOOLS.filter(
-    (t) => !isMutationTool(t.function.name) && !telegramDisabledNames.has(normalizeToolName(t.function.name))
-  );
-  if (dataScope === 'pure_llm') {
-    availableTools = [];
-  } else if (dataScope === 'tasks_only') {
-    // Exclude note and knowledge search tools
-    availableTools = availableTools.filter(
-      (t) =>
-        t.function.name !== 'query_notes' &&
-        t.function.name !== 'search_knowledge_base' &&
-        t.function.name !== 'get_document_details' &&
-        t.function.name !== 'get_document_backlinks'
-    );
-  }
-
-  // AI-Chat parity: merge dynamically discovered MCP tools for knowledge-capable scopes.
-  if (dataScope === 'full' || dataScope === 'knowledge_only') {
-    try {
-      invalidateMcpDiscovery();
-      const dynamicMcpTools = await discoverAllMcpTools(db);
-      availableTools = [...availableTools, ...dynamicMcpTools];
-    } catch (err) {
-      console.warn('[telegramWorker] MCP discovery unavailable:', err);
-    }
-  }
-
-  // Step 8: Invoke AI with AIChatDrawer-style Read-Tool Loop and Anti-Hallucination rules
-  const todayStr = getTodayDateString();
-  const now = dayjs();
-  const dayName = now.format('dddd');
-  const timeStr = now.format('HH:mm');
-
-  const systemPrompt = [
-    `You are TaskMate Telegram Assistant, a helpful, precise personal AI assistant directly integrated with the user's local TaskMate productivity app.`,
-    `Current Date: ${todayStr} (${dayName}). Time: ${timeStr}.`,
-    ``,
-    `CRITICAL ANTI-HALLUCINATION RULES:`,
-    `1. NEVER GUESS, ASSUME, OR INVENT DATA.`,
-    `2. Every statement regarding tasks, projects, milestones, statuses, deadlines, logged work sessions, actual hours, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be strictly grounded in concrete evidence returned by your tools or recorded in the database.`,
-    `3. If the user asks about tasks, projects, milestones, schedules, worklogs, or notes, YOU MUST CALL THE RELEVANT DATABASE TOOLS to fetch accurate, real-time data instead of assuming or extrapolating.`,
-    `4. If a requested item or detail is missing, null, empty, or not recorded in the database, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate, approximate, or pretend data exists.`,
-    `5. If no relevant records are found after calling tools, clearly state that no matching record exists in the system.`,
-    `6. Format your markdown cleanly for Telegram reading. Avoid deep nesting and keep responses clear and structured.`,
-  ].join('\n');
-
-  let currentMessages: ChatCompletionMessage[] = [
-    { role: 'system', content: systemPrompt },
-    ...chatHistory,
-    { role: 'user', content: trimmedText },
-  ];
 
   let rawAiResponse = '';
   let tokenCount = 0;
-  // D-13: the app prepends the canonical server-empty notice once per turn when
-  // a tool result carries NO_PUBLISHED_SETS, so the model never owns the copy.
   let serverEmptyNotice = '';
-
   try {
-    const loopResult = await runAiOrchestratorLoop({
-      endpoint: aiConfig.endpoint,
-      apiKey,
-      model: effectiveModel,
-      messages: currentMessages,
-      ...(availableTools.length > 0 ? { tools: availableTools } : {}),
-      temperature: 0.1,
-      // AI-Chat parity ceiling. There is no user-visible cancellation source in the
-      // headless worker, so the loop terminates only by model completion or cap.
-      maxLoops: 30,
-      db,
-      onToolResult: (_callId, result, _durationMs) => {
-        if (serverEmptyNotice) return;
-        // The orchestrator's seam is keyed by callId, not tool name; only the
-        // retrieve_knowledge result carries this exact structured outcome.
-        if (detectKnowledgeToolOutcome('retrieve_knowledge', result) === 'NO_PUBLISHED_SETS') {
-          serverEmptyNotice = KNOWLEDGE_SERVER_EMPTY_NOTICE;
-        }
+    const turnResult = await runTelegramChatTurn(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        text: trimmedText,
+        dataScope,
+        routedIntent,
+        history: chatHistory,
+        contextText: scoped.contextText,
+        endpoint: aiConfig.endpoint,
+        apiKey,
+        model: effectiveModel,
+        contextWindowTokens: aiConfig.contextWindowTokens,
+        db,
       },
-      synthesisPrompt:
-        'Dựa trên tất cả các kết quả công cụ và thông tin đã thu thập ở trên, hãy tổng hợp câu trả lời đầy đủ, chi tiết, chính xác và rõ ràng cho yêu cầu ban đầu.\n' +
-        'Yêu cầu định dạng:\n' +
-        '- Trình bày bằng Markdown hoàn chỉnh, mạch lạc, trực quan cho Telegram.\n' +
-        '- In đậm các từ khóa, mã trạng thái, ID quan trọng.\n' +
-        '- Nếu không tìm thấy thông tin, nêu rõ không có dữ liệu thay vì suy đoán.\n' +
-        '- Không gọi thêm bất kỳ công cụ nào nữa.',
-      onMutationCheck: async (toolName, args) => {
-        if (isMutationTool(toolName, args)) {
-          return {
-            proceed: false,
-            cancellationResult: JSON.stringify({
-              error: 'Thao tác thay đổi dữ liệu yêu cầu quyền Admin hoặc lệnh cụ thể.',
-            }),
-          };
-        }
-        return { proceed: true };
-      },
-    });
-
-    rawAiResponse = loopResult.fullResponse;
-    tokenCount = loopResult.tokenUsage?.totalTokens || 0;
+      runAiOrchestratorLoop
+    );
+    rawAiResponse = turnResult.replyMarkdown;
+    tokenCount = turnResult.tokenUsage.totalTokens || 0;
+    serverEmptyNotice = turnResult.serverEmptyNotice || '';
+    if (turnResult.loopLimitReached && !rawAiResponse.trim()) {
+      rawAiResponse =
+        '*(Đã dừng sau nhiều vòng truy vấn công cụ. Hãy hỏi lại với phạm vi hẹp hơn.)*';
+    }
   } catch (aiErr: any) {
     console.error('[telegramWorker] AI generation error:', aiErr);
     rawAiResponse = `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;
