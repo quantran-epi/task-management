@@ -2,6 +2,14 @@ export type TelegramDataScope = 'full' | 'knowledge_only' | 'tasks_only' | 'pure
 
 export type TelegramUserStatus = 'active' | 'blocked' | 'pending';
 
+export type TelegramDeviceStatus = 'pending' | 'approved' | 'revoked';
+
+export interface TelegramRemoteSettings {
+  defaultModel?: string | undefined;
+  maxHistoryTurns?: number | undefined;
+  dataScope?: TelegramDataScope | undefined;
+}
+
 export interface TelegramSettingsRecord {
   id: 'default';
   botToken: string;
@@ -26,6 +34,13 @@ export interface TelegramWhitelistUser {
   overQuotaCommandsUsed?: number | undefined; // Count of /help or /reset used after reaching daily limit
   overQuotaAttempts?: number | undefined; // Count of chat message attempts after exhausting daily limit
   aiModel?: string | undefined; // Model override per user; fallback to aiConfig.defaultModel if empty
+  // Định danh thiết bị standalone; `chatId` chỉ là địa chỉ reply của bot.
+  telegramUserId?: string | undefined;
+  deviceStatus?: TelegramDeviceStatus | undefined;
+  allowedModels?: string[] | undefined;
+  remoteSettings?: TelegramRemoteSettings | undefined;
+  pairingCode?: string | undefined;
+  pairingCodeExpiresAt?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,6 +63,7 @@ export interface TelegramInboundEvent {
   from_name: string;
   text: string;
   date: number;
+  fromUserId?: string | undefined; // Telegram from.id; payload cũ không có thì fallback chat_id
 }
 
 export interface TelegramConflictEvent {
