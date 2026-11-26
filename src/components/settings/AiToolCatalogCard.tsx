@@ -14,6 +14,7 @@ const { Text } = Typography;
 const SOURCE_META: Record<ToolCatalogSource, { color: string; label: string; icon: React.ReactNode }> = {
   builtin: { color: 'blue', label: 'Cơ sở dữ liệu', icon: <DatabaseOutlined /> },
   team: { color: 'purple', label: 'Agent nhóm', icon: <TeamOutlined /> },
+  chat: { color: 'geekblue', label: 'Lịch sử hội thoại', icon: <ToolOutlined /> },
   mcp: { color: 'cyan', label: 'MCP động', icon: <ApiOutlined /> },
   graphiti: { color: 'green', label: 'Graphiti (Tauri)', icon: <ToolOutlined /> },
 };

@@ -64,7 +64,7 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
     }
     expect(new Set(names).size).toBe(names.length);
     for (const entry of entries) {
-      expect(['builtin', 'team', 'mcp', 'graphiti']).toContain(entry.source);
+      expect(['builtin', 'team', 'chat', 'mcp', 'graphiti']).toContain(entry.source);
       expect(typeof entry.isMutationTool).toBe('boolean');
       expect(Array.isArray(entry.usage.labels)).toBe(true);
       expect(Array.isArray(entry.usage.references)).toBe(true);

@@ -10,6 +10,7 @@ import type { AiTeam } from '../../types/aiOffice';
 import { invalidateMcpDiscovery, isReadOnlyMcpTool } from './mcpClient';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { TEAM_TOOL_DEFINITIONS } from './office/teamTools';
+import { CHAT_HISTORY_TOOL_DEFINITIONS } from './chatHistoryTools';
 import { discoverAllMcpTools } from './mcpClient';
 import { getGraphitiMcpToolDefinitions } from './graphitiMcpClient';
 
@@ -187,6 +188,9 @@ export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToo
     );
     if (gitReadDef) tools.push(gitReadDef);
   }
+  // 261126-q7j: the chat panel's own transcript tools are available on every turn, including
+  // the standalone capability set. Nothing else is added or removed.
+  tools.push(...CHAT_HISTORY_TOOL_DEFINITIONS);
   return tools;
 }
 
@@ -195,7 +199,7 @@ export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToo
 // is modified. The catalog never feeds a dispatch path — it is inventory only.
 // ---------------------------------------------------------------------------
 
-export type ToolCatalogSource = 'builtin' | 'team' | 'mcp' | 'graphiti';
+export type ToolCatalogSource = 'builtin' | 'team' | 'chat' | 'mcp' | 'graphiti';
 
 export interface ToolCatalogUsage {
   /** Human-readable flow labels (Vietnamese), e.g. "Chat thường". */
@@ -247,6 +251,14 @@ const MUTATION_EXTRA_USAGE: ToolCatalogUsage = {
 const CURATED_TEAM_USAGE: ToolCatalogUsage = {
   labels: ['Agent nhóm (lead/employee)'],
   references: ['teamRunCoordinator.ts:1323', 'teamRunCoordinator.ts:1334'],
+};
+
+const CURATED_CHAT_USAGE: ToolCatalogUsage = {
+  labels: ['AI Chat panel (dock + standalone)'],
+  references: [
+    'chatHistoryTools.ts (executeChatHistoryTool)',
+    'chatTurnRuntime.ts (dispatchAiToolCall with request.threadId)',
+  ],
 };
 
 const CURATED_MCP_USAGE: ToolCatalogUsage = {
@@ -312,8 +324,8 @@ function mergeUsage(...parts: (ToolCatalogUsage | undefined)[]): ToolCatalogUsag
 }
 
 /**
- * Pure/additive inventory of every AI tool TaskMate can advertise. Builtin and
- * team tools are always present; MCP and Graphiti discovery are independent and
+ * Pure/additive inventory of every AI tool TaskMate can advertise. Builtin, team
+ * and chat-history tools are always present; MCP and Graphiti discovery are independent and
  * degrade to [] on failure. Nothing here touches getToolsForTurn, any allowlist
  * or any dispatch path.
  */
@@ -345,6 +357,13 @@ export async function getAllAvailableToolDefinitions(
       usage: mergeUsage(CURATED_TEAM_USAGE, isMutationTool(name) ? MUTATION_EXTRA_USAGE : undefined),
     };
   });
+
+  const chatEntries: ToolCatalogEntry[] = CHAT_HISTORY_TOOL_DEFINITIONS.map((tool) => ({
+    tool,
+    source: 'chat',
+    isMutationTool: isMutationTool(normalizeToolName(tool.function.name)),
+    usage: CURATED_CHAT_USAGE,
+  }));
 
   let mcpTools: AiToolDefinition[] = [];
   try {
@@ -380,11 +399,11 @@ export async function getAllAvailableToolDefinitions(
     ),
   ];
 
-  // First source wins (builtin -> team -> mcp -> graphiti); later duplicates only
+  // First source wins (builtin -> team -> chat -> mcp -> graphiti); later duplicates only
   // contribute their usage references so the "where used" column stays complete.
   const result: ToolCatalogEntry[] = [];
   const byName = new Map<string, ToolCatalogEntry>();
-  for (const entry of [...builtinEntries, ...teamEntries, ...dynamicEntries]) {
+  for (const entry of [...builtinEntries, ...teamEntries, ...chatEntries, ...dynamicEntries]) {
     const key = normalizeToolName(entry.tool.function.name);
     const existing = byName.get(key);
     if (existing) {
