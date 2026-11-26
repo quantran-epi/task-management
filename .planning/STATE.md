@@ -31,7 +31,7 @@ Phase: 51 (TaskMate Chat standalone) — COMPLETE
 Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
 Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat.
-Last activity: 2026-11-26 - Completed quick task 261126-ky8: standalone chat DB split, SSH connection settings, default model seeding.
+Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat dark/light theme switch.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -152,6 +152,7 @@ Progress: [██████████] 100%
 | 261126-m1v | CR detail page: move right-side sections below table so table is full width; add task filtering in CR detail page. | 2026-11-26 | 31928a99 | — | [261126-m1v-cr-detail-page-move-right-side-sections-](./quick/261126-m1v-cr-detail-page-move-right-side-sections-/) |
 | 261126-ky8 | Split standalone chat window onto its own database, add SSH connection config, fix default model for new tabs | 2026-11-26 | 7809e6c6 | — | [261126-ky8-split-standalone-chat-window-onto-its-ow](./quick/261126-ky8-split-standalone-chat-window-onto-its-ow/) |
 | 261126-qag | Điều tra AI doc read + thiết kế SSH remote browse/multi-attach + AI read tool cho standalone chat | 2026-11-26 | e4053a7e | — | [261126-qag-them-ssh-remote-file-browser-va-multi-se](./quick/261126-qag-them-ssh-remote-file-browser-va-multi-se/) |
+| 261126-vuy | Thêm dark/light theme switch cho AI chat standalone window | 2026-11-26 | 817ff15b | Verified | [261126-vuy-th-m-dark-light-theme-switch-cho-ai-chat](./quick/261126-vuy-th-m-dark-light-theme-switch-cho-ai-chat/) |
 | 261126-q7j | Add search_chat_history and read_chat_turn tools to AI chat panel, scoped to current thread | 2026-11-26 | 49b71e93, 6bc5f229, c8c851a3, 2e702ed9 | Verified | [261126-q7j-add-search-chat-history-and-read-chat-tu](./quick/261126-q7j-add-search-chat-history-and-read-chat-tu/) |
 | 261126-vra | Pool SSH sessions và giữ remote SQLcl persistent trong Tauri, bỏ handshake/spawn lặp lại | 2026-11-26 | 41949863, 3b1bfbef | Verified | [261126-vra-implement-ssh-connection-pool-persistent](./quick/261126-vra-implement-ssh-connection-pool-persistent/) |
 

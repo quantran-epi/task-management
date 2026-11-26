@@ -7,7 +7,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import JSZip from 'jszip';
 import AppIntelliJ from '../src/AppIntelliJ';
-import { broadcastThemeMode, THEME_STORAGE_KEY } from '../src/workbench/themeBroadcast';
 import { chatWindowDb } from '../src/db/chatWindowDb';
 import type { SshConfig } from '../src/types/ssh';
 import { SSH_FS_TOOL_CONFIG_KEY } from '../src/types/sshFsTool';
@@ -35,11 +34,6 @@ const BASE = '/srv/taskmate-fixture';
 const DOCX_PATH = `${BASE}/reports/plan.docx`;
 const TXT_PATH = `${BASE}/reports/summary.txt`;
 const DOCX_TEXT = 'Kế hoạch: 6 giờ mỗi ngày.';
-
-function toggleTheme(): void {
-  const mode = localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'light' : 'dark';
-  broadcastThemeMode(mode);
-}
 
 async function makeDocxBytes(): Promise<ArrayBuffer> {
   const zip = new JSZip();
@@ -197,9 +191,6 @@ async function installTauriShim(withFixtureKey: boolean): Promise<void> {
 function HarnessShell() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <button type="button" aria-label="Chuyển đổi giao diện sáng/tối" onClick={toggleTheme} style={{ height: 28 }}>
-        Chuyển đổi giao diện
-      </button>
       <div style={{ flex: 1, minHeight: 0 }}>
         <AppIntelliJ standaloneChat />
       </div>
