@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-26T06:34:20.991Z"
+last_updated: "2026-11-26T09:04:48.382Z"
 last_activity: 2026-11-26
 last_activity_desc: "Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers"
-state_head: 5bd75c296305a4169df4c701fa4b473c81caddc0
+state_head: 31928a99569833fd4b01516623a9c7d777518df2
 progress:
   total_phases: 2
   completed_phases: 2
@@ -149,6 +149,7 @@ Progress: [██████████] 100%
 | 59 | Add ui-task-insight-toolbar and pre-v1.6-baseline to Windows installer workflow push triggers. | 2026-11-26 | ae3cfd3c | — | — |
 | 261126-cid | Refactor CR detail + task list theo sketch A; fix mọi critical/warning | 2026-11-26 | 5b21c2e8 | Verified | [261126-cid-refactor-changerequestdetailview-theo-sk](./quick/261126-cid-refactor-changerequestdetailview-theo-sk/) |
 | 261126-diw | Fix AI chat window: convert settings drawer to full-width modal, remove auto-approve button (chat is Q&A only, no TaskMate data mutation) | 2026-11-26 | 5bd75c29 | — | [261126-diw-fix-ai-chat-window-convert-settings-draw](./quick/261126-diw-fix-ai-chat-window-convert-settings-draw/) |
+| 261126-m1v | CR detail page: move right-side sections below table so table is full width; add task filtering in CR detail page. | 2026-11-26 | 31928a99 | — | [261126-m1v-cr-detail-page-move-right-side-sections-](./quick/261126-m1v-cr-detail-page-move-right-side-sections-/) |
 
 ## Accumulated Context
 
