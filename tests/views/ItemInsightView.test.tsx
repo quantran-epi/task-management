@@ -18,9 +18,11 @@ const SYSTEM_INPUT = {
 describe('ItemInsightView', () => {
   let testDb: TaskPlannerDatabase;
   const mockNavigate = vi.fn();
+  const mockOpenSystem = vi.fn();
 
   beforeEach(async () => {
     mockNavigate.mockClear();
+    mockOpenSystem.mockClear();
     testDb = new TaskPlannerDatabase('TestItemInsightView_' + Math.random().toString(36).slice(2));
     await testDb.open();
   });
@@ -94,7 +96,7 @@ describe('ItemInsightView', () => {
     expect(screen.getByRole('button', { name: /phân bổ lịch/i })).toBeInTheDocument();
   }, 30000);
 
-  it('renders system tag in task header, click navigates to system insight, with both fallbacks', async () => {
+  it('shows linked system in its own section, opens canonical detail from tag and breadcrumb, with both fallbacks', async () => {
     const system = await createSystem(SYSTEM_INPUT, testDb);
     const cr = await createChangeRequest(
       {
@@ -115,31 +117,60 @@ describe('ItemInsightView', () => {
       testDb
     );
     const view = render(
-      <ItemInsightView itemType="task" itemId={attached.id} onNavigate={mockNavigate} db={testDb} />
+      <ItemInsightView
+        itemType="task"
+        itemId={attached.id}
+        onNavigate={mockNavigate}
+        onOpenSystemDetail={mockOpenSystem}
+        db={testDb}
+      />
     );
-    const tag = await screen.findByText('PAYMENT_SVC — Payment Service');
+    expect(await screen.findByText('Hệ thống liên kết')).toBeInTheDocument();
+    const tag = await screen.findByTestId('item-insight-linked-system');
+    expect(tag).toHaveTextContent('PAYMENT_SVC — Payment Service');
+    // Compact header tag row must no longer carry the system chip.
+    expect(screen.getAllByText('PAYMENT_SVC — Payment Service')).toEqual([tag]);
     fireEvent.click(tag);
-    expect(mockNavigate).toHaveBeenCalledWith('insight', {
-      type: 'system',
-      id: system.id,
-      name: 'Payment Service',
-    });
+    expect(mockOpenSystem).toHaveBeenCalledWith(
+      expect.objectContaining({ id: system.id, code: 'PAYMENT_SVC', name: 'Payment Service' })
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    mockOpenSystem.mockClear();
+    fireEvent.click(screen.getByText('PAYMENT_SVC'));
+    expect(mockOpenSystem).toHaveBeenCalledWith(
+      expect.objectContaining({ id: system.id, code: 'PAYMENT_SVC', name: 'Payment Service' })
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
     view.unmount();
 
-    mockNavigate.mockClear();
     const unattachedView = render(
-      <ItemInsightView itemType="task" itemId={unattached.id} onNavigate={mockNavigate} db={testDb} />
+      <ItemInsightView
+        itemType="task"
+        itemId={unattached.id}
+        onNavigate={mockNavigate}
+        onOpenSystemDetail={mockOpenSystem}
+        db={testDb}
+      />
     );
-    expect(await screen.findByText('Chung (không gắn)')).toBeInTheDocument();
+    expect(await screen.findByTestId('item-insight-linked-system')).toHaveTextContent('Chung (không gắn)');
+    expect(mockOpenSystem).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
     unattachedView.unmount();
 
     const orphanId = '00000000-0000-4000-8000-000000000999';
     await testDb.tasks.update(attached.id, { systemId: orphanId });
     const orphanView = render(
-      <ItemInsightView itemType="task" itemId={attached.id} onNavigate={mockNavigate} db={testDb} />
+      <ItemInsightView
+        itemType="task"
+        itemId={attached.id}
+        onNavigate={mockNavigate}
+        onOpenSystemDetail={mockOpenSystem}
+        db={testDb}
+      />
     );
-    expect(await screen.findByText(orphanId)).toBeInTheDocument();
+    expect(await screen.findByTestId('item-insight-linked-system')).toHaveTextContent(orphanId);
+    expect(mockOpenSystem).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
     orphanView.unmount();
   }, 30000);
