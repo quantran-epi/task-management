@@ -7,16 +7,27 @@ import React, {
 } from "react";
 import {
   Alert,
+  Breadcrumb,
   Button,
+  Checkbox,
+  Empty,
   Input,
   Modal,
   Space,
   Spin,
+  Tag,
   Tree,
   Typography,
   useAntdToken,
 } from "../ui";
-import { FolderOpenOutlined, SearchOutlined } from "../ui/icon";
+import {
+  ArrowUpOutlined,
+  FileOutlined,
+  FolderOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  SettingOutlined,
+} from "../ui/icon";
 import { db as defaultDb, type TaskPlannerDatabase } from "../../db";
 import {
   cancelRemoteCall,
@@ -32,6 +43,7 @@ import {
 import type { RemoteFileInfo } from "../../types/ssh";
 
 const { Text } = Typography;
+const EMPTY_META = "—";
 
 export interface StandaloneSshFileBrowserProps {
   open: boolean;
@@ -45,6 +57,9 @@ interface BrowseEntry {
   path: string;
   name: string;
   isDir: boolean;
+  size?: string;
+  modified?: string;
+  hitDir?: string;
 }
 
 function normalizePath(path: string): string {
@@ -62,6 +77,28 @@ function normalizePath(path: string): string {
   return `${absolute ? "/" : ""}${parts.join("/")}` || ".";
 }
 
+function formatSize(bytes: number | undefined): string {
+  if (typeof bytes !== "number" || !Number.isFinite(bytes)) return EMPTY_META;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatModified(epoch: number | undefined): string {
+  if (typeof epoch !== "number" || !Number.isFinite(epoch) || epoch <= 0)
+    return EMPTY_META;
+  const date = new Date(epoch * 1000);
+  return Number.isNaN(date.getTime())
+    ? EMPTY_META
+    : date.toLocaleDateString("vi-VN");
+}
+
+function parentPath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  parts.pop();
+  return parts.length ? `/${parts.join("/")}` : "/";
+}
+
 /**
  * Standalone-only SSH file picker. Browsing reads directory metadata and filename search only;
  * attaching hands normalized identity paths to the caller. No file content is read here.
@@ -74,11 +111,12 @@ export const StandaloneSshFileBrowser: React.FC<
   const [configError, setConfigError] = useState<string | null>(null);
   const [currentPath, setCurrentPath] = useState(".");
   const [entries, setEntries] = useState<BrowseEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [searchPaths, setSearchPaths] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [hostLabel, setHostLabel] = useState("SSH");
   const callIdRef = useRef<string | null>(null);
+  const sshConfigIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -99,6 +137,7 @@ export const StandaloneSshFileBrowser: React.FC<
         const base = resolveRemoteToolPath(".", cfg.defaultBasePath, undefined);
         if (cancelled) return;
         sshConfigIdRef.current = cfg.sshConfigId;
+        setHostLabel(sshConfig.name || cfg.sshConfigId);
         setBasePath(base);
         setCurrentPath(base);
       })
@@ -111,13 +150,10 @@ export const StandaloneSshFileBrowser: React.FC<
     };
   }, [open, db]);
 
-  const sshConfigIdRef = useRef<string | null>(null);
-
   const loadDir = useCallback(
     async (rawPath: string) => {
       const configId = sshConfigIdRef.current;
       if (!configId) return;
-      setLoading(true);
       setSearchPaths(null);
       try {
         const sshConfig = await getSshConfigById(configId, db);
@@ -134,12 +170,12 @@ export const StandaloneSshFileBrowser: React.FC<
               ),
               name: entry.name,
               isDir: entry.isDir,
+              size: formatSize(entry.size),
+              modified: formatModified(entry.modified),
             })),
         );
       } catch (err) {
         setConfigError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setLoading(false);
       }
     },
     [db],
@@ -158,7 +194,6 @@ export const StandaloneSshFileBrowser: React.FC<
       void cancelRemoteCall(callIdRef.current).catch(() => undefined);
     const callId = `ssh-file-browser-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     callIdRef.current = callId;
-    setLoading(true);
     try {
       const sshConfig = await getSshConfigById(configId, db);
       if (!sshConfig) throw new Error("Không tìm thấy cấu hình SSH đã lưu.");
@@ -189,10 +224,30 @@ export const StandaloneSshFileBrowser: React.FC<
     } finally {
       if (callIdRef.current === callId) {
         callIdRef.current = null;
-        setLoading(false);
       }
     }
   }, [basePath, db, query]);
+
+  const cancelSearch = useCallback(() => {
+    if (callIdRef.current) {
+      void cancelRemoteCall(callIdRef.current).catch(() => undefined);
+      callIdRef.current = null;
+    }
+    setSearchPaths(null);
+    setQuery("");
+  }, []);
+
+  const navigate = useCallback(
+    (target: string) => {
+      if (callIdRef.current)
+        void cancelRemoteCall(callIdRef.current).catch(() => undefined);
+      callIdRef.current = null;
+      setQuery("");
+      setConfigError(null);
+      void loadDir(target);
+    },
+    [loadDir],
+  );
 
   const entriesToShow = useMemo(
     () =>
@@ -201,12 +256,73 @@ export const StandaloneSshFileBrowser: React.FC<
             path,
             name: path.split("/").pop() || path,
             isDir: false,
+            size: EMPTY_META,
+            modified: EMPTY_META,
+            hitDir: parentPath(path),
           }))
         : entries,
     [entries, searchPaths],
   );
 
+  const explorerTree = useMemo(() => {
+    if (!basePath) return [];
+    const folders = entries.filter((entry) => entry.isDir && entry.path !== basePath);
+    return [
+      {
+        key: basePath,
+        title: hostLabel,
+        children: folders.map((entry) => ({
+          key: entry.path,
+          title: entry.name,
+        })),
+      },
+    ];
+  }, [basePath, entries, hostLabel]);
+
+  const breadcrumbItems = useMemo(() => {
+    const root = basePath || "/";
+    const parts = currentPath.split("/").filter(Boolean);
+    const rootParts = root.split("/").filter(Boolean);
+    const rel = parts.slice(rootParts.length);
+    return [
+      {
+        title: (
+          <span style={{ cursor: basePath ? "pointer" : "default" }}
+            onClick={() => basePath && navigate(root)}>
+            {basePath ? hostLabel : root}
+          </span>
+        ),
+      },
+      ...rel.map((part, index) => ({
+        title: (
+          <span style={{ cursor: "pointer" }}
+            onClick={() => navigate(`/${parts.slice(0, rootParts.length + index + 1).join("/")}`)}>
+            {part}
+          </span>
+        ),
+      })),
+    ];
+  }, [basePath, currentPath, hostLabel, navigate]);
+
+  const togglePath = useCallback((path: string) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
   const paths = [...selected];
+  const listStyle: React.CSSProperties = {
+    height: 360,
+    overflowY: "auto",
+    border: `1px solid ${token.colorBorderSecondary}`,
+    borderRadius: 6,
+    background: token.colorBgContainer,
+  };
+  const searching = Boolean(callIdRef.current);
+
   return (
     <Modal
       open={open}
@@ -217,7 +333,7 @@ export const StandaloneSshFileBrowser: React.FC<
       }}
       title={
         <Space>
-          <FolderOpenOutlined />
+          <FolderOutlined />
           <span>Duyệt tệp SSH</span>
         </Space>
       }
@@ -229,93 +345,209 @@ export const StandaloneSshFileBrowser: React.FC<
         onClose();
       }}
       destroyOnClose
-      width={640}
+      width={1080}
+      style={{ maxWidth: "calc(100vw - 48px)" }}
     >
-      {configError && (
-        <Alert
-          type="error"
-          showIcon
-          message={configError}
-          style={{ marginBottom: 12 }}
-        />
-      )}
-      <Space style={{ marginBottom: 12 }}>
-        <Input
-          aria-label="Tìm tên tệp SSH"
-          placeholder="Tìm tên tệp (find -iname)..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onPressEnter={() => void runSearch()}
-          style={{ width: 280 }}
-        />
-        <Button
-          icon={<SearchOutlined />}
-          onClick={() => void runSearch()}
-          disabled={!query.trim() || !basePath}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "228px minmax(0, 1fr)",
+            gap: 12,
+          }}
         >
-          Tìm
-        </Button>
-        <Button onClick={() => void loadDir(currentPath)} disabled={!basePath}>
-          Thư mục hiện tại
-        </Button>
-      </Space>
-      <Text
-        type="secondary"
-        style={{
-          display: "block",
-          marginBottom: 8,
-          fontSize: "var(--font-size-small)",
-        }}
-      >
-        {currentPath}
-        {searchPaths !== null
-          ? ` · ${searchPaths.length} kết quả (tối đa 200)`
-          : ""}
-      </Text>
-      <div
-        style={{
-          maxHeight: 360,
-          overflowY: "auto",
-          border: `1px solid ${token.colorBorderSecondary}`,
-          borderRadius: 6,
-          padding: 8,
-        }}
-      >
-        {loading && <Spin size="small" />}
-        <Tree
-          checkable
-          selectable={false}
-          checkedKeys={paths}
-          onCheck={(checked) =>
-            setSelected(
-              new Set(
-                (Array.isArray(checked)
-                  ? checked
-                  : checked.checked) as string[],
-              ),
-            )
-          }
-          treeData={entriesToShow.map((entry) => ({
-            key: entry.path,
-            checkable: !entry.isDir,
-            title: (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (entry.isDir) void loadDir(entry.path);
+          <div
+            style={{
+              ...listStyle,
+              padding: 8,
+              background: token.colorBgLayout,
+            }}
+          >
+            <Text
+              type="secondary"
+              style={{ display: "block", marginBottom: 8, fontSize: "var(--font-size-small)" }}
+            >
+              Explorer · SSH
+            </Text>
+            {explorerTree.length > 0 && (
+              <Tree
+                checkable={false}
+                selectedKeys={[currentPath]}
+                defaultExpandedKeys={[basePath!]}
+                treeData={explorerTree}
+                onSelect={(_, info) => {
+                  const key = String(info.node.key);
+                  if (key === basePath || entries.some((e) => e.path === key && e.isDir))
+                    navigate(key);
                 }}
-                onKeyDown={(e) => {
-                  if (entry.isDir && (e.key === "Enter" || e.key === " "))
-                    void loadDir(entry.path);
-                }}
+              />
+            )}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                <Breadcrumb items={breadcrumbItems} />
+              </div>
+              <Button
+                size="small"
+                icon={<ArrowUpOutlined />}
+                aria-label="Thư mục cha"
+                title="Thư mục cha"
+                disabled={!basePath || currentPath === "/" || searching}
+                onClick={() => navigate(parentPath(currentPath))}
+              />
+            </div>
+            <Space style={{ marginBottom: 0 }}>
+              <Input
+                aria-label="Tìm tên tệp SSH"
+                placeholder="Tìm tên tệp (find -iname)..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onPressEnter={() => void runSearch()}
+                style={{ width: 280 }}
+              />
+              <Button
+                icon={<SearchOutlined />}
+                onClick={() => void runSearch()}
+                disabled={!query.trim() || !basePath}
               >
-                {entry.name}
-                {entry.isDir ? "/" : ""}
-              </span>
-            ),
-          }))}
-        />
+                Tìm
+              </Button>
+              {searching && (
+                <Button
+                  aria-label="Hủy tìm kiếm"
+                  onClick={cancelSearch}
+                >
+                  Hủy
+                </Button>
+              )}
+            </Space>
+            <Text
+              type="secondary"
+              style={{ display: "block", fontSize: "var(--font-size-small)" }}
+            >
+              {searchPaths !== null
+                ? `${searchPaths.length} kết quả (tối đa 200)`
+                : currentPath}
+            </Text>
+            {configError && (
+              <Alert
+                type="error"
+                showIcon
+                message={configError}
+                action={
+                  <Space size={4}>
+                    <Button size="small" icon={<ReloadOutlined />}
+                      onClick={() => {
+                        setConfigError(null);
+                        void loadDir(basePath || currentPath);
+                      }}>
+                      Thử lại
+                    </Button>
+                    <Button size="small" icon={<SettingOutlined />}
+                      onClick={() => {
+                        window.location.hash = "#/settings";
+                        onClose();
+                      }}>
+                      Sửa connection SSH
+                    </Button>
+                  </Space>
+                }
+              />
+            )}
+            <div style={listStyle}>
+              {searching ? (
+                <div style={{ padding: 16 }}>
+                  <Spin size="small" />
+                  <Text style={{ marginLeft: 8, fontSize: "var(--font-size-small)" }}>
+                    find {basePath} -iname {query.trim() || "..."} (tối đa 200)
+                  </Text>
+                  <div style={{ marginTop: 8 }}>
+                    <Button size="small" onClick={cancelSearch}>Hủy</Button>
+                  </div>
+                </div>
+              ) : configError && entriesToShow.length === 0 ? null : entriesToShow.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center" }}>
+                  <Empty description={searchPaths !== null
+                    ? "Không tìm thấy tệp nào"
+                    : "Thư mục này trống"}>
+                    <Button size="small" onClick={() => navigate(basePath || "/")}>
+                      Về thư mục gốc
+                    </Button>
+                  </Empty>
+                </div>
+              ) : (
+                entriesToShow.map((entry) => {
+                  const isSelected = selected.has(entry.path);
+                  return (
+                    <div
+                      key={entry.path}
+                      data-file-path={entry.path}
+                      role={entry.isDir ? "button" : undefined}
+                      tabIndex={entry.isDir ? 0 : undefined}
+                      onClick={() => {
+                        if (entry.isDir) navigate(entry.path);
+                        else togglePath(entry.path);
+                      }}
+                      onKeyDown={(e) => {
+                        if (entry.isDir && (e.key === "Enter" || e.key === " "))
+                          navigate(entry.path);
+                      }}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "22px minmax(0, 1fr) 76px 96px",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 8px",
+                        cursor: "pointer",
+                        borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                        background: isSelected ? token.colorPrimary : undefined,
+                      }}
+                    >
+                      <div onClick={(e) => e.stopPropagation()}>
+                        {entry.isDir ? null : (
+                          <Checkbox
+                            aria-label={`Chọn ${entry.name}`}
+                            checked={isSelected}
+                            onChange={() => togglePath(entry.path)}
+                          />
+                        )}
+                      </div>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        {entry.isDir ? <FolderOutlined /> : <FileOutlined />}
+                        <Text ellipsis title={entry.hitDir || entry.path}>
+                          {entry.name}
+                          {entry.isDir ? "/" : ""}
+                        </Text>
+                      </span>
+                      <Text type="secondary" style={{ fontSize: "var(--font-size-small)" }}>
+                        {entry.isDir ? EMPTY_META : (entry.size ?? EMPTY_META)}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: "var(--font-size-small)" }}>
+                        {entry.isDir ? EMPTY_META : (entry.modified ?? EMPTY_META)}
+                      </Text>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+        <Space wrap style={{ minHeight: 32 }}>
+          <Text type="secondary" style={{ fontSize: "var(--font-size-small)" }}>
+            {paths.length ? `${paths.length} tệp đã chọn` : "Chưa chọn tệp nào"}
+          </Text>
+          {paths.map((path) => (
+            <Tag
+              key={path}
+              closable
+              onClose={() => togglePath(path)}
+              title={path}
+            >
+              {path.split("/").pop() || path}
+            </Tag>
+          ))}
+        </Space>
       </div>
     </Modal>
   );
