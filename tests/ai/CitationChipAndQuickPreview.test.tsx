@@ -207,7 +207,7 @@ describe('QuickPreviewDrawer', () => {
       progress: 0,
       estimateMinutes: 60,
       notes: 'Refer to [[doc:doc-preview-1|DevOps Kubernetes Runbook]]',
-      documentLinks: ['doc-preview-1'],
+      links: [{ name: 'Doc', url: 'doc-preview-1' }],
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     };

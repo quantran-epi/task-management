@@ -29,6 +29,7 @@ import {
   SCHEMA_V27,
   SCHEMA_V28,
   SCHEMA_V29,
+  SCHEMA_V30,
 } from './schema';
 import type {
   Task,
@@ -337,7 +338,9 @@ export class TaskPlannerDatabase extends Dexie {
             jiraEpicKey: typeof proj.jiraEpicKey === 'string' ? proj.jiraEpicKey : undefined,
             opsOwners: Array.isArray(proj.opsOwners) ? proj.opsOwners : undefined,
             businessAnalysts: Array.isArray(proj.businessAnalysts) ? proj.businessAnalysts : undefined,
-            documentLinks: Array.isArray(proj.documentLinks) ? proj.documentLinks : undefined,
+            links: Array.isArray(proj.documentLinks)
+              ? proj.documentLinks.map((url: string) => ({ name: '', url }))
+              : undefined,
             reminderDate: typeof proj.reminderDate === 'string' ? proj.reminderDate : undefined,
             reminderNote: typeof proj.reminderNote === 'string' ? proj.reminderNote : undefined,
             reminders: Array.isArray(proj.reminders) ? proj.reminders : undefined,
@@ -701,6 +704,35 @@ export class TaskPlannerDatabase extends Dexie {
             }
           })
       );
+
+    // V30: unify documentLinks + quickLinks into `links: [{name, url}]`, deduped by url.
+    this.version(30)
+      .stores(SCHEMA_V30)
+      .upgrade((tx) => {
+        const migrate = (collection: { toCollection: () => { modify: (fn: (row: Record<string, unknown>) => void) => unknown } }) =>
+          collection.toCollection().modify((row: Record<string, unknown>) => {
+            if (row.documentLinks === undefined && row.quickLinks === undefined) return;
+            const merged = new Map<string, { name: string; url: string }>();
+            const addUrl = (value: unknown, name: string) => {
+              if (typeof value === 'string' && value && !merged.has(value)) merged.set(value, { name, url: value });
+            };
+            for (const value of Array.isArray(row.documentLinks) ? row.documentLinks : []) addUrl(value, '');
+            for (const value of [
+              ...(Array.isArray(row.quickLinks) ? row.quickLinks : []),
+              ...(Array.isArray(row.links) ? row.links : []),
+            ]) {
+              const link = value as { name?: unknown; url?: unknown };
+              if (link && typeof link === 'object' && typeof link.url === 'string' && link.url) {
+                merged.set(link.url, { name: typeof link.name === 'string' ? link.name : '', url: link.url });
+              }
+            }
+            delete row.documentLinks;
+            delete row.quickLinks;
+            row.links = Array.from(merged.values());
+          });
+        migrate(tx.table('tasks'));
+        migrate(tx.table('changeRequests'));
+      });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {

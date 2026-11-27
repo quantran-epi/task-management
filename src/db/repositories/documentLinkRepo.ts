@@ -22,7 +22,7 @@ export interface LinkEntitiesOptions {
  * Persists bidirectional links between a document and selected entities in a single Dexie transaction (D-06, D-08).
  * 1. For each selected task/CR/doc:
  *    - Appends `[[doc:${docId}|${docTitle}]]` to `notes` or `body` field if not already present.
- *    - For tasks: ensures `docId` is in `task.documentLinks`; for CRs: in `cr.documentLinks`.
+ *    - For tasks: ensures `docId` is in `task.links`; for CRs: in `cr.links`.
  * 2. In the document:
  *    - Appends `[[${entity.type}:${entity.id}|${entity.title}]]` to doc's `body` if not already present (unless skipDocBodyUpdate is true).
  */
@@ -52,24 +52,24 @@ export async function linkEntitiesToDoc(
             ? currentNotes ? `${currentNotes}\n${docWikiLink}` : docWikiLink
             : currentNotes;
 
-          const currentDocLinks = task.documentLinks || [];
-          const newDocLinks = currentDocLinks.includes(docId)
-            ? currentDocLinks
-            : [...currentDocLinks, docId];
+          const currentLinks = task.links || [];
+          const newLinks = currentLinks.some((link) => link.url === docId)
+            ? currentLinks
+            : [...currentLinks, { name: '', url: docId }];
 
           await db.tasks.update(task.id, {
             notes: newNotes,
-            documentLinks: newDocLinks,
+            links: newLinks,
             updatedAt: now,
           });
         }
       } else if (entity.type === 'cr') {
         const cr = await db.changeRequests.get(entity.id);
         if (cr) {
-          const currentDocLinks = cr.documentLinks || [];
-          if (!currentDocLinks.includes(docId)) {
+          const currentLinks = cr.links || [];
+          if (!currentLinks.some((link) => link.url === docId)) {
             await db.changeRequests.update(cr.id, {
-              documentLinks: [...currentDocLinks, docId],
+              links: [...currentLinks, { name: '', url: docId }],
               updatedAt: now,
             });
           }
@@ -139,19 +139,19 @@ export async function unlinkEntityFromDoc(
       const task = await db.tasks.get(entityId);
       if (task) {
         const updatedNotes = (task.notes || '').replace(docLinkPattern, '').trimEnd();
-        const updatedDocLinks = (task.documentLinks || []).filter((id) => id !== docId);
+        const updatedLinks = (task.links || []).filter((link) => link.url !== docId);
         await db.tasks.update(entityId, {
           notes: updatedNotes,
-          documentLinks: updatedDocLinks,
+          links: updatedLinks,
           updatedAt: now,
         });
       }
     } else if (entityType === 'cr') {
       const cr = await db.changeRequests.get(entityId);
       if (cr) {
-        const updatedDocLinks = (cr.documentLinks || []).filter((id) => id !== docId);
+        const updatedLinks = (cr.links || []).filter((link) => link.url !== docId);
         await db.changeRequests.update(entityId, {
-          documentLinks: updatedDocLinks,
+          links: updatedLinks,
           updatedAt: now,
         });
       }
@@ -176,12 +176,12 @@ export async function getBacklinksForDoc(
 
   const tasks = allTasks.filter((t) => {
     const hasWikiNote = t.notes && t.notes.includes(docWikiPattern);
-    const hasDocLink = t.documentLinks && t.documentLinks.includes(docId);
+    const hasDocLink = t.links && t.links.some((link) => link.url === docId);
     return Boolean(hasWikiNote || hasDocLink);
   });
 
   const changeRequests = allChangeRequests.filter((cr) => {
-    return Boolean(cr.documentLinks && cr.documentLinks.includes(docId));
+    return Boolean(cr.links && cr.links.some((link) => link.url === docId));
   });
 
   const currentDoc = allNotes.find((n) => n.id === docId);

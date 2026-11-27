@@ -148,7 +148,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record) => {
-        const linkCount = record.documentLinks?.length ?? 0;
+        const linkCount = record.links?.length ?? 0;
         return (
           <>
             {contextHolder}
@@ -211,7 +211,7 @@ export const ChangeRequestTable: React.FC<ChangeRequestTableProps> = ({
                         paddingRight: 4,
                       }}
                     >
-                      {record.documentLinks?.map((link, idx) => {
+                      {record.links?.map(({ url: link }, idx) => {
                         const local = isLocalPath(link);
                         return (
                           <a

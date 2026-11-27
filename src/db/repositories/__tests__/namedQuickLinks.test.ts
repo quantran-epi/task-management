@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
+import Dexie from 'dexie';
 import { TaskPlannerDatabase } from '../../index';
+import { SCHEMA_V29, LATEST_SCHEMA_VERSION } from '../../schema';
 import {
   ChangeRequestInputSchema,
   ChangeRequestUpdateSchema,
@@ -8,7 +10,6 @@ import {
   TaskUpdateSchema,
 } from '../../../validation/schemas';
 import {
-  BACKUP_SCHEMA_VERSION,
   BackupChangeRequestRecordSchema,
   BackupTaskRecordSchema,
 } from '../../../validation/backupSchemas';
@@ -18,6 +19,23 @@ import { createTask, updateTask } from '../taskRepo';
 
 function validNamedLink() {
   return { name: 'API spec', url: 'https://example.com/spec' };
+}
+
+function normalizeLegacyLinks(row: Record<string, unknown>): Record<string, unknown> {
+  const merged = new Map<string, { name: string; url: string }>();
+  for (const value of Array.isArray(row.documentLinks) ? row.documentLinks : []) {
+    if (typeof value === 'string') merged.set(value, { name: '', url: value });
+  }
+  for (const value of Array.isArray(row.quickLinks) ? row.quickLinks : []) {
+    const link = value as { name?: string; url?: string };
+    if (typeof link?.url === 'string') merged.set(link.url, { name: link.name ?? '', url: link.url });
+  }
+  for (const value of Array.isArray(row.links) ? row.links : []) {
+    const link = value as { name?: string; url?: string };
+    if (typeof link?.url === 'string') merged.set(link.url, { name: link.name ?? '', url: link.url });
+  }
+  const { documentLinks: _d, quickLinks: _q, ...rest } = row;
+  return { ...rest, links: Array.from(merged.values()) };
 }
 
 function validCrRow(overrides: Record<string, unknown> = {}) {
@@ -49,10 +67,10 @@ function validTaskRow(overrides: Record<string, unknown> = {}) {
 describe('namedQuickLinks schema validation', () => {
   it('accepts a named link on CR and Task input and update schemas', () => {
     const link = validNamedLink();
-    expect(ChangeRequestInputSchema.parse({ name: 'CR', code: 'QL', targets: [], quickLinks: [link] }).quickLinks).toEqual([link]);
-    expect(ChangeRequestUpdateSchema.parse({ quickLinks: [link] }).quickLinks).toEqual([link]);
-    expect(TaskInputSchema.parse({ crId: validTaskRow().crId, name: 'Task', quickLinks: [link] }).quickLinks).toEqual([link]);
-    expect(TaskUpdateSchema.parse({ quickLinks: [link] }).quickLinks).toEqual([link]);
+    expect(ChangeRequestInputSchema.parse({ name: 'CR', code: 'QL', targets: [], links: [link] }).links).toEqual([link]);
+    expect(ChangeRequestUpdateSchema.parse({ links: [link] }).links).toEqual([link]);
+    expect(TaskInputSchema.parse({ crId: validTaskRow().crId, name: 'Task', links: [link] }).links).toEqual([link]);
+    expect(TaskUpdateSchema.parse({ links: [link] }).links).toEqual([link]);
   });
 
   it('rejects empty/overlong names and unsafe URLs', () => {
@@ -60,55 +78,61 @@ describe('namedQuickLinks schema validation', () => {
       const base = schema === ChangeRequestInputSchema
         ? { name: 'CR', code: 'QL', targets: [] }
         : { crId: validTaskRow().crId, name: 'Task' };
-      expect(schema.safeParse({ ...base, quickLinks: [{ name: '', url: 'https://x.test' }] }).success).toBe(false);
-      expect(schema.safeParse({ ...base, quickLinks: [{ name: 'x'.repeat(81), url: 'https://x.test' }] }).success).toBe(false);
-      expect(schema.safeParse({ ...base, quickLinks: [{ name: 'OK', url: 'javascript:alert(1)' }] }).success).toBe(false);
-      expect(schema.safeParse({ ...base, quickLinks: [{ name: 'OK', url: 'data:text/html,x' }] }).success).toBe(false);
-      expect(schema.safeParse({ ...base, quickLinks: [{ name: 'OK', url: 'relative/path' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: '', url: 'https://x.test' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: 'x'.repeat(81), url: 'https://x.test' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: 'OK', url: 'javascript:alert(1)' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: 'OK', url: 'data:text/html,x' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: 'OK', url: 'relative/path' }] }).success).toBe(false);
     }
   });
 
-  it('keeps documentLinks as string[] and parses rows with no quickLinks', () => {
-    const parsed = TaskInputSchema.parse({
-      crId: validTaskRow().crId,
-      name: 'Task',
-      documentLinks: ['https://x.test/a', '/Users/me/doc'],
-    });
-    expect(parsed.documentLinks).toEqual(['https://x.test/a', '/Users/me/doc']);
-    expect(parsed.quickLinks).toBeUndefined();
+  it('rejects the removed documentLinks and quickLinks fields at the trust boundary', () => {
+    for (const schema of [ChangeRequestInputSchema, TaskInputSchema]) {
+      const base = schema === ChangeRequestInputSchema
+        ? { name: 'CR', code: 'QL', targets: [] }
+        : { crId: validTaskRow().crId, name: 'Task' };
+      const legacy = { ...base, documentLinks: ['https://x.test'], quickLinks: [validNamedLink()] };
+      const parsed = schema.parse(legacy);
+      expect(parsed).not.toHaveProperty('documentLinks');
+      expect(parsed).not.toHaveProperty('quickLinks');
+    }
   });
 
   it('backup CR and Task schemas validate new and old rows', () => {
     const link = validNamedLink();
-    expect(BackupTaskRecordSchema.parse(validTaskRow({ quickLinks: [link] })).quickLinks).toEqual([link]);
-    expect(BackupTaskRecordSchema.parse(validTaskRow()).quickLinks).toBeUndefined();
-    expect(BackupChangeRequestRecordSchema.parse(validCrRow({ quickLinks: [link] })).quickLinks).toEqual([link]);
-    expect(BackupChangeRequestRecordSchema.parse(validCrRow()).quickLinks).toBeUndefined();
+    expect(BackupTaskRecordSchema.parse(validTaskRow({ links: [link] })).links).toEqual([link]);
+    expect(BackupTaskRecordSchema.parse(validTaskRow()).links).toBeUndefined();
+    expect(BackupChangeRequestRecordSchema.parse(validCrRow({ links: [link] })).links).toEqual([link]);
+    expect(BackupChangeRequestRecordSchema.parse(validCrRow()).links).toBeUndefined();
   });
 
-  it('backup envelope round-trips quickLinks without a schema version bump', () => {
+  it('backup envelope normalizes legacy links and round-trips v14', () => {
     const link = validNamedLink();
     const crId = validTaskRow().crId;
     const secondCrId = '44444444-4444-4444-8444-444444444444';
     const result = validateBackupPayload({
       app: 'personal-task-planner',
-      schemaVersion: BACKUP_SCHEMA_VERSION,
+      schemaVersion: 13 as never,
       exportedAt: '2026-01-01T00:00:00.000Z',
       tables: {
         tasks: [
-          validTaskRow({ quickLinks: [link] }),
+          normalizeLegacyLinks(validTaskRow({
+            documentLinks: ['/Users/me/specs'],
+            quickLinks: [link],
+          })),
           validTaskRow({ id: '55555555-5555-4555-8555-555555555555', crId: secondCrId }),
         ],
         changeRequests: [
-          validCrRow({ id: crId, quickLinks: [link] }),
+          normalizeLegacyLinks(validCrRow({ id: crId, documentLinks: ['https://x.test/duplicate'], quickLinks: [{ name: 'First', url: 'https://x.test/duplicate' }] })),
           validCrRow({ id: secondCrId, code: 'QL-002' }),
         ],
       },
       counts: { tasks: 2, changeRequests: 2 },
     });
     expect(result.valid).toBe(true);
-    expect(result.envelope?.tables.tasks[0]?.quickLinks).toEqual([link]);
-    expect(result.envelope?.tables.changeRequests?.[0]?.quickLinks).toEqual([link]);
+    expect(result.envelope?.schemaVersion).toBe(14);
+    expect(result.envelope?.tables.tasks[0]?.links).toEqual([{ name: '', url: '/Users/me/specs' }, link]);
+    expect(result.envelope?.tables.changeRequests?.[0]?.links).toEqual([{ name: 'First', url: 'https://x.test/duplicate' }]);
   });
 });
 
@@ -123,7 +147,7 @@ describe('namedQuickLinks repo round-trip', () => {
     await db.delete();
   });
 
-  it('create then read preserves name, url and documentLinks shape', async () => {
+  it('create then read preserves name and url in links', async () => {
     const system = await db.systems.add({
       id: '33333333-3333-4333-8333-333333333333',
       name: 'Web',
@@ -140,41 +164,83 @@ describe('namedQuickLinks repo round-trip', () => {
         status: 'Open',
         type: 'ENHANCEMENT',
         targets: [{ systemId: system as string }],
-        documentLinks: ['https://x.test/doc'],
-        quickLinks: [validNamedLink()],
+        links: [{ name: 'Doc', url: 'https://x.test/doc' }, validNamedLink()],
       },
       db
     );
-    expect((await db.changeRequests.get(cr.id))?.quickLinks).toEqual([validNamedLink()]);
+    expect((await db.changeRequests.get(cr.id))?.links).toEqual([{ name: 'Doc', url: 'https://x.test/doc' }, validNamedLink()]);
 
     const task = await createTask(
       {
         crId: cr.id,
         name: 'Task QL',
-        documentLinks: ['/Users/me/doc'],
-        quickLinks: [validNamedLink()],
+        links: [{ name: 'Local', url: '/Users/me/doc' }, validNamedLink()],
       },
       db
     );
-    expect((await db.tasks.get(task.id))?.quickLinks).toEqual([validNamedLink()]);
-    expect((await db.tasks.get(task.id))?.documentLinks).toEqual(['/Users/me/doc']);
+    expect((await db.tasks.get(task.id))?.links).toEqual([{ name: 'Local', url: '/Users/me/doc' }, validNamedLink()]);
+    expect((await db.tasks.get(task.id))?.links).toEqual([{ name: 'Local', url: '/Users/me/doc' }, validNamedLink()]);
   });
 
   it('update changes links and clears them when patch sends undefined', async () => {
     const cr = await createChangeRequest(
-      { name: 'CR QL', code: 'QL', status: 'Open', type: 'ENHANCEMENT', targets: [], quickLinks: [validNamedLink()] },
+      { name: 'CR QL', code: 'QL', status: 'Open', type: 'ENHANCEMENT', targets: [], links: [validNamedLink()] },
       db
     );
     const renamed = { name: 'Design', url: 'https://example.com/design' };
-    await updateChangeRequest(cr.id, { quickLinks: [renamed] }, db);
-    expect((await db.changeRequests.get(cr.id))?.quickLinks).toEqual([renamed]);
-    await updateChangeRequest(cr.id, { quickLinks: undefined }, db);
-    expect((await db.changeRequests.get(cr.id))?.quickLinks).toBeUndefined();
+    await updateChangeRequest(cr.id, { links: [renamed] }, db);
+    expect((await db.changeRequests.get(cr.id))?.links).toEqual([renamed]);
+    await updateChangeRequest(cr.id, { links: undefined }, db);
+    expect((await db.changeRequests.get(cr.id))?.links).toBeUndefined();
 
-    const task = await createTask({ crId: cr.id, name: 'Task QL', quickLinks: [validNamedLink()] }, db);
-    await updateTask(task.id, { quickLinks: [renamed] }, db);
-    expect((await db.tasks.get(task.id))?.quickLinks).toEqual([renamed]);
-    await updateTask(task.id, { quickLinks: undefined }, db);
-    expect((await db.tasks.get(task.id))?.quickLinks).toBeUndefined();
+    const task = await createTask({ crId: cr.id, name: 'Task QL', links: [validNamedLink()] }, db);
+    await updateTask(task.id, { links: [renamed] }, db);
+    expect((await db.tasks.get(task.id))?.links).toEqual([renamed]);
+    await updateTask(task.id, { links: undefined }, db);
+    expect((await db.tasks.get(task.id))?.links).toBeUndefined();
+  });
+});
+
+
+describe('Dexie V30 link migration', () => {
+  it('migrates legacy documentLinks/quickLinks into deduped links with old fields deleted', async () => {
+    const dbName = 'TestV30Links_' + Math.random().toString(36).slice(2);
+    const legacy = new Dexie(dbName);
+    legacy.version(29).stores(SCHEMA_V29);
+    await legacy.open();
+    const crId = '22222222-2222-4222-8222-222222222222';
+    await legacy.table('changeRequests').add({
+      ...validCrRow(),
+      id: crId,
+      documentLinks: ['id1', 'https://x.test'],
+      quickLinks: [{ name: 'Docs', url: 'https://y.test' }, { name: 'Dup', url: 'https://x.test' }],
+    });
+    await legacy.table('tasks').add({
+      ...validTaskRow(),
+      documentLinks: ['https://task.test'],
+      quickLinks: [{ name: 'Task docs', url: 'https://task.test' }],
+    });
+    await legacy.close();
+
+    const db = new TaskPlannerDatabase(dbName);
+    await db.open();
+    expect(db.verno).toBe(LATEST_SCHEMA_VERSION);
+
+    const cr = await db.changeRequests.get(crId) as unknown as Record<string, unknown>;
+    expect(cr.links).toEqual([
+      { name: '', url: 'id1' },
+      { name: 'Dup', url: 'https://x.test' },
+      { name: 'Docs', url: 'https://y.test' },
+    ]);
+    expect(cr.documentLinks).toBeUndefined();
+    expect(cr.quickLinks).toBeUndefined();
+
+    const task = (await db.tasks.toArray())[0] as unknown as Record<string, unknown>;
+    expect(task.links).toEqual([{ name: 'Task docs', url: 'https://task.test' }]);
+    expect(task.documentLinks).toBeUndefined();
+    expect(task.quickLinks).toBeUndefined();
+
+    await db.delete();
+    await Dexie.delete(dbName);
   });
 });

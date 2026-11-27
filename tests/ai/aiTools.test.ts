@@ -320,10 +320,13 @@ describe('aiTools', () => {
   };
 
   it('declares comprehensive query and mutation AI_DATABASE_TOOLS', () => {
-    expect(AI_DATABASE_TOOLS.length).toBe(78);
+    expect(AI_DATABASE_TOOLS.length).toBe(83);
 
     const sshNames = SSH_READ_TOOLS.map((t) => t.function.name);
-    expect(sshNames).toEqual(['ssh_list_dir', 'ssh_read_file_page', 'ssh_grep_files']);
+    expect(sshNames).toEqual([
+      'ssh_list_dir', 'ssh_read_file_page', 'ssh_read_document', 'ssh_attached_file_info',
+      'ssh_attached_file_search', 'ssh_attached_file_read', 'ssh_grep_files',
+    ]);
     expect(sshNames.some((n) => ORACLE_READ_TOOLS.some((o) => o.function.name === n))).toBe(false);
     const names = AI_DATABASE_TOOLS.map((t) => t.function.name);
     // Local file read tool removed per checkpoint 261118-cz2 (no local FS reads).
@@ -1084,7 +1087,7 @@ describe('aiTools', () => {
   describe('link_document and unlink_document', () => {
     it('links and unlinks document with entity', async () => {
       const mockDoc = { id: 'doc-l1', title: 'Architecture Doc', body: '# Architecture' };
-      const mockTask = { id: 'task-l1', name: 'Build Core', notes: 'Initial notes', documentLinks: [] };
+      const mockTask = { id: 'task-l1', name: 'Build Core', notes: 'Initial notes', links: [] };
       const testDb: any = {
         notes: {
           get: vi.fn().mockResolvedValue(mockDoc),

@@ -641,49 +641,12 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           ) : null}
         </Row>
 
-        {/* Document Links */}
-        {((currentTask?.documentLinks || currentCr?.documentLinks)?.length ?? 0) > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <Text type="secondary">Tài liệu liên kết: </Text>
+        {/* Named links */}
+        {((currentTask?.links || currentCr?.links)?.length ?? 0) > 0 && (
+          <div style={{ marginTop: 12 }} data-testid="item-insight-links">
+            <Text type="secondary">Links: </Text>
             <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
-              {(currentTask?.documentLinks || currentCr?.documentLinks)!.map((link, idx) => (
-                <Button
-                  key={idx}
-                  size="small"
-                  style={{
-                    maxWidth: '100%',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    overflow: 'hidden',
-                  }}
-                  icon={isLocalPath(link) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                  onClick={(e) => void openDocumentLink(link, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-                  title={isLocalPath(link) ? `${link} (Alt+Click để mở Claude Code)` : link}
-                >
-                  <span
-                    style={{
-                      maxWidth: 320,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-block',
-                      verticalAlign: 'bottom',
-                    }}
-                  >
-                    {link}
-                  </span>
-                </Button>
-              ))}
-            </Space>
-          </div>
-        )}
-
-        {/* Named quick links — separate from documentLinks (UUID/path for knowledge/AI) */}
-        {((currentTask?.quickLinks || currentCr?.quickLinks)?.length ?? 0) > 0 && (
-          <div style={{ marginTop: 12 }} data-testid="item-insight-quick-links">
-            <Text type="secondary">Liên kết nhanh: </Text>
-            <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
-              {(currentTask?.quickLinks ?? currentCr?.quickLinks ?? []).map((link, idx) => (
+              {(currentTask?.links ?? currentCr?.links ?? []).map((link, idx) => (
                 <Button
                   key={`${idx}-${link.url}`}
                   size="small"

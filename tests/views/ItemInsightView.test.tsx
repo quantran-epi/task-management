@@ -67,7 +67,7 @@ describe('ItemInsightView', () => {
           { id: 'c1', text: 'Thiết kế prompt', done: false },
           { id: 'c2', text: 'Viết unit tests', done: true },
         ],
-        documentLinks: ['https://example.com/spec'],
+        links: [{ name: 'Spec', url: 'https://example.com/spec' }],
       },
       testDb
     );
@@ -78,7 +78,7 @@ describe('ItemInsightView', () => {
 
     expect((await screen.findAllByText('Triển khai tính năng AI Sizing')).length).toBeGreaterThan(0);
     expect(screen.getByText('Ưu tiên High')).toBeInTheDocument();
-    expect(screen.getByText('https://example.com/spec')).toBeInTheDocument();
+    expect(screen.getByText('Spec')).toBeInTheDocument();
 
     // Parent CR and subsystem are shown for a task (live queries resolve after first paint).
     expect((await screen.findAllByText(/CR-2026-001/)).length).toBeGreaterThan(0);

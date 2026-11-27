@@ -692,7 +692,7 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
       notes: marker('notes'),
       reminderNote: marker('reminderNote'),
       reminders: [{ id: generateId(), date: '2026-11-20', note: marker('reminders') }],
-      documentLinks: [marker('documentLinks')],
+      links: [{ name: 'Doc', url: marker('documentLinks') }],
       checklist: [{ id: generateId(), text: marker('checklist'), done: false }],
     });
     await db.notes.add({
@@ -718,7 +718,7 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
       ['notes', task.item.notes],
       ['reminderNote', task.item.reminderNote],
       ['reminders', task.item.reminders[0].note],
-      ['documentLinks', task.item.documentLinks[0]],
+      ['links.url', task.item.links[0].url],
       ['checklist', task.item.checklist[0].text],
       ['stickyTitle', task.stickyNotes[0].title],
       ['stickyBody', task.stickyNotes[0].body],
@@ -747,7 +747,7 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
         .update(entityId, {
           reminderNote: marker('reminderNote'),
           reminders: [{ id: generateId(), date: '2026-11-20', note: marker('reminders') }],
-          documentLinks: [marker('documentLinks')],
+          links: [{ name: 'Doc', url: marker('documentLinks') }],
         });
 
       const result = JSON.parse(
@@ -756,7 +756,7 @@ describe('teamTools — linked-item retrieval with full content (AIO-LINK-01, D-
       for (const [field, value] of [
         ['reminderNote', result.item.reminderNote],
         ['reminders', result.item.reminders[0].note],
-        ['documentLinks', result.item.documentLinks[0]],
+        ['links.url', result.item.links[0].url],
       ] as const) {
         expect(value, `${entityType} ${field}`).toContain('DỮ LIỆU KHÔNG ĐÁNG TIN — BẮT ĐẦU');
         expect(value, `${entityType} ${field}`).toContain(marker(field));

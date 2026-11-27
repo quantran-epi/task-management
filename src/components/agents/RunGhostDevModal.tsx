@@ -83,10 +83,10 @@ export const RunGhostDevModal: React.FC<RunGhostDevModalProps> = ({
   useEffect(() => {
     if (!visible || !task) return;
 
-    // Detect paths from task.documentLinks
+    // Detect paths from task.links
     const validPaths: string[] = [];
-    if (task.documentLinks && Array.isArray(task.documentLinks)) {
-      task.documentLinks.forEach((link) => {
+    if (task.links && Array.isArray(task.links)) {
+      task.links.forEach(({ url: link }) => {
         if (isLocalPath(link)) {
           const clean = normalizeLocalPath(link);
           if (clean && !validPaths.includes(clean)) {

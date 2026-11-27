@@ -50,8 +50,9 @@ const linkSchema = z
     { message: 'Link must be a URL, folder path, or file URI.' }
   );
 
-export const namedQuickLinkSchema = z.object({
-  name: z.string().trim().min(1, 'Tên liên kết không được trống').max(80, 'Tên liên kết tối đa 80 ký tự'),
+export const namedLinkSchema = z.object({
+  // Legacy documentLinks migrate to name:'' — empty is a valid migrated label.
+  name: z.string().trim().max(80, 'Tên liên kết tối đa 80 ký tự'),
   url: linkSchema,
 });
 
@@ -78,8 +79,7 @@ export const BackupTaskRecordSchema = z.object({
   workType: workTypeSchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  quickLinks: z.array(namedQuickLinkSchema).optional(),
+  links: z.array(namedLinkSchema).optional(),
   jiraKey: jiraKeySchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
@@ -590,8 +590,7 @@ export const BackupChangeRequestRecordSchema = z.object({
   jiraEpicKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  quickLinks: z.array(namedQuickLinkSchema).optional(),
+  links: z.array(namedLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
@@ -901,7 +900,7 @@ export const BackupTeamReadCursorRecordSchema = z.strictObject({
  * A bump is only warranted when a field becomes required or its meaning changes — and then
  * it needs a `13 → N` normalization step, not an outright reject.
  */
-export const BACKUP_SCHEMA_VERSION = 13 as const;
+export const BACKUP_SCHEMA_VERSION = 14 as const;
 
 export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),

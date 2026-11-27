@@ -17,7 +17,7 @@ describe('claudeCliService', () => {
       { id: 'c1', text: 'Write Redis session adapter', done: false },
       { id: 'c2', text: 'Handle 401 token refresh in axios interceptor', done: true },
     ],
-    documentLinks: ['/workspace/server/auth.ts', 'https://github.com/org/repo'],
+    links: [{ name: 'Auth', url: '/workspace/server/auth.ts' }, { name: 'Repo', url: 'https://github.com/org/repo' }],
     createdAt: '2026-10-01T00:00:00Z',
     updatedAt: '2026-10-02T00:00:00Z',
   };

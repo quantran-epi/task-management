@@ -62,7 +62,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
     it('validates system input schema', () => {
       expect(() => SystemInputSchema.parse({ name: '', code: 'X' })).toThrow();
       expect(() => SystemInputSchema.parse({ name: 'S', code: '' })).toThrow();
-      expect(() => SystemInputSchema.parse({ name: 'S', code: 'X', type: 'INVALID' })).toThrow();
+      expect(() => SystemInputSchema.parse({ name: 'S', code: 'X', type: 'invalid-type' })).toThrow();
     });
 
     it('creates a system with generated UUID and valid defaults', async () => {
@@ -218,15 +218,15 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
       );
 
       expect(() =>
-        TaskInputSchema.parse({ name: 'Task', crId: cr.id, documentLinks: ['ftp://bad-link.com'] })
+        TaskInputSchema.parse({ name: 'Task', crId: cr.id, links: [{ name: 'Bad', url: 'ftp://bad-link.com' }] })
       ).toThrow();
 
       const valid = TaskInputSchema.parse({
         name: 'Task',
         crId: cr.id,
-        documentLinks: ['https://example.com/spec', 'http://localhost:3000'],
+        links: [{ name: 'Spec', url: 'https://example.com/spec' }, { name: 'Local', url: 'http://localhost:3000' }],
       });
-      expect(valid.documentLinks).toHaveLength(2);
+      expect(valid.links).toHaveLength(2);
     });
 
     it('creates a CR-level task with no systemId', async () => {
@@ -320,7 +320,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
           notes: 'remove this',
           actualStartDate: '2026-10-01',
           actualEndDate: '2026-10-02',
-          documentLinks: ['https://example.com/spec'],
+          links: [{ name: 'Spec', url: 'https://example.com/spec' }],
           opsOwners: ['ops-one'],
           businessAnalysts: ['ba-one'],
         },
@@ -334,7 +334,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
           notes: undefined,
           actualStartDate: undefined,
           actualEndDate: undefined,
-          documentLinks: undefined,
+          links: undefined,
           opsOwners: undefined,
           businessAnalysts: undefined,
         },
@@ -345,7 +345,7 @@ describe('System, ChangeRequest & Task Repositories & Schemas (ENT-NORM-01, ENT-
       expect(updated.notes).toBeUndefined();
       expect(updated.actualStartDate).toBeUndefined();
       expect(updated.actualEndDate).toBeUndefined();
-      expect(updated.documentLinks).toBeUndefined();
+      expect(updated.links).toBeUndefined();
       expect(updated.opsOwners).toBeUndefined();
       expect(updated.businessAnalysts).toBeUndefined();
       expect(await getTask(task.id, testDb)).toMatchObject(updated);

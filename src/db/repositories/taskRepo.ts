@@ -55,8 +55,7 @@ export async function createTask(
   if (validated.actualEndDate !== undefined) task.actualEndDate = validated.actualEndDate;
   if (validated.opsOwners !== undefined) task.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) task.businessAnalysts = validated.businessAnalysts;
-  if (validated.documentLinks !== undefined) task.documentLinks = validated.documentLinks;
-  if (validated.quickLinks !== undefined) task.quickLinks = validated.quickLinks;
+  if (validated.links !== undefined) task.links = validated.links;
   if (validated.jiraKey !== undefined) task.jiraKey = validated.jiraKey;
   if (validated.reminderDate !== undefined) task.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) task.reminderNote = validated.reminderNote;
@@ -117,8 +116,7 @@ export async function updateTask(
     | 'actualEndDate'
     | 'opsOwners'
     | 'businessAnalysts'
-    | 'documentLinks'
-    | 'quickLinks'
+    | 'links'
   >) => {
     if (!(key in patch)) return;
     const value = validated[key];
@@ -136,8 +134,7 @@ export async function updateTask(
   assignOptional('actualEndDate');
   assignOptional('opsOwners');
   assignOptional('businessAnalysts');
-  assignOptional('documentLinks');
-  assignOptional('quickLinks');
+  assignOptional('links');
   if ('jiraKey' in patch) {
     if (validated.jiraKey !== undefined) {
       updated.jiraKey = validated.jiraKey;

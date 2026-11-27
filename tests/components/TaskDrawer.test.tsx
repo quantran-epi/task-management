@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { ThemeAppHolder } from '../../src/components/ui';
+
+const render = (ui: React.ReactElement) => rtlRender(<ThemeAppHolder>{ui}</ThemeAppHolder>);
 import { TaskPlannerDatabase } from '../../src/db';
 import { TaskDrawer } from '../../src/components/tasks/TaskDrawer';
 import type { ChangeRequest, System } from '../../src/types/models';
@@ -206,7 +209,7 @@ describe('TaskDrawer', () => {
     expect(screen.getByLabelText('Phút')).toHaveValue('30');
   }, 90000);
 
-  it('validates document links with http/https regex per D-25, T-02-05', async () => {
+  it('validates named link URL with http/https regex per D-25, T-02-05', async () => {
     await seedTask({ name: 'Link task' });
 
     render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
@@ -214,8 +217,10 @@ describe('TaskDrawer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /thêm liên kết/i }));
 
-    const linkInput = screen.getByPlaceholderText('https://... hoặc C:\\folder hoặc /path/to/folder');
-    fireEvent.change(linkInput, { target: { value: 'javascript:alert(1)' } });
+    const nameInput = screen.getByPlaceholderText('Tên liên kết');
+    const urlInput = screen.getByPlaceholderText('https://... hoặc /path/to/folder');
+    fireEvent.change(nameInput, { target: { value: 'Bad link' } });
+    fireEvent.change(urlInput, { target: { value: 'javascript:alert(1)' } });
     fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
     expect(
@@ -280,7 +285,7 @@ describe('TaskDrawer', () => {
     await seedTask({
       name: 'Nhiệm vụ có doc liên kết',
       notes: `Ghi chú task [[doc:${doc.id}|Tài liệu kiến trúc hệ thống]]`,
-      documentLinks: [doc.id],
+      links: [{ name: 'Doc', url: doc.id }],
     });
 
     render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);

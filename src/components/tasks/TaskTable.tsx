@@ -331,7 +331,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       sorter: (a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }),
       sortDirections: ['ascend', 'descend'],
       render: (_, record) => {
-        const linkCount = record.documentLinks?.length ?? 0;
+        const linkCount = record.links?.length ?? 0;
         const hasNotes = taskNotesSet.has(record.id);
 
         return (
@@ -418,7 +418,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         paddingRight: 4,
                       }}
                     >
-                      {record.documentLinks?.map((link, idx) => {
+                      {record.links?.map(({ url: link }, idx) => {
                         const local = isLocalPath(link);
                         return (
                           <a

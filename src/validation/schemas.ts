@@ -130,7 +130,7 @@ const linkSchema = z
     { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.' }
   );
 
-export const namedQuickLinkSchema = z.object({
+export const namedLinkSchema = z.object({
   name: z.string().trim().min(1, 'Tên liên kết không được trống').max(80, 'Tên liên kết tối đa 80 ký tự'),
   url: linkSchema,
 });
@@ -259,8 +259,7 @@ export const ChangeRequestInputSchema = z
     jiraEpicKey: jiraKeySchema.optional(),
     opsOwners: tagListSchema.optional(),
     businessAnalysts: tagListSchema.optional(),
-    documentLinks: z.array(linkSchema).optional(),
-    quickLinks: z.array(namedQuickLinkSchema).optional(),
+    links: z.array(namedLinkSchema).optional(),
     reminderDate: reminderDateSchema.optional(),
     reminderNote: reminderNoteSchema,
     reminders: remindersArraySchema,
@@ -285,8 +284,7 @@ export const ChangeRequestUpdateSchema = z
     jiraEpicKey: jiraKeySchema.optional(),
     opsOwners: tagListSchema.optional(),
     businessAnalysts: tagListSchema.optional(),
-    documentLinks: z.array(linkSchema).optional(),
-    quickLinks: z.array(namedQuickLinkSchema).optional(),
+    links: z.array(namedLinkSchema).optional(),
     reminderDate: reminderDateSchema.optional(),
     reminderNote: reminderNoteSchema,
     reminders: remindersArraySchema,
@@ -317,8 +315,7 @@ export const TaskInputSchema = z.object({
   jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  quickLinks: z.array(namedQuickLinkSchema).optional(),
+  links: z.array(namedLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
@@ -348,8 +345,7 @@ export const TaskUpdateSchema = z.object({
   jiraKey: jiraKeySchema.optional(),
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
-  documentLinks: z.array(linkSchema).optional(),
-  quickLinks: z.array(namedQuickLinkSchema).optional(),
+  links: z.array(namedLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,

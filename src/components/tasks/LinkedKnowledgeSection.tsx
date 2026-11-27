@@ -13,7 +13,7 @@ export interface LinkedKnowledgeSectionProps {
   entityType?: TaskMateEntityType | undefined;
   entityId?: string | undefined;
   notes?: string | undefined;
-  documentLinks?: string[] | undefined;
+  links?: Array<{ name: string; url: string }> | undefined;
   onOpenDocPreview: (docId: string) => void;
   db?: TaskPlannerDatabase | undefined;
 }
@@ -23,17 +23,17 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
   entityType = 'task',
   entityId,
   notes,
-  documentLinks = [],
+  links = [],
   onOpenDocPreview,
   db = defaultDb,
 }) => {
   const resolvedEntityId = entityId || taskId;
 
-  // 1. Extract linked document UUIDs from wiki-links [[doc:uuid|...]] and documentLinks
+  // 1. Extract linked document UUIDs from wiki-links [[doc:uuid|...]] and links
   const docIds = useMemo(() => {
     const ids = new Set<string>();
 
-    documentLinks.forEach((link) => {
+    links.forEach(({ url: link }) => {
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(link)) {
         ids.add(link);
       }
@@ -47,7 +47,7 @@ export const LinkedKnowledgeSection: React.FC<LinkedKnowledgeSectionProps> = ({
     }
 
     return Array.from(ids);
-  }, [notes, documentLinks]);
+  }, [notes, links]);
 
   // Query legacy wiki-linked notes from DB
   const legacyDocs = useLiveQuery(

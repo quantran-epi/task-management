@@ -225,14 +225,14 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     await linkEntitiesToDoc(docId, docTitle, selectedEntities, db);
 
-    // Check task has doc wiki-link and documentLinks entry
+    // Check task has doc wiki-link and links entry
     const updatedTask = await db.tasks.get('task-1');
     expect(updatedTask?.notes).toContain(`[[doc:${docId}|${docTitle}]]`);
-    expect(updatedTask?.documentLinks).toContain(docId);
+    expect(updatedTask?.links?.some((l) => l.url === docId)).toBe(true);
 
-    // Check CR has a documentLinks entry
+    // Check CR has a links entry
     const updatedCr = await db.changeRequests.get('cr-1');
-    expect(updatedCr?.documentLinks).toContain(docId);
+    expect(updatedCr?.links?.some((l) => l.url === docId)).toBe(true);
 
     // Check document body has references to task and CR
     const updatedDoc = await db.notes.get(docId);
@@ -273,7 +273,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
       status: 'Open',
       type: 'ENHANCEMENT',
       targets: [],
-      documentLinks: [docId],
+      links: [{ name: '', url: docId }],
       createdAt: '2026-10-01T00:00:00Z',
       updatedAt: '2026-10-01T00:00:00Z',
     });
@@ -313,7 +313,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
       crId: 'cr-u',
       name: 'Task U',
       notes: `Note with [[doc:${docId}|${docTitle}]]`,
-      documentLinks: [docId],
+      links: [{ name: '', url: docId }],
       status: 'Open',
       progress: 0,
       priority: 'Low',
@@ -326,7 +326,7 @@ describe('documentLinkRepo bidirectional links and backlinks', () => {
 
     const updatedTask = await db.tasks.get('task-u');
     expect(updatedTask?.notes).not.toContain(`[[doc:${docId}`);
-    expect(updatedTask?.documentLinks).toEqual([]);
+    expect(updatedTask?.links).toEqual([]);
 
     const updatedDoc = await db.notes.get(docId);
     expect(updatedDoc?.body).not.toContain('[[task:task-u');

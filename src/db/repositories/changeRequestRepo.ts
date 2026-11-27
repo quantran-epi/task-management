@@ -76,8 +76,7 @@ export async function createChangeRequest(
   if (validated.jiraEpicKey !== undefined) cr.jiraEpicKey = validated.jiraEpicKey;
   if (validated.opsOwners !== undefined) cr.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) cr.businessAnalysts = validated.businessAnalysts;
-  if (validated.documentLinks !== undefined) cr.documentLinks = validated.documentLinks;
-  if (validated.quickLinks !== undefined) cr.quickLinks = validated.quickLinks;
+  if (validated.links !== undefined) cr.links = validated.links;
   if (validated.reminderDate !== undefined) cr.reminderDate = validated.reminderDate;
   if (validated.reminderNote !== undefined) cr.reminderNote = validated.reminderNote;
   if (validated.reminders !== undefined) cr.reminders = validated.reminders;
@@ -140,10 +139,9 @@ export async function updateChangeRequest(
   }
   if (validated.opsOwners !== undefined) updated.opsOwners = validated.opsOwners;
   if (validated.businessAnalysts !== undefined) updated.businessAnalysts = validated.businessAnalysts;
-  if (validated.documentLinks !== undefined) updated.documentLinks = validated.documentLinks;
-  if ('quickLinks' in patch) {
-    if (validated.quickLinks !== undefined) updated.quickLinks = validated.quickLinks;
-    else delete updated.quickLinks;
+  if ('links' in patch) {
+    if (validated.links !== undefined) updated.links = validated.links;
+    else delete updated.links;
   }
   if ('reminderDate' in patch) {
     if (validated.reminderDate !== undefined) updated.reminderDate = validated.reminderDate;

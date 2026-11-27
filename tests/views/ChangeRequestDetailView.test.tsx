@@ -230,7 +230,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
         type: 'BUGFIX',
         targets: [{ systemId: sysA.id }],
         jiraEpicKey: 'EPIC-42',
-        documentLinks: ['https://example.com/doc'],
+        links: [{ name: 'Spec', url: 'https://example.com/doc' }],
         reminders: [{ id: '11111111-1111-4111-8111-111111111111', date: '2026-12-01' }],
       },
       db
@@ -259,7 +259,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
         code: 'CR-2026-005',
         type: 'NEW_FEATURE',
         targets: [{ systemId: sysA.id }],
-        documentLinks: ['https://example.com/doc'],
+        links: [{ name: 'Spec', url: 'https://example.com/doc' }],
         reminders: [{ id: '11111111-1111-4111-8111-111111111111', date: '2026-12-01' }],
       },
       db

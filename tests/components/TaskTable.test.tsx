@@ -68,7 +68,7 @@ describe('TaskTable Component', () => {
       progress: 25,
       deadline: '2025-01-01', // Overdue
       notes: 'Notes line 1\nNotes line 2',
-      documentLinks: ['https://example.com/spec'],
+      links: [{ name: 'Spec', url: 'https://example.com/spec' }],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     },
@@ -486,7 +486,7 @@ describe('TaskTable Component', () => {
             workType: 'document',
             estimateMinutes: 30,
             progress: 0,
-            documentLinks: ['/Users/test/workspace/project'],
+            links: [{ name: 'Folder', url: '/Users/test/workspace/project' }],
             createdAt: '2026-01-01T00:00:00.000Z',
             updatedAt: '2026-01-01T00:00:00.000Z',
           },
@@ -521,7 +521,7 @@ describe('TaskTable Component', () => {
       ...sampleTasks[0]!,
       id: 'task-long-link',
       name: 'Task with long link',
-      documentLinks: [longLink],
+      links: [{ name: 'Long', url: longLink }],
     };
 
     render(

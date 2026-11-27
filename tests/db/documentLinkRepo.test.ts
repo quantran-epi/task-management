@@ -64,13 +64,13 @@ describe('DocumentLink Repository — CR axis (ENT-NORM-01)', () => {
     );
 
     const crAfter = await db.changeRequests.get(cr.id);
-    expect(crAfter?.documentLinks).toContain(docId);
+    expect(crAfter?.links?.some((l) => l.url === docId)).toBe(true);
 
     const docAfter = await db.notes.get(docId);
     expect(docAfter?.body).toContain(`[[cr:${cr.id}`);
   }, 30000);
 
-  it('keeps existing CR documentLinks when another link is added', async () => {
+  it('keeps existing CR links when another link is added', async () => {
     const { docId, cr } = await seedDocAndCr();
     const otherDocId = '77777777-7777-4777-8777-777777777777';
 
@@ -92,17 +92,17 @@ describe('DocumentLink Repository — CR axis (ENT-NORM-01)', () => {
     );
 
     const crAfter = await db.changeRequests.get(cr.id);
-    expect(crAfter?.documentLinks).toEqual(expect.arrayContaining([docId, otherDocId]));
+    expect(crAfter?.links?.map((l) => l.url)).toEqual(expect.arrayContaining([docId, otherDocId]));
   }, 30000);
 
-  it('removes the link from changeRequests.documentLinks on unlink', async () => {
+  it('removes the link from changeRequests.links on unlink', async () => {
     const { docId, cr } = await seedDocAndCr();
 
     await linkEntitiesToDoc(docId, 'Design Doc', [{ id: cr.id, type: 'cr', title: cr.name }], db);
     await unlinkEntityFromDoc(docId, 'cr', cr.id, db);
 
     const crAfter = await db.changeRequests.get(cr.id);
-    expect(crAfter?.documentLinks ?? []).not.toContain(docId);
+    expect((crAfter?.links ?? []).some((l) => l.url === docId)).toBe(false);
 
     const docAfter = await db.notes.get(docId);
     expect(docAfter?.body ?? '').not.toContain(`[[cr:${cr.id}`);

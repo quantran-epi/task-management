@@ -57,7 +57,7 @@ describe('useTimerAlertMonitor', () => {
       workType: 'code',
       opsOwners: [],
       businessAnalysts: [],
-      documentLinks: [],
+      links: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

@@ -745,10 +745,11 @@ async function getLinkedContext(args: Record<string, any>, ctx: TeamToolContext)
         note: wrapField(`NHẮC NHỞ ${itemId}`, reminder?.note),
       }));
     }
-    if (Array.isArray(item.documentLinks)) {
-      item.documentLinks = item.documentLinks.map((link: unknown) =>
-        wrapField(`LIÊN KẾT TÀI LIỆU ${itemId}`, link)
-      );
+    if (Array.isArray(item.links)) {
+      item.links = item.links.map((link: { name?: unknown; url?: unknown }) => ({
+        name: typeof link?.name === 'string' ? wrapField(`TÊN LIÊN KẾT ${itemId}`, link.name) : '',
+        url: wrapField(`LIÊN KẾT ${itemId}`, link?.url),
+      }));
     }
   }
   // WR-01: the linked CR's and system's names are user-authored free text too.

@@ -30,7 +30,8 @@ export function generateClaudeCliPrompt(task: Task): string {
     }
   }
 
-  const localFiles = (task.documentLinks || [])
+  const localFiles = (task.links || [])
+    .map((link) => link.url)
     .filter((link) => isLocalPath(link))
     .map((link) => normalizeLocalPath(link));
 

@@ -30,10 +30,10 @@ describe('contextGrounding', () => {
       { id: 'c1', text: 'Define refresh endpoint', done: true },
       { id: 'c2', text: 'Add token expiry interceptor', done: false },
     ],
-    documentLinks: [
-      'https://example.com/api-docs',
-      '/local/workspace/auth.ts',
-      '/local/workspace/logo.png',
+    links: [
+      { name: 'API docs', url: 'https://example.com/api-docs' },
+      { name: 'Auth', url: '/local/workspace/auth.ts' },
+      { name: 'Logo', url: '/local/workspace/logo.png' },
     ],
     createdAt: '2026-10-01T00:00:00Z',
     updatedAt: '2026-10-02T00:00:00Z',
@@ -51,7 +51,7 @@ describe('contextGrounding', () => {
     targets: [{ systemId: 'sys-1', featureBranch: 'feature/CR-2026-001' }],
     opsOwners: ['Duc Quan'],
     businessAnalysts: ['Alice BA'],
-    documentLinks: ['https://confluence.bank.local/arch-spec'],
+    links: [{ name: 'Arch', url: 'https://confluence.bank.local/arch-spec' }],
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-15T00:00:00Z',
   };

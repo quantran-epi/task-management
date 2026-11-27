@@ -117,7 +117,7 @@ export async function spawnNextRecurringTask(
   if (task.workType !== undefined) nextTask.workType = task.workType;
   if (task.opsOwners !== undefined) nextTask.opsOwners = task.opsOwners;
   if (task.businessAnalysts !== undefined) nextTask.businessAnalysts = task.businessAnalysts;
-  if (task.documentLinks !== undefined) nextTask.documentLinks = task.documentLinks;
+  if (task.links !== undefined) nextTask.links = task.links;
   if (nextDeadline !== undefined) nextTask.deadline = nextDeadline;
   if (task.recurrenceInterval !== undefined) nextTask.recurrenceInterval = task.recurrenceInterval;
   if (task.recurrenceDaysOfWeek !== undefined) nextTask.recurrenceDaysOfWeek = task.recurrenceDaysOfWeek;

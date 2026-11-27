@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Form, Input, DatePicker, Select, Button, Space, Tag, FormItem, FormList, useForm, RadioGroup, RadioButton, TextArea, useMessage, useTaskMateModal } from '../ui';
-import { DeleteOutlined, LinkOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
+import { DeleteOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ChangeRequest, CrTarget, CrType, CrStatus } from '../../types/models';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
@@ -40,8 +40,7 @@ interface ChangeRequestFormValues {
   jiraEpicKey?: string;
   opsOwners?: string[];
   businessAnalysts?: string[];
-  documentLinks?: string[];
-  quickLinks?: { name: string; url: string }[];
+  links?: { name: string; url: string }[];
   reminders?: unknown[];
 }
 
@@ -92,8 +91,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           jiraEpicKey: changeRequest.jiraEpicKey || '',
           opsOwners: changeRequest.opsOwners ?? [],
           businessAnalysts: changeRequest.businessAnalysts ?? [],
-          documentLinks: changeRequest.documentLinks ?? [],
-          quickLinks: changeRequest.quickLinks ?? [],
+          links: changeRequest.links ?? [],
           reminders: formatRemindersForForm(changeRequest),
         });
       } else {
@@ -108,8 +106,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
           jiraEpicKey: '',
           opsOwners: [],
           businessAnalysts: [],
-          documentLinks: [],
-          quickLinks: [],
+          links: [],
           reminders: [],
         });
       }
@@ -182,10 +179,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
-      const cleanedLinks = (values.documentLinks ?? [])
-        .map((l) => (typeof l === 'string' ? l.trim() : ''))
-        .filter((l) => l.length > 0);
-      const cleanedQuickLinks = (values.quickLinks ?? [])
+      const cleanedLinks = (values.links ?? [])
         .map((link) => ({ name: link?.name?.trim() ?? '', url: link?.url?.trim() ?? '' }))
         .filter((link) => link.name && link.url);
       const savedReminders = formatRemindersForSave(values.reminders);
@@ -204,8 +198,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         opsOwners: (values.opsOwners ?? []).length > 0 ? values.opsOwners : undefined,
         businessAnalysts:
           (values.businessAnalysts ?? []).length > 0 ? values.businessAnalysts : undefined,
-        documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
-        quickLinks: cleanedQuickLinks.length > 0 ? cleanedQuickLinks : undefined,
+        links: cleanedLinks.length > 0 ? cleanedLinks : undefined,
         reminders: savedReminders ?? [],
         reminderDate: savedReminders?.[0]?.date,
         reminderNote: savedReminders?.[0]?.note,
@@ -348,15 +341,19 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
         {/* Reminders */}
         <RemindersFormList />
 
-        {/* Document Links */}
-        <FormItem label="Tài liệu liên kết">
-          <FormList name="documentLinks">
+        {/* Named links — URL, local folder path or document UUID */}
+        <FormItem label="Links">
+          <FormList name="links">
             {(fields, { add, remove }) => (
               <Space direction="vertical" style={{ width: '100%' }}>
                 {fields.map((field) => (
                   <div key={field.key} style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
+                    <FormItem {...field} name={[field.name, 'name']} noStyle>
+                      <Input placeholder="Tên liên kết" style={{ flex: 1, minWidth: 0 }} />
+                    </FormItem>
                     <FormItem
                       {...field}
+                      name={[field.name, 'url']}
                       noStyle
                       rules={[
                         {
@@ -369,11 +366,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                         },
                       ]}
                     >
-                      <Input
-                        placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
-                        prefix={<LinkOutlined style={{ color: 'var(--fg-secondary)' }} />}
-                        style={{ flex: 1, minWidth: 0 }}
-                      />
+                      <Input placeholder="https://... hoặc /path/to/folder" style={{ flex: 2, minWidth: 0 }} />
                     </FormItem>
                     <Button
                       type="text"
@@ -383,7 +376,7 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                       onClick={async () => {
                         const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                         if (picked) {
-                          form.setFieldValue(['documentLinks', field.name], picked);
+                          form.setFieldValue(['links', field.name, 'url'], picked);
                         }
                       }}
                     />
@@ -393,68 +386,13 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                       title="Mở liên kết"
                       aria-label="Mở liên kết"
                       onClick={() => {
-                        const val = form.getFieldValue(['documentLinks', field.name]);
+                        const val = form.getFieldValue(['links', field.name, 'url']);
                         if (val) {
                           void openDocumentLink(val, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                         }
                       }}
                     />
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => remove(field.name)}
-                      aria-label="Xóa liên kết"
-                    />
-                  </div>
-                ))}
-                <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
-                  <Button
-                    type="dashed"
-                    onClick={() => add('')}
-                    icon={<PlusOutlined />}
-                    style={{ flex: 1 }}
-                  >
-                    Thêm liên kết
-                  </Button>
-                  <Button
-                    type="default"
-                    icon={<FolderOpenOutlined />}
-                    onClick={async () => {
-                      const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
-                      if (picked) {
-                        add(picked);
-                      }
-                    }}
-                  >
-                    Chọn thư mục từ máy
-                  </Button>
-                </div>
-              </Space>
-            )}
-          </FormList>
-        </FormItem>
-
-        {/* Named quick links */}
-        <FormItem label="Liên kết nhanh">
-          <FormList name="quickLinks">
-            {(fields, { add, remove }) => (
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {fields.map((field) => (
-                  <div key={field.key} style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
-                    <FormItem {...field} name={[field.name, 'name']} noStyle>
-                      <Input placeholder="Tên liên kết" style={{ flex: 1, minWidth: 0 }} />
-                    </FormItem>
-                    <FormItem {...field} name={[field.name, 'url']} noStyle>
-                      <Input placeholder="https://..." style={{ flex: 2, minWidth: 0 }} />
-                    </FormItem>
-                    <Button
-                      type="text"
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => remove(field.name)}
-                      aria-label="Xóa liên kết nhanh"
-                    />
+                    <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} aria-label="Xóa liên kết" />
                   </div>
                 ))}
                 <Button type="dashed" onClick={() => add({ name: '', url: '' })} icon={<PlusOutlined />} style={{ width: '100%' }}>

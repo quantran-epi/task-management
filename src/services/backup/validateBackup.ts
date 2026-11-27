@@ -43,6 +43,7 @@ import {
   BackupTeamMessageRecordSchema,
   BackupTeamReadCursorRecordSchema,
   assertNoLegacyTables,
+  BACKUP_SCHEMA_VERSION,
   LEGACY_BACKUP_MESSAGE,
 } from '../../validation/backupSchemas';
 
@@ -63,6 +64,33 @@ import {
  * IN-04: `aiSkillVersionRepo.stripNonApprovedVersionNumbers` holds the same rule for stored
  * rows. Keep the two in step: change both or neither.
  */
+/**
+ * v13 → v14: merge `documentLinks` (string URLs/paths/UUIDs), `quickLinks` and `links`
+ * into one deduplicated `links: [{name, url}]` list. Legacy fields never reach the
+ * per-table strict schemas. Kept in sync with the Dexie V30 upgrade hook.
+ */
+function normalizeLegacyLinks(records: unknown): unknown {
+  if (!Array.isArray(records)) return records;
+  return records.map((rec) => {
+    if (!rec || typeof rec !== 'object') return rec;
+    const row = rec as Record<string, unknown>;
+    if (row.documentLinks === undefined && row.quickLinks === undefined) return rec;
+    const merged = new Map<string, { name: string; url: string }>();
+    const add = (value: unknown, name: string) => {
+      if (typeof value !== 'string' || !value) return;
+      if (!merged.has(value)) merged.set(value, { name, url: value });
+    };
+    for (const value of Array.isArray(row.documentLinks) ? row.documentLinks : []) add(value, '');
+    for (const value of [...(Array.isArray(row.quickLinks) ? row.quickLinks : []), ...(Array.isArray(row.links) ? row.links : [])]) {
+      const link = value as { name?: unknown; url?: unknown };
+      if (!link || typeof link !== 'object' || typeof link.url !== 'string' || !link.url) continue;
+      merged.set(link.url, { name: typeof link.name === 'string' ? link.name : '', url: link.url });
+    }
+    const { documentLinks: _docs, quickLinks: _quick, ...rest } = row;
+    return { ...rest, links: Array.from(merged.values()) };
+  });
+}
+
 function stripNonApprovedVersionNumbers(records: unknown): unknown {
   if (!Array.isArray(records)) return records;
   return records.map((rec) => {
@@ -124,8 +152,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       field: 'schemaVersion',
       message: `Phiên bản sơ đồ (${String(candidate.schemaVersion)}) không tương thích (chỉ hỗ trợ phiên bản ${CURRENT_SCHEMA_VERSION})`,
     });
-  } else if (candidate.schemaVersion < CURRENT_SCHEMA_VERSION) {
-    // D-49: older envelopes are not normalized — they are rejected outright.
+  } else if (candidate.schemaVersion < CURRENT_SCHEMA_VERSION && candidate.schemaVersion < 13) {
     errors.push({
       table: 'envelope',
       field: 'schemaVersion',
@@ -193,7 +220,14 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     return validRecords;
   }
 
-  const tasks = validateTable('tasks', BackupTaskRecordSchema, rawTables.tasks ?? []);
+  // v13 → v14: normalize link fields before per-table validation. The envelope recorded
+  // below is rewritten to v14 so the restored data is exported in the unified shape.
+  const legacyLinks = typeof candidate.schemaVersion === 'number' && candidate.schemaVersion < 14;
+  const normalizedTasks = legacyLinks ? normalizeLegacyLinks(rawTables.tasks ?? []) : rawTables.tasks ?? [];
+  const normalizedChangeRequests = legacyLinks
+    ? normalizeLegacyLinks(rawTables.changeRequests ?? [])
+    : rawTables.changeRequests ?? [];
+  const tasks = validateTable('tasks', BackupTaskRecordSchema, normalizedTasks);
   const capacityRules = validateTable('capacityRules', BackupCapacityRuleRecordSchema, rawTables.capacityRules ?? []);
   const capacityOverrides = validateTable('capacityOverrides', BackupCapacityOverrideRecordSchema, rawTables.capacityOverrides ?? []);
   const plannedAllocations = validateTable('plannedAllocations', BackupPlannedAllocationRecordSchema, rawTables.plannedAllocations ?? []);
@@ -262,7 +296,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
     ? validateTable('systems', BackupSystemRecordSchema, rawTables.systems)
     : undefined;
   const changeRequests = rawTables.changeRequests !== undefined
-    ? validateTable('changeRequests', BackupChangeRequestRecordSchema, rawTables.changeRequests)
+    ? validateTable('changeRequests', BackupChangeRequestRecordSchema, normalizedChangeRequests)
     : undefined;
   const aiEmployees = rawTables.aiEmployees !== undefined
     ? validateTable('aiEmployees', BackupAiEmployeeRecordSchema, rawTables.aiEmployees)
@@ -717,7 +751,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
 
   const validEnvelope: BackupEnvelope = {
     app: APP_MARKER,
-    schemaVersion: candidate.schemaVersion as number,
+    schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: candidate.exportedAt as string,
     tables: {
       tasks: tasks as BackupEnvelope['tables']['tasks'],

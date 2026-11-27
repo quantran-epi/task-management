@@ -69,8 +69,8 @@ export interface CrTarget {
   featureBranch?: string; // Per-target feature branch; defaults to feature/{cr.code}
 }
 
-/** Quick link with a user-chosen label. Separate from documentLinks (UUID/path for knowledge/AI). */
-export interface NamedQuickLink {
+/** Link with a user-chosen label; `url` may be a URL, local path, or document UUID. */
+export interface NamedLink {
   name: string;
   url: string;
 }
@@ -87,8 +87,7 @@ export interface ChangeRequest {
   jiraEpicKey?: string;
   opsOwners?: string[];
   businessAnalysts?: string[];
-  documentLinks?: string[];
-  quickLinks?: NamedQuickLink[];
+  links?: NamedLink[];
   reminderDate?: string;
   reminderNote?: string;
   reminders?: ReminderItem[];
@@ -120,8 +119,7 @@ export interface Task {
   jiraKey?: string | undefined;
   opsOwners?: string[];
   businessAnalysts?: string[];
-  documentLinks?: string[];
-  quickLinks?: NamedQuickLink[];
+  links?: NamedLink[];
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
   reminders?: ReminderItem[];

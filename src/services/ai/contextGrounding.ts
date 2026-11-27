@@ -345,7 +345,7 @@ export async function buildItemContextPrompt(options: BuildItemContextPromptOpti
   }
 
   // 2. Document Links & Local Files
-  const docLinks = 'documentLinks' in item && Array.isArray(item.documentLinks) ? item.documentLinks : [];
+  const docLinks = 'links' in item && Array.isArray(item.links) ? item.links.map((l: { url: string }) => l.url) : [];
   if (docLinks.length > 0) {
     sections.push('\n### Document & External Links');
     for (const link of docLinks) {

@@ -225,7 +225,7 @@ describe('DocEditorPane', () => {
     // Verify task-b was actually linked in IndexedDB
     await waitFor(async () => {
       const updatedTaskB = await db.tasks.get('task-b');
-      expect(updatedTaskB?.documentLinks).toContain(mockDoc.id);
+      expect(updatedTaskB?.links?.some((l) => l.url === mockDoc.id)).toBe(true);
       expect(updatedTaskB?.notes).toContain(`[[doc:${mockDoc.id}`);
     });
 

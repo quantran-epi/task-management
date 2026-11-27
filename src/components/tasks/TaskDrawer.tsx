@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch, useTaskMateModal } from '../ui';
-import { PlusOutlined, DeleteOutlined, LinkOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '../ui/icon';
+import { PlusOutlined, DeleteOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
@@ -60,8 +60,7 @@ interface TaskDrawerFormValues {
   actualStartDate?: Dayjs | null;
   actualEndDate?: Dayjs | null;
   progress: number;
-  documentLinks?: string[];
-  quickLinks?: { name: string; url: string }[];
+  links?: { name: string; url: string }[];
   reminderDate?: Dayjs | null;
   reminderNote?: string;
   reminders?: unknown[];
@@ -222,8 +221,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
               : null,
             progress: taskData.progress,
             checklist: taskData.checklist ?? [],
-            documentLinks: taskData.documentLinks ?? [],
-            quickLinks: taskData.quickLinks ?? [],
+            links: taskData.links ?? [],
             reminders: formatRemindersForForm(taskData),
             notes: taskData.notes ?? '',
             isRecurring: taskData.isRecurring ?? false,
@@ -339,11 +337,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       const minutes = values.minutes ?? 0;
       const estimateMinutes = Math.min(6000, Math.max(0, hours * 60 + minutes));
 
-      // Sanitize document links
-      const cleanedLinks = (values.documentLinks ?? [])
-        .map((link) => link?.trim())
-        .filter((link): link is string => Boolean(link && link.length > 0));
-      const cleanedQuickLinks = (values.quickLinks ?? [])
+      // Sanitize named links
+      const cleanedLinks = (values.links ?? [])
         .map((link) => ({ name: link?.name?.trim() ?? '', url: link?.url?.trim() ?? '' }))
         .filter((link) => link.name && link.url);
 
@@ -368,8 +363,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           actualEndDate: values.actualEndDate
             ? values.actualEndDate.format('YYYY-MM-DD')
             : undefined,
-          documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
-          quickLinks: cleanedQuickLinks.length > 0 ? cleanedQuickLinks : undefined,
+          links: cleanedLinks.length > 0 ? cleanedLinks : undefined,
           reminders: savedReminders ?? [],
           reminderDate: savedReminders?.[0]?.date,
           reminderNote: savedReminders?.[0]?.note,
@@ -781,19 +775,23 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             entityType="task"
             entityId={currentTask?.id || ''}
             notes={currentTask?.notes}
-            documentLinks={currentTask?.documentLinks}
+            links={currentTask?.links}
             onOpenDocPreview={(docId) => setPreviewDocId(docId)}
             db={db}
           />
 
-          <FormItem label="Tài liệu liên kết">
-            <FormList name="documentLinks">
+          <FormItem label="Links">
+            <FormList name="links">
               {(fields, { add, remove }) => (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {fields.map((field) => (
                     <div key={field.key} style={{ display: 'flex', gap: 'var(--island-gap)', alignItems: 'center' }}>
+                      <FormItem {...field} name={[field.name, 'name']} noStyle>
+                        <Input placeholder="Tên liên kết" style={{ flex: 1, minWidth: 0 }} />
+                      </FormItem>
                       <FormItem
                         {...field}
+                        name={[field.name, 'url']}
                         noStyle
                         rules={[
                           {
@@ -806,11 +804,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                           },
                         ]}
                       >
-                        <Input
-                          placeholder="https://... hoặc C:\folder hoặc /path/to/folder"
-                          prefix={<LinkOutlined style={{ color: 'var(--fg-secondary)' }} />}
-                          style={{ flex: 1, minWidth: 0 }}
-                        />
+                        <Input placeholder="https://... hoặc /path/to/folder" style={{ flex: 2, minWidth: 0 }} />
                       </FormItem>
                       <Button
                         type="text"
@@ -820,7 +814,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         onClick={async () => {
                           const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
                           if (picked) {
-                            form.setFieldValue(['documentLinks', field.name], picked);
+                            form.setFieldValue(['links', field.name, 'url'], picked);
                           }
                         }}
                       />
@@ -830,67 +824,13 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         title="Mở liên kết"
                         aria-label="Mở liên kết"
                         onClick={() => {
-                          const val = form.getFieldValue(['documentLinks', field.name]);
+                          const val = form.getFieldValue(['links', field.name, 'url']);
                           if (val) {
                             void openDocumentLink(val, { notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) });
                           }
                         }}
                       />
-                      <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => remove(field.name)}
-                        aria-label="Xóa liên kết"
-                      />
-                    </div>
-                  ))}
-                  <div style={{ display: 'flex', gap: 'var(--gap-8)' }}>
-                    <Button
-                      type="dashed"
-                      onClick={() => add('')}
-                      icon={<PlusOutlined />}
-                      style={{ flex: 1 }}
-                    >
-                      Thêm liên kết
-                    </Button>
-                    <Button
-                      type="default"
-                      icon={<FolderOpenOutlined />}
-                      onClick={async () => {
-                        const picked = await browseLocalFolder((kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }));
-                        if (picked) {
-                          add(picked);
-                        }
-                      }}
-                    >
-                      Chọn thư mục từ máy
-                    </Button>
-                  </div>
-                </Space>
-              )}
-            </FormList>
-          </FormItem>
-
-          <FormItem label="Liên kết nhanh">
-            <FormList name="quickLinks">
-              {(fields, { add, remove }) => (
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {fields.map((field) => (
-                    <div key={field.key} style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
-                      <FormItem {...field} name={[field.name, 'name']} noStyle>
-                        <Input placeholder="Tên liên kết" style={{ flex: 1, minWidth: 0 }} />
-                      </FormItem>
-                      <FormItem {...field} name={[field.name, 'url']} noStyle>
-                        <Input placeholder="https://..." style={{ flex: 2, minWidth: 0 }} />
-                      </FormItem>
-                      <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => remove(field.name)}
-                        aria-label="Xóa liên kết nhanh"
-                      />
+                      <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} aria-label="Xóa liên kết" />
                     </div>
                   ))}
                   <Button type="dashed" onClick={() => add({ name: '', url: '' })} icon={<PlusOutlined />} style={{ width: '100%' }}>

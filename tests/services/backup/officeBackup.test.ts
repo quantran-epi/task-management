@@ -305,8 +305,8 @@ describe('AI Office backup lifecycle (AIO-BACKUP-01, AIO-MEM-01)', () => {
 
     expect(envelope.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     // Phase 39: no envelope bump; the Dexie bump is the V26 non-approved-number strip.
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
-    expect(LATEST_SCHEMA_VERSION).toBe(27);
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
+    expect(LATEST_SCHEMA_VERSION).toBe(30);
     expect(envelope.tables.aiEmployees).toEqual([employee]);
     expect(envelope.tables.aiLeads).toEqual([lead]);
     expect(envelope.tables.aiSkills).toEqual([skill]);

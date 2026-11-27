@@ -209,4 +209,8 @@ export const SCHEMA_V29 = {
     'chatId, telegramUserId, name, status, dataScope, dailyLimit, usedToday, lastActiveDate',
 } as const;
 
-export const LATEST_SCHEMA_VERSION = 29;
+export const SCHEMA_V30 = {
+  ...SCHEMA_V29,
+} as const;
+
+export const LATEST_SCHEMA_VERSION = 30;

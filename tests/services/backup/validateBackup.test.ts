@@ -102,11 +102,9 @@ describe('validateBackupPayload', () => {
     expect(result.errors.some((e) => e.field === 'app')).toBe(true);
   });
 
-  // CR-01: phase 38 added only optional columns, so a v13 envelope must stay restorable.
-  // Pinning the literal here is deliberate: an accidental bump makes every pre-38 backup
-  // unrestorable, which is exactly the regression this test exists to catch.
-  it('keeps the envelope at v13 so pre-38 backups stay restorable (CR-01)', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+  // QRN-05: v13 → v14 normalizes legacy link fields; the current envelope is v14.
+  it('normalizes v13 link fields and pins the current envelope at v14', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
     const v13 = { ...validPayload, schemaVersion: 13 };
     expect(validateBackupPayload(v13).valid).toBe(true);
   });
