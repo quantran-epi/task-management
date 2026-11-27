@@ -437,14 +437,107 @@ pub fn build_sqlcl_script(sql: &str, marker_sql: &str) -> String {
     )
 }
 
-/// Append one stdout line unless it is exactly the completion marker. Comparison is equality on
-/// the trimmed line, never substring, so a marker inside a banner or JSON payload cannot trigger
-/// an early stop. The marker line is dropped entirely; every other line is kept byte-for-byte.
+/// Drop terminal control sequences from one PTY line: CSI (`ESC [` .. final byte 0x40..=0x7E)
+/// and OSC (`ESC ]` .. BEL or ST). No regex or extra crate needed.
+fn strip_ansi_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut kept_from = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b {
+            i += 1;
+            continue;
+        }
+        let esc_start = i;
+        i += 1;
+        let end = match bytes.get(i) {
+            Some(b'[') => {
+                i += 1;
+                let mut end = None;
+                while i < bytes.len() {
+                    let b = bytes[i];
+                    i += 1;
+                    if (0x40..=0x7e).contains(&b) {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                end
+            }
+            Some(b']') => {
+                i += 1;
+                let mut end = None;
+                while i < bytes.len() {
+                    if bytes[i] == 0x07 {
+                        i += 1;
+                        end = Some(i);
+                        break;
+                    }
+                    if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
+                        i += 2;
+                        end = Some(i);
+                        break;
+                    }
+                    i += 1;
+                }
+                end
+            }
+            Some(_) => {
+                i += 1;
+                Some(i)
+            }
+            None => None,
+        };
+        if let Some(end) = end {
+            out.push_str(&input[kept_from..esc_start]);
+            kept_from = end;
+        }
+    }
+    out.push_str(&input[kept_from..]);
+    out
+}
+
+/// Remove only a leading `SQL>` prompt (optionally followed by one space) from an already
+/// ANSI-stripped line. A `SQL>` inside data is never touched.
+fn strip_sqlcl_prompt(line: &str) -> &str {
+    let without_prompt = match line.trim_start().strip_prefix("SQL>") {
+        Some(rest) => rest,
+        None => return line,
+    };
+    without_prompt.strip_prefix(' ').unwrap_or(without_prompt)
+}
+
+/// True only when the whole normalized line equals the completion marker. Substring matches in
+/// banners or JSON payloads never end a query early.
+fn sqlcl_line_is_marker(line: &str, marker: &str) -> bool {
+    strip_sqlcl_prompt(&strip_ansi_escapes(line)).trim() == marker
+}
+
+/// Parse the `setsid` PGID line from a PTY stream after ANSI/prompt normalization. Bare numbers
+/// in SQLcl banners do not carry the sentinel prefix and are ignored.
+fn scan_sqlcl_pgid_line(line: &str) -> Option<u32> {
+    let clean = strip_ansi_escapes(line);
+    strip_sqlcl_prompt(&clean)
+        .trim()
+        .strip_prefix(crate::tool_cancel::PGID_LINE_PREFIX)?
+        .trim()
+        .parse::<u32>()
+        .ok()
+}
+
+/// Append one normalized PTY line to stdout. Marker lines and prompt/ANSI-only lines are dropped;
+/// every other line is appended after stripping terminal control sequences and the leading
+/// prompt, so PTY decorations never leak into the returned payload. Returns true on the marker.
 fn append_sqlcl_line(output: &mut String, line: &str, marker: &str) -> bool {
-    if line.trim() == marker {
+    let clean = strip_ansi_escapes(line);
+    let normalized = strip_sqlcl_prompt(&clean);
+    if normalized.trim() == marker {
         true
+    } else if !normalized.trim().is_empty() {
+        output.push_str(normalized);
+        false
     } else {
-        output.push_str(line);
         false
     }
 }
@@ -771,6 +864,81 @@ mod tests {
         assert_eq!(output, "TASKMATE_SQLCL_DONE_");
         assert!(append_sqlcl_line(&mut output, &format!("{marker}\n"), marker));
         assert_eq!(output, "TASKMATE_SQLCL_DONE_");
+    }
+
+    #[test]
+    fn strip_ansi_escapes_removes_csi_and_osc() {
+        assert_eq!(
+            strip_ansi_escapes("\x1b[31mSQL>\x1b[0m TASKMATE_SQLCL_DONE_1"),
+            "SQL> TASKMATE_SQLCL_DONE_1"
+        );
+        assert_eq!(strip_ansi_escapes("\x1b]0;title\x07SQL> ok"), "SQL> ok");
+        assert_eq!(strip_ansi_escapes("a\x1b]0;title\x1b\\b\x1b[?2004hc"), "abc");
+    }
+
+    #[test]
+    fn strip_sqlcl_prompt_removes_only_leading_prompt() {
+        assert_eq!(strip_sqlcl_prompt("SQL> TASKMATE_SQLCL_DONE_1"), "TASKMATE_SQLCL_DONE_1");
+        assert_eq!(strip_sqlcl_prompt("SQL>[{\"ID\":1}]"), "[{\"ID\":1}]");
+        assert_eq!(strip_sqlcl_prompt("a SQL> b"), "a SQL> b");
+    }
+
+    #[test]
+    fn sqlcl_line_is_marker_after_ansi_and_prompt() {
+        assert!(sqlcl_line_is_marker(
+            "\x1b[?2004hSQL> TASKMATE_SQLCL_DONE_1\r\n",
+            "TASKMATE_SQLCL_DONE_1"
+        ));
+        assert!(sqlcl_line_is_marker("SQL>TASKMATE_SQLCL_DONE_1", "TASKMATE_SQLCL_DONE_1"));
+        assert!(!sqlcl_line_is_marker(
+            "banner TASKMATE_SQLCL_DONE_1 noise\n",
+            "TASKMATE_SQLCL_DONE_1"
+        ));
+    }
+
+    #[test]
+    fn scan_sqlcl_pgid_line_after_prompt_and_ansi() {
+        assert_eq!(scan_sqlcl_pgid_line("SQL> TASKMATE_PGID:4242"), Some(4242));
+        assert_eq!(scan_sqlcl_pgid_line("\x1b[?2004hSQL>TASKMATE_PGID:9\r\n"), Some(9));
+        assert_eq!(scan_sqlcl_pgid_line("4242"), None);
+        assert_eq!(scan_sqlcl_pgid_line("banner TASKMATE_PGID:7"), None);
+    }
+
+    #[test]
+    fn append_sqlcl_line_normalizes_prompt_and_ansi() {
+        let marker = "TASKMATE_SQLCL_DONE_1_6";
+        let mut output = String::new();
+        assert!(!append_sqlcl_line(
+            &mut output,
+            "\x1b[?2004hSQL> [{\"ID\":1}]\n",
+            marker
+        ));
+        assert_eq!(output, "[{\"ID\":1}]\n");
+    }
+
+    #[test]
+    fn append_sqlcl_line_drops_prompt_only_lines() {
+        let marker = "TASKMATE_SQLCL_DONE_1_7";
+        let mut output = String::new();
+        assert!(!append_sqlcl_line(&mut output, "\x1b[?2004hSQL> \n", marker));
+        assert!(!append_sqlcl_line(&mut output, "SQL>", marker));
+        assert!(append_sqlcl_line(
+            &mut output,
+            &format!("SQL> \x1b[32m{marker}\x1b[0m\r\n"),
+            marker
+        ));
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn append_sqlcl_line_keeps_banner_and_partial_marker_after_normalization() {
+        let marker = "TASKMATE_SQLCL_DONE_1_8";
+        let mut output = String::new();
+        let banner = format!("SQL> banner {marker} noise\n");
+        assert!(!append_sqlcl_line(&mut output, &banner, marker));
+        assert_eq!(output, format!("banner {marker} noise\n"));
+        assert!(!append_sqlcl_line(&mut output, "SQL> TASKMATE_SQLCL_DONE_", marker));
+        assert_eq!(output, format!("banner {marker} noise\nTASKMATE_SQLCL_DONE_"));
     }
 
     #[test]
