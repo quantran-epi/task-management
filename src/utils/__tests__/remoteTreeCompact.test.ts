@@ -135,11 +135,22 @@ describe('compactRemoteTree', () => {
     expect(badged.label).toBe('acme');
   });
 
-  it('does not merge past a badged single child', () => {
+  it('merges past a badged single child and carries its badge onto the merged row', () => {
     const input = [folder('com', [folder('com/acme', undefined, 'M')])];
     const out = compactRemoteTree(input);
-    expect(out[0]!.label).toBe('com');
-    expect(out[0]!.children[0]!.gitStatus).toBe('M');
+    expect(out[0]!.label).toBe('com.acme');
+    expect(out[0]!.gitStatus).toBe('M');
+    expect(out[0]!.children).toHaveLength(0);
+  });
+
+  it('compacts dirty and clean chains identically (BUG-03)', () => {
+    const clean = [folder('a', [folder('a/b')])];
+    const dirty = [folder('a', [folder('a/b', undefined, 'M')])];
+    const cleanOut = compactRemoteTree(clean);
+    const dirtyOut = compactRemoteTree(dirty);
+    expect(cleanOut[0]!.label).toBe(dirtyOut[0]!.label);
+    expect(cleanOut[0]!.chain).toEqual(dirtyOut[0]!.chain);
+    expect(dirtyOut[0]!.gitStatus).toBe('M');
   });
 
   it('passes file leaves through unchanged', () => {

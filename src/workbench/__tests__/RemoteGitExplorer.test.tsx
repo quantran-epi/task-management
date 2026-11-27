@@ -314,6 +314,39 @@ describe('RemoteGitExplorer Component', () => {
     expect(tab?.params?.initialLine).toBeUndefined();
   });
 
+  it('refresh keeps expanded folders expandable and re-fetches children (BUG-04)', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+      useLayoutStore.getState().setActiveRemoteBranch('main');
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) return [{ key: 'src', title: 'src', isLeaf: false, sha: 't-src' }];
+      return [{ key: `${dirPath}/child.ts`, title: 'child.ts', isLeaf: true, size: 10, sha: 'b' }];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => expect(screen.getByText('src')).toBeDefined());
+    // Expand once: rc-tree caches the node as loaded.
+    fireEvent.click(screen.getByText('src').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!);
+    await waitFor(() => expect(screen.getByText('child.ts')).toBeDefined());
+    const callsBefore = (gitRemoteTreeService.getRemoteTree as any).mock.calls.length;
+
+    fireEvent.click(screen.getByTestId('refresh-tree-btn'));
+    await waitFor(() => {
+      expect((gitRemoteTreeService.getRemoteTree as any).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    // Refresh preserves expansion, so the child is still visible after remount — and the
+    // folder is still expandable because rc-tree's loadedKeys were reset by the remount.
+    await waitFor(() => expect(screen.getByText('child.ts')).toBeDefined());
+    const srcRow = screen.getByText('src').closest('.ant-tree-treenode')!;
+    expect(srcRow.querySelector('.ant-tree-switcher')?.className).toContain('ant-tree-switcher_open');
+  });
+
   it('reveals a pending file: expands ancestor folders, selects the node, and consumes the request', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
@@ -752,7 +785,7 @@ describe('RemoteGitExplorer Component', () => {
     });
   });
 
-  it('does not merge a status-badged node and keeps its badge visible', async () => {
+  it('merges a status-badged single-child chain and keeps its badge visible', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
     });
@@ -780,11 +813,11 @@ describe('RemoteGitExplorer Component', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('com')).toBeDefined();
+      // Directory badge no longer stops compaction; the merged row keeps the status badge.
+      expect(screen.getByText('com.acme')).toBeDefined();
       expect(screen.getAllByTestId('status-badge-modified').length).toBeGreaterThan(0);
     });
-    // Badge stops the chain: the root label is not merged into a dotted `com.acme`.
-    expect(screen.queryByText('com.acme')).toBeNull();
+    expect(screen.queryByText('acme')).toBeNull();
   });
 
   it('reveal of a path inside a compact chain selects the stable first-path key', async () => {

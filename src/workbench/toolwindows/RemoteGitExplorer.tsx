@@ -251,6 +251,9 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [loadingTree, setLoadingTree] = useState<boolean>(false);
+  // Refresh must reset rc-tree's internal loadedKeys (cached by node key) while keeping the
+  // user's expandedKeys. Remounting on this counter does both in one step (BUG-04).
+  const [treeRefreshKey, setTreeRefreshKey] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   // Global (whole-ref) search state — the unified Find dialog (plan 02) owns subtree search.
   const [globalQuery, setGlobalQuery] = useState<string>('');
@@ -827,7 +830,10 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
             <Button
               size="small"
               icon={<ReloadOutlined spin={loadingTree} />}
-              onClick={() => loadRootTree()}
+              onClick={() => {
+                setTreeRefreshKey((n) => n + 1);
+                void loadRootTree();
+              }}
               disabled={!selectedConfig || !repoPath.trim()}
               data-testid="refresh-tree-btn"
             />
@@ -933,7 +939,7 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         <Spin spinning={loadingTree}>
           {compactDisplayNodes.length > 0 ? (
             <Tree
-              key={treeTargetKey}
+              key={`${treeTargetKey}|refresh-${treeRefreshKey}`}
               className="remote-git-tree"
               motion={false as any}
               loadData={onLoadData}

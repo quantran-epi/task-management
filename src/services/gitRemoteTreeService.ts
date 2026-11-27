@@ -74,11 +74,10 @@ export function mergeUncommittedFilesIntoTree(
     }
 
     const relPath = basePrefix ? filePath.slice(basePrefix.length) : filePath;
-    const parts = relPath.split('/');
+    const parts = relPath.split('/').filter(Boolean);
     const directName = parts[0];
     if (!directName) continue;
 
-    const isDirectLeaf = parts.length === 1;
     // Determine combined status: prefer workingTreeStatus if not space/'?', else indexStatus
     let status = '';
     if (item.indexStatus === '?' || item.workingTreeStatus === '?') {
@@ -91,29 +90,50 @@ export function mergeUncommittedFilesIntoTree(
 
     const existingNode = nodeMap.get(directName);
     if (existingNode) {
-      if (isDirectLeaf) {
+      if (parts.length === 1) {
         existingNode.gitStatus = status;
-      } else {
+      } else if (!existingNode.gitStatus) {
         // Directory containing uncommitted files - mark with indicator if not already set
-        if (!existingNode.gitStatus) {
-          existingNode.gitStatus = 'M';
-        }
+        existingNode.gitStatus = 'M';
       }
-    } else {
-      // New item not in tree (e.g. untracked file or folder)
-      const key = cleanBaseDir ? `${cleanBaseDir}/${directName}` : directName;
-      const newNode: RemoteGitTreeNode = {
-        key,
-        title: directName,
-        isLeaf: isDirectLeaf,
-        sha: '',
-        gitStatus: status,
-      };
-      nodeMap.set(directName, newNode);
-      resultNodes.push(newNode);
+      // A nested dirty path under an existing ref folder is materialized on expansion by the
+      // baseDir-scoped merge in onLoadData; no need to fabricate folders here.
+      continue;
+    }
+
+    // New path not in the ref. Materialize the WHOLE chain down to the file: a bare top folder
+    // would be unexpandable because `git ls-tree <ref>:<newdir>` fails for a staged-new dir.
+    const keyAt = (segments: string[]) =>
+      [cleanBaseDir, ...segments].filter(Boolean).join('/');
+    let siblings = resultNodes;
+    for (let i = 0; i < parts.length; i += 1) {
+      const name = parts[i]!;
+      const isLeaf = i === parts.length - 1;
+      const key = keyAt(parts.slice(0, i + 1));
+      let node = siblings.find((n) => n.title === name);
+      if (!node) {
+        node = {
+          key,
+          title: name,
+          isLeaf,
+          sha: '',
+          ...(isLeaf ? { gitStatus: status } : { gitStatus: 'M', children: [] }),
+        };
+        siblings.push(node);
+      }
+      if (isLeaf) {
+        node.gitStatus = status;
+      } else {
+        // Folder in a brand-new chain: ensure it can hold the next segment and stays badged.
+        node.children = node.children ?? [];
+        if (!node.gitStatus) node.gitStatus = 'M';
+        siblings = node.children;
+      }
     }
   }
 
+  // Rebuild the direct-child map so later items can merge into folders created in this pass.
+  resultNodes.forEach((n) => nodeMap.set(n.title, n));
   return sortTreeNodes(resultNodes);
 }
 
@@ -327,9 +347,13 @@ export async function getRemoteFileContent(
     return await runGitCommand(config, repoPath, gitArgs, secret, callId);
   } catch (err: any) {
     if (!isNotInRef(err, cleanPath, ref)) throw err;
-    // WR-01: "exists on disk, but not in <ref>" also matches a path that is TRACKED but deleted
-    // in <ref> — and the working copy then holds whatever another branch has. Fall back only
-    // for a path git does not track at all, i.e. a genuine untracked file.
+    // The path is absent from <ref>. Two cases share that message:
+    //  - untracked: not in the index (ls-files exits 1) -> working copy is the only source.
+    //  - staged-new (porcelain `A ` / `AM`): in the index but absent from the ref. The working
+    //    copy is what the user staged and what the editor must show.
+    // WR-01 guard: a path committed at HEAD but absent from an OLD ref also has an index entry,
+    // yet its working copy may belong to a different branch. Ask git status for a staged ADD at
+    // the current HEAD; only that case earns the fallback.
     const probe = await execRemoteCommand(
       config,
       `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
@@ -337,10 +361,22 @@ export async function getRemoteFileContent(
       secret,
       callId
     );
-    if (probe.exitStatus === 0) throw err;
-    // Only exit 1 means untracked; infrastructure and SSH failures must stay failures.
-    if (probe.exitStatus !== 1) {
+    // Infrastructure/SSH failures stay failures; only 0 (tracked) and 1 (untracked) continue.
+    if (probe.exitStatus !== 0 && probe.exitStatus !== 1) {
       throw new Error(probe.stderr.trim() || `Lệnh git thất bại với exit code ${probe.exitStatus}`);
+    }
+    if (probe.exitStatus === 0) {
+      const staged = await execRemoteCommand(
+        config,
+        `git -C ${escapeShellArg(repoPath)} -c core.fsmonitor=false --no-pager --literal-pathspecs ` +
+          `status --porcelain=v1 -z -- ${escapeShellArg(cleanPath)}`,
+        secret,
+        callId
+      );
+      const entry = staged.stdout.split('\0').find((token) => token.length > 0);
+      // Only an index-stage ADD (`A ` / `AM`) is a staged-new file; anything else keeps the
+      // ref-missing error so the editor never shows another branch's working copy (WR-01).
+      if (entry?.charAt(0) !== 'A') throw err;
     }
     return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret, callId);
   }

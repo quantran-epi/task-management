@@ -63,6 +63,21 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
     expect(notes?.gitStatus).toBe('?');
   });
 
+  it('materializes the full folder chain for a staged-new nested file', () => {
+    const merged = mergeUncommittedFilesIntoTree(
+      [],
+      [{ path: 'config/app/feature.ts', indexStatus: 'A', workingTreeStatus: 'M' }]
+    );
+    const config = merged.find((n) => n.title === 'config');
+    expect(config?.isLeaf).toBe(false);
+    const app = config?.children?.find((n) => n.title === 'app');
+    expect(app?.isLeaf).toBe(false);
+    const file = app?.children?.find((n) => n.title === 'feature.ts');
+    expect(file?.isLeaf).toBe(true);
+    expect(file?.gitStatus).toBe('AM');
+    expect(file?.key).toBe('config/app/feature.ts');
+  });
+
   it('getRemoteFileContent falls back only when the literal probe exits 1', async () => {
     vi.spyOn(gitRemoteService, 'runGitCommand')
       .mockRejectedValueOnce(new Error("fatal: path 'untracked.ts' does not exist in 'main'"));
@@ -333,12 +348,24 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     expect(commands).toHaveLength(3);
   });
 
-  it('does not substitute working content for tracked-but-absent literal glob', async () => {
+  it('reads a staged-new literal glob from the working copy (AM case)', async () => {
     const oldRef = git('rev-parse', 'HEAD').trim();
     writeFileSync(join(repo, '*.txt'), 'new branch content');
     git('add', '--', '*.txt');
-    await expect(getRemoteFileContent(mockConfig, repo, oldRef, '*.txt')).rejects.toThrow('not in');
-    expect(commands).toHaveLength(2);
+    writeFileSync(join(repo, '*.txt'), 'new branch content (edited after stage)');
+    await expect(getRemoteFileContent(mockConfig, repo, oldRef, '*.txt'))
+      .resolves.toBe('new branch content (edited after stage)');
+  });
+
+  it('does not substitute working content for a path present at HEAD but absent from an old ref (WR-01)', async () => {
+    const oldRef = git('rev-parse', 'HEAD').trim();
+    writeFileSync(join(repo, 'other-branch.txt'), 'content from another branch');
+    git('add', '--', 'other-branch.txt');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'later');
+    // Working copy holds the committed bytes; oldRef genuinely lacks the path. git status sees
+    // no staged ADD, so the ref-missing error must survive.
+    await expect(getRemoteFileContent(mockConfig, repo, oldRef, 'other-branch.txt'))
+      .rejects.toThrow('not in');
   });
 
   it.each(['exit', 'ssh'] as const)('propagates probe infrastructure failure (%s), never reads working file', async (failure) => {

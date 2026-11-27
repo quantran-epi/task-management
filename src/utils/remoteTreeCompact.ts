@@ -53,17 +53,21 @@ export function compactRemoteTree(
     const names: string[] = [node.title || node.key.split('/').at(-1) || node.key];
     let end = node;
 
+    // Directory badges are not a compaction boundary: a dirty folder and a clean folder with
+    // the same single-child shape must render identically. Carry the first badge in the chain
+    // onto the merged row instead of hiding it or splitting the chain (BUG-03).
+    let badge = node.gitStatus;
     for (;;) {
-      // A badged or reveal-target end stops the chain before it can merge further.
-      if (hasBadge(end) || reveal.has(end.key) || SOURCE_ROOT_RE.test(end.key)) break;
+      if (reveal.has(end.key) || SOURCE_ROOT_RE.test(end.key)) break;
       const children = end.children ?? [];
       if (children.length !== 1) break; // branch point (incl. zero children)
       const only = children[0]!;
       if (only.isLeaf) break; // do not swallow a file
-      if (hasBadge(only) || reveal.has(only.key)) break; // never hide status or a reveal target
+      if (reveal.has(only.key)) break; // reveal targets stay distinct and selectable
       end = only;
       chain.push(end.key);
       names.push(end.title || end.key.split('/').at(-1) || end.key);
+      if (badge === undefined && hasBadge(only)) badge = only.gitStatus;
     }
 
     return {
@@ -74,7 +78,7 @@ export function compactRemoteTree(
       chain,
       children: (end.children ?? []).map(compactOne),
       isLeaf: false,
-      ...(node.gitStatus !== undefined ? { gitStatus: node.gitStatus } : {}),
+      ...(badge !== undefined ? { gitStatus: badge } : {}),
     };
   };
 
