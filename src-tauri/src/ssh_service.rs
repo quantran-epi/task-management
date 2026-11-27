@@ -524,48 +524,10 @@ pub async fn ssh_exec_command(
     let out = tauri::async_runtime::spawn_blocking(move || {
         let registry = handle.state::<crate::tool_cancel::ToolTaskRegistry>();
         let runtime = crate::ssh_pool::runtime();
-        // SQLcl heredocs are handled by a persistent remote session (sentinel parsing stays in
-        // Rust). All other commands keep the existing channel-per-call runner.
-        if let Some((env, bin, conn, sql)) = crate::ssh_pool::parse_sqlcl_command(&command) {
-            let outcome = crate::ssh_pool::run_persistent_sqlcl(
-                &runtime,
-                &config,
-                secret.as_deref(),
-                &bin,
-                &conn,
-                &env,
-                &sql,
-                &cancelled,
-            );
-            let finish_call = |result: crate::tool_cancel::ToolExecOutput| {
-                registry.remove(&call_id);
-                let status = if result.finish_reason == "cancelled" { "cancelled" }
-                    else if result.finish_reason == "error" { "error" } else { "done" };
-                let _ = handle.emit(
-                    "tool-task-status",
-                    crate::tool_cancel::ToolTaskStatusEvent {
-                        call_id: call_id.clone(),
-                        status: status.to_string(),
-                        finish_reason: Some(result.finish_reason.clone()),
-                    },
-                );
-                result
-            };
-            return match outcome {
-                Ok((stdout, stderr, was_cancelled)) => Ok(finish_call(crate::tool_cancel::ToolExecOutput {
-                    stdout,
-                    stderr,
-                    exit_status: if was_cancelled { -1 } else { 0 },
-                    finish_reason: if was_cancelled { "cancelled" } else { "complete" }.to_string(),
-                })),
-                Err(e) => Ok(finish_call(crate::tool_cancel::ToolExecOutput {
-                    stdout: String::new(),
-                    stderr: e,
-                    exit_status: -1,
-                    finish_reason: "error".to_string(),
-                })),
-            };
-        }
+        // All commands, including Oracle SQLcl heredocs, use the proven channel-per-call
+        // cancellable runner. The persistent PTY session proved unreliable on live Windows/SSH:
+        // banner/PGID/marker timing and libssh2 timeouts left tool calls hanging and blocked
+        // other SSH tools. Spawn-per-call was stable before the persistence change; keep it.
         crate::tool_cancel::run_cancellable_remote_command(
             &registry,
             handle.clone(),
