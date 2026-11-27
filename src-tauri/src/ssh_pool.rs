@@ -38,6 +38,22 @@ fn is_wakeup_timeout(err: &std::io::Error) -> bool {
     )
 }
 
+/// Drain already-buffered bytes (banner tail, `SQL>` prompt) without blocking the caller. PTY
+/// streams use the wake-up socket timeout, so a quiet REPL returns quickly; the line cap also
+/// bounds work when the remote keeps sending output.
+const SQLCL_DRAIN_MAX_LINES: usize = 64;
+
+fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
+    let mut line = String::new();
+    for _ in 0..SQLCL_DRAIN_MAX_LINES {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+    }
+}
+
 /// Identity of one pooled SSH session. `secret_digest` is a salted digest, never plaintext.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PoolKey {
@@ -204,6 +220,16 @@ impl SqlclSession {
             key.bin,
             key.conn
         );
+        // PTY keeps SQLcl's REPL alive between queries. With a plain stdin pipe, `-s` runs the
+        // script as a batch and exits at EOF before the trailing marker can be read. ECHO is off
+        // so the script itself is never echoed back into stdout; the wide column count avoids
+        // wrapping long JSON result lines.
+        let mut modes = ssh2::PtyModes::new();
+        modes.set_boolean(ssh2::PtyModeOpcode::ECHO, false);
+        channel
+            .request_pty("xterm", Some(modes), Some((65535, 24, 0, 0)))
+            .map_err(|e| format!("Yêu cầu PTY SQLcl thất bại: {}", e))?;
+
         let remote_command = crate::tool_cancel::build_remote_command(&launcher);
         channel.exec(&remote_command).map_err(|e| format!("Khởi động SQLcl thất bại: {}", e))?;
 
@@ -211,7 +237,6 @@ impl SqlclSession {
         // bounded window of lines, ignoring wake-up timeouts (they are not transport errors).
         let mut reader = BufReader::new(channel.stream(0));
         let pgid = {
-            let prefix = crate::tool_cancel::PGID_LINE_PREFIX;
             let mut found = None;
             let mut line = String::new();
             for _ in 0..10 {
@@ -219,8 +244,8 @@ impl SqlclSession {
                 match reader.read_line(&mut line) {
                     Ok(0) => break,
                     Ok(_) => {
-                        if let Some(value) = line.trim().strip_prefix(prefix) {
-                            found = value.trim().parse::<u32>().ok();
+                        if let Some(value) = scan_sqlcl_pgid_line(&line) {
+                            found = Some(value);
                             break;
                         }
                     }
@@ -230,6 +255,10 @@ impl SqlclSession {
             }
             found.ok_or_else(|| "Không nhận dạng được PGID của phiên SQLcl.".to_string())?
         };
+
+        // Discard banner/prompt bytes already buffered before the first script is sent. Bounded
+        // so a quiet REPL stops at its wake-up timeout instead of blocking session startup.
+        drain_sqlcl_prefix(&mut reader);
 
         let stderr = Arc::new(Mutex::new(String::new()));
         let stderr_reader = channel.stderr();
@@ -307,17 +336,18 @@ impl SqlclSession {
                 Ok(0) => {
                     // SQLcl can exit right after the marker with no trailing newline; the last
                     // line may still be a complete marker sitting in the buffer.
-                    if append_sqlcl_line(&mut output, &line, marker) {
+                    if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                     }
                     line.clear();
                     break;
                 }
                 Ok(_) => {
-                    if append_sqlcl_line(&mut output, &line, marker) {
+                    if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                         break;
                     }
+                    append_sqlcl_line(&mut output, &line, marker);
                     line.clear();
                 }
                 Err(e) => {
@@ -329,7 +359,15 @@ impl SqlclSession {
             }
         }
         if !saw_sentinel && !cancelled.load(Ordering::SeqCst) {
-            return Err("Phiên SQLcl kết thúc trước khi có sentinel.".to_string());
+            return Err(format!(
+                "Phiên SQLcl kết thúc trước khi có marker.\n{}",
+                self.stderr_snapshot()
+            ));
+        }
+        // After the marker, the REPL prints a fresh `SQL> ` prompt. Drop it (and any trailing
+        // banner bytes) so the next query cannot read stale output.
+        if saw_sentinel {
+            drain_sqlcl_prefix(&mut reader);
         }
         Ok((output, self.stderr_snapshot(), false))
     }
