@@ -16,7 +16,6 @@ import {
   Space,
   Spin,
   Tag,
-  Tree,
   Typography,
   useAntdToken,
 } from "../ui";
@@ -114,9 +113,6 @@ export const StandaloneSshFileBrowser: React.FC<
   const [query, setQuery] = useState("");
   const [searchPaths, setSearchPaths] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [hostLabel, setHostLabel] = useState("SSH");
-  // Folder children seen so far, keyed by directory path — keeps ancestors in the explorer.
-  const [folderChildren, setFolderChildren] = useState<Map<string, BrowseEntry[]>>(new Map());
   const [searching, setSearching] = useState(false);
   const [loadingDir, setLoadingDir] = useState(false);
   const callIdRef = useRef<string | null>(null);
@@ -138,7 +134,6 @@ export const StandaloneSshFileBrowser: React.FC<
     setBasePath(null);
     setCurrentPath(".");
     setEntries([]);
-    setFolderChildren(new Map());
     setQuery("");
     setSearchPaths(null);
     setSelected(new Set());
@@ -151,7 +146,6 @@ export const StandaloneSshFileBrowser: React.FC<
         const base = resolveRemoteToolPath(".", cfg.defaultBasePath, undefined);
         if (cancelled) return;
         sshConfigIdRef.current = cfg.sshConfigId;
-        setHostLabel(sshConfig.name || cfg.sshConfigId);
         setBasePath(base);
         setCurrentPath(base);
       })
@@ -179,15 +173,6 @@ export const StandaloneSshFileBrowser: React.FC<
         const listed: RemoteFileInfo[] = await listRemoteDir(sshConfig, target);
         if (seq !== loadSeqRef.current) return;
         setCurrentPath(target);
-        setFolderChildren((previous) => {
-          const next = new Map(previous);
-          next.set(target, listed.filter((entry) => entry.isDir).map((entry) => ({
-            path: normalizePath(`${target === "/" ? "" : target}/${entry.name}`),
-            name: entry.name,
-            isDir: true,
-          })));
-          return next;
-        });
         setEntries(
           listed
             .filter((entry) => target !== "/" || entry.name !== ".")
@@ -298,22 +283,6 @@ export const StandaloneSshFileBrowser: React.FC<
     [entries, searchPaths],
   );
 
-  const explorerTree = useMemo(() => {
-    if (!basePath) return [];
-    interface FolderNode {
-      key: string;
-      title: string;
-      children?: FolderNode[];
-    }
-    const buildNode = (path: string, title: string): FolderNode => {
-      const children = (folderChildren.get(path) || [])
-        .filter((child) => child.path !== path)
-        .map((child) => buildNode(child.path, child.name));
-      return { key: path, title, ...(children.length ? { children } : {}) };
-    };
-    return [buildNode(basePath, hostLabel)];
-  }, [basePath, folderChildren, hostLabel]);
-
   const breadcrumbItems = useMemo(() => {
     const parts = currentPath.split("/").filter(Boolean);
     return [
@@ -379,39 +348,7 @@ export const StandaloneSshFileBrowser: React.FC<
       style={{ maxWidth: "calc(100vw - 48px)" }}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "228px minmax(0, 1fr)",
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              ...listStyle,
-              padding: 8,
-              background: token.colorBgLayout,
-            }}
-          >
-            <Text
-              type="secondary"
-              style={{ display: "block", marginBottom: 8, fontSize: "var(--font-size-small)" }}
-            >
-              Explorer · SSH
-            </Text>
-            {explorerTree.length > 0 && (
-              <Tree
-                checkable={false}
-                selectedKeys={[currentPath]}
-                defaultExpandedKeys={[basePath!]}
-                treeData={explorerTree}
-                onSelect={(_, info) => {
-                  navigate(String(info.node.key));
-                }}
-              />
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
                 <Breadcrumb items={breadcrumbItems} />
@@ -577,7 +514,6 @@ export const StandaloneSshFileBrowser: React.FC<
               )}
             </div>
           </div>
-        </div>
         <Space wrap style={{ minHeight: 32 }}>
           <Text type="secondary" style={{ fontSize: "var(--font-size-small)" }}>
             {paths.length ? `${paths.length} tệp đã chọn` : "Chưa chọn tệp nào"}
