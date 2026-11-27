@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, useTaskMateModal, Textarea } from '../ui';
-import type { TableColumnsType, MenuProps } from 'antd';
-import { EditOutlined, MoreOutlined, DeleteOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined, RobotOutlined, BellOutlined } from '../ui/icon';
-import { useAIChat } from '../../context/AIChatContext';
+import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea } from '../ui';
+import type { TableColumnsType } from 'antd';
+import { EditOutlined, MoreOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined } from '../ui/icon';
 import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
 import { EmptyState } from '../common/EmptyState';
 import { formatMinutes, formatElapsedTicker } from '../../utils/time';
 import { getTodayDateString } from '../../utils/date';
-import { deleteTaskWithAllocations } from '../../db/repositories/cascadeRepo';
 import { WorkTypeBadge, WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { TagListDisplay } from '../common/TagListDisplay';
 import { resolveInheritedTags } from '../../domain/inheritance';
@@ -27,7 +25,7 @@ import {
   type TaskSortKey,
 } from '../../utils/filter';
 import { RunGhostDevModal } from '../agents/RunGhostDevModal';
-import { QuickReminderModal } from '../common/QuickReminderModal';
+import { useTaskMenuItems } from '../../hooks/useTaskMenuItems';
 
 export interface TaskTableProps {
   tasks: Task[];
@@ -132,7 +130,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   onGlobalSortChange,
   filterBarRef,
 }) => {
-  const { modal, contextHolder } = useTaskMateModal();
+
   const message = useMessage();
   const { token } = useAntdToken();
   const today = getTodayDateString();
@@ -204,7 +202,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   };
 
   const effectiveDb = db || defaultDb;
-  const { openChat } = useAIChat();
+  const { getTaskMenuItems, reminderModal, modal, contextHolder } = useTaskMenuItems({ db, onOpenDrawer });
   const {
     getTimerForTask,
     getElapsedSeconds,
@@ -324,60 +322,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     x: number;
     y: number;
   } | null>(null);
-
-  const [reminderTargetTask, setReminderTargetTask] = useState<Task | null>(null);
-
-  const getTaskMenuItems = (record: Task): NonNullable<MenuProps['items']> => [
-    {
-      key: 'ai-chat',
-      icon: <RobotOutlined style={{ color: token.colorPrimary }} />,
-      label: 'Hỏi Trợ lý AI',
-      onClick: () => {
-        openChat({ type: 'task', id: record.id, title: record.name });
-      },
-    },
-    {
-      key: 'add-reminder',
-      icon: <BellOutlined style={{ color: '#faad14' }} />,
-      label: 'Thêm nhắc nhở',
-      onClick: () => {
-        setReminderTargetTask(record);
-      },
-    },
-    {
-      key: 'edit',
-      icon: <EditOutlined />,
-      label: 'Sửa tác vụ',
-      onClick: () => onOpenDrawer(record.id),
-    },
-    {
-      type: 'divider',
-    },
-    {
-      key: 'delete',
-      icon: <DeleteOutlined style={{ color: token.colorError }} />,
-      danger: true,
-      label: 'Xóa',
-      onClick: () => {
-        modal.confirm({
-          title: 'Xóa tác vụ',
-          content: `Bạn có chắc muốn xóa "${record.name}"?`,
-          okText: 'Xóa',
-          cancelText: 'Hủy',
-          okButtonProps: { danger: true },
-          onOk: async () => {
-            if (!db) return;
-            try {
-              await deleteTaskWithAllocations(record.id, db);
-              message.success({ content: 'Đã xóa tác vụ', duration: 1.5 });
-            } catch {
-              message.error({ content: 'Không thể xóa tác vụ', duration: 2 });
-            }
-          },
-        });
-      },
-    },
-  ];
 
   const columns: TableColumnsType<Task> = [
     {
@@ -1068,14 +1012,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         </Dropdown>
       )}
 
-      {reminderTargetTask && (
-        <QuickReminderModal
-          open={!!reminderTargetTask}
-          onClose={() => setReminderTargetTask(null)}
-          target={{ type: 'task', entity: reminderTargetTask }}
-          db={db}
-        />
-      )}
+      {reminderModal}
 
       {/* Fallback modal for clipboard copy in non-secure or restricted contexts */}
       <Modal

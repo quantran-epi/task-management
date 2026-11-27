@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { TaskTable } from '../../src/components/tasks/TaskTable';
@@ -7,11 +8,20 @@ import { TaskFilterBar } from '../../src/components/tasks/TaskFilterBar';
 import { BatchActionBar } from '../../src/components/tasks/BatchActionBar';
 import type { Task, ChangeRequest, System } from '../../src/types/models';
 import { DEFAULT_TASK_FILTER_STATE } from '../../src/utils/filter';
+import { useTaskMenuItems } from '../../src/hooks/useTaskMenuItems';
+import { ThemeAppHolder } from '../../src/components/ui';
+import { deleteTaskWithAllocations } from '../../src/db/repositories/cascadeRepo';
+
+vi.mock('../../src/db/repositories/cascadeRepo', () => ({
+  deleteTaskWithAllocations: vi.fn().mockResolvedValue(undefined),
+}));
 
 // QuickReminderModal still imports the retired projectRepo; plan 31.2-22 re-axes it.
 // Stub it so this suite exercises TaskTable rather than that pending migration.
 vi.mock('../../src/components/common/QuickReminderModal', () => ({
-  QuickReminderModal: () => null,
+  QuickReminderModal: ({ target }: { target: { type: 'task'; entity: { name: string } } | null }) => (
+    <div data-testid="quick-reminder-target">{target?.entity.name}</div>
+  ),
 }));
 
 describe('TaskTable Component', () => {
@@ -349,28 +359,72 @@ describe('TaskTable Component', () => {
   });
 
   it('clicking delete option in task dropdown triggers confirmation modal', async () => {
-    render(
-      <TaskTable
-        tasks={sampleTasks}
-        changeRequests={sampleChangeRequests}
-        systems={sampleSystems}
-        selectedRowKeys={[]}
-        onSelectRows={vi.fn()}
-        onOpenDrawer={vi.fn()}
-        db={db}
-      />
-    );
+    const Harness: React.FC = () => {
+      const { getTaskMenuItems, contextHolder } = useTaskMenuItems({ db, onOpenDrawer: vi.fn() });
+      return (
+        <>
+          {getTaskMenuItems(sampleTasks[0]!).filter((i) => i?.key === 'delete').map((item) => (
+            <button key="delete" onClick={(item as { onClick?: () => void }).onClick}>Xóa</button>
+          ))}
+          {contextHolder}
+        </>
+      );
+    };
+    render(<ThemeAppHolder><Harness /></ThemeAppHolder>);
 
-    const moreButtons = screen.getAllByRole('button', { name: /Thao tác khác/i });
-    fireEvent.click(moreButtons[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa' }));
+    expect(await screen.findByText(/Bạn có chắc muốn xóa "Alpha Task One"/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hủy' })).toBeInTheDocument();
+  });
 
-    const deleteOption = await screen.findByText('Xóa');
-    fireEvent.click(deleteOption);
+  it('shared task menu exposes the four actions and delete goes through cascade repo after confirm', async () => {
+    vi.mocked(deleteTaskWithAllocations).mockClear();
+    const onOpenDrawer = vi.fn();
+    const Harness: React.FC = () => {
+      const { getTaskMenuItems, reminderModal, reminderTargetTask, contextHolder } = useTaskMenuItems({
+        db,
+        onOpenDrawer,
+      });
+      (globalThis as { __qrnMenu?: unknown }).__qrnMenu = { getTaskMenuItems, reminderTargetTask };
+      return <>{reminderModal}{contextHolder}</>;
+    };
+    render(<ThemeAppHolder><Harness /></ThemeAppHolder>);
+    const result = { current: (globalThis as { __qrnMenu?: unknown }).__qrnMenu as {
+      getTaskMenuItems: ReturnType<typeof useTaskMenuItems>['getTaskMenuItems'];
+      reminderTargetTask: Task | null;
+    } };
+    const labels = result.current
+      .getTaskMenuItems(sampleTasks[0]!)
+      .map((item) => (item && 'label' in item ? item.label : 'divider'));
+    expect(labels).toEqual([
+      'Hỏi Trợ lý AI',
+      'Thêm nhắc nhở',
+      'Sửa tác vụ',
+      'divider',
+      'Xóa',
+    ]);
 
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getAllByText('Xóa tác vụ').length).toBeGreaterThan(0);
-    expect(within(dialog).getByText(/Bạn có chắc muốn xóa "Alpha Task One"/)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Hủy' })).toBeInTheDocument();
+    const clickItem = async (key: string) => {
+      const item = result.current.getTaskMenuItems(sampleTasks[0]!).find((i) => i?.key === key);
+      const handler = item && 'onClick' in item ? item.onClick : undefined;
+      await act(async () => { await handler?.({} as never); });
+    };
+
+    await clickItem('edit');
+    expect(onOpenDrawer).toHaveBeenCalledWith('task-1');
+
+    await clickItem('add-reminder');
+    expect((globalThis as { __qrnMenu?: { reminderTargetTask?: Task | null } }).__qrnMenu?.reminderTargetTask?.id).toBe('task-1');
+
+    await clickItem('delete');
+    expect(await screen.findByText(/Bạn có chắc muốn xóa "Alpha Task One"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
+    expect(deleteTaskWithAllocations).not.toHaveBeenCalled();
+
+    await clickItem('delete');
+    const okButtons = screen.getAllByRole('button', { name: 'Xóa' });
+    fireEvent.click(okButtons[okButtons.length - 1]!);
+    await vi.waitFor(() => expect(deleteTaskWithAllocations).toHaveBeenCalledWith('task-1', db));
   });
 
   it('renders Jira Key tag and clicking it opens Jira issue with stopPropagation without opening drawer (JIRA-04, D-12)', async () => {
