@@ -385,6 +385,7 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     expect(command.endsWith(`EXIT;\n${delimiter}`)).toBe(true);
     expect(command.split(/\r?\n/).filter((line) => line.startsWith('EOF_ORACLE_SQLCL'))).toHaveLength(1);
     expect(command).not.toContain('TASKMATE_SQLCL_DONE');
+    expect(command).not.toContain('TASKMATE_DONE');
     expect(command).not.toContain('PROMPT');
   });
 
