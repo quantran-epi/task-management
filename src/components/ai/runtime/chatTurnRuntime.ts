@@ -412,6 +412,9 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           }
         },
         onStatusChange: (loopStatus) => {
+          // Stop must be authoritative: the loop keeps unwinding after abort and its late
+          // callbacks must never drag a terminal 'aborted' turn back to an active stage.
+          if (!isCurrent(turnId, turnController)) return;
           if (loopStatus && loopStatus.includes(SYNTHESIS_STATUS_MARKER)) {
             publish('synthesizing');
           }
@@ -434,7 +437,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           deps.onUsage?.(tokenUsage);
         },
         onToolCall: (call) => {
-          publish('tool');
+          if (isCurrent(turnId, turnController)) publish('tool');
           currentCallId = call.id;
           toolNames.set(call.id, call.name);
           deps.onToolEvent?.({
@@ -445,7 +448,7 @@ export function createChatTurnRuntime(deps: ChatTurnRuntimeDeps): ChatTurnRuntim
           });
         },
         onToolResult: (callId, toolResult, durationMs) => {
-          publish('tool');
+          if (isCurrent(turnId, turnController)) publish('tool');
           deps.onToolEvent?.({
             id: callId,
             name: toolNames.get(callId) ?? callId,

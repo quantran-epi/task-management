@@ -832,6 +832,35 @@ describe('chatTurnRuntime lifecycle (D-19, D-21, D-22)', () => {
 
     expect(order).toEqual(['cancel-registry', 'controller-abort']);
   });
+
+  it('late loop callbacks after Stop must not resurrect the active streaming indicator', async () => {
+    let fireLate!: () => void;
+    let release!: () => void;
+    const late = new Promise<void>((resolve) => { fireLate = resolve; });
+    const runtime = runtimeWith(async (options) => {
+      options.onTextChunk?.('partial ');
+      await new Promise<void>((resolve) => { release = resolve; });
+      // The unwinding loop keeps reporting tool/synthesis work after its controller was aborted.
+      options.onToolCall?.({ id: 'late-call', name: 'query_notes', args: {} });
+      options.onStatusChange?.('Đang tổng hợp thông tin...');
+      options.onToolResult?.('late-call', '{"found":true}', 10);
+      fireLate();
+      return { fullResponse: 'partial ', tokenUsage: {} } as never;
+    });
+
+    const turn = runtime.start(makeRequest({ threadId }));
+    await waitForStatus(() => statuses.includes('streaming'));
+    runtime.abort();
+    expect(runtime.getStatus()).toBe('aborted');
+    release();
+    await late;
+
+    expect(runtime.getStatus()).toBe('aborted');
+    expect(statuses[statuses.length - 1]).toBe('aborted');
+    expect(statuses.slice(statuses.indexOf('aborted') + 1)).not.toContain('tool');
+    expect(statuses.slice(statuses.indexOf('aborted') + 1)).not.toContain('synthesizing');
+    expect((await turn).phase).toBe('aborted');
+  });
 });
 
 describe('chatTurnRuntime team seams (D-07, D-12, D-13, D-19, D-21)', () => {
