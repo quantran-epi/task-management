@@ -254,6 +254,7 @@ impl SqlclSession {
 
         let remote_command = crate::tool_cancel::build_remote_command(&launcher);
         channel.exec(&remote_command).map_err(|e| format!("Khởi động SQLcl thất bại: {}", e))?;
+        crate::sqlcl_pty_debug::dump("START_AFTER_EXEC", b"");
 
         // `setsid` prints its PID/PGID as a line; banners or a slow link may precede it. Scan a
         // bounded window of lines, ignoring wake-up timeouts (they are not transport errors).
@@ -267,6 +268,7 @@ impl SqlclSession {
                     Err(e) if is_wakeup_timeout(&e) => SqlclPgidReadStatus::Wakeup,
                     Err(e) => SqlclPgidReadStatus::Failed(e.to_string()),
                 };
+                crate::sqlcl_pty_debug::dump("PGID_READ", chunk.as_bytes());
                 (chunk, status)
             })
             .take(10),
@@ -362,6 +364,7 @@ impl SqlclSession {
             let line_len_before = line.len();
             match reader.read_line(&mut line) {
                 Ok(0) => {
+                    crate::sqlcl_pty_debug::dump("SCRIPT_EOF", line.as_bytes());
                     // SQLcl can exit right after the marker with no trailing newline; the last
                     // line may still be a complete marker sitting in the buffer. Capture the
                     // pending line before clearing it so ORA-/SP2- survives the EOF error.
@@ -374,6 +377,7 @@ impl SqlclSession {
                 }
                 Ok(_) => {
                     last_progress = Instant::now();
+                    crate::sqlcl_pty_debug::dump("SCRIPT_LINE", line.as_bytes());
                     if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                         break;
@@ -385,6 +389,7 @@ impl SqlclSession {
                     if is_wakeup_timeout(&e) {
                         if line.len() > line_len_before {
                             last_progress = Instant::now();
+                            crate::sqlcl_pty_debug::dump("SCRIPT_PARTIAL", &line.as_bytes()[line_len_before..]);
                         }
                         continue; // wake-up only; keep the partial line
                     }

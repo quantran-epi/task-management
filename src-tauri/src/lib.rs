@@ -8,6 +8,7 @@ mod keyring_store;
 mod sqlite_persistence;
 mod ssh_pool;
 mod ssh_pty_service;
+mod sqlcl_pty_debug;
 mod ssh_service;
 mod standalone_access;
 mod telegram_gateway;
