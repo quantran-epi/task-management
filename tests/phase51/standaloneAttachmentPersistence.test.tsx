@@ -152,14 +152,14 @@ describe("261126-rfx persistent attachment chips", () => {
     await waitFor(() =>
       expect(screen.getByText("Duyệt tệp SSH")).toBeInTheDocument(),
     );
-    // Search returns two paths; confirm both are selected via tree checkboxes.
+    // Search returns two paths; confirm both are selected via file row checkboxes.
     fireEvent.change(screen.getByLabelText("Tìm tên tệp SSH"), {
       target: { value: "*.pdf" },
     });
     fireEvent.click(screen.getByRole("button", { name: /Tìm/ }));
     await waitFor(() => expect(screen.getByText("b.pdf")).toBeInTheDocument());
     // Search rows are files only. Directory rows in browse mode must not be checkable.
-    const checkboxes = document.body.querySelectorAll(".ant-tree-checkbox");
+    const checkboxes = screen.getAllByRole("checkbox");
     expect(checkboxes.length).toBe(2);
     fireEvent.click(checkboxes[0]!);
     fireEvent.click(checkboxes[1]!);
@@ -171,12 +171,24 @@ describe("261126-rfx persistent attachment chips", () => {
   });
 
   it("browser không cho Check thư mục", async () => {
+    const ssh = await import("../../src/services/sshService");
     render(
       <StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />,
     );
-    await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
-    const folderRow = screen.getByText("folder/").closest(".ant-tree-treenode");
-    expect(folderRow?.querySelector(".ant-tree-checkbox")).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByText("folder/")).toBeInTheDocument(),
+    );
+    const folderRow = document.querySelector('[data-file-path="/repo/folder"]');
+    expect(folderRow).toBeTruthy();
+    expect(folderRow!.querySelector('input[type="checkbox"]')).toBeNull();
+    expect(folderRow!.querySelector(".ant-checkbox-wrapper")).toBeNull();
+    fireEvent.click(folderRow!);
+    await waitFor(() =>
+      expect(ssh.listRemoteDir).toHaveBeenCalledWith(
+        expect.anything(),
+        "/repo/folder",
+      ),
+    );
   });
 
   it("saveMessage ghi attachments trước khi lưu; team gửi kèm attachments", () => {

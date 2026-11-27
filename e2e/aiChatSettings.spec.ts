@@ -437,9 +437,9 @@ test.describe('AI chat settings and composer modals', () => {
     await expect(browser).toBeVisible();
     await browser.getByLabel('Tìm tên tệp SSH').fill('*.doc*');
     await browser.getByRole('button', { name: 'Tìm' }).click();
-    const docxRow = browser.locator('.ant-tree-treenode').filter({ hasText: 'plan.docx' });
+    const docxRow = browser.locator('[data-file-path="/srv/taskmate-fixture/reports/plan.docx"]');
     await expect(docxRow).toBeVisible();
-    await docxRow.locator('.ant-tree-checkbox').click();
+    await docxRow.getByRole('checkbox').click();
     await browser.getByRole('button', { name: /Đính kèm \(1\)/ }).click();
     await expect(browser).toHaveCount(0);
     const composerChip = page.locator('.ant-tag').filter({ hasText: 'plan.docx' });
