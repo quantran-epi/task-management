@@ -191,6 +191,48 @@ describe("261126-rfx persistent attachment chips", () => {
     );
   });
 
+  it("explorer giữ thư mục cha và không cho Up vượt quá basePath", async () => {
+    const ssh = await import("../../src/services/sshService");
+    render(<StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
+    const up = screen.getByLabelText("Thư mục cha");
+    expect(up).toBeDisabled(); // tại basePath /repo
+
+    fireEvent.click(document.querySelector('[data-file-path="/repo/folder"]')!);
+    await waitFor(() =>
+      expect(ssh.listRemoteDir).toHaveBeenCalledWith(expect.anything(), "/repo/folder"),
+    );
+    expect(screen.getByText("folder/")).toBeInTheDocument(); // vẫn là node trong explorer
+    expect(screen.getByLabelText("Thư mục cha")).not.toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Thư mục cha"));
+    await waitFor(() =>
+      expect(ssh.listRemoteDir).toHaveBeenLastCalledWith(expect.anything(), "/repo"),
+    );
+  });
+
+  it("bỏ qua response listRemoteDir cũ khi navigate nhanh", async () => {
+    const ssh = await import("../../src/services/sshService");
+    let resolveSlow!: (value: unknown) => void;
+    const slow = new Promise((resolve) => { resolveSlow = resolve; });
+    vi.mocked(ssh.listRemoteDir).mockImplementation((_cfg, target) =>
+      target === "/repo/folder" ? slow as Promise<never> : Promise.resolve([
+        { name: ".", path: "/repo/.", isDir: true, isSymlink: false, size: 0, modified: 0 },
+        { name: "folder", path: "/repo/folder", isDir: true, isSymlink: false, size: 0, modified: 0 },
+        { name: "a.pdf", path: "/repo/a.pdf", isDir: false, isSymlink: false, size: 10, modified: 0 },
+      ]),
+    );
+    render(<StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
+    fireEvent.click(document.querySelector('[data-file-path="/repo/folder"]')!);
+    expect(screen.getByText("Đang đọc thư mục…")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Thư mục cha")); // navigate về /repo trước khi slow resolve
+    await waitFor(() =>
+      expect(ssh.listRemoteDir).toHaveBeenLastCalledWith(expect.anything(), "/repo"),
+    );
+    resolveSlow([{ name: "ghost.pdf", path: "/repo/folder/ghost.pdf", isDir: false, isSymlink: false, size: 10, modified: 0 }]);
+    await waitFor(() => expect(screen.queryByText("ghost.pdf")).not.toBeInTheDocument());
+  });
+
   it("saveMessage ghi attachments trước khi lưu; team gửi kèm attachments", () => {
     const drawer = readSource("src/components/ai/AIChatDrawer.tsx");
     expect(drawer).toMatch(/attachments: attachedPaths/);

@@ -115,16 +115,30 @@ export const StandaloneSshFileBrowser: React.FC<
   const [searchPaths, setSearchPaths] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hostLabel, setHostLabel] = useState("SSH");
+  // Folder children seen so far, keyed by directory path — keeps ancestors in the explorer.
+  const [folderChildren, setFolderChildren] = useState<Map<string, BrowseEntry[]>>(new Map());
+  const [searching, setSearching] = useState(false);
+  const [loadingDir, setLoadingDir] = useState(false);
   const callIdRef = useRef<string | null>(null);
   const sshConfigIdRef = useRef<string | null>(null);
+  // Ignore stale SFTP listing responses when the user navigates rapidly.
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    loadSeqRef.current += 1;
+    if (callIdRef.current) {
+      void cancelRemoteCall(callIdRef.current).catch(() => undefined);
+      callIdRef.current = null;
+    }
+    setSearching(false);
+    setLoadingDir(false);
     setConfigError(null);
     setBasePath(null);
     setCurrentPath(".");
     setEntries([]);
+    setFolderChildren(new Map());
     setQuery("");
     setSearchPaths(null);
     setSelected(new Set());
@@ -154,13 +168,26 @@ export const StandaloneSshFileBrowser: React.FC<
     async (rawPath: string) => {
       const configId = sshConfigIdRef.current;
       if (!configId) return;
+      const seq = ++loadSeqRef.current;
       setSearchPaths(null);
+      setLoadingDir(true);
+      setConfigError(null);
       try {
         const sshConfig = await getSshConfigById(configId, db);
         if (!sshConfig) throw new Error("Không tìm thấy cấu hình SSH đã lưu.");
         const target = resolveRemoteToolPath(rawPath, undefined, undefined);
         const listed: RemoteFileInfo[] = await listRemoteDir(sshConfig, target);
+        if (seq !== loadSeqRef.current) return;
         setCurrentPath(target);
+        setFolderChildren((previous) => {
+          const next = new Map(previous);
+          next.set(target, listed.filter((entry) => entry.isDir).map((entry) => ({
+            path: normalizePath(`${target === "/" ? "" : target}/${entry.name}`),
+            name: entry.name,
+            isDir: true,
+          })));
+          return next;
+        });
         setEntries(
           listed
             .filter((entry) => target !== "/" || entry.name !== ".")
@@ -175,7 +202,10 @@ export const StandaloneSshFileBrowser: React.FC<
             })),
         );
       } catch (err) {
-        setConfigError(err instanceof Error ? err.message : String(err));
+        if (seq === loadSeqRef.current)
+          setConfigError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (seq === loadSeqRef.current) setLoadingDir(false);
       }
     },
     [db],
@@ -194,6 +224,8 @@ export const StandaloneSshFileBrowser: React.FC<
       void cancelRemoteCall(callIdRef.current).catch(() => undefined);
     const callId = `ssh-file-browser-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     callIdRef.current = callId;
+    setSearching(true);
+    setConfigError(null);
     try {
       const sshConfig = await getSshConfigById(configId, db);
       if (!sshConfig) throw new Error("Không tìm thấy cấu hình SSH đã lưu.");
@@ -224,6 +256,7 @@ export const StandaloneSshFileBrowser: React.FC<
     } finally {
       if (callIdRef.current === callId) {
         callIdRef.current = null;
+        setSearching(false);
       }
     }
   }, [basePath, db, query]);
@@ -233,6 +266,7 @@ export const StandaloneSshFileBrowser: React.FC<
       void cancelRemoteCall(callIdRef.current).catch(() => undefined);
       callIdRef.current = null;
     }
+    setSearching(false);
     setSearchPaths(null);
     setQuery("");
   }, []);
@@ -242,8 +276,8 @@ export const StandaloneSshFileBrowser: React.FC<
       if (callIdRef.current)
         void cancelRemoteCall(callIdRef.current).catch(() => undefined);
       callIdRef.current = null;
+      setSearching(false);
       setQuery("");
-      setConfigError(null);
       void loadDir(target);
     },
     [loadDir],
@@ -266,43 +300,40 @@ export const StandaloneSshFileBrowser: React.FC<
 
   const explorerTree = useMemo(() => {
     if (!basePath) return [];
-    const folders = entries.filter((entry) => entry.isDir && entry.path !== basePath);
-    return [
-      {
-        key: basePath,
-        title: hostLabel,
-        children: folders.map((entry) => ({
-          key: entry.path,
-          title: entry.name,
-        })),
-      },
-    ];
-  }, [basePath, entries, hostLabel]);
+    interface FolderNode {
+      key: string;
+      title: string;
+      children?: FolderNode[];
+    }
+    const buildNode = (path: string, title: string): FolderNode => {
+      const children = (folderChildren.get(path) || [])
+        .filter((child) => child.path !== path)
+        .map((child) => buildNode(child.path, child.name));
+      return { key: path, title, ...(children.length ? { children } : {}) };
+    };
+    return [buildNode(basePath, hostLabel)];
+  }, [basePath, folderChildren, hostLabel]);
 
   const breadcrumbItems = useMemo(() => {
-    const root = basePath || "/";
     const parts = currentPath.split("/").filter(Boolean);
-    const rootParts = root.split("/").filter(Boolean);
-    const rel = parts.slice(rootParts.length);
     return [
       {
         title: (
-          <span style={{ cursor: basePath ? "pointer" : "default" }}
-            onClick={() => basePath && navigate(root)}>
-            {basePath ? hostLabel : root}
+          <span style={{ cursor: "pointer" }} onClick={() => navigate("/")}>
+            /
           </span>
         ),
       },
-      ...rel.map((part, index) => ({
+      ...parts.map((part, index) => ({
         title: (
           <span style={{ cursor: "pointer" }}
-            onClick={() => navigate(`/${parts.slice(0, rootParts.length + index + 1).join("/")}`)}>
+            onClick={() => navigate(`/${parts.slice(0, index + 1).join("/")}`)}>
             {part}
           </span>
         ),
       })),
     ];
-  }, [basePath, currentPath, hostLabel, navigate]);
+  }, [currentPath, navigate]);
 
   const togglePath = useCallback((path: string) => {
     setSelected((previous) => {
@@ -321,7 +352,6 @@ export const StandaloneSshFileBrowser: React.FC<
     borderRadius: 6,
     background: token.colorBgContainer,
   };
-  const searching = Boolean(callIdRef.current);
 
   return (
     <Modal
@@ -376,9 +406,7 @@ export const StandaloneSshFileBrowser: React.FC<
                 defaultExpandedKeys={[basePath!]}
                 treeData={explorerTree}
                 onSelect={(_, info) => {
-                  const key = String(info.node.key);
-                  if (key === basePath || entries.some((e) => e.path === key && e.isDir))
-                    navigate(key);
+                  navigate(String(info.node.key));
                 }}
               />
             )}
@@ -393,8 +421,16 @@ export const StandaloneSshFileBrowser: React.FC<
                 icon={<ArrowUpOutlined />}
                 aria-label="Thư mục cha"
                 title="Thư mục cha"
-                disabled={!basePath || currentPath === "/" || searching}
-                onClick={() => navigate(parentPath(currentPath))}
+                disabled={!basePath || currentPath === basePath || currentPath === "/"}
+                onClick={() => {
+                  if (basePath && currentPath.startsWith(`${basePath}/`)) {
+                    // Never navigate above the configured base path.
+                    const rel = currentPath.slice(basePath.length + 1).split("/");
+                    navigate(rel.length > 1 ? `${basePath}/${rel.slice(0, -1).join("/")}` : basePath);
+                  } else {
+                    navigate(parentPath(currentPath));
+                  }
+                }}
               />
             </div>
             <Space style={{ marginBottom: 0 }}>
@@ -427,7 +463,7 @@ export const StandaloneSshFileBrowser: React.FC<
               style={{ display: "block", fontSize: "var(--font-size-small)" }}
             >
               {searchPaths !== null
-                ? `${searchPaths.length} kết quả (tối đa 200)`
+                ? `${searchPaths.length} kết quả (tối đa 201)`
                 : currentPath}
             </Text>
             {configError && (
@@ -460,11 +496,18 @@ export const StandaloneSshFileBrowser: React.FC<
                 <div style={{ padding: 16 }}>
                   <Spin size="small" />
                   <Text style={{ marginLeft: 8, fontSize: "var(--font-size-small)" }}>
-                    find {basePath} -iname {query.trim() || "..."} (tối đa 200)
+                    find {basePath} -iname {query.trim() || "..."} (tối đa 201)
                   </Text>
                   <div style={{ marginTop: 8 }}>
                     <Button size="small" onClick={cancelSearch}>Hủy</Button>
                   </div>
+                </div>
+              ) : loadingDir ? (
+                <div style={{ padding: 24, textAlign: "center" }}>
+                  <Spin size="small" />
+                  <Text style={{ marginLeft: 8, fontSize: "var(--font-size-small)" }}>
+                    Đang đọc thư mục…
+                  </Text>
                 </div>
               ) : configError && entriesToShow.length === 0 ? null : entriesToShow.length === 0 ? (
                 <div style={{ padding: 24, textAlign: "center" }}>
@@ -490,8 +533,10 @@ export const StandaloneSshFileBrowser: React.FC<
                         else togglePath(entry.path);
                       }}
                       onKeyDown={(e) => {
-                        if (entry.isDir && (e.key === "Enter" || e.key === " "))
+                        if (entry.isDir && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
                           navigate(entry.path);
+                        }
                       }}
                       style={{
                         display: "grid",
