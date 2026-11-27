@@ -1,20 +1,41 @@
 //! Bounded in-memory PTY trace for persistent SQLcl sessions.
 //!
-//! Enabled in every build so a live debug session can be exported from Settings → Remote SSH.
-//! The buffer is capped at 64 KiB, stores escaped bytes only, and applies a conservative redaction
-//! pass at export time. Nothing is written to disk automatically.
+//! Always on. Settings → Remote SSH exports the trace to a file the user chooses. Nothing is
+//! written to disk automatically. All lines are escaped, session-tagged, and redacted at export.
 
+use std::cell::Cell;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-const MAX_TRACE_BYTES: usize = 64 * 1024;
+const MAX_TRACE_BYTES: usize = 256 * 1024;
 
 static TRACE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+static SESSION_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// Append one labelled fragment. Excess bytes are dropped from the front so the newest evidence
-/// survives; this is diagnostic-only state, never domain data.
+thread_local! {
+    static TRACE_SESSION: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Start a new correlation id for one `SqlclSession::start` and everything it does afterwards.
+pub(crate) fn session_start() -> u64 {
+    let id = SESSION_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+    TRACE_SESSION.with(|slot| slot.set(id));
+    event("SESSION_BEGIN");
+    id
+}
+
 pub(crate) fn dump(label: &str, bytes: &[u8]) {
+    push(label, bytes);
+}
+
+pub(crate) fn event(label: &str) {
+    push(label, b"");
+}
+
+fn push(label: &str, bytes: &[u8]) {
     let Ok(mut trace) = TRACE.lock() else { return };
-    let line = format!("{} {}\n", label, escaped(bytes));
+    let id = TRACE_SESSION.with(|slot| slot.get());
+    let line = format!("s{:04} {} {}\n", id, label, escaped(bytes));
     trace.extend_from_slice(line.as_bytes());
     if trace.len() > MAX_TRACE_BYTES {
         let excess = trace.len() - MAX_TRACE_BYTES;
@@ -22,7 +43,6 @@ pub(crate) fn dump(label: &str, bytes: &[u8]) {
     }
 }
 
-/// Export the current trace as one printable string. Redaction is applied here, once, on output.
 #[tauri::command]
 pub fn sqlcl_pty_dump_export(clear: bool) -> Result<String, String> {
     let mut trace = TRACE.lock().map_err(|e| e.to_string())?;
@@ -30,9 +50,6 @@ pub fn sqlcl_pty_dump_export(clear: bool) -> Result<String, String> {
     Ok(redact(&String::from_utf8_lossy(&bytes)))
 }
 
-/// Escape bytes into a single printable line fragment. Keeps ASCII; renders CR/LF/TAB and other
-/// control bytes as `\xNN`. Truncates a single fragment at 2048 bytes so one noisy line cannot
-/// crowd out the rest of the trace.
 fn escaped(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().min(2048));
     for &b in input.iter().take(2048) {
@@ -60,8 +77,7 @@ fn redact(fragment: &str) -> String {
             let mut from = 0usize;
             while from < lower.len() {
                 let Some(rel) = lower[from..].find(marker) else { break };
-                let key_start = from + rel;
-                let key_end = key_start + marker.len();
+                let key_end = from + rel + marker.len();
                 let mut value_start = key_end;
                 while out.as_bytes().get(value_start) == Some(&b' ') {
                     value_start += 1;
@@ -84,7 +100,7 @@ fn redact(fragment: &str) -> String {
                     if value_end > value_start && !out[value_start..value_end].starts_with("[REDACTED]") {
                         out.replace_range(value_start..value_end, "[REDACTED]");
                         changed = true;
-                        break; // lowercase index is stale; restart the pass
+                        break;
                     }
                 }
                 from = key_end;
@@ -108,8 +124,7 @@ mod tests {
 
     #[test]
     fn escaped_bounds_fragment() {
-        let out = escaped(&[b'x'; 4096]);
-        assert!(out.len() <= 2048);
+        assert!(escaped(&[b'x'; 4096]).len() <= 2048);
     }
 
     #[test]
@@ -121,15 +136,19 @@ mod tests {
     }
 
     #[test]
-    fn trace_is_bounded_and_clearable() {
+    fn trace_is_bounded_session_tagged_and_clearable() {
         if let Ok(mut trace) = TRACE.lock() {
             trace.clear();
         }
-        for _ in 0..100 {
-            dump("TEST", &[b'x'; 1024]);
+        session_start(); // creates SESSION_BEGIN
+        for _ in 0..400 {
+            dump("BOUNDARY_FILLER", &[b'x'; 1024]);
         }
+        session_start(); // must survive at the tail after ring-buffer trimming
         let exported = sqlcl_pty_dump_export(false).expect("export");
         assert!(exported.len() <= MAX_TRACE_BYTES);
+        assert!(exported.contains("SESSION_BEGIN"));
+        assert!(exported.lines().any(|line| line.starts_with("s")));
         let cleared = sqlcl_pty_dump_export(true).expect("clear");
         assert_eq!(cleared, exported);
         assert!(sqlcl_pty_dump_export(false).expect("empty").is_empty());

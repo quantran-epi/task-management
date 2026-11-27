@@ -63,10 +63,15 @@ fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
     loop {
         line.clear();
         let got_new_bytes = match reader.read_line(&mut line) {
-            Ok(0) | Err(_) => false, // EOF/timeout: nothing new buffered; a real read error also stops
+            Ok(0) => {
+                crate::sqlcl_pty_debug::event("DRAIN_EOF");
+                false
+            }
+            Err(_) => false,
             Ok(n) => {
                 lines += 1;
                 bytes += n;
+                crate::sqlcl_pty_debug::dump("DRAIN_LINE", line.as_bytes());
                 true
             }
         };
@@ -233,6 +238,7 @@ impl SqlclSession {
     /// `env`, `bin` and `conn` cannot inject a second shell command, and the PGID is captured
     /// for explicit cancellation.
     fn start(session: &ssh2::Session, key: &SqlclKey) -> Result<Self, String> {
+        crate::sqlcl_pty_debug::session_start();
         let mut channel = session
             .channel_session()
             .map_err(|e| format!("Không thể mở channel SQLcl: {}", e))?;
@@ -268,7 +274,13 @@ impl SqlclSession {
                     Err(e) if is_wakeup_timeout(&e) => SqlclPgidReadStatus::Wakeup,
                     Err(e) => SqlclPgidReadStatus::Failed(e.to_string()),
                 };
-                crate::sqlcl_pty_debug::dump("PGID_READ", chunk.as_bytes());
+                let label = match &status {
+                    SqlclPgidReadStatus::Line => "PGID_LINE",
+                    SqlclPgidReadStatus::Eof => "PGID_EOF",
+                    SqlclPgidReadStatus::Wakeup => "PGID_WAKEUP",
+                    SqlclPgidReadStatus::Failed(_) => "PGID_FAILED",
+                };
+                crate::sqlcl_pty_debug::dump(label, chunk.as_bytes());
                 (chunk, status)
             })
             .take(10),
@@ -338,6 +350,7 @@ impl SqlclSession {
         }
         channel.write_all(script.as_bytes()).map_err(|e| format!("Ghi SQLcl thất bại: {}", e))?;
         channel.flush().map_err(|e| format!("Flush SQLcl thất bại: {}", e))?;
+        crate::sqlcl_pty_debug::event("SCRIPT_SENT");
         *self.last_used.lock().map_err(|e| e.to_string())? = Instant::now();
 
         let mut output = String::new();
@@ -354,6 +367,7 @@ impl SqlclSession {
             }
             if sqlcl_idle_timed_out(last_progress.elapsed()) {
                 self.kill_remote(config, secret);
+                crate::sqlcl_pty_debug::event("SCRIPT_IDLE_TIMEOUT");
                 return Err(format!(
                     "SQLcl không tiến triển trong {:?}.\n{}\n{}",
                     SQLCL_REPL_IDLE_DEADLINE,
@@ -365,6 +379,7 @@ impl SqlclSession {
             match reader.read_line(&mut line) {
                 Ok(0) => {
                     crate::sqlcl_pty_debug::dump("SCRIPT_EOF", line.as_bytes());
+                    crate::sqlcl_pty_debug::event("SCRIPT_EOS_MARKER_SEEN");
                     // SQLcl can exit right after the marker with no trailing newline; the last
                     // line may still be a complete marker sitting in the buffer. Capture the
                     // pending line before clearing it so ORA-/SP2- survives the EOF error.
@@ -377,11 +392,12 @@ impl SqlclSession {
                 }
                 Ok(_) => {
                     last_progress = Instant::now();
-                    crate::sqlcl_pty_debug::dump("SCRIPT_LINE", line.as_bytes());
                     if sqlcl_line_is_marker(&line, marker) {
+                        crate::sqlcl_pty_debug::event("SCRIPT_MARKER");
                         saw_sentinel = true;
                         break;
                     }
+                    crate::sqlcl_pty_debug::dump("SCRIPT_LINE", line.as_bytes());
                     append_sqlcl_line(&mut output, &line, marker);
                     line.clear();
                 }
@@ -393,6 +409,7 @@ impl SqlclSession {
                         }
                         continue; // wake-up only; keep the partial line
                     }
+                    crate::sqlcl_pty_debug::event("SCRIPT_READ_FAILED");
                     return Err(format!(
                         "Đọc SQLcl thất bại: {}\n{}\n{}",
                         e,
@@ -403,6 +420,7 @@ impl SqlclSession {
             }
         }
         if !saw_sentinel && !cancelled.load(Ordering::SeqCst) {
+            crate::sqlcl_pty_debug::event("SCRIPT_NO_MARKER_ERROR");
             return Err(format!(
                 "Phiên SQLcl kết thúc trước khi có marker.\n{}\n{}",
                 self.stderr_snapshot(),
@@ -804,11 +822,13 @@ pub fn run_persistent_sqlcl(
     cancelled: &AtomicBool,
 ) -> Result<(String, String, bool), String> {
     validate_sqlcl_profile(conn, bin, env)?;
+    crate::sqlcl_pty_debug::event("RUN_BEGIN");
     let key = SqlclKey::new(config, secret, bin, conn, env);
     let (marker_sql, marker) = make_sqlcl_sentinel();
     let full_script = build_sqlcl_script(script, &marker_sql);
 
     for attempt in 0..2 {
+        crate::sqlcl_pty_debug::event(if attempt == 0 { "ATTEMPT_0" } else { "ATTEMPT_1" });
         if cancelled.load(Ordering::SeqCst) {
             return Ok((String::new(), String::new(), true));
         }
@@ -816,13 +836,16 @@ pub fn run_persistent_sqlcl(
         let session = {
             let mut sessions = state.sqlcl.sessions.lock().map_err(|e| e.to_string())?;
             if sessions.get(&key).is_some() {
+                crate::sqlcl_pty_debug::event("SESSION_REUSE");
                 let existing = sessions.get(&key).expect("checked above");
                 Arc::clone(existing)
             } else {
+                crate::sqlcl_pty_debug::event("SESSION_CREATE");
                 let ssh = state.pool.acquire(config, secret, SocketTimeout::Wakeup)?;
                 let created = match SqlclSession::start(&ssh, &key) {
                     Ok(created) => Arc::new(created),
                     Err(e) => {
+                        crate::sqlcl_pty_debug::event("SESSION_START_FAILED");
                         state.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
                         if attempt == 0 { continue; }
                         return Err(e);
@@ -843,6 +866,7 @@ pub fn run_persistent_sqlcl(
             }
             Ok((stdout, stderr, false)) => return Ok((stdout, stderr, false)),
             Err(e) => {
+                crate::sqlcl_pty_debug::event("SCRIPT_ERROR_RETRY");
                 if let Ok(mut sessions) = state.sqlcl.sessions.lock() {
                     sessions.remove(&key);
                 }
