@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-27T09:45:00.000Z"
+last_updated: "2026-11-27T09:53:23.840Z"
 last_activity: 2026-11-27
 last_activity_desc: "Completed quick task 261127-mmz: PGID scan keeps partial bytes across wakeups, accepts only complete line/EOF, bounded UTF-8-safe pending diagnostic"
-state_head: 86a670ae4ad099bd3b90bf550c262ebed0bf770f
+state_head: d2be1fd326fae105799cb0dfb0e20e3602f9fa48
 progress:
   total_phases: 2
   completed_phases: 2
@@ -38,6 +38,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-eos: SQLcl completion ch
 Last activity: 2026-11-27 - Completed quick task 261127-hup: persistent SQLcl moved onto SSH PTY (xterm, ECHO off, wide columns) with ANSI/prompt-normalized marker reader; PGID, cancel, TTL and TS heredoc contract unchanged.
 Last activity: 2026-11-27 - Completed quick task 261127-j35: fixed 4 PTY SQLcl review findings — bounded ORA-/SP2- diagnostics in Err stderr, 60s idle PGID kill, inactivity drain with caps, prompt preserved on data lines.
 Last activity: 2026-11-27 - Completed quick task 261127-mrx: standalone chat system prompt now carries the shared referenced_files block with exact SSH-attached paths; no file content read or runtime path changed.
+Last activity: 2026-11-27 - Completed quick task 261127-nai: standalone AI chat SSH file browser now uses only the right-side folder browser; left-panel tree view removed.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -173,6 +174,7 @@ Progress: [██████████] 100%
 | 261127-jvm | Implement sketch 015 winner A: two-column SSH file picker | 2026-11-27 | 86a670ae | — | [261127-jvm-implement-sketch-015-winner-a-v-o-standa](./quick/261127-jvm-implement-sketch-015-winner-a-v-o-standa/) |
 | 261127-mrx | Fix standalone AI chat SSH attachments: include referenced_files block in standalone prompt and add targeted check | 2026-11-27 | 45842bec | — | [261127-mrx-fix-standalone-ai-chat-ssh-attachments-f](./quick/261127-mrx-fix-standalone-ai-chat-ssh-attachments-f/) |
 | 261127-mmz | Sửa scan PGID SQLcl: giữ byte partial qua wakeup, chỉ nhận dạng PGID trên dòng hoàn chỉnh/EOF, kèm diagnostic bounded | 2026-11-27 | 533c14d3, 5d43d2e4 | — | [261127-mmz-fix-pgid-partial-line](./quick/261127-mmz-fix-pgid-partial-line/) |
+| 261127-nai | Standalone AI chat: remove left-panel tree view in SSH file browser, keep only right-side folder browser | 2026-11-27 | d2be1fd3 | — | [261127-nai-standalone-ai-chat-remove-left-panel-tre](./quick/261127-nai-standalone-ai-chat-remove-left-panel-tre/) |
 
 ## Accumulated Context
 
