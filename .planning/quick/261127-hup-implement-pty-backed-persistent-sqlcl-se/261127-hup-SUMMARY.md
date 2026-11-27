@@ -52,7 +52,7 @@ Không chạy `npm test` (quy ước dự án >1 giờ), không live SSH/SQLcl, 
 - Giữ marker `SELECT '<marker>' FROM DUAL;` dưới `SET SQLFORMAT DEFAULT` — detection equality sau strip ANSI + prompt + trim, không substring. `PROMPT` bị suppress ở `-s`; `SQLFORMAT JSON` làm marker lẫn payload JSON.
 - API PTY đúng với `ssh2 0.9.6` đã pin: `Channel::request_pty(&str, Option<PtyModes>, Option<(u32,u32,u32,u32)>)` và `PtyModes::set_boolean(PtyModeOpcode::ECHO, false)` — đối chiếu trực tiếp source local `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ssh2-0.9.6/src/{channel.rs,lib.rs}`. Không có deviation so với plan.
 - ECHO tắt để script không bị echo ngược vào stdout; 65535 cột (`unsigned short` max) tránh wrap dòng JSON.
-- Drain có giới hạn (`SQLCL_DRAIN_MAX_LINES = 64`, dừng ở wakeup timeout/EOF) sau banner và sau marker để không để byte cũ sang query sau, không chặn vô hạn.
+- Drain có giới hạn (`SQLCL_DRAIN_MAX_LINES = 512` sau quick task 261127-j35, dừng ở wakeup timeout/EOF) sau banner và sau marker để không để byte cũ sang query sau, không chặn vô hạn.
 - stderr vẫn đọc thread riêng, bounded `MAX_SQLCL_STDERR_BYTES = 2 MiB`; cancel vẫn SIGTERM PGID qua `spawn_kill_remote_process_group_for_sqlcl`.
 
 ## Files intentionally unchanged
