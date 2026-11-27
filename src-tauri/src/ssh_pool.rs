@@ -6,8 +6,9 @@
 //! the secret, never plaintext, and changes when the saved config/keyring secret changes.
 //!
 //! A remote `sqlcl -s -L '<conn>'` process is kept alive per connection profile over a pooled
-//! SSH channel. Each query sends a full SET preamble + script + unique `PROMPT` sentinel, then
-//! reads stdout until that sentinel. A broken pipe restarts the session once and retries.
+//! SSH channel. Each query sends a full SET preamble + script + unique SQL `SELECT` marker, then
+//! reads stdout until that marker appears in the SQLcl JSON output. A broken pipe restarts the
+//! session once and retries.
 //! Nothing is spawned on the host and no local filesystem API is added.
 
 use crate::ssh_service::{connect_and_auth_inner, SshConfig};
@@ -271,7 +272,7 @@ impl SqlclSession {
         }
     }
 
-    /// Send one script and read until its unique sentinel. `cancelled` is the shared token from
+    /// Send one script and read until its unique SQL marker. `cancelled` is the shared token from
     /// `ToolTaskRegistry`; on cancel the remote process group is SIGTERM'd and the session is
     /// torn down, never left half-read.
     fn run_script(
@@ -303,17 +304,25 @@ impl SqlclSession {
                 return Ok((output, self.stderr_snapshot(), true));
             }
             match reader.read_line(&mut line) {
-                Ok(0) => break, // process exited before the sentinel: broken session
+                Ok(0) => {
+                    // SQLcl can exit right after the marker with no trailing newline.
+                    output.push_str(&line);
+                    line.clear();
+                    if output.contains(marker) {
+                        saw_sentinel = true;
+                    }
+                    break;
+                }
                 Ok(_) => {
-                    if line.trim_end_matches(['\n', '\r']) == marker {
+                    output.push_str(&line);
+                    line.clear();
+                    if output.contains(marker) {
                         saw_sentinel = true;
                         break;
                     }
-                    output.push_str(&line);
-                    line.clear();
                 }
                 Err(e) => {
-                    if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted) {
+                    if is_wakeup_timeout(&e) {
                         continue; // wake-up only; keep the partial line
                     }
                     return Err(format!("Đọc SQLcl thất bại: {}", e));
@@ -323,7 +332,7 @@ impl SqlclSession {
         if !saw_sentinel && !cancelled.load(Ordering::SeqCst) {
             return Err("Phiên SQLcl kết thúc trước khi có sentinel.".to_string());
         }
-        Ok((output, self.stderr_snapshot(), false))
+        Ok((strip_sqlcl_marker_row(&output, marker), self.stderr_snapshot(), false))
     }
 
     fn stderr_snapshot(&self) -> String {
@@ -402,7 +411,7 @@ pub fn cleanup_on_exit(state: &SshRuntimeState) {
 
 // --- pure helpers --------------------------------------------------------------------------
 
-/// Unique per-request sentinel. `PROMPT <marker>` is sent as the last script line.
+/// Unique per-request SQL marker. Emitted by SQLcl as a JSON row, unlike `PROMPT` in `-s`.
 pub fn make_sqlcl_sentinel() -> (String, String) {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NONCE: AtomicU64 = AtomicU64::new(1);
@@ -411,15 +420,90 @@ pub fn make_sqlcl_sentinel() -> (String, String) {
         std::process::id(),
         NONCE.fetch_add(1, Ordering::SeqCst)
     );
-    (format!("PROMPT {marker}"), marker)
+    (format!("SELECT '{marker}' AS TASKMATE_DONE FROM DUAL;"), marker)
 }
 
-/// Full per-query script: reset preamble + caller SQL + sentinel. Every query gets the same
+/// Full per-query script: reset preamble + caller SQL + JSON marker. Every query gets the same
 /// baseline so one query's SET cannot affect the next on a persistent session.
-pub fn build_sqlcl_script(sql: &str, prompt_line: &str) -> String {
+pub fn build_sqlcl_script(sql: &str, marker_sql: &str) -> String {
     format!(
-        "SET SQLFORMAT DEFAULT;\nSET PAGESIZE 0;\nSET FEEDBACK OFF;\nSET HEADING ON;\nSET LINESIZE 32767;\nSET TRIMSPOOL ON;\n{sql}\n{prompt_line}\n"
+        "SET SQLFORMAT DEFAULT;\nSET PAGESIZE 0;\nSET FEEDBACK OFF;\nSET HEADING ON;\nSET LINESIZE 32767;\nSET TRIMSPOOL ON;\n{sql}\nSET SQLFORMAT JSON;\n{marker_sql}\n"
     )
+}
+
+/// Remove the internal marker row from SQLcl stdout. Banner/epilogue text is preserved except
+/// for lines that still carry the marker; malformed JSON falls back to a textual strip.
+pub fn strip_sqlcl_marker_row(output: &str, marker: &str) -> String {
+    if !output.contains(marker) {
+        return output.to_string();
+    }
+    let start = output.find(|c| c == '[' || c == '{');
+    let end = output.rfind(|c| c == ']' || c == '}');
+    if let (Some(start), Some(end)) = (start, end) {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&output[start..=end]) {
+            fn drop_markers(value: &mut serde_json::Value, marker: &str) {
+                match value {
+                    serde_json::Value::Array(items) => {
+                        items.retain(|item| !is_marker_row(item, marker));
+                        for item in items.iter_mut() {
+                            drop_markers(item, marker);
+                        }
+                    }
+                    serde_json::Value::Object(map) => {
+                        for child in map.values_mut() {
+                            drop_markers(child, marker);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let mut value = value;
+            drop_markers(&mut value, marker);
+            if let Ok(clean) = serde_json::to_string(&value) {
+                return format!("{}{}{}", &output[..start], clean, &output[end + 1..]);
+            }
+        }
+    }
+    // Fallback: drop the `{...}` object containing the marker (with one adjacent comma),
+    // then any leftover line.
+    let mut cleaned = output.to_string();
+    while let Some(pos) = cleaned.find(marker) {
+        let before = cleaned[..pos].rfind('{');
+        let after = cleaned[pos..].find('}').map(|i| pos + i + 1);
+        if let (Some(before), Some(after)) = (before, after) {
+            let remove_from = if cleaned[..before].trim_end().ends_with(',') {
+                cleaned[..before].len() - 1
+            } else if cleaned[after..].trim_start().starts_with(',') {
+                after + cleaned[after..].find(',').expect("checked") + 1
+            } else {
+                before
+            };
+            cleaned.replace_range(remove_from..after, "");
+        } else {
+            let line_start = cleaned[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
+            let line_end = cleaned[pos..].find('\n').map(|i| pos + i + 1).unwrap_or(cleaned.len());
+            cleaned.replace_range(line_start..line_end, "");
+        }
+    }
+    cleaned
+        .lines()
+        .filter(|line| !line.contains(marker))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn is_marker_row(value: &serde_json::Value, marker: &str) -> bool {
+    let map = match value.as_object() {
+        Some(map) => map,
+        None => return false,
+    };
+    if map.len() != 1 {
+        return false;
+    }
+    map.iter().any(|(key, val)| {
+        (key.eq_ignore_ascii_case("taskmate_done"))
+            && val.as_str().is_some_and(|text| text == marker)
+    })
 }
 
 /// Saved-profile guardrails, duplicated in Rust so a pooled call can never bypass the TS
@@ -519,8 +603,8 @@ pub fn run_persistent_sqlcl(
 ) -> Result<(String, String, bool), String> {
     validate_sqlcl_profile(conn, bin, env)?;
     let key = SqlclKey::new(config, secret, bin, conn, env);
-    let (prompt, marker) = make_sqlcl_sentinel();
-    let full_script = build_sqlcl_script(script, &prompt);
+    let (marker_sql, marker) = make_sqlcl_sentinel();
+    let full_script = build_sqlcl_script(script, &marker_sql);
 
     for attempt in 0..2 {
         if cancelled.load(Ordering::SeqCst) {
@@ -670,20 +754,69 @@ mod tests {
 
     #[test]
     fn sentinel_is_unique_per_call() {
-        let (p1, m1) = make_sqlcl_sentinel();
-        let (p2, m2) = make_sqlcl_sentinel();
+        let (sql1, m1) = make_sqlcl_sentinel();
+        let (sql2, m2) = make_sqlcl_sentinel();
         assert_ne!(m1, m2);
-        assert!(p1.contains(&m1) && p2.contains(&m2));
+        assert!(sql1.contains(&m1) && sql2.contains(&m2));
+        assert!(sql1.contains("SELECT"));
+        assert!(sql1.contains(&format!("'{m1}'")));
+        assert!(sql1.contains("TASKMATE_DONE FROM DUAL"));
+        assert!(!sql1.contains("PROMPT") && !sql2.contains("PROMPT"));
     }
 
     #[test]
     fn script_contains_preamble_sql_and_sentinel() {
-        let (prompt, marker) = make_sqlcl_sentinel();
-        let script = build_sqlcl_script("SELECT 1 FROM dual;", &prompt);
-        assert!(script.contains("SET SQLFORMAT"));
+        let (marker_sql, marker) = make_sqlcl_sentinel();
+        let script = build_sqlcl_script("SELECT 1 FROM dual;", &marker_sql);
+        assert!(script.contains("SET SQLFORMAT DEFAULT;"));
+        assert!(script.contains("SET TRIMSPOOL ON;"));
         assert!(script.contains("SELECT 1 FROM dual;"));
-        assert!(script.ends_with(&format!("{prompt}\n")));
         assert!(script.contains(&marker));
+        assert!(script.ends_with(&format!("{marker_sql}\n")));
+        let json_at = script.find("SET SQLFORMAT JSON;").expect("JSON format before marker");
+        let marker_at = script.find(&marker_sql).expect("marker SQL present");
+        assert!(json_at < marker_at);
+        assert!(!script.contains("PROMPT"));
+    }
+
+    #[test]
+    fn strip_sqlcl_marker_row_removes_marker_object_from_array() {
+        let marker = "TASKMATE_SQLCL_DONE_1_1";
+        let output = format!("[{{\"ID\":1}},{{\"taskmate_done\":\"{marker}\"}}]");
+        let stripped = strip_sqlcl_marker_row(&output, marker);
+        let value: serde_json::Value = serde_json::from_str(&stripped).expect("valid JSON after strip");
+        assert_eq!(value, serde_json::json!([{"ID": 1}]));
+        assert!(!stripped.contains(marker));
+    }
+
+    #[test]
+    fn strip_sqlcl_marker_row_removes_marker_from_results_items() {
+        let marker = "TASKMATE_SQLCL_DONE_1_2";
+        let output = format!("{{\"results\":[{{\"items\":[{{\"TASKMATE_DONE\":\"{marker}\"}}]}}]}}");
+        let stripped = strip_sqlcl_marker_row(&output, marker);
+        let value: serde_json::Value = serde_json::from_str(&stripped).expect("valid JSON after strip");
+        assert_eq!(value, serde_json::json!({"results": [{"items": []}]}));
+        assert!(!stripped.contains(marker));
+    }
+
+    #[test]
+    fn strip_sqlcl_marker_row_keeps_real_rows_and_group_shape() {
+        let marker = "TASKMATE_SQLCL_DONE_1_3";
+        let output = format!(
+            "{{\"results\":[{{\"columns\":[{{\"name\":\"ID\"}}],\"items\":[{{\"ID\":7}},{{\"TASKMATE_DONE\":\"{marker}\"}}]}}]}}"
+        );
+        let stripped = strip_sqlcl_marker_row(&output, marker);
+        let value: serde_json::Value = serde_json::from_str(&stripped).expect("valid JSON after strip");
+        let items = value["results"][0]["items"].as_array().expect("items array");
+        assert_eq!(items, &[serde_json::json!({"ID": 7})]);
+        assert!(value["results"][0]["columns"].is_array());
+        assert!(!stripped.contains(marker));
+    }
+
+    #[test]
+    fn strip_sqlcl_marker_row_returns_input_untouched_without_marker() {
+        let output = "[{\"ID\":1}]\n";
+        assert_eq!(strip_sqlcl_marker_row(output, "TASKMATE_SQLCL_DONE_9"), output);
     }
 
     #[test]

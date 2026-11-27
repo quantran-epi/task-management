@@ -358,6 +358,36 @@ describe('oracleSqlclService - Execution & SSH mocking', () => {
     ]);
   });
 
+  it('keeps describe_table heredoc command shape for persistent SQLcl routing', async () => {
+    seedActiveProfile({});
+
+    vi.spyOn(sshService, 'getSshConfigs').mockResolvedValueOnce([
+      { id: 'ssh-1', name: 'Bastion' } as any,
+    ]);
+    vi.spyOn(sshService, 'getSshSecret').mockResolvedValueOnce('secret-pass');
+    vi.spyOn(sshService, 'execRemoteCommand').mockResolvedValueOnce({
+      stdout: '[{"COLUMN_NAME": "ID", "FULL_DATA_TYPE": "NUMBER(10,0)", "NULLABLE": "N"}]',
+      stderr: '',
+      exitStatus: 0,
+    });
+
+    const resStr = await executeOracleDescribe(
+      { action: 'describe_table', tableOrView: 'EMPLOYEES' },
+      fakeDb
+    );
+    expect(JSON.parse(resStr).success).toBe(true);
+
+    const command = (sshService.execRemoteCommand as any).mock.calls[0][1] as string;
+    expect(command).toMatch(/^sql -s -L 'user\/pass@host:1521\/srv' << 'EOF_ORACLE_SQLCL_[0-9A-F]{32}'/);
+    const delimiter = command.split('\n')[0]!.match(/'EOF_ORACLE_SQLCL_[0-9A-F]{32}'$/)![0].slice(1, -1);
+    expect(command).toContain('SET SQLFORMAT JSON;');
+    expect(command).toContain('EMPLOYEES');
+    expect(command.endsWith(`EXIT;\n${delimiter}`)).toBe(true);
+    expect(command.split(/\r?\n/).filter((line) => line.startsWith('EOF_ORACLE_SQLCL'))).toHaveLength(1);
+    expect(command).not.toContain('TASKMATE_SQLCL_DONE');
+    expect(command).not.toContain('PROMPT');
+  });
+
   // WR-03: a model-supplied identifier carrying an injected UNION must be rejected before
   // any SSH script is sent, and must surface through the JSON { success:false, error } path.
   it('rejects an injected tableOrView in describe_table without reaching SSH', async () => {
