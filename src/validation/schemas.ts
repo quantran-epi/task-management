@@ -130,6 +130,11 @@ const linkSchema = z
     { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.' }
   );
 
+export const namedQuickLinkSchema = z.object({
+  name: z.string().trim().min(1, 'Tên liên kết không được trống').max(80, 'Tên liên kết tối đa 80 ký tự'),
+  url: linkSchema,
+});
+
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
 // Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.
 // The runtime label/color list lives in the `system_type_options` settings row.
@@ -255,6 +260,7 @@ export const ChangeRequestInputSchema = z
     opsOwners: tagListSchema.optional(),
     businessAnalysts: tagListSchema.optional(),
     documentLinks: z.array(linkSchema).optional(),
+    quickLinks: z.array(namedQuickLinkSchema).optional(),
     reminderDate: reminderDateSchema.optional(),
     reminderNote: reminderNoteSchema,
     reminders: remindersArraySchema,
@@ -280,6 +286,7 @@ export const ChangeRequestUpdateSchema = z
     opsOwners: tagListSchema.optional(),
     businessAnalysts: tagListSchema.optional(),
     documentLinks: z.array(linkSchema).optional(),
+    quickLinks: z.array(namedQuickLinkSchema).optional(),
     reminderDate: reminderDateSchema.optional(),
     reminderNote: reminderNoteSchema,
     reminders: remindersArraySchema,
@@ -311,6 +318,7 @@ export const TaskInputSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(linkSchema).optional(),
+  quickLinks: z.array(namedQuickLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,
@@ -341,6 +349,7 @@ export const TaskUpdateSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(linkSchema).optional(),
+  quickLinks: z.array(namedQuickLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,

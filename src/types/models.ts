@@ -69,6 +69,12 @@ export interface CrTarget {
   featureBranch?: string; // Per-target feature branch; defaults to feature/{cr.code}
 }
 
+/** Quick link with a user-chosen label. Separate from documentLinks (UUID/path for knowledge/AI). */
+export interface NamedQuickLink {
+  name: string;
+  url: string;
+}
+
 export interface ChangeRequest {
   id: string; // RFC 4122 v4 UUID (matches previous Project.id for migrated records)
   name: string;
@@ -82,6 +88,7 @@ export interface ChangeRequest {
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
+  quickLinks?: NamedQuickLink[];
   reminderDate?: string;
   reminderNote?: string;
   reminders?: ReminderItem[];
@@ -114,6 +121,7 @@ export interface Task {
   opsOwners?: string[];
   businessAnalysts?: string[];
   documentLinks?: string[];
+  quickLinks?: NamedQuickLink[];
   reminderDate?: string; // YYYY-MM-DD
   reminderNote?: string;
   reminders?: ReminderItem[];

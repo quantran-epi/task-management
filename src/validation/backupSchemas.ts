@@ -50,6 +50,11 @@ const linkSchema = z
     { message: 'Link must be a URL, folder path, or file URI.' }
   );
 
+export const namedQuickLinkSchema = z.object({
+  name: z.string().trim().min(1, 'Tên liên kết không được trống').max(80, 'Tên liên kết tối đa 80 ký tự'),
+  url: linkSchema,
+});
+
 export const BackupTaskChecklistItemSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -74,6 +79,7 @@ export const BackupTaskRecordSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(linkSchema).optional(),
+  quickLinks: z.array(namedQuickLinkSchema).optional(),
   jiraKey: jiraKeySchema.optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
@@ -585,6 +591,7 @@ export const BackupChangeRequestRecordSchema = z.object({
   opsOwners: tagListSchema.optional(),
   businessAnalysts: tagListSchema.optional(),
   documentLinks: z.array(linkSchema).optional(),
+  quickLinks: z.array(namedQuickLinkSchema).optional(),
   reminderDate: reminderDateSchema.optional(),
   reminderNote: reminderNoteSchema,
   reminders: remindersArraySchema,

@@ -88,19 +88,27 @@ describe('namedQuickLinks schema validation', () => {
 
   it('backup envelope round-trips quickLinks without a schema version bump', () => {
     const link = validNamedLink();
+    const crId = validTaskRow().crId;
+    const secondCrId = '44444444-4444-4444-8444-444444444444';
     const result = validateBackupPayload({
       app: 'personal-task-planner',
       schemaVersion: BACKUP_SCHEMA_VERSION,
       exportedAt: '2026-01-01T00:00:00.000Z',
       tables: {
-        tasks: [validTaskRow({ quickLinks: [link] }), validTaskRow()],
-        changeRequests: [validCrRow({ quickLinks: [link] }), validCrRow()],
+        tasks: [
+          validTaskRow({ quickLinks: [link] }),
+          validTaskRow({ id: '55555555-5555-4555-8555-555555555555', crId: secondCrId }),
+        ],
+        changeRequests: [
+          validCrRow({ id: crId, quickLinks: [link] }),
+          validCrRow({ id: secondCrId, code: 'QL-002' }),
+        ],
       },
       counts: { tasks: 2, changeRequests: 2 },
     });
     expect(result.valid).toBe(true);
-    expect(result.tasks?.[0]?.quickLinks).toEqual([link]);
-    expect(result.changeRequests?.[0]?.quickLinks).toEqual([link]);
+    expect(result.envelope?.tables.tasks[0]?.quickLinks).toEqual([link]);
+    expect(result.envelope?.tables.changeRequests?.[0]?.quickLinks).toEqual([link]);
   });
 });
 
