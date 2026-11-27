@@ -57,28 +57,30 @@ fn is_wakeup_timeout(err: &std::io::Error) -> bool {
 /// only bound work when the remote keeps sending output.
 
 fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
-    let mut line = String::new();
-    let mut lines = 0usize;
+    // Raw read, not read_line: SQLcl prompts/banners on a PTY are not newline-terminated, so a
+    // line-oriented drain can block waiting for a newline that never arrives.
+    let mut buf = [0u8; 8192];
+    let mut read_calls = 0usize;
     let mut bytes = 0usize;
     loop {
-        line.clear();
-        let got_new_bytes = match reader.read_line(&mut line) {
+        let got_new_bytes = match reader.read(&mut buf) {
             Ok(0) => {
                 crate::sqlcl_pty_debug::event("DRAIN_EOF");
                 false
             }
             Err(_) => false,
             Ok(n) => {
-                lines += 1;
+                read_calls += 1;
                 bytes += n;
-                crate::sqlcl_pty_debug::dump("DRAIN_LINE", line.as_bytes());
+                crate::sqlcl_pty_debug::dump("DRAIN_CHUNK", &buf[..n]);
                 true
             }
         };
-        if !sqlcl_drain_should_continue(got_new_bytes, false, lines, bytes) {
+        if !sqlcl_drain_should_continue(got_new_bytes, false, read_calls, bytes) {
             break;
         }
     }
+    crate::sqlcl_pty_debug::event("DRAIN_DONE");
 }
 
 /// Identity of one pooled SSH session. `secret_digest` is a salted digest, never plaintext.
