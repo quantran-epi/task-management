@@ -1,11 +1,12 @@
 # Sketch Manifest
 
 ## Design Direction
-Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench gọn, mật độ cao: rail trái chọn bộ, vùng phải tập trung tìm/chọn doc. Với bộ chứa rất nhiều docs: ưu tiên search/filter dính đầu, virtual scroll — không render toàn bộ danh sách, không kéo full note body vào row. Dùng lại token màu/control Ant Design 6 và pattern workbench hiện có.
+Workbench gọn, mật độ cao, dùng token Ant Design 6 / TaskMate hiện có. Với bộ tài liệu: rail trái chọn bộ, vùng phải tìm/chọn doc, search dính đầu + virtual scroll. Với chat standalone: chat là trung tâm, file SSH và policy Telegram phải hiện rõ trạng thái + bước tiếp theo, không giấu trong nhiều lớp modal. Telegram chỉ là cấu hình từ xa + whitelist model, không phải kênh chat dùng chung.
 
 ## Reference Points
-- Codebase thật: `src/views/ConfigProfilesView.tsx`, `src/styles/tokens.ts`, `src/components/ui/ui-tokens.css`
-- Không có app/site ngoài được sếp nêu làm mẫu; 3 variant tự đề xuất.
+- Codebase thật: `src/views/ConfigProfilesView.tsx`, `src/styles/tokens.ts`, `src/components/ui/ui-tokens.css`, `src/components/ai/AIChatDrawer.tsx`, `src/components/ai/StandaloneSshFileBrowser.tsx`, `src/views/TelegramMonitorView.tsx`
+- Sketch trước: 007-chat-only-shell (winner A), 008-chat-ai-settings (winner C)
+- Không có app/site ngoài được sếp nêu làm mẫu; 3 variant tự đề xuất cho mỗi sketch.
 
 ## Sketches
 
@@ -21,3 +22,8 @@ Refactor màn hình "Bộ tài liệu" của TaskMate theo hướng workbench g�
 | 008 | chat-ai-settings | Gom toàn bộ AI settings (provider, knowledge, MCP, Graphiti, Oracle, SSH, tool catalog) thế nào? | C — Side nav + accordion | settings, chat-only, tabs, ant-design |
 | 009 | cr-detail-fast-scan | Màn hình chi tiết CR nên gom thông tin thế nào để quét nhanh mà không cuộn nhiều? | A — Header nén + 2 cột | cr-detail, layout, workbench, density |
 | 010 | task-list-triage | Danh sách task từ nút Task trên taskbar nên lọc/chọn/cập nhật hàng loạt thế nào? | A — Bảng dày + toolbar dính | task-list, triage, batch, workbench, density |
+| 011 | chat-ssh-file-browser | Chat standalone nên bố trí browser file SSH thế nào để chọn đúng tệp mà không làm chat bị lệch? | null | chat, ssh, file-browser, layout, standalone |
+| 012 | telegram-remote-settings | Telegram chỉ dùng để setting từ xa và whitelist model theo từng user thì nên trình bày luồng nào để hiểu ngay ai/gì/ở đâu? | null | telegram, settings, whitelist, device-policy, per-user |
+| 013 | standalone-access-request | User nhập Telegram ID + Request access, admin setup rồi Apply, standalone nhận settings tự động — luồng đó trình bày thế nào? | null | standalone, access-request, telegram, admin, push-settings, states |
+| 014 | access-request-draft | Draft bám UI thật: đổi StandaloneDevicePolicyCard thành Request access, dùng card hàng chờ + modal whitelist có sẵn của #/telegram | null | draft, standalone, telegram, per-user, ant-design |
+| 015 | ssh-file-picker | Chuẩn hoá chọn tệp SSH theo folder-picker của SSH Remote Explorer nhưng pick multiple files — bố cục/multi-select nào rõ nhất? | A — Two-column · VS Code faithful | chat, ssh, file-picker, multi-select, standalone, ant-design, consistency |

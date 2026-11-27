@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sketch 015 — SSH File Picker</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 56px 16px 72px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+  }
+  button, input, select { font: inherit; }
+  button { cursor: pointer; }
+
+  /* ---------- variant nav ---------- */
+  #variant-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+    background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+    padding: 8px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  #variant-nav .brand { font-weight: 700; margin-right: 8px; }
+  .variant-tab {
+    border: 1px solid transparent; background: transparent; color: var(--color-text-muted);
+    padding: 6px 12px; border-radius: var(--radius-md); transition: all .15s ease;
+  }
+  .variant-tab:hover { background: var(--color-surface-soft); color: var(--color-text); }
+  .variant-tab.active { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); font-weight: 600; }
+  .variant { display: none; }
+  .variant.active { display: block; }
+
+  /* ---------- sketch frame ---------- */
+  #sketch-frame { max-width: none; margin: 0 auto; transition: max-width .2s ease; }
+  #sketch-frame.vp-phone { max-width: 375px; }
+  #sketch-frame.vp-tablet { max-width: 768px; }
+
+  .stage-note {
+    max-width: 980px; margin: 0 auto 12px; color: var(--color-text-muted);
+    font-size: var(--text-sm); display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  }
+  .stage-note strong { color: var(--color-text); }
+
+  /* ---------- chat backdrop (context, deliberately quiet) ---------- */
+  .chat-backdrop {
+    max-width: 980px; margin: 0 auto; background: var(--color-surface);
+    border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md); overflow: hidden; position: relative;
+  }
+  .chat-topbar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+    border-bottom: 1px solid var(--color-border); background: var(--color-surface-soft);
+  }
+  .chat-topbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
+  .chat-topbar .title { font-weight: 600; }
+  .chat-topbar .meta { margin-left: auto; color: var(--color-text-muted); font-size: var(--text-xs); }
+  .chat-body { padding: 18px 16px 22px; min-height: 200px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { max-width: 72%; padding: 10px 12px; border-radius: var(--radius-md); font-size: var(--text-sm); line-height: 1.5; }
+  .bubble.user { align-self: flex-end; background: var(--color-primary-soft); color: var(--color-primary); }
+  .bubble.ai { align-self: flex-start; background: var(--color-surface-soft); border: 1px solid var(--color-border); color: var(--color-text); }
+  .composer {
+    margin: 0 16px 16px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-md);
+    padding: 8px 10px; display: flex; align-items: center; gap: 8px; color: var(--color-text-tertiary);
+    font-size: var(--text-sm); min-height: 44px;
+  }
+  .composer .grow { flex: 1; }
+  .ghost-btn {
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted);
+    padding: 5px 9px; border-radius: var(--radius-sm); font-size: var(--text-xs); transition: all .15s ease;
+  }
+  .ghost-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+  /* ---------- modal overlay ---------- */
+  .modal-overlay {
+    position: absolute; inset: 0; background: rgba(17,19,24,.46);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 10;
+  }
+  .picker {
+    width: min(920px, 100%); max-height: min(620px, calc(100vh - 120px));
+    background: var(--color-surface); border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-lg); box-shadow: 0 24px 60px rgba(0,0,0,.24);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .picker-head {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .picker-head h2 { margin: 0; font-size: var(--text-lg); font-weight: 650; }
+  .host-badge {
+    font-family: var(--font-mono); font-size: var(--text-xs); padding: 3px 8px;
+    background: var(--color-surface-soft); border: 1px solid var(--color-border);
+    border-radius: var(--radius-full); color: var(--color-text-muted);
+  }
+  .icon-btn {
+    width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: var(--radius-sm);
+    background: transparent; color: var(--color-text-muted); transition: all .15s ease; font-size: 16px;
+  }
+  .icon-btn:hover { background: var(--color-surface-soft); color: var(--color-danger); }
+  .picker-head .spacer { flex: 1; }
+
+  .picker-body { display: grid; grid-template-columns: 228px minmax(0,1fr); min-height: 330px; flex: 1; }
+  .explorer { border-right: 1px solid var(--color-border); background: var(--color-surface-soft); display: flex; flex-direction: column; min-width: 0; }
+  .pane-label {
+    padding: 9px 12px 6px; font-size: 10px; letter-spacing: .09em; font-weight: 700;
+    color: var(--color-text-tertiary); text-transform: uppercase;
+  }
+  .tree { padding: 0 6px 10px; overflow: auto; flex: 1; }
+  .tree-row {
+    display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: transparent;
+    padding: 5px 6px; border-radius: var(--radius-sm); color: var(--color-text);
+    font-size: var(--text-sm); text-align: left; transition: background .12s ease;
+  }
+  .tree-row:hover { background: var(--color-surface); }
+  .tree-row.current { background: var(--color-primary-soft); color: var(--color-primary); font-weight: 600; }
+  .tree-row .chev { width: 12px; color: var(--color-text-tertiary); font-size: 10px; }
+  .tree-row .ico { font-size: 13px; }
+  .tree-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .files { display: flex; flex-direction: column; min-width: 0; }
+  .file-toolbar {
+    padding: 8px 12px; border-bottom: 1px solid var(--color-border);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .breadcrumb-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .crumb {
+    border: 0; background: transparent; color: var(--color-text-muted); padding: 2px 4px;
+    border-radius: var(--radius-sm); font-size: var(--text-sm); transition: all .12s ease; white-space: nowrap;
+  }
+  .crumb:hover { color: var(--color-primary); background: var(--color-primary-soft); }
+  .crumb.last { color: var(--color-text); font-weight: 600; }
+  .crumb-sep { color: var(--color-text-tertiary); font-size: 11px; }
+  .up-btn {
+    border: 1px solid var(--color-border); background: var(--color-surface); border-radius: var(--radius-sm);
+    padding: 3px 7px; font-size: var(--text-xs); color: var(--color-text-muted); margin-right: 4px;
+    transition: all .12s ease;
+  }
+  .up-btn:hover:not(:disabled) { color: var(--color-primary); border-color: var(--color-primary); }
+  .up-btn:disabled { opacity: .4; cursor: default; }
+  .search-row { display: flex; gap: 6px; align-items: center; }
+  .search-input {
+    flex: 1; min-width: 0; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm);
+    padding: 6px 8px; font-size: var(--text-sm); background: var(--color-surface); color: var(--color-text);
+  }
+  .search-input:focus { outline: 2px solid var(--color-primary-soft); border-color: var(--color-primary); }
+  .search-meta { font-size: var(--text-xs); color: var(--color-text-tertiary); white-space: nowrap; }
+  .cmd-k { font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--color-border); padding: 2px 5px; border-radius: var(--radius-sm); color: var(--color-text-tertiary); }
+
+  .filter-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .filter-chip {
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted);
+    border-radius: var(--radius-full); padding: 3px 9px; font-size: var(--text-xs); transition: all .12s ease;
+  }
+  .filter-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .filter-chip.on { background: var(--color-primary-soft); border-color: var(--color-primary); color: var(--color-primary); }
+
+  .file-list { flex: 1; overflow: auto; }
+  .file-row {
+    display: grid; grid-template-columns: 22px minmax(0,1fr) 76px 96px; gap: 8px; align-items: center;
+    padding: 7px 12px; border-bottom: 1px solid var(--color-border); font-size: var(--text-sm);
+    transition: background .12s ease; cursor: pointer;
+  }
+  .file-row:hover { background: var(--color-surface-soft); }
+  .file-row.checked { background: var(--color-primary-soft); }
+  .file-row input { accent-color: var(--color-primary); width: 14px; height: 14px; }
+  .file-name { display: flex; align-items: center; gap: 7px; min-width: 0; }
+  .file-name .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-name .ext { color: var(--color-text-tertiary); font-size: 10px; }
+  .file-meta { color: var(--color-text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
+  .dir-row { cursor: pointer; }
+  .dir-row .file-name { font-weight: 600; color: var(--color-text); }
+  .search-hit { color: var(--color-text-tertiary); font-size: var(--text-xs); font-family: var(--font-mono); }
+
+  .picker-foot {
+    border-top: 1px solid var(--color-border); padding: 10px 14px;
+    display: flex; flex-direction: column; gap: 8px; background: var(--color-surface);
+  }
+  .selection-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 24px; }
+  .selection-count { font-size: var(--text-sm); font-weight: 600; }
+  .selection-count.zero { color: var(--color-text-tertiary); font-weight: 400; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; max-width: 220px;
+    background: var(--color-surface-soft); border: 1px solid var(--color-border);
+    border-radius: var(--radius-full); padding: 2px 7px; font-size: var(--text-xs); color: var(--color-text-muted);
+  }
+  .chip .x { border: 0; background: transparent; color: var(--color-text-tertiary); padding: 0 2px; }
+  .chip .x:hover { color: var(--color-danger); }
+  .foot-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn {
+    border-radius: var(--radius-sm); padding: 6px 14px; font-size: var(--text-sm);
+    border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text);
+    transition: all .15s ease;
+  }
+  .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .btn.primary { background: var(--color-primary); border-color: var(--color-primary); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: var(--color-primary-hover); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.link { border: 0; background: transparent; color: var(--color-primary); padding: 4px 6px; }
+
+  /* ---------- selected tray (variant B) ---------- */
+  .with-tray .picker-body { grid-template-columns: 210px minmax(0,1fr) 224px; }
+  .with-tray .explorer { border-right: 1px solid var(--color-border); }
+  .tray { border-left: 1px solid var(--color-border); display: flex; flex-direction: column; min-width: 0; }
+  .tray-list { flex: 1; overflow: auto; padding: 0 8px 8px; }
+  .tray-item {
+    border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 7px 8px;
+    margin-bottom: 6px; background: var(--color-surface);
+  }
+  .tray-item .n { font-size: var(--text-sm); font-weight: 600; display: flex; justify-content: space-between; gap: 4px; }
+  .tray-item .p { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tray-item .preview {
+    margin-top: 5px; font-family: var(--font-mono); font-size: 10px; line-height: 1.45;
+    background: var(--color-surface-soft); border-radius: var(--radius-sm); padding: 5px 6px;
+    color: var(--color-text-muted); white-space: pre; overflow: hidden;
+  }
+  .tray-empty { padding: 18px 12px; color: var(--color-text-tertiary); font-size: var(--text-sm); text-align: center; }
+
+  /* ---------- states ---------- */
+  .state-panel { padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+  .callout { border: 1px solid var(--color-border); border-left: 3px solid var(--color-warning); background: var(--color-warning-bg); border-radius: var(--radius-sm); padding: 10px 12px; font-size: var(--text-sm); line-height: 1.5; }
+  .callout.error { border-left-color: var(--color-danger); background: var(--color-surface); }
+  .callout .t { font-weight: 700; margin-bottom: 4px; }
+  .empty-art { font-size: 28px; color: var(--color-text-tertiary); }
+  .searching-bar { height: 4px; border-radius: 2px; background: var(--color-primary-soft); overflow: hidden; width: 100%; }
+  .searching-bar i { display: block; height: 100%; width: 35%; background: var(--color-primary); animation: sweep 1s ease-in-out infinite; }
+  @keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(390%); } }
+
+  /* ---------- sketch toolbar ---------- */
+  #sketch-tools {
+    position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-family: var(--font-sans); font-size: 11px;
+    background: rgba(0,0,0,.78); color: #fff; padding: 8px 10px; border-radius: 8px;
+    opacity: .45; transition: opacity .2s ease; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: calc(100vw - 24px);
+  }
+  #sketch-tools:hover { opacity: 1; }
+  #sketch-tools select, #sketch-tools button {
+    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.2);
+    border-radius: 4px; padding: 3px 6px; font-size: 11px;
+  }
+  #sketch-tools button.on { background: #fff; color: #111; }
+  #toast {
+    position: fixed; bottom: 62px; right: 16px; z-index: 10000; background: var(--color-text); color: var(--color-surface);
+    padding: 9px 13px; border-radius: var(--radius-md); font-size: var(--text-sm); box-shadow: var(--shadow-lg);
+    opacity: 0; transform: translateY(6px); transition: all .18s ease; pointer-events: none; max-width: 360px;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ---------- annotation mode ---------- */
+  body.annotating [data-annot] { outline: 1px dashed var(--color-accent); outline-offset: 2px; position: relative; }
+  body.annotating [data-annot]::after {
+    content: attr(data-annot); position: absolute; top: -16px; left: 0; z-index: 20;
+    background: var(--color-accent); color: #06202a; font-size: 9px; padding: 1px 5px; border-radius: 3px; white-space: nowrap;
+  }
+
+  /* ---------- phone preview ---------- */
+  .vp-phone .picker-body { grid-template-columns: 1fr; }
+  .vp-phone .explorer, .vp-phone .tray { display: none; }
+  .vp-phone .file-row { grid-template-columns: 20px minmax(0,1fr) 64px; }
+  .vp-phone .file-row .file-date { display: none; }
+  .vp-phone .modal-overlay { padding: 8px; }
+  .vp-phone .picker { max-height: calc(100vh - 90px); }
+  .vp-phone .chat-body { min-height: 130px; }
+  .vp-phone .stage-note { font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div id="variant-nav">
+  <span class="brand">Sketch 015 · SSH File Picker</span>
+  <button class="variant-tab active" data-variant="a" onclick="showVariant('a',this)">A: Two-column · VS Code faithful ★ Selected</button>
+  <button class="variant-tab" data-variant="b" onclick="showVariant('b',this)">B: Two-column + selection tray</button>
+  <button class="variant-tab" data-variant="c" onclick="showVariant('c',this)">C: Compact + filters + ⌘K</button>
+</div>
+
+<div id="sketch-frame">
+
+  <!-- ============ Variant A ============ -->
+  <section id="variant-a" class="variant active">
+    <div class="stage-note">
+      <strong>A — Two-column.</strong>
+      Explorer ghép cây host/thư mục giống SSH Remote Explorer; danh sách tệp bên phải; checkbox là multi-select; footer gom selection.
+      <span>Question: two-column picker có đủ để chọn đúng nhiều tệp mà không cần preview không?</span>
+    </div>
+    <div class="chat-backdrop" id="backdrop-a"></div>
+  </section>
+
+  <!-- ============ Variant B ============ -->
+  <section id="variant-b" class="variant">
+    <div class="stage-note">
+      <strong>B — + Selection tray.</strong>
+      Giữ cấu trúc A, thêm cột phải hiện các tệp đã chọn kèm 3 dòng preview. Tránh attach nhầm nhưng hẹp vùng danh sách.
+      <span>Question: preview ngắn có đáng đổi 224px chiều ngang không?</span>
+    </div>
+    <div class="chat-backdrop" id="backdrop-b"></div>
+  </section>
+
+  <!-- ============ Variant C ============ -->
+  <section id="variant-c" class="variant">
+    <div class="stage-note">
+      <strong>C — Compact + filters.</strong>
+      Giữ cấu trúc A, thêm filter extension + quick open ⌘K; selection gom thành count badge ở footer.
+      <span>Question: filter theo extension có thay thế được search khi đã biết đuôi tệp cần attach không?</span>
+    </div>
+    <div class="chat-backdrop" id="backdrop-c"></div>
+  </section>
+
+</div>
+
+<div id="sketch-tools">
+  <select id="theme-switcher" aria-label="Theme" onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'">
+    <option value="default">Theme: Default</option>
+  </select>
+  <button data-vp="" class="on" onclick="setViewport('',this)">Desktop</button>
+  <button data-vp="vp-tablet" onclick="setViewport('vp-tablet',this)">Tablet</button>
+  <button data-vp="vp-phone" onclick="setViewport('vp-phone',this)">Phone</button>
+  <button id="annot-btn" onclick="toggleAnnotations()">Annotate</button>
+  <select id="state-switcher" aria-label="State" onchange="setState(this.value)">
+    <option value="ready">State: Ready</option>
+    <option value="no-config">No SSH config</option>
+    <option value="searching">Searching</option>
+    <option value="empty">Empty folder</option>
+    <option value="error">Connection error</option>
+  </select>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------- real-ish data, grounded in RemoteFileInfo ---------------- */
+const HOSTS = [
+  { id: 'dev-web-01', label: 'dev-web-01', base: '/srv/taskmate' },
+  { id: 'oracle-db-02', label: 'oracle-db-02', base: '/opt/oracle/diag' },
+  { id: 'nas-archive', label: 'nas-archive', base: '/volume1/taskmate' }
+];
+
+const TREE = {
+  'dev-web-01': {
+    label: 'dev-web-01', path: '/srv/taskmate', children: [
+      { label: 'app', path: '/srv/taskmate/app', children: [
+        { label: 'src', path: '/srv/taskmate/app/src' },
+        { label: 'tests', path: '/srv/taskmate/app/tests' }
+      ]},
+      { label: 'config', path: '/srv/taskmate/config' },
+      { label: 'logs', path: '/srv/taskmate/logs', children: [
+        { label: '2026-11', path: '/srv/taskmate/logs/2026-11' }
+      ]}
+    ]
+  },
+  'oracle-db-02': {
+    label: 'oracle-db-02', path: '/opt/oracle/diag', children: [
+      { label: 'cdb$root', path: '/opt/oracle/diag/cdb$root' },
+      { label: 'trace', path: '/opt/oracle/diag/trace' }
+    ]
+  },
+  'nas-archive': {
+    label: 'nas-archive', path: '/volume1/taskmate', children: [
+      { label: 'exports', path: '/volume1/taskmate/exports' }
+    ]
+  }
+};
+
+const DIRS = {
+  '/srv/taskmate': [
+    { name: 'app', isDir: true, modified: 'today' },
+    { name: 'config', isDir: true, modified: 'yesterday' },
+    { name: 'logs', isDir: true, modified: '2026-11-27' },
+    { name: 'README.md', size: '2.1 KB', modified: '2026-11-20', permissions: '-rw-r--r--' }
+  ],
+  '/srv/taskmate/app': [
+    { name: 'src', isDir: true, modified: 'today' },
+    { name: 'tests', isDir: true, modified: 'yesterday' },
+    { name: 'package.json', size: '1.4 KB', modified: '2026-11-26', permissions: '-rw-r--r--' },
+    { name: 'vite.config.ts', size: '886 B', modified: '2026-11-26', permissions: '-rw-r--r--' }
+  ],
+  '/srv/taskmate/app/src': [
+    { name: 'App.tsx', size: '4.2 KB', modified: 'today', permissions: '-rw-r--r--' },
+    { name: 'api.ts', size: '2.8 KB', modified: 'today', permissions: '-rw-r--r--' },
+    { name: 'config.ts', size: '1.1 KB', modified: 'yesterday', permissions: '-rw-r--r--' },
+    { name: 'utils.ts', size: '612 B', modified: 'yesterday', permissions: '-rw-r--r--' },
+    { name: 'styles.css', size: '7.9 KB', modified: '2026-11-24', permissions: '-rw-r--r--' }
+  ],
+  '/srv/taskmate/app/tests': [
+    { name: 'app.test.ts', size: '3.3 KB', modified: 'yesterday', permissions: '-rw-r--r--' },
+    { name: 'api.test.ts', size: '1.9 KB', modified: 'yesterday', permissions: '-rw-r--r--' }
+  ],
+  '/srv/taskmate/config': [
+    { name: 'app.config.yaml', size: '3.6 KB', modified: '2026-11-25', permissions: '-rw-r--r--' },
+    { name: 'deploy.env', size: '1.2 KB', modified: '2026-11-25', permissions: '-rw-------' }
+  ],
+  '/srv/taskmate/logs': [
+    { name: '2026-11', isDir: true, modified: 'today' },
+    { name: 'app.log', size: '182 KB', modified: 'today', permissions: '-rw-r--r--' }
+  ],
+  '/srv/taskmate/logs/2026-11': [],
+  '/opt/oracle/diag': [
+    { name: 'cdb$root', isDir: true, modified: 'today' },
+    { name: 'trace', isDir: true, modified: 'today' },
+    { name: 'alert_orcl.log', size: '9.8 MB', modified: 'today', permissions: '-rw-r-----' }
+  ],
+  '/opt/oracle/diag/cdb$root': [
+    { name: 'incident_1042.trc', size: '44 KB', modified: 'today', permissions: '-rw-r-----' },
+    { name: 'incident_1042.trm', size: '2 KB', modified: 'today', permissions: '-rw-r-----' }
+  ],
+  '/opt/oracle/diag/trace': [
+    { name: 'orcl_ora_8812.trc', size: '118 KB', modified: 'today', permissions: '-rw-r-----' }
+  ],
+  '/volume1/taskmate/exports': [
+    { name: 'backup-2026-11-26.sql.gz', size: '18 MB', modified: '2026-11-26', permissions: '-rw-r--r--' }
+  ]
+};
+
+const PREVIEWS = {
+  'App.tsx': 'import { ConfigProvider } from \'antd\';\nexport default function App() {\n  return <ConfigProvider>',
+  'config.ts': 'export const BASE_URL = \'/api/v2\';\nexport const TIMEOUT = 30_000;',
+  'api.ts': 'import { request } from \'./client\';\nexport async function getTasks() {',
+  'app.config.yaml': 'server:\n  host: 0.0.0.0\n  port: 4173\nlogLevel: info'
+};
+
+/* ---------------- app state ---------------- */
+const state = {
+  variant: 'a',
+  host: 'dev-web-01',
+  cwd: '/srv/taskmate/app/src',
+  expanded: new Set(['/srv/taskmate', '/srv/taskmate/app']),
+  selected: new Map(),        // path -> { path, name, host, size }
+  query: '',
+  searching: false,
+  filter: '',
+  forceState: 'ready'
+};
+const initialSelected = [
+  { path: '/srv/taskmate/app/src/App.tsx', name: 'App.tsx', host: 'dev-web-01', size: '4.2 KB' },
+  { path: '/srv/taskmate/app/src/config.ts', name: 'config.ts', host: 'dev-web-01', size: '1.1 KB' }
+];
+initialSelected.forEach(f => state.selected.set(f.path, f));
+
+/* ---------------- helpers ---------------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const joinPath = (base, name) => base.replace(/\/$/, '') + '/' + name;
+const crumbs = p => p.split('/').filter(Boolean);
+const toast = msg => {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2600);
+};
+const activeState = () => state.forceState;
+const fileEntries = () => {
+  if (state.query && state.searching) {
+    const q = state.query.toLowerCase();
+    const hits = [];
+    Object.entries(DIRS).forEach(([dir, entries]) => {
+      entries.filter(e => !e.isDir && e.name.toLowerCase().includes(q)).forEach(e => {
+        hits.push({ ...e, path: joinPath(dir, e.name), hitDir: dir });
+      });
+    });
+    return hits.slice(0, 201);
+  }
+  return (DIRS[state.cwd] || []).map(e => ({ ...e, path: joinPath(state.cwd, e.name) }));
+};
+
+/* ---------------- tree ---------------- */
+function renderTree(hostId, depth = 0, node = TREE[hostId]) {
+  const isOpen = state.expanded.has(node.path);
+  const isCurrent = state.cwd === node.path;
+  const hasKids = !!node.children?.length;
+  let html = `<button class="tree-row ${isCurrent ? 'current' : ''}" style="padding-left:${6 + depth * 13}px"
+      data-annot="host / folder node" onclick="treeClick('${hostId}','${esc(node.path)}')">
+      <span class="chev">${hasKids ? (isOpen ? '▾' : '▸') : '·'}</span>
+      <span class="ico">${depth === 0 ? '🖥' : '📁'}</span>
+      <span class="name">${esc(node.label)}</span>
+    </button>`;
+  if (isOpen && hasKids) node.children.forEach(c => { html += renderTree(hostId, depth + 1, c); });
+  return html;
+}
+function treeClick(hostId, path) {
+  state.host = hostId;
+  state.cwd = path;
+  state.expanded.add(path);
+  state.query = ''; state.searching = false;
+  renderAll();
+}
+
+/* ---------------- file rows ---------------- */
+function fileRow(entry) {
+  if (entry.isDir) {
+    return `<div class="file-row dir-row" data-annot="folder row: click navigates, not checkbox"
+      onclick="navigate('${esc(entry.path)}')">
+      <span></span>
+      <div class="file-name"><span>📁</span><span class="label">${esc(entry.name)}</span></div>
+      <span class="file-meta">—</span>
+      <span class="file-meta file-date">${esc(entry.modified)}</span>
+    </div>`;
+  }
+  const checked = state.selected.has(entry.path);
+  return `<div class="file-row ${checked ? 'checked' : ''}" data-annot="file row: checkbox = multi-select"
+    onclick="toggleFile('${esc(entry.path)}','${esc(entry.name)}')">
+    <input type="checkbox" ${checked ? 'checked' : ''} tabindex="-1"
+      aria-label="Chọn ${esc(entry.name)}" onclick="event.stopPropagation();toggleFile('${esc(entry.path)}','${esc(entry.name)}')">
+    <div class="file-name"><span>📄</span><span class="label">${esc(entry.name)}</span>
+      ${entry.hitDir ? `<span class="search-hit">${esc(entry.hitDir)}</span>` : ''}</div>
+    <span class="file-meta">${esc(entry.size || '—')}</span>
+    <span class="file-meta file-date">${esc(entry.modified)}</span>
+  </div>`;
+}
+function navigate(path) {
+  state.cwd = path; state.query = ''; state.searching = false;
+  state.expanded.add(path);
+  renderAll();
+}
+function toggleFile(path, name) {
+  if (state.selected.has(path)) state.selected.delete(path);
+  else state.selected.set(path, { path, name, host: state.host, size: (DIRS[state.cwd] || []).find(e => joinPath(state.cwd, e.name) === path)?.size || '' });
+  renderAll();
+}
+function removeSelected(path) { state.selected.delete(path); renderAll(); }
+function goUp() {
+  const parts = crumbs(state.cwd);
+  if (!parts.length) return;
+  parts.pop();
+  navigate('/' + parts.join('/'));
+}
+function goCrumb(path) { navigate(path); }
+
+/* ---------------- search ---------------- */
+let searchTimer;
+function onSearch(value) {
+  state.query = value;
+  clearTimeout(searchTimer);
+  if (!value.trim()) { state.searching = false; renderAll(); return; }
+  state.searching = false;
+  renderAll();
+  searchTimer = setTimeout(() => { state.searching = true; renderAll(); }, 320);
+}
+function cancelSearch() { clearTimeout(searchTimer); state.query = ''; state.searching = false; renderAll(); toast('Search cancelled'); }
+function setFilter(value) { state.filter = state.filter === value ? '' : value; renderAll(); }
+
+/* ---------------- state switcher ---------------- */
+function setState(value) {
+  state.forceState = value;
+  if (value === 'searching') { state.query = 'config'; state.searching = true; }
+  else if (value === 'ready') { state.query = ''; state.searching = false; }
+  renderAll();
+}
+function statePanel() {
+  const s = activeState();
+  if (s === 'no-config') return `<div class="state-panel">
+    <div class="callout"><div class="t">Chưa cấu hình SSH Host</div>
+      Picker cần một SSH connection hợp lệ. Chọn <strong>Thêm connection</strong> để mở SSH Connections settings rồi quay lại đây.</div>
+    <button class="btn primary" onclick="toast('Mở AISettingsDrawer → SSH Connections (sketch 008)')">Thêm connection SSH</button>
+  </div>`;
+  if (s === 'error') return `<div class="state-panel">
+    <div class="callout error"><div class="t">Không thể liệt kê thư mục</div>
+      dev-web-01: Connection refused (sshService.listRemoteDir). Giữ nguyên selection đã chọn ở footer.</div>
+    <div><button class="btn" onclick="setState('ready')">Thử lại</button>
+      <button class="btn link" onclick="toast('Mở lại SSH Connections để sửa host/port')">Sửa connection</button></div>
+  </div>`;
+  if (s === 'empty') return `<div class="state-panel">
+    <div class="empty-art">📂</div>
+    <div style="color:var(--color-text-muted)">Thư mục rỗng — không có tệp để chọn.</div>
+    <button class="btn" onclick="navigate('/srv/taskmate/app/src')">Về app/src</button>
+  </div>`;
+  if (s === 'searching') return `<div class="state-panel" style="width:100%">
+    <div style="display:flex;width:100%;justify-content:space-between;gap:12px;align-items:center">
+      <span style="font-size:var(--text-sm)">find /srv/taskmate -type f -iname '*config*'</span>
+      <button class="btn" onclick="cancelSearch()">Hủy</button>
+    </div>
+    <div class="searching-bar"><i></i></div>
+    <div style="color:var(--color-text-tertiary);font-size:var(--text-xs)">Đang quét… giữ nguyên 2 tệp đã chọn.</div>
+  </div>`;
+  return null;
+}
+
+/* ---------------- modal ---------------- */
+function modalHTML(variant) {
+  const s = activeState();
+  const disabled = s === 'no-config' || s === 'error' || s === 'empty' || s === 'searching';
+  const tray = variant === 'b';
+  const compact = variant === 'c';
+  const crumbParts = crumbs(state.cwd);
+  const searchValue = state.query;
+
+  const breadcrumb = `<div class="breadcrumb-row" data-annot="breadcrumb + Up (mới so với code hiện tại)">
+    <button class="up-btn" onclick="goUp()" ${state.cwd === '/' ? 'disabled' : ''} title="Thư mục cha">↑</button>
+    <button class="crumb" onclick="goCrumb('/')">${esc(state.host)}</button>
+    ${crumbParts.map((part, i) => {
+      const p = '/' + crumbParts.slice(0, i + 1).join('/');
+      return `<span class="crumb-sep">/</span><button class="crumb ${i === crumbParts.length - 1 ? 'last' : ''}" onclick="goCrumb('${esc(p)}')">${esc(part)}</button>`;
+    }).join('')}
+  </div>`;
+
+  const searchRow = `<div class="search-row" data-annot="find -iname, capped 201, cancellable">
+    <input class="search-input" aria-label="Tìm tên tệp SSH" placeholder="Tìm tên tệp trong ${esc(state.host)}…"
+      value="${esc(searchValue)}" oninput="onSearch(this.value)" onkeydown="if(event.key==='Escape')cancelSearch()">
+    ${compact ? '<span class="cmd-k">⌘K</span>' : '<button class="ghost-btn" onclick="toast(\'Search: find -iname (max 201)\')">Tìm</button>'}
+    <span class="search-meta">${state.searching ? '201 max' : 'local'}</span>
+  </div>`;
+
+  const filters = compact ? `<div class="filter-row" data-annot="extension quick filter">
+    ${['', '.ts', '.tsx', '.yaml', '.log'].map(f => `<button class="filter-chip ${state.filter === f ? 'on' : ''}"
+      onclick="setFilter('${f}')">${f || 'Tất cả'}</button>`).join('')}
+  </div>` : '';
+
+  let entries = fileEntries();
+  if (state.filter) entries = entries.filter(e => e.name.endsWith(state.filter));
+  const truncated = state.searching && entries.length >= 201;
+  const fileList = disabled
+    ? statePanel()
+    : `<div class="file-list">${entries.length ? entries.map(fileRow).join('') :
+        `<div class="state-panel"><div class="empty-art">📂</div><div style="color:var(--color-text-muted)">Không có tệp khớp.</div></div>`}
+       ${truncated ? `<div style="padding:8px 12px;color:var(--color-warning);font-size:var(--text-xs)">Giới hạn 201 kết quả — thu hẹp tìm kiếm.</div>` : ''}
+      </div>`;
+
+  const selectedArr = [...state.selected.values()];
+  const chips = selectedArr.map(f => `<span class="chip" data-annot="selected file chip">
+      <span>${esc(f.name)}</span><button class="x" aria-label="Bỏ ${esc(f.name)}" onclick="removeSelected('${esc(f.path)}')">×</button>
+    </span>`).join('');
+
+  const trayHTML = tray ? `<aside class="tray" data-annot="selection tray: preview trước khi attach">
+      <div class="pane-label">Đã chọn · ${selectedArr.length}</div>
+      <div class="tray-list">${selectedArr.length ? selectedArr.map(f => `<div class="tray-item">
+        <div class="n"><span>${esc(f.name)}</span><button class="x" style="border:0;background:transparent;color:var(--color-text-tertiary)" onclick="removeSelected('${esc(f.path)}')">×</button></div>
+        <div class="p">${esc(f.path)}</div>
+        <div class="preview">${esc(PREVIEWS[f.name] || '(không đọc nội dung cho đến khi AI gọi ssh_attached_file_read)')}</div>
+      </div>`).join('') : '<div class="tray-empty">Chưa chọn tệp nào.</div>'}</div>
+    </aside>` : '';
+
+  const foot = `<footer class="picker-foot" data-annot="footer: selection summary + attach">
+    <div class="selection-line">
+      <span class="selection-count ${selectedArr.length ? '' : 'zero'}">
+        ${selectedArr.length ? `${selectedArr.length} tệp đã chọn` : 'Chưa chọn tệp nào'}
+      </span>
+      ${chips}
+    </div>
+    <div class="foot-actions">
+      <button class="btn" onclick="closePicker()">Hủy</button>
+      <button class="btn primary" ${selectedArr.length && !disabled ? '' : 'disabled'}
+        onclick="attach()">Đính kèm ${selectedArr.length ? `(${selectedArr.length})` : ''}</button>
+    </div>
+  </footer>`;
+
+  return `<div class="modal-overlay" onclick="if(event.target===this)closePicker()">
+    <div class="picker ${tray ? 'with-tray' : ''}" role="dialog" aria-modal="true" aria-label="Chọn tệp từ SSH">
+      <header class="picker-head">
+        <h2>Chọn tệp từ SSH</h2>
+        <span class="host-badge">${esc(state.host)} · ${esc(state.cwd)}</span>
+        <span class="spacer"></span>
+        <button class="icon-btn" aria-label="Đóng" onclick="closePicker()">×</button>
+      </header>
+      <div class="picker-body">
+        <aside class="explorer" data-annot="explorer: hosts + folders, giống Remote Explorer">
+          <div class="pane-label">Explorer · SSH</div>
+          <div class="tree">${s === 'no-config' ? '' : HOSTS.map(h => renderTree(h.id, 0, TREE[h.id])).join('')}</div>
+        </aside>
+        <div class="files">
+          <div class="file-toolbar">${breadcrumb}${searchRow}${filters}</div>
+          ${fileList}
+        </div>
+        ${trayHTML}
+      </div>
+      ${foot}
+    </div>
+  </div>`;
+}
+
+/* backdrop mimics the standalone chat shell so picker context is visible */
+function renderBackdrop(variant) {
+  const el = document.getElementById('backdrop-' + variant);
+  el.innerHTML = `
+    <div class="chat-topbar"><span class="dot"></span><span class="title">Standalone chat · TaskMate</span>
+      <span class="meta">ssh_fs_ai_tool · dev-web-01</span></div>
+    <div class="chat-body">
+      <div class="bubble user">Review giúp tớ phần cấu hình deploy ở app/src nhé.</div>
+      <div class="bubble ai">Mình cần đọc nội dung tệp trên dev-web-01. Bạn có thể chọn tệp để đính kèm không?</div>
+    </div>
+    <div class="composer"><span>📎</span><span class="grow">Nhắn tin cho AI…</span>
+      <button class="ghost-btn" onclick="openPicker()">Duyệt tệp SSH</button>
+    </div>
+    ${modalHTML(variant)}`;
+}
+
+function renderAll() {
+  ['a', 'b', 'c'].forEach(renderBackdrop);
+}
+
+/* ---------------- sketch controls ---------------- */
+function showVariant(id, btn) {
+  state.variant = id;
+  document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+  document.getElementById('variant-' + id).classList.add('active');
+  document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+function setViewport(cls, btn) {
+  const frame = document.getElementById('sketch-frame');
+  frame.classList.remove('vp-phone', 'vp-tablet');
+  if (cls) frame.classList.add(cls);
+  document.querySelectorAll('#sketch-tools button[data-vp]').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+function toggleAnnotations() {
+  document.body.classList.toggle('annotating');
+  document.getElementById('annot-btn').classList.toggle('on', document.body.classList.contains('annotating'));
+}
+function openPicker() { toast('Picker đang mở sẵn để review.'); }
+function closePicker() { toast('Đóng picker (mock) — quay lại composer với chip đã chọn.'); }
+function attach() {
+  const paths = [...state.selected.values()].map(f => f.path);
+  toast('onAttach([' + paths.length + ' path]) → ' + paths.join(', '));
+}
+
+renderAll();
+</script>
+</body>
+</html>
