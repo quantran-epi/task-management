@@ -64,6 +64,23 @@ describe('gitRemoteTreeService uncommitted files & working copy fallback', () =>
     expect(notes?.gitStatus).toBe('?');
   });
 
+  it('keeps a committed folder lazy when a dirty file lives inside it (no partial children)', () => {
+    // Expanding `src` yields committed children, one of which (`nested`) is a folder whose own
+    // children are NOT loaded yet. A dirty file deeper in that folder must only badge `nested`;
+    // fabricating `children` here makes AntD skip onLoadData and hides every committed file in it.
+    const rawChildren = [
+      { key: 'src/nested', title: 'nested', isLeaf: false, sha: 'tree-nested' },
+      { key: 'src/top.ts', title: 'top.ts', isLeaf: true, sha: 'blob-top' },
+    ];
+    const dirty = [{ path: 'src/nested/untracked.ts', indexStatus: '?', workingTreeStatus: '?' }];
+
+    const merged = mergeUncommittedFilesIntoTree(rawChildren, dirty, 'src');
+    const nested = merged.find((n) => n.title === 'nested');
+
+    expect(nested?.children).toBeUndefined();
+    expect(nested?.gitStatus).toBe('M'); // folder containing dirty files keeps the M badge
+  });
+
   it('materializes the full folder chain for a staged-new nested file', () => {
     const merged = mergeUncommittedFilesIntoTree(
       [],

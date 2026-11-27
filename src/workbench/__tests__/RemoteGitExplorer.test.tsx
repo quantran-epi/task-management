@@ -820,6 +820,90 @@ describe('RemoteGitExplorer Component', () => {
     expect(screen.queryByText('acme')).toBeNull();
   });
 
+  it('lists committed files alongside an untracked file in the same folder', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'src/untracked.ts', indexStatus: '?', workingTreeStatus: '?' },
+      ],
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) return [{ key: 'src', title: 'src', isLeaf: false, sha: 't-src' }];
+      if (dirPath === 'src') {
+        return [{ key: 'src/committed.ts', title: 'committed.ts', isLeaf: true, size: 10, sha: 'b-c' }];
+      }
+      return [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => expect(screen.getByText('src')).toBeDefined());
+    fireEvent.click(
+      screen.getByText('src').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('committed.ts')).toBeDefined();
+      expect(screen.getByText('untracked.ts')).toBeDefined();
+    });
+  });
+
+  it('does not hide committed files in a folder whose dirty child was pre-fabricated', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'src/nested/untracked.ts', indexStatus: '?', workingTreeStatus: '?' },
+      ],
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) return [{ key: 'src', title: 'src', isLeaf: false, sha: 't-src' }];
+      if (dirPath === 'src') {
+        return [
+          { key: 'src/nested', title: 'nested', isLeaf: false, sha: 't-nested' },
+          { key: 'src/top.ts', title: 'top.ts', isLeaf: true, size: 10, sha: 'b-top' },
+        ];
+      }
+      if (dirPath === 'src/nested') {
+        return [
+          { key: 'src/nested/CommittedA.ts', title: 'CommittedA.ts', isLeaf: true, size: 10, sha: 'b-a' },
+          { key: 'src/nested/CommittedB.ts', title: 'CommittedB.ts', isLeaf: true, size: 10, sha: 'b-b' },
+        ];
+      }
+      return [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => expect(screen.getByText('src')).toBeDefined());
+    fireEvent.click(
+      screen.getByText('src').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!
+    );
+    await waitFor(() => expect(screen.getByText('nested')).toBeDefined());
+    fireEvent.click(
+      screen.getByText('nested').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('CommittedA.ts')).toBeDefined();
+      expect(screen.getByText('CommittedB.ts')).toBeDefined();
+      expect(screen.getByText('untracked.ts')).toBeDefined();
+    });
+  });
+
   it('reveals a deeply untracked file when its ancestor is absent from the ref', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');

@@ -90,9 +90,11 @@ export function mergeUncommittedFilesIntoTree(
 
     // Keys stay repo-relative even when merging into a baseDir subtree: reveal/compact map
     // paths against the full path, so `baseDir='tracked/new'` must not key a child as `new/x`.
-    // Materialize the WHOLE chain down to the file. A bare top folder would be unexpandable
-    // because `git ls-tree <ref>:<newdir>` fails for a path absent from the ref. Starting from
-    // an existing ref folder (parts.length > 1) keeps its badge but still adds the real child.
+    // Only fabricate the whole chain when the TOP segment is absent from the ref. An untracked
+    // directory has no `ls-tree <ref>:<dir>` object, so without a materialized chain it can never
+    // expand. For a folder already present in the ref (existingNode below), children come from
+    // the real tree via onLoadData — fabricating even one child here would make AntD treat the
+    // folder as loaded and skip that fetch, hiding every committed file inside it.
     const materializeChain = (start: RemoteGitTreeNode[], segments: string[], parentKey = '') => {
       let siblings = start;
       for (let i = 0; i < segments.length; i += 1) {
@@ -122,14 +124,13 @@ export function mergeUncommittedFilesIntoTree(
 
     const existingNode = nodeMap.get(directName);
     if (existingNode) {
+      // Badge only. A dirty path under a ref folder is materialized by a later fetch with this
+      // folder as baseDir (onLoadData / reveal): every uncommitted row under that prefix then
+      // gets its full chain, including folders the ref does not have. Adding children here —
+      // even from the same status row — would pre-mark the node as loaded and hide committed
+      // children that `ls-tree <ref>:<folder>` would otherwise return.
       if (parts.length === 1) {
         existingNode.gitStatus = status;
-      } else if (cleanBaseDir) {
-        // Lazy expansion inside this folder: materialize real children from uncommitted rows.
-        // At root (no baseDir) keep the ref folder lazy — its children arrive via onLoadData.
-        if (!existingNode.gitStatus) existingNode.gitStatus = 'M';
-        existingNode.children = existingNode.children ?? [];
-        materializeChain(existingNode.children, parts.slice(1), existingNode.key);
       } else if (!existingNode.gitStatus) {
         existingNode.gitStatus = 'M';
       }
