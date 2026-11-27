@@ -30,6 +30,20 @@ pub(crate) const SESSION_IDLE_TTL: Duration = Duration::from_secs(15 * 60);
 /// Cap buffered stderr per persistent session — same ceiling as `tool_cancel`'s readers.
 const MAX_SQLCL_STDERR_BYTES: usize = 2 * 1024 * 1024;
 
+/// Bounded tail of merged stdout carried into an error string before the completion marker.
+/// PTY merges stderr into stdout, so this is the only diagnostics channel for ORA-/SP2- errors.
+const MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES: usize = 8 * 1024;
+
+/// Persistent SQLcl only: give up on a marker that makes no progress for 60 s. This is a stricter
+/// policy than `tool_cancel`'s no-timeout readers — a quiet REPL can be cut off with a clear error
+/// instead of hanging the session forever.
+const SQLCL_REPL_IDLE_DEADLINE: Duration = Duration::from_secs(60);
+
+/// Safety ceilings for draining buffered banner/prompt bytes. A normal drain stops on the first
+/// wake-up timeout or EOF; these caps only bound work while the remote keeps sending output.
+const SQLCL_DRAIN_MAX_LINES: usize = 512;
+const SQLCL_DRAIN_MAX_BYTES: usize = 256 * 1024;
+
 /// Wake-up socket timeout is only a poll tick, never a transport failure.
 fn is_wakeup_timeout(err: &std::io::Error) -> bool {
     matches!(
@@ -39,9 +53,8 @@ fn is_wakeup_timeout(err: &std::io::Error) -> bool {
 }
 
 /// Drain already-buffered bytes (banner tail, `SQL>` prompt) without blocking the caller. PTY
-/// streams use the wake-up socket timeout, so a quiet REPL returns quickly; the line cap also
-/// bounds work when the remote keeps sending output.
-const SQLCL_DRAIN_MAX_LINES: usize = 64;
+/// streams use the wake-up socket timeout, so a quiet REPL returns quickly; the line/byte caps
+/// only bound work when the remote keeps sending output.
 
 fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
     let mut line = String::new();
@@ -447,6 +460,19 @@ pub fn cleanup_on_exit(state: &SshRuntimeState) {
 }
 
 // --- pure helpers --------------------------------------------------------------------------
+
+// RED-phase stubs — replaced by real implementations after the assertion-level failures below.
+fn sqlcl_error_diagnostics(_output: &str, _pending_line: &str) -> String {
+    String::new()
+}
+
+fn sqlcl_idle_timed_out(_elapsed: Duration) -> bool {
+    false
+}
+
+fn sqlcl_drain_should_continue(_got_new_bytes: bool, _eof: bool, _lines: usize, _bytes: usize) -> bool {
+    false
+}
 
 /// Unique per-request plain-text marker line. `PROMPT` is suppressed in `sqlcl -s`, so the marker
 /// is selected as a bare value after switching that one statement back to default format.
@@ -943,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn append_sqlcl_line_normalizes_prompt_and_ansi() {
+    fn append_sqlcl_line_strips_ansi_but_keeps_prompt_on_data() {
         let marker = "TASKMATE_SQLCL_DONE_1_6";
         let mut output = String::new();
         assert!(!append_sqlcl_line(
@@ -951,7 +977,7 @@ mod tests {
             "\x1b[?2004hSQL> [{\"ID\":1}]\n",
             marker
         ));
-        assert_eq!(output, "[{\"ID\":1}]\n");
+        assert_eq!(output, "SQL> [{\"ID\":1}]\n");
     }
 
     #[test]
@@ -969,14 +995,68 @@ mod tests {
     }
 
     #[test]
-    fn append_sqlcl_line_keeps_banner_and_partial_marker_after_normalization() {
+    fn append_sqlcl_line_keeps_prompt_on_banner_and_partial_marker() {
         let marker = "TASKMATE_SQLCL_DONE_1_8";
         let mut output = String::new();
         let banner = format!("SQL> banner {marker} noise\n");
         assert!(!append_sqlcl_line(&mut output, &banner, marker));
-        assert_eq!(output, format!("banner {marker} noise\n"));
+        assert_eq!(output, banner);
         assert!(!append_sqlcl_line(&mut output, "SQL> TASKMATE_SQLCL_DONE_", marker));
-        assert_eq!(output, format!("banner {marker} noise\nTASKMATE_SQLCL_DONE_"));
+        assert_eq!(output, format!("{banner}SQL> TASKMATE_SQLCL_DONE_"));
+    }
+
+    #[test]
+    fn sqlcl_error_diagnostics_keeps_error_tokens_bound_and_char_safe() {
+        let simple = sqlcl_error_diagnostics("some output\n", "ORA-00942: table or view does not exist");
+        assert!(simple.contains("ORA-00942: table or view does not exist"));
+
+        let mut long = "A".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES * 2);
+        long.push_str("ORA-00942: table or view does not exist");
+        let tail = sqlcl_error_diagnostics(&long, "SP2-0042: unknown command");
+        assert!(tail.contains("ORA-00942: table or view does not exist"));
+        assert!(tail.contains("SP2-0042: unknown command"));
+        assert!(tail.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+
+        let mut multibyte = "à".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+        multibyte.push_str("ORA-00942");
+        let cut = sqlcl_error_diagnostics(&multibyte, "");
+        assert!(cut.is_char_boundary(cut.len()));
+        assert!(cut.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+    }
+
+    #[test]
+    fn sqlcl_idle_deadline_boundary_is_inclusive() {
+        assert!(!sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE - Duration::from_secs(1)));
+        assert!(sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE));
+        assert!(sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn sqlcl_drain_stops_on_timeout_eof_and_safety_caps() {
+        assert!(sqlcl_drain_should_continue(true, false, 0, 0));
+        assert!(!sqlcl_drain_should_continue(false, false, 0, 0));
+        assert!(!sqlcl_drain_should_continue(true, true, 0, 0));
+        assert!(!sqlcl_drain_should_continue(true, false, SQLCL_DRAIN_MAX_LINES, 0));
+        assert!(!sqlcl_drain_should_continue(true, false, 0, SQLCL_DRAIN_MAX_BYTES));
+    }
+
+    #[test]
+    fn marker_and_pgid_detection_still_strip_prompt_and_ansi() {
+        let marker = "TASKMATE_SQLCL_DONE_1_9";
+        assert!(sqlcl_line_is_marker(
+            "\x1b[?2004hSQL> \x1b[32mTASKMATE_SQLCL_DONE_1_9\x1b[0m\r\n",
+            marker
+        ));
+        assert_eq!(
+            scan_sqlcl_pgid_line("\x1b[?2004hSQL> TASKMATE_PGID:4242\r\n"),
+            Some(4242)
+        );
+        let mut output = String::new();
+        assert!(append_sqlcl_line(&mut output, &format!("SQL> {marker}\n"), marker));
+        assert_eq!(output, "");
+        assert!(!append_sqlcl_line(&mut output, "\x1b[?2004hSQL> \n", marker));
+        assert!(!append_sqlcl_line(&mut output, "SQL>", marker));
+        assert_eq!(output, "");
     }
 
     #[test]
