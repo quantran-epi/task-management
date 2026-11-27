@@ -144,6 +144,8 @@ describe('ItemInsightView', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
     view.unmount();
 
+    mockOpenSystem.mockClear();
+    mockNavigate.mockClear();
     const unattachedView = render(
       <ItemInsightView
         itemType="task"

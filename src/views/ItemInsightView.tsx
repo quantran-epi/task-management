@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, Input, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
-import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined } from '../components/ui/icon';
+import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined, DeploymentUnitOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
-import type { Note } from '../types/models';
+import type { Note, System } from '../types/models';
 import type { AppRoute, NavigateFunction } from '../types/navigation';
 import { EntityDiagramsSection } from '../components/diagrams/EntityDiagramsSection';
 import { analyzeTaskInsight, type InsightRecommendation } from '../utils/itemInsight';
@@ -28,6 +28,7 @@ export interface ItemInsightViewProps {
   itemType: ItemInsightType;
   itemId: string;
   onNavigate: NavigateFunction;
+  onOpenSystemDetail?: (system: System) => void;
   db?: TaskPlannerDatabase;
 }
 
@@ -68,6 +69,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   itemType,
   itemId,
   onNavigate,
+  onOpenSystemDetail,
   db = defaultDb,
 }) => {
   const { activeTimers, startTimer, pauseTimer } = useTimer();
@@ -394,15 +396,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 ? [
                     {
                       title: (
-                        <a
-                          onClick={() =>
-                            onNavigate('insight', {
-                              type: 'system',
-                              id: parentSystem.id,
-                              name: parentSystem.name,
-                            })
-                          }
-                        >
+                        <a onClick={() => onOpenSystemDetail?.(parentSystem)}>
                           {parentSystem.code}
                         </a>
                       ),
@@ -428,26 +422,6 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <div style={{ flex: 1, minWidth: 280 }}>
             <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
               {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}
-              {itemType === 'task' &&
-                (parentSystem ? (
-                  <Tag
-                    color="cyan"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      onNavigate('insight', {
-                        type: 'system',
-                        id: parentSystem.id,
-                        name: parentSystem.name,
-                      })
-                    }
-                  >
-                    {parentSystem.code} — {parentSystem.name}
-                  </Tag>
-                ) : (
-                  <Tag color="default">
-                    {currentTask?.systemId ?? 'Chung (không gắn)'}
-                  </Tag>
-                ))}
               {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
               {itemType === 'system' && <Tag color="cyan">Subsystem</Tag>}
 
@@ -709,7 +683,33 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             )}
           </div>
         )}
+
       </Card>
+
+      {itemType === 'task' && (
+        <Card
+          title={<Space><DeploymentUnitOutlined /><span>Hệ thống liên kết</span></Space>}
+          style={{ marginBottom: 16 }}
+          data-testid="item-insight-linked-system-section"
+        >
+          <Space size={8} wrap>
+            {parentSystem ? (
+              <Tag
+                color="cyan"
+                data-testid="item-insight-linked-system"
+                style={{ cursor: onOpenSystemDetail ? 'pointer' : 'default' }}
+                onClick={() => onOpenSystemDetail?.(parentSystem)}
+              >
+                {parentSystem.code} — {parentSystem.name}
+              </Tag>
+            ) : (
+              <Tag color="default" data-testid="item-insight-linked-system">
+                {currentTask?.systemId ?? 'Chung (không gắn)'}
+              </Tag>
+            )}
+          </Space>
+        </Card>
+      )}
 
       {itemType !== 'task' && (
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
