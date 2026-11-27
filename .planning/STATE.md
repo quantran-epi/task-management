@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-26T09:22:04.240Z"
+last_updated: "2026-11-27T02:04:50.764Z"
 last_activity: 2026-11-26
 last_activity_desc: "Completed quick task 261127-01z: Telegram device control for standalone AI chat (review fixes applied, UAT pending)"
-state_head: 7809e6c6039d5d33a0f2b84c1f6bf265d1d60e43
+state_head: 488c8f69a08036d25cad121bd5ac2956ec647358
 progress:
   total_phases: 2
   completed_phases: 2
@@ -32,6 +32,7 @@ Plan: 4 of 4
 Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `261126-1od`, `261126-1q1`; final gate xanh (64 tests, tsc, Tauri build + hdiutil VALID). T16 human UAT cài 2 app cùng tồn tại là checkpoint thủ công; artifact sẵn sàng.
 Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat.
 Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat dark/light theme switch.
+Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -157,6 +158,7 @@ Progress: [██████████] 100%
 | 261126-q7j | Add search_chat_history and read_chat_turn tools to AI chat panel, scoped to current thread | 2026-11-26 | 49b71e93, 6bc5f229, c8c851a3, 2e702ed9 | Verified | [261126-q7j-add-search-chat-history-and-read-chat-tu](./quick/261126-q7j-add-search-chat-history-and-read-chat-tu/) |
 | 261126-vra | Pool SSH sessions và giữ remote SQLcl persistent trong Tauri, bỏ handshake/spawn lặp lại | 2026-11-26 | 41949863, 3b1bfbef | Verified | [261126-vra-implement-ssh-connection-pool-persistent](./quick/261126-vra-implement-ssh-connection-pool-persistent/) |
 | 261127-01z | Quản lý thiết bị AI chat standalone qua Telegram user ID: đăng ký, duyệt, whitelist model, settings từ xa | 2026-11-26 | cc128ab0, b432da3a, 85dafc3a, 24e1e37f | Reviewed + UAT pending | [261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te](./quick/261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te/) |
+| 261127-c3r | Add named quick links to CR detail and Task detail pages | 2026-11-27 | 488c8f69 | — | [261127-c3r-add-named-quick-links-to-cr-detail-and-t](./quick/261127-c3r-add-named-quick-links-to-cr-detail-and-t/) |
 
 ## Accumulated Context
 
