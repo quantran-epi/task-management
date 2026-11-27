@@ -24,7 +24,6 @@ const GROUP_LABELS = [
 ] as const;
 
 const STANDALONE_GROUP_LABELS = [
-  'Telegram Device',
   'Provider',
   'Knowledge Server',
   'MCP',

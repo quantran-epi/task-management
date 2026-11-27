@@ -10,7 +10,6 @@ import { SshConfigCard } from '../settings/SshConfigCard';
 import { SshFsAiToolConfigCard } from '../settings/SshFsAiToolConfigCard';
 import { AiToolCatalogCard } from '../settings/AiToolCatalogCard';
 import { GlobalConventionsCard } from '../settings/GlobalConventionsCard';
-import { StandaloneDevicePolicyCard } from '../settings/StandaloneDevicePolicyCard';
 
 export interface AISettingsDrawerProps {
   open: boolean;
@@ -46,11 +45,6 @@ const GROUPS: SettingsGroup[] = [
 ];
 
 const STANDALONE_GROUPS: SettingsGroup[] = [
-  {
-    label: 'Telegram Device',
-    header: 'Telegram Device',
-    render: (db) => <StandaloneDevicePolicyCard db={db} />,
-  },
   ...GROUPS.slice(0, 5),
   { label: 'SSH Connections', header: 'SSH Connections', render: (db) => <SshConfigCard db={db} /> },
   ...GROUPS.slice(5),
