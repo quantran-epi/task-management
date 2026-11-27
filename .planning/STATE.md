@@ -163,6 +163,7 @@ Progress: [██████████] 100%
 | 261127-c3r | Add named quick links to CR detail and Task detail pages | 2026-11-27 | 488c8f69 | — | [261127-c3r-add-named-quick-links-to-cr-detail-and-t](./quick/261127-c3r-add-named-quick-links-to-cr-detail-and-t/) |
 | 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
 | 261127-eos | Sửa 2 lỗi review: marker hoàn tất là một dòng plain text, reader dừng bằng so sánh dòng chính xác, bỏ JSON strip/reserialize khỏi Rust | 2026-11-27 | bbe75d3c, 873570c4 | — | [261127-eos-fix-sqlcl-marker-reader-review-findings-](./quick/261127-eos-fix-sqlcl-marker-reader-review-findings-/) |
+| 261127-fzv | Implement standalone Request access flow: local bridge, admin approval + per-user model whitelist in `#/telegram`, realtime fail-closed policy delivery to standalone chat | 2026-11-27 | 53c3ee6f, 2140f628, 7deb81f5, 29753376 | Verified | [261127-fzv-implement-standalone-access-request-flow](./quick/261127-fzv-implement-standalone-access-request-flow/) |
 
 ## Accumulated Context
 
