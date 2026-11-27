@@ -221,22 +221,19 @@ impl SqlclKey {
     }
 }
 
-/// A live remote SQLcl process. `channel` is the mutable command/stdin side; `reader` holds
-/// stdout and `stderr` holds bounded diagnostics. The per-session mutex serialises whole
-/// queries so two calls can never interleave SQL or sentinel lines on one stream.
+/// A live remote SQLcl process on its own SSH PTY channel. `channel` is the mutable command/stdin
+/// side; `reader` holds stdout and `stderr` holds bounded diagnostics. The per-session mutex
+/// serialises whole queries so two calls can never interleave SQL or sentinel lines on one stream.
 pub(crate) struct SqlclSession {
     channel: Mutex<ssh2::Channel>,
     reader: Mutex<BufReader<ssh2::Stream>>,
     stderr: Arc<Mutex<String>>,
     last_used: Mutex<Instant>,
-    pgid: Option<u32>,
 }
 
 impl SqlclSession {
-    /// Spawn the remote process on a dedicated SSH channel. No host process is created. The
-    /// remote command goes through `build_remote_command` (base64 inside `setsid sh -c`), so
-    /// `env`, `bin` and `conn` cannot inject a second shell command, and the PGID is captured
-    /// for explicit cancellation.
+    /// Spawn the remote process on a dedicated SSH channel. No host process is created. The PTY
+    /// already isolates the command in its own session; cancellation sends Ctrl-C on this PTY.
     fn start(session: &ssh2::Session, key: &SqlclKey) -> Result<Self, String> {
         crate::sqlcl_pty_debug::session_start();
         let mut channel = session
@@ -258,33 +255,13 @@ impl SqlclSession {
             .request_pty("xterm", Some(modes), Some((65535, 24, 0, 0)))
             .map_err(|e| format!("Yêu cầu PTY SQLcl thất bại: {}", e))?;
 
-        let remote_command = crate::tool_cancel::build_remote_command(&launcher);
-        channel.exec(&remote_command).map_err(|e| format!("Khởi động SQLcl thất bại: {}", e))?;
-        crate::sqlcl_pty_debug::dump("START_AFTER_EXEC", b"");
-
-        // `setsid` prints its PID/PGID as a line; banners or a slow link may precede it. Scan a
-        // bounded window of lines, ignoring wake-up timeouts (they are not transport errors).
+        // On a PTY channel sshd already gives the command its own session. Wrapping it in
+        // `setsid` makes setsid fork (it is already a process-group leader) and the parent exits
+        // immediately, so sshd closes the channel before the child can print the PGID. Exec the
+        // validated launcher directly; the PTY itself provides the job boundary.
+        channel.exec(&launcher).map_err(|e| format!("Khởi động SQLcl thất bại: {}", e))?;
+        crate::sqlcl_pty_debug::event("START_AFTER_EXEC");
         let mut reader = BufReader::new(channel.stream(0));
-        let pgid = read_sqlcl_pgid(
-            std::iter::repeat_with(|| {
-                let mut chunk = String::new();
-                let status = match reader.read_line(&mut chunk) {
-                    Ok(0) => SqlclPgidReadStatus::Eof,
-                    Ok(_) => SqlclPgidReadStatus::Line,
-                    Err(e) if is_wakeup_timeout(&e) => SqlclPgidReadStatus::Wakeup,
-                    Err(e) => SqlclPgidReadStatus::Failed(e.to_string()),
-                };
-                let label = match &status {
-                    SqlclPgidReadStatus::Line => "PGID_LINE",
-                    SqlclPgidReadStatus::Eof => "PGID_EOF",
-                    SqlclPgidReadStatus::Wakeup => "PGID_WAKEUP",
-                    SqlclPgidReadStatus::Failed(_) => "PGID_FAILED",
-                };
-                crate::sqlcl_pty_debug::dump(label, chunk.as_bytes());
-                (chunk, status)
-            })
-            .take(10),
-        )?;
 
         // Discard banner/prompt bytes already buffered before the first script is sent. Bounded
         // so a quiet REPL stops at its wake-up timeout instead of blocking session startup.
@@ -321,13 +298,15 @@ impl SqlclSession {
             reader: Mutex::new(reader),
             stderr,
             last_used: Mutex::new(Instant::now()),
-            pgid: Some(pgid),
         })
     }
 
-    fn kill_remote(&self, config: &SshConfig, secret: Option<&str>) {
-        if let Some(pgid) = self.pgid {
-            let _ = crate::tool_cancel::spawn_kill_remote_process_group_for_sqlcl(config, secret, pgid);
+    /// Interrupt the foreground process on this PTY. libssh2 0.9 has no signal channel request,
+    /// but a PTY turns byte 0x03 into SIGINT for the foreground process group.
+    fn kill_remote(&self) {
+        if let Ok(mut channel) = self.channel.lock() {
+            let _ = channel.write_all(&[0x03]);
+            let _ = channel.flush();
         }
     }
 
@@ -339,13 +318,11 @@ impl SqlclSession {
         script: &str,
         marker: &str,
         cancelled: &AtomicBool,
-        config: &SshConfig,
-        secret: Option<&str>,
     ) -> Result<(String, String, bool), String> {
         let mut channel = self.channel.lock().map_err(|e| e.to_string())?;
         let mut reader = self.reader.lock().map_err(|e| e.to_string())?;
         if cancelled.load(Ordering::SeqCst) {
-            self.kill_remote(config, secret);
+            self.kill_remote();
             return Ok((String::new(), String::new(), true));
         }
         channel.write_all(script.as_bytes()).map_err(|e| format!("Ghi SQLcl thất bại: {}", e))?;
@@ -362,11 +339,11 @@ impl SqlclSession {
         let mut last_progress = Instant::now();
         loop {
             if cancelled.load(Ordering::SeqCst) {
-                self.kill_remote(config, secret);
+                self.kill_remote();
                 return Ok((output, self.stderr_snapshot(), true));
             }
             if sqlcl_idle_timed_out(last_progress.elapsed()) {
-                self.kill_remote(config, secret);
+                self.kill_remote();
                 crate::sqlcl_pty_debug::event("SCRIPT_IDLE_TIMEOUT");
                 return Err(format!(
                     "SQLcl không tiến triển trong {:?}.\n{}\n{}",
@@ -451,11 +428,11 @@ pub struct SqlclSessionRegistry {
 
 impl SqlclSessionRegistry {
     /// Prune expired sessions and tear down the live remote process group for each.
-    pub fn health_check(&self, config: &SshConfig, secret: Option<&str>) {
+    pub fn health_check(&self) {
         if let Ok(mut sessions) = self.sessions.lock() {
             sessions.retain(|_, session| {
                 if session.is_expired() {
-                    session.kill_remote(config, secret);
+                    session.kill_remote();
                     false
                 } else {
                     true
@@ -464,12 +441,10 @@ impl SqlclSessionRegistry {
         }
     }
 
-    pub fn teardown(&self, config: Option<&SshConfig>, secret: Option<&str>) {
+    pub fn teardown(&self) {
         if let Ok(mut sessions) = self.sessions.lock() {
-            if let (Some(config), Some(_)) = (config, secret) {
-                for session in sessions.values() {
-                    session.kill_remote(config, secret);
-                }
+            for session in sessions.values() {
+                session.kill_remote();
             }
             sessions.clear();
         }
@@ -498,14 +473,14 @@ pub fn runtime() -> &'static SshRuntimeState {
 #[tauri::command]
 pub fn ssh_invalidate_pool() {
     let state = runtime();
-    state.sqlcl.teardown(None, None);
+    state.sqlcl.teardown();
     state.pool.teardown();
 }
 
 pub fn cleanup_on_exit(state: &SshRuntimeState) {
     // No config here (registry deliberately keeps none); dropping channels closes the remote
     // shells when SSH disconnects. Explicit Cancel is the path that kills a live SQLcl PGID.
-    state.sqlcl.teardown(None, None);
+    state.sqlcl.teardown();
     state.pool.teardown();
 }
 
@@ -642,74 +617,6 @@ fn sqlcl_line_is_marker(line: &str, marker: &str) -> bool {
     strip_sqlcl_prompt(&strip_ansi_escapes(line)).trim() == marker
 }
 
-/// Outcome of one scripted `read_line` while scanning for the `setsid` PGID line.
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum SqlclPgidReadStatus {
-    Line,
-    Eof,
-    Wakeup,
-    Failed(String),
-}
-
-/// Attach the pending PTY bytes to a PGID error as a bounded, UTF-8-safe diagnostic tail. Empty
-/// diagnostics leave the original message untouched; TS `redactOracleText` still applies downstream.
-fn sqlcl_pgid_error(message: &str, pending: &str) -> String {
-    let diag = sqlcl_error_diagnostics("", pending);
-    if diag.trim().is_empty() {
-        message.to_string()
-    } else {
-        format!("{}\n{}", message, diag)
-    }
-}
-
-/// Scan a bounded sequence of scripted reads for the PGID line. Pure so the wake-up/EOF split can
-/// be tested without SSH; the real reader is mapped to these outcomes at the call site. A wake-up
-/// timeout is only a poll tick — bytes already consumed from the reader stay in `line`, which is
-/// parsed on every attempt and cleared only after a complete line failed to match.
-fn read_sqlcl_pgid<I>(outcomes: I) -> Result<u32, String>
-where
-    I: IntoIterator<Item = (String, SqlclPgidReadStatus)>,
-{
-    let mut line = String::new();
-    for (chunk, status) in outcomes {
-        line.push_str(&chunk);
-        // A partial number at a wake-up tick is not a PGID yet: `TASKMATE_PGID:42` can still grow
-        // into `4242`. Accept a match only on a completed line or at EOF; keep accumulating otherwise.
-        let line_complete = matches!(status, SqlclPgidReadStatus::Eof)
-            || line.ends_with('\n')
-            || line.ends_with('\r');
-        if line_complete {
-            if let Some(value) = scan_sqlcl_pgid_line(&line) {
-                return Ok(value);
-            }
-        }
-        match status {
-            SqlclPgidReadStatus::Line => line.clear(),
-            SqlclPgidReadStatus::Wakeup => continue,
-            SqlclPgidReadStatus::Eof => break,
-            SqlclPgidReadStatus::Failed(e) => {
-                return Err(sqlcl_pgid_error(&format!("Đọc PGID SQLcl thất bại: {}", e), &line));
-            }
-        }
-    }
-    Err(sqlcl_pgid_error(
-        "Không nhận dạng được PGID của phiên SQLcl.",
-        &line,
-    ))
-}
-
-/// Parse the `setsid` PGID line from a PTY stream after ANSI/prompt normalization. Bare numbers
-/// in SQLcl banners do not carry the sentinel prefix and are ignored.
-fn scan_sqlcl_pgid_line(line: &str) -> Option<u32> {
-    let clean = strip_ansi_escapes(line);
-    strip_sqlcl_prompt(&clean)
-        .trim()
-        .strip_prefix(crate::tool_cancel::PGID_LINE_PREFIX)?
-        .trim()
-        .parse::<u32>()
-        .ok()
-}
-
 /// Append one ANSI-stripped PTY line to stdout. Data bytes are kept verbatim — including a
 /// leading `SQL>` — because stripping it here corrupts JSON payloads. Prompt removal belongs only
 /// to marker/PGID detection. Marker lines and prompt/ANSI-only lines are dropped. Returns true on
@@ -832,7 +739,7 @@ pub fn run_persistent_sqlcl(
         if cancelled.load(Ordering::SeqCst) {
             return Ok((String::new(), String::new(), true));
         }
-        state.sqlcl.health_check(config, secret);
+        state.sqlcl.health_check();
         let session = {
             let mut sessions = state.sqlcl.sessions.lock().map_err(|e| e.to_string())?;
             if sessions.get(&key).is_some() {
@@ -856,7 +763,7 @@ pub fn run_persistent_sqlcl(
             }
         };
 
-        match session.run_script(&full_script, &marker, cancelled, config, secret) {
+        match session.run_script(&full_script, &marker, cancelled) {
             Ok((stdout, stderr, true)) => {
                 // Explicit cancel: SIGTERM already sent; drop the half-read session.
                 if let Ok(mut sessions) = state.sqlcl.sessions.lock() {
@@ -1087,70 +994,6 @@ mod tests {
     }
 
     #[test]
-    fn scan_sqlcl_pgid_line_after_prompt_and_ansi() {
-        assert_eq!(scan_sqlcl_pgid_line("SQL> TASKMATE_PGID:4242"), Some(4242));
-        assert_eq!(scan_sqlcl_pgid_line("\x1b[?2004hSQL>TASKMATE_PGID:9\r\n"), Some(9));
-        assert_eq!(scan_sqlcl_pgid_line("4242"), None);
-        assert_eq!(scan_sqlcl_pgid_line("banner TASKMATE_PGID:7"), None);
-    }
-
-    #[test]
-    fn read_sqlcl_pgid_keeps_partial_across_wakeups() {
-        let outcomes = vec![
-            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
-            ("42".to_string(), SqlclPgidReadStatus::Wakeup),
-            ("42\n".to_string(), SqlclPgidReadStatus::Line),
-        ];
-        assert_eq!(read_sqlcl_pgid(outcomes.into_iter().take(3)), Ok(4242));
-    }
-
-    #[test]
-    fn read_sqlcl_pgid_parses_pending_line_at_eof() {
-        let split = vec![
-            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
-            ("9".to_string(), SqlclPgidReadStatus::Eof),
-        ];
-        assert_eq!(read_sqlcl_pgid(split), Ok(9));
-
-        let no_newline = vec![
-            ("TASKMATE_PGID:9".to_string(), SqlclPgidReadStatus::Wakeup),
-            (String::new(), SqlclPgidReadStatus::Eof),
-        ];
-        assert_eq!(read_sqlcl_pgid(no_newline), Ok(9));
-    }
-
-    #[test]
-    fn read_sqlcl_pgid_discards_non_matching_line() {
-        let outcomes = vec![
-            ("banner TASKMATE_PGID:77\n".to_string(), SqlclPgidReadStatus::Line),
-            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
-            ("8\n".to_string(), SqlclPgidReadStatus::Line),
-        ];
-        assert_eq!(read_sqlcl_pgid(outcomes), Ok(8));
-    }
-
-    #[test]
-    fn read_sqlcl_pgid_error_is_bounded_and_char_safe() {
-        let mut pending = "à".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
-        pending.push_str("ORA-00942: table or view does not exist");
-        let outcomes = std::iter::repeat_with(|| {
-            ("🍕".to_string(), SqlclPgidReadStatus::Wakeup)
-        })
-        .take(12)
-        .chain(std::iter::once((pending, SqlclPgidReadStatus::Wakeup)));
-        let err = read_sqlcl_pgid(outcomes).expect_err("must fail after attempts");
-        assert!(err.contains("Không nhận dạng được PGID"));
-        assert!(err.contains("ORA-00942"));
-        let diag = err.split_once('\n').map(|(_, tail)| tail).unwrap_or("");
-        assert!(diag.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
-        assert!(diag.is_char_boundary(diag.len()));
-
-        let failed = vec![("pending".to_string(), SqlclPgidReadStatus::Failed("boom".to_string()))];
-        let err = read_sqlcl_pgid(failed).expect_err("read failure must surface");
-        assert!(err.contains("boom"));
-    }
-
-    #[test]
     fn append_sqlcl_line_strips_ansi_but_keeps_prompt_on_data() {
         let marker = "TASKMATE_SQLCL_DONE_1_6";
         let mut output = String::new();
@@ -1223,16 +1066,12 @@ mod tests {
     }
 
     #[test]
-    fn marker_and_pgid_detection_still_strip_prompt_and_ansi() {
+    fn marker_detection_still_strips_prompt_and_ansi() {
         let marker = "TASKMATE_SQLCL_DONE_1_9";
         assert!(sqlcl_line_is_marker(
             "\x1b[?2004hSQL> \x1b[32mTASKMATE_SQLCL_DONE_1_9\x1b[0m\r\n",
             marker
         ));
-        assert_eq!(
-            scan_sqlcl_pgid_line("\x1b[?2004hSQL> TASKMATE_PGID:4242\r\n"),
-            Some(4242)
-        );
         let mut output = String::new();
         assert!(append_sqlcl_line(&mut output, &format!("SQL> {marker}\n"), marker));
         assert_eq!(output, "");

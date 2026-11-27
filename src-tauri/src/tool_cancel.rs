@@ -195,14 +195,6 @@ const SHUTDOWN_KILL_WAIT: Duration = Duration::from_secs(3);
 /// SIGTERM the remote process group on a detached thread so explicit Cancel never waits on
 /// SSH. The returned receiver fires when the kill attempt finishes, letting app shutdown
 /// wait briefly instead of exiting while the remote job is still alive.
-pub(crate) fn spawn_kill_remote_process_group_for_sqlcl(
-    config: &SshConfig,
-    secret: Option<&str>,
-    pgid: u32,
-) -> Result<mpsc::Receiver<()>, String> {
-    spawn_kill_remote_process_group(config, secret, pgid)
-}
-
 fn spawn_kill_remote_process_group(
     config: &SshConfig,
     secret: Option<&str>,
