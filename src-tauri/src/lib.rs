@@ -9,6 +9,7 @@ mod sqlite_persistence;
 mod ssh_pool;
 mod ssh_pty_service;
 mod ssh_service;
+mod standalone_access;
 mod telegram_gateway;
 mod tool_cancel;
 use tauri::Manager;
@@ -65,6 +66,9 @@ pub fn run() {
             agent_diff_ops::revert_hunk_diff,
             agent_diff_ops::ssh_worktree_provision,
             agent_skill_ops::list_available_skills,
+            standalone_access::standalone_access_request,
+            standalone_access::standalone_access_apply,
+            standalone_access::standalone_access_list,
             telegram_gateway::start_telegram_polling,
             telegram_gateway::stop_telegram_polling,
             telegram_gateway::get_telegram_status,
