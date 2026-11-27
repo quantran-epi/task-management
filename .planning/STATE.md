@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-27T07:37:22.778Z"
+last_updated: "2026-11-27T09:31:55.226Z"
 last_activity: 2026-11-27
 last_activity_desc: "Completed quick task 261127-j35: bounded ORA-/SP2- diagnostics, 60s SQLcl idle kill, inactivity drain, SQL> data preservation"
-state_head: 86a670ae4ad099bd3b90bf550c262ebed0bf770f
+state_head: 45842bec6ddb77dd0b7eed5e74798e9933a62431
 progress:
   total_phases: 2
   completed_phases: 2
@@ -37,6 +37,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-se
 Last activity: 2026-11-27 - Completed quick task 261127-eos: SQLcl completion changed to one plain-text marker line with exact-line reader and no JSON strip.
 Last activity: 2026-11-27 - Completed quick task 261127-hup: persistent SQLcl moved onto SSH PTY (xterm, ECHO off, wide columns) with ANSI/prompt-normalized marker reader; PGID, cancel, TTL and TS heredoc contract unchanged.
 Last activity: 2026-11-27 - Completed quick task 261127-j35: fixed 4 PTY SQLcl review findings — bounded ORA-/SP2- diagnostics in Err stderr, 60s idle PGID kill, inactivity drain with caps, prompt preserved on data lines.
+Last activity: 2026-11-27 - Completed quick task 261127-mrx: standalone chat system prompt now carries the shared referenced_files block with exact SSH-attached paths; no file content read or runtime path changed.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -170,6 +171,7 @@ Progress: [██████████] 100%
 | 261127-hup | Chuyển SQLcl thường trú sang SSH PTY (xterm, ECHO tắt, 65535 cột); reader chuẩn hoá ANSI/prompt, marker dòng plain, giữ PGID/cancel/TTL/restart-once | 2026-11-27 | c9c4cd90, 7af9a357 | — | [261127-hup-implement-pty-backed-persistent-sqlcl-se](./quick/261127-hup-implement-pty-backed-persistent-sqlcl-se/) |
 | 261127-j35 | Sửa 4 finding review PTY SQLcl: error tail bounded vào stderr, idle deadline 60s + SIGTERM PGID, drain theo inactivity có cap, giữ prefix SQL> trên dữ liệu | 2026-11-27 | a094e622, 76faf6ad, 636b6f62 | — | [261127-j35-fix-pty-sqlcl-review-findings-merged-std](./quick/261127-j35-fix-pty-sqlcl-review-findings-merged-std/) |
 | 261127-jvm | Implement sketch 015 winner A: two-column SSH file picker | 2026-11-27 | 86a670ae | — | [261127-jvm-implement-sketch-015-winner-a-v-o-standa](./quick/261127-jvm-implement-sketch-015-winner-a-v-o-standa/) |
+| 261127-mrx | Fix standalone AI chat SSH attachments: include referenced_files block in standalone prompt and add targeted check | 2026-11-27 | 45842bec | — | [261127-mrx-fix-standalone-ai-chat-ssh-attachments-f](./quick/261127-mrx-fix-standalone-ai-chat-ssh-attachments-f/) |
 
 ## Accumulated Context
 
@@ -272,6 +274,7 @@ Progress: [██████████] 100%
 - [Quick 261127-eos]: Completion marker là một dòng plain text duy nhất (`SELECT '<marker>' FROM DUAL;` sau `SET SQLFORMAT DEFAULT`, không alias `TASKMATE_DONE`); reader so sánh `line.trim() == marker` bằng equality (kể cả partial ở EOF), dòng marker không vào stdout, bỏ hoàn toàn JSON strip/reserialize trong Rust để stdout byte-identical.
 - [Quick 261127-jvm]: SSH picker chuẩn VS Code Remote Explorer — explorer trái (host/folder, navigate), file list phải (breadcrumb/Up/search, checkbox + size/mtime), footer chip; `onAttach(paths)`/search `find -iname | head -n 201` có cancel/không đọc nội dung giữ nguyên.
 - [Quick 261127-j35]: tail chẩn đoán 8 KiB (merged stdout + pending line, cắt char boundary) nằm trong Err string để TS `redactOracleText` che connection string; idle deadline 60s là policy riêng persistent SQLcl, khác `tool_cancel` no-timeout; drain dừng theo inactivity, cap 512 dòng/256 KiB chỉ làm safety; `SQL>` giữ nguyên trên data, prompt chỉ strip ở detection marker/PGID.
+- [Quick 261127-mrx]: block `<referenced_files>` dựng một lần từ `allFiles` qua helper thuần dùng cho cả standalone lẫn ordinary prompt; standalone không đọc nội dung file và không đổi `attachedPaths`/`attachmentScope`/runtime.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
