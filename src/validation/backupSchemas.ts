@@ -42,12 +42,13 @@ const linkSchema = z
   .min(1, 'Link must not be empty')
   .refine(
     (val) =>
+      isValidUuid(val) || // Knowledge document UUID link
       /^https?:\/\//i.test(val) ||
       /^file:\/\//i.test(val) ||
       /^[A-Za-z]:\\/.test(val) ||
       /^\//.test(val) ||
       /^\\\\/.test(val),
-    { message: 'Link must be a URL, folder path, or file URI.' }
+    { message: 'Link must be a URL, folder path, document UUID, or file URI.' }
   );
 
 export const namedLinkSchema = z.object({

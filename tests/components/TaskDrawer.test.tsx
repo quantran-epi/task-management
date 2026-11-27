@@ -184,6 +184,24 @@ describe('TaskDrawer', () => {
     expect(updated?.id).toBe(task.id); // Stable UUID preserved
   }, 30000);
 
+  it('preserves migrated empty-name links and document UUID links on save', async () => {
+    const docId = '55555555-5555-4555-8555-555555555555';
+    await seedTask({ links: [{ name: '', url: '/Users/me/spec' }, { name: 'Doc', url: docId }] });
+
+    render(<TaskDrawer taskId={'task-1'} open={true} onClose={vi.fn()} db={testDb} />);
+    await screen.findByDisplayValue('Implement OAuth callback');
+
+    fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
+
+    await waitFor(async () => {
+      const updated = await testDb.tasks.get('task-1');
+      expect(updated?.links).toEqual([
+        { name: '', url: '/Users/me/spec' },
+        { name: 'Doc', url: docId },
+      ]);
+    });
+  }, 30000);
+
   it('shows the inherited tags hint from the CR', async () => {
     await seedTask();
 
@@ -224,7 +242,7 @@ describe('TaskDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: /lưu tác vụ/i }));
 
     expect(
-      await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.')
+      await screen.findByText('Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.')
     ).toBeInTheDocument();
   }, 60000);
 

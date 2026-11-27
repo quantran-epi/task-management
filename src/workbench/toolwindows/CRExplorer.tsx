@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Tree, SearchInput, Button, Empty, Tag, Typography, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
 import type { MenuProps } from 'antd';
 import { InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined, CloudServerOutlined, CodeOutlined, RocketOutlined } from '../../components/ui/icon';
@@ -15,6 +15,7 @@ import { useSystemActions } from '../hooks/useSystemActions';
 import { useTaskMenuItems } from '../../hooks/useTaskMenuItems';
 import { useLayoutStore } from '../store/layoutStore';
 import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
+import { TaskDrawer } from '../../components/tasks/TaskDrawer';
 import type { DataNode } from 'antd/es/tree';
 import type { ChangeRequest, CrStatus, CrType, Task } from '../../types/models';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
@@ -72,6 +73,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
   const [crModalTargets, setCrModalTargets] = useState<Array<{ systemId: string }>>([]);
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
+  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
   const openTab = useLayoutStore((s) => s.openTab);
   const { openGit, openTerminal, disabledReason } = useSystemActions();
@@ -98,7 +100,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
     });
   };
 
-  const openTaskInsight = (task: Task) => {
+  const openTaskInsight = useCallback((task: Task) => {
     openTab({
       id: `task-${task.id}`,
       title: task.name,
@@ -106,15 +108,25 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       closable: true,
       params: { itemType: 'task', itemId: task.id },
     });
-  };
+  }, [openTab]);
 
   const { getTaskMenuItems, reminderModal, contextHolder: taskMenuContextHolder } = useTaskMenuItems({
     db,
-    onOpenDrawer: (taskId) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (task) openTaskInsight(task);
-    },
+    onOpenDrawer: setDrawerTaskId,
   });
+
+  const getExplorerTaskMenuItems = useCallback(
+    (task: Task): NonNullable<MenuProps['items']> => [
+      {
+        key: 'open-detail',
+        icon: <ExportOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+        label: 'Xem chi tiết',
+        onClick: () => openTaskInsight(task),
+      },
+      ...getTaskMenuItems(task),
+    ],
+    [getTaskMenuItems, openTaskInsight]
+  );
 
   const systemActionItems = (cr: ChangeRequest): NonNullable<MenuProps['items']> => {
     const targets = cr.targets
@@ -227,7 +239,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
         const taskNodes: DataNode[] = visibleTasks.map((task) => ({
           key: `task:${task.id}`,
           title: (
-            <Dropdown menu={{ items: getTaskMenuItems(task) }} trigger={['contextMenu']}>
+            <Dropdown menu={{ items: getExplorerTaskMenuItems(task) }} trigger={['contextMenu']}>
               <TaskLeafTitle task={task} />
             </Dropdown>
           ),
@@ -279,7 +291,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
         };
       })
       .filter(Boolean) as DataNode[];
-  }, [changeRequests, tasks, searchQuery, systemMap, getTaskMenuItems]);
+  }, [changeRequests, tasks, searchQuery, systemMap, getExplorerTaskMenuItems]);
 
   const handleSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0]?.toString();
@@ -394,6 +406,13 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
             message.error('Không thể lưu Change Request');
           }
         }}
+        db={db}
+      />
+
+      <TaskDrawer
+        taskId={drawerTaskId}
+        open={drawerTaskId !== null}
+        onClose={() => setDrawerTaskId(null)}
         db={db}
       />
     </div>

@@ -708,8 +708,8 @@ export class TaskPlannerDatabase extends Dexie {
     // V30: unify documentLinks + quickLinks into `links: [{name, url}]`, deduped by url.
     this.version(30)
       .stores(SCHEMA_V30)
-      .upgrade((tx) => {
-        const migrate = (collection: { toCollection: () => { modify: (fn: (row: Record<string, unknown>) => void) => unknown } }) =>
+      .upgrade(async (tx) => {
+        const migrate = (collection: { toCollection: () => { modify: (fn: (row: Record<string, unknown>) => void) => Promise<number> } }) =>
           collection.toCollection().modify((row: Record<string, unknown>) => {
             if (row.documentLinks === undefined && row.quickLinks === undefined) return;
             const merged = new Map<string, { name: string; url: string }>();
@@ -730,8 +730,7 @@ export class TaskPlannerDatabase extends Dexie {
             delete row.quickLinks;
             row.links = Array.from(merged.values());
           });
-        migrate(tx.table('tasks'));
-        migrate(tx.table('changeRequests'));
+        await Promise.all([migrate(tx.table('tasks')), migrate(tx.table('changeRequests'))]);
       });
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)

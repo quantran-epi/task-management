@@ -4,6 +4,7 @@ import { PlusOutlined, DeleteOutlined, SyncOutlined, FolderOpenOutlined, ExportO
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
+import { isValidLinkUrl } from '../../validation/schemas';
 import type {
   Task,
   ChangeRequest,
@@ -338,9 +339,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       const estimateMinutes = Math.min(6000, Math.max(0, hours * 60 + minutes));
 
       // Sanitize named links
+      // ponytail: migrated document links have an empty name; URL is the only required part.
       const cleanedLinks = (values.links ?? [])
         .map((link) => ({ name: link?.name?.trim() ?? '', url: link?.url?.trim() ?? '' }))
-        .filter((link) => link.name && link.url);
+        .filter((link) => link.url.length > 0);
 
       const savedReminders = formatRemindersForSave(values.reminders);
 
@@ -796,10 +798,8 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                         rules={[
                           {
                             validator: (_: unknown, value: string) => {
-                              if (!value || /^https?:\/\//i.test(value) || /^file:\/\//i.test(value) || /^[A-Za-z]:\\/.test(value) || /^\//.test(value) || /^\\\\/.test(value)) {
-                                return Promise.resolve();
-                              }
-                              return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.');
+                              if (!value || isValidLinkUrl(value)) return Promise.resolve();
+                              return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.');
                             },
                           },
                         ]}

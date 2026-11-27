@@ -202,7 +202,7 @@ describe('CRExplorer — CR → Task tree (ENT-NORM-04)', () => {
     });
   }, 30000);
 
-  it('task leaf context menu offers shared task actions and opens insight', async () => {
+  it('task leaf context menu offers detail plus shared actions, with matching targets', async () => {
     await seed();
     render(<ThemeAppHolder><CRExplorer db={db} /></ThemeAppHolder>);
     await expandCr('Instant Payment');
@@ -211,16 +211,23 @@ describe('CRExplorer — CR → Task tree (ENT-NORM-04)', () => {
 
     await waitFor(() => expect(document.querySelector('.ant-dropdown-menu')).not.toBeNull());
     const menu = document.querySelector('.ant-dropdown-menu') as HTMLElement;
+    expect(menu.textContent).toContain('Xem chi tiết');
     expect(menu.textContent).toContain('Hỏi Trợ lý AI');
     expect(menu.textContent).toContain('Thêm nhắc nhở');
     expect(menu.textContent).toContain('Sửa tác vụ');
     expect(menu.textContent).toContain('Xóa');
 
-    fireEvent.click(screen.getByText('Sửa tác vụ'));
+    fireEvent.click(screen.getByText('Xem chi tiết'));
     await waitFor(() => {
       const tab = useLayoutStore.getState().openTabs.find((t) => t.viewType === 'insight');
       expect(tab?.params?.itemId).toBe('11111111-1111-4111-8111-111111111111');
     });
+
+    fireEvent.contextMenu(task, { clientX: 220, clientY: 340 });
+    await waitFor(() => expect(document.querySelector('.ant-dropdown-menu')).not.toBeNull());
+    fireEvent.click(screen.getByText('Sửa tác vụ'));
+    expect(await screen.findByText('Chỉnh sửa tác vụ')).toBeInTheDocument();
+    expect(useLayoutStore.getState().openTabs.filter((t) => t.viewType === 'insight')).toHaveLength(1);
   }, 30000);
 
   it('renders the zero-CR empty state with heading and CTA', async () => {

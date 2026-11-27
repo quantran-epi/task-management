@@ -131,7 +131,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await db.tasks.get(task.id)).toBeUndefined();
   }, 30000);
 
-  it('renders the task table full width with five secondary blocks in one stacked column', async () => {
+  it('renders the task table full width with three secondary blocks in one stacked column', async () => {
     const { cr } = await seed();
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
@@ -143,7 +143,6 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       'cr-detail-block-notes',
       'cr-detail-block-jira',
       'cr-detail-block-documents',
-      'cr-detail-block-quick-links',
       'cr-detail-block-reminders',
     ];
     const blocks = blockIds.map((id) => screen.getByTestId(id));
@@ -164,7 +163,6 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       tableIndex + 2,
       tableIndex + 3,
       tableIndex + 4,
-      tableIndex + 5,
     ]);
   }, 30000);
 
@@ -221,7 +219,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await screen.findByText('CR này chưa có tác vụ nào')).toBeInTheDocument();
   }, 30000);
 
-  it('shows all four secondary blocks expanded with counts and body content, plus header meta', async () => {
+  it('shows all three secondary blocks expanded with counts and body content, plus header meta', async () => {
     const sysA = await createSystem({ parentId: null, name: 'Payment Service', code: 'PAYMENT_SVC', type: 'SERVICE' }, db);
     const cr = await createChangeRequest(
       { status: 'Open',
@@ -245,8 +243,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     // Bodies are mounted without any click.
     expect(screen.getAllByText('EPIC-42').length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'https://example.com/doc' })).toHaveAttribute('target', '_blank');
-    expect(screen.getByRole('link', { name: 'https://example.com/doc' })).toHaveAttribute('rel', 'noreferrer');
+    expect(screen.getByRole('button', { name: /Spec/ })).toHaveAttribute('title', 'https://example.com/doc');
     expect(screen.getAllByText(/2026-12-01/).length).toBeGreaterThan(0);
     expect(screen.getByText(cr.updatedAt.slice(0, 10))).toBeInTheDocument();
   }, 30000);
@@ -283,7 +280,8 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(statValue('ƯỚC TÍNH')).toBe('1h 30m');
     expect(statValue('HOÀN THÀNH')).toBe('0/1');
     expect(statValue('GHI CHÚ')).toBe('2');
-    expect(statValue('DOC / REMINDER')).toBe('1 / 1');
+    expect(statValue('LINKS')).toBe('1');
+    expect(statValue('NHẮC NHỞ')).toBe('1');
   }, 30000);
 
   it('keeps reminder count consistent between stats strip and Nhắc nhở badge for legacy reminderDate', async () => {
@@ -298,7 +296,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     await screen.findByTestId('cr-detail-stats');
 
     expect(screen.getByTestId('cr-detail-block-reminders').textContent).toContain('1');
-    expect(screen.getByTestId('cr-detail-stats').textContent).toContain('DOC / REMINDER0 / 1');
+    expect(screen.getByTestId('cr-detail-stats').textContent).toContain('NHẮC NHỞ1');
   }, 30000);
 
   it('counts only cr notes in the Ghi chú block and renders them without a click', async () => {

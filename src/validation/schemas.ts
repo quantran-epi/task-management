@@ -135,6 +135,9 @@ export const namedLinkSchema = z.object({
   url: linkSchema,
 });
 
+/** Single source of truth for the link URL rule in Ant Design form validators. */
+export const isValidLinkUrl = (value: unknown): boolean => linkSchema.safeParse(value).success;
+
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
 // Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.
 // The runtime label/color list lives in the `system_type_options` settings row.

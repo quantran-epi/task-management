@@ -4,6 +4,7 @@ import { DeleteOutlined, PlusOutlined, ApiOutlined, FolderOpenOutlined, ExportOu
 import dayjs, { type Dayjs } from 'dayjs';
 import type { ChangeRequest, CrTarget, CrType, CrStatus } from '../../types/models';
 import { openDocumentLink, browseLocalFolder } from '../../utils/documentLinks';
+import { isValidLinkUrl } from '../../validation/schemas';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { TagSelect } from '../common/TagSelect';
@@ -179,9 +180,10 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
   const handleOk = async () => {
     try {
       const values = await form.validateFields();
+      // ponytail: migrated document links have an empty name; URL is the only required part.
       const cleanedLinks = (values.links ?? [])
         .map((link) => ({ name: link?.name?.trim() ?? '', url: link?.url?.trim() ?? '' }))
-        .filter((link) => link.name && link.url);
+        .filter((link) => link.url.length > 0);
       const savedReminders = formatRemindersForSave(values.reminders);
       const epicKeyTrimmed = values.jiraEpicKey?.trim().toUpperCase();
 
@@ -358,10 +360,8 @@ export const ChangeRequestModal: React.FC<ChangeRequestModalProps> = ({
                       rules={[
                         {
                           validator: (_: unknown, value: string) => {
-                            if (!value || /^https?:\/\//i.test(value) || /^file:\/\//i.test(value) || /^[A-Za-z]:\\/.test(value) || /^\//.test(value) || /^\\\\/.test(value)) {
-                              return Promise.resolve();
-                            }
-                            return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, hoặc file URI.');
+                            if (!value || isValidLinkUrl(value)) return Promise.resolve();
+                            return Promise.reject('Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.');
                           },
                         },
                       ]}

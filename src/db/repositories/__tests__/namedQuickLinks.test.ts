@@ -8,6 +8,7 @@ import {
   ChangeRequestUpdateSchema,
   TaskInputSchema,
   TaskUpdateSchema,
+  isValidLinkUrl,
 } from '../../../validation/schemas';
 import {
   BackupChangeRequestRecordSchema,
@@ -19,23 +20,6 @@ import { createTask, updateTask } from '../taskRepo';
 
 function validNamedLink() {
   return { name: 'API spec', url: 'https://example.com/spec' };
-}
-
-function normalizeLegacyLinks(row: Record<string, unknown>): Record<string, unknown> {
-  const merged = new Map<string, { name: string; url: string }>();
-  for (const value of Array.isArray(row.documentLinks) ? row.documentLinks : []) {
-    if (typeof value === 'string') merged.set(value, { name: '', url: value });
-  }
-  for (const value of Array.isArray(row.quickLinks) ? row.quickLinks : []) {
-    const link = value as { name?: string; url?: string };
-    if (typeof link?.url === 'string') merged.set(link.url, { name: link.name ?? '', url: link.url });
-  }
-  for (const value of Array.isArray(row.links) ? row.links : []) {
-    const link = value as { name?: string; url?: string };
-    if (typeof link?.url === 'string') merged.set(link.url, { name: link.name ?? '', url: link.url });
-  }
-  const { documentLinks: _d, quickLinks: _q, ...rest } = row;
-  return { ...rest, links: Array.from(merged.values()) };
 }
 
 function validCrRow(overrides: Record<string, unknown> = {}) {
@@ -71,6 +55,14 @@ describe('namedQuickLinks schema validation', () => {
     expect(ChangeRequestUpdateSchema.parse({ links: [link] }).links).toEqual([link]);
     expect(TaskInputSchema.parse({ crId: validTaskRow().crId, name: 'Task', links: [link] }).links).toEqual([link]);
     expect(TaskUpdateSchema.parse({ links: [link] }).links).toEqual([link]);
+  });
+
+  it('accepts document UUID links in input, backup and form validators', () => {
+    const docId = '55555555-5555-4555-8555-555555555555';
+    expect(TaskInputSchema.parse({ crId: validTaskRow().crId, name: 'Task', links: [{ name: 'Doc', url: docId }] }).links).toEqual([{ name: 'Doc', url: docId }]);
+    expect(BackupTaskRecordSchema.parse(validTaskRow({ links: [{ name: '', url: docId }] })).links).toEqual([{ name: '', url: docId }]);
+    expect(isValidLinkUrl(docId)).toBe(true);
+    expect(isValidLinkUrl('javascript:alert(1)')).toBe(false);
   });
 
   it('rejects empty/overlong names and unsafe URLs', () => {
@@ -116,14 +108,14 @@ describe('namedQuickLinks schema validation', () => {
       exportedAt: '2026-01-01T00:00:00.000Z',
       tables: {
         tasks: [
-          normalizeLegacyLinks(validTaskRow({
+          validTaskRow({
             documentLinks: ['/Users/me/specs'],
             quickLinks: [link],
-          })),
+          }),
           validTaskRow({ id: '55555555-5555-4555-8555-555555555555', crId: secondCrId }),
         ],
         changeRequests: [
-          normalizeLegacyLinks(validCrRow({ id: crId, documentLinks: ['https://x.test/duplicate'], quickLinks: [{ name: 'First', url: 'https://x.test/duplicate' }] })),
+          validCrRow({ id: crId, documentLinks: ['https://x.test/duplicate'], quickLinks: [{ name: 'First', url: 'https://x.test/duplicate' }] }),
           validCrRow({ id: secondCrId, code: 'QL-002' }),
         ],
       },

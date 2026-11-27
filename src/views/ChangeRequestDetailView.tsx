@@ -112,7 +112,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     doneCount: tasks.filter((t) => t.status === 'Done').length,
     estimateLabel: formatMinutes(tasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0)),
     noteCount: crNotesCount,
-    docCount: cr?.links?.length ?? 0,
     linkCount: cr?.links?.length ?? 0,
     reminderCount: Math.max(cr?.reminders?.length ?? 0, cr?.reminderDate ? 1 : 0),
   }), [tasks, crNotesCount, cr]);
@@ -254,27 +253,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       ),
     },
     {
-      key: 'documents',
+      key: 'links',
       testId: 'cr-detail-block-documents',
-      header: 'Tài liệu liên kết',
-      count: cr.links?.length ?? 0,
-      body:
-        cr.links && cr.links.length > 0 ? (
-          <Space direction="vertical" size={2}>
-            {cr.links.map(({ url: link }) => (
-              <a key={link} href={link} target="_blank" rel="noreferrer" style={{ fontSize: 'var(--font-size-small)' }}>
-                {link}
-              </a>
-            ))}
-          </Space>
-        ) : (
-          <span style={mutedStyle}>Chưa có</span>
-        ),
-    },
-    {
-      key: 'quick-links',
-      testId: 'cr-detail-block-quick-links',
-      header: 'Liên kết nhanh',
+      header: 'Links',
       count: stats.linkCount,
       body:
         stats.linkCount > 0 ? (
@@ -428,8 +409,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           ['ƯỚC TÍNH', stats.estimateLabel],
           ['HOÀN THÀNH', `${stats.doneCount}/${stats.taskCount}`],
           ['GHI CHÚ', String(stats.noteCount)],
-          ['DOC / REMINDER', `${stats.docCount} / ${stats.reminderCount}`],
-          ['LIÊN KẾT NHANH', String(stats.linkCount)],
+          ['LINKS', String(stats.linkCount)],
+          ['NHẮC NHỞ', String(stats.reminderCount)],
         ] as const).map(([label, value], index) => (
           <React.Fragment key={label}>
             {index > 0 && <span style={{ width: 1, height: 20, background: 'var(--border)' }} />}
