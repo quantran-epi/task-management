@@ -7,12 +7,10 @@ import {
   saveTelegramSettings,
   upsertWhitelistUser,
   deleteWhitelistUser,
-  upsertDeviceEnrollment,
   recordStandaloneAccessRequest,
   denyStandaloneAccessRequest,
 } from '../services/telegram/telegramSettingsService';
 
-import { buildPolicyPayload } from '../services/telegram/telegramDevicePolicy';
 import type { StandaloneAccessRecord } from '../services/telegram/standaloneAccessService';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
 import {
@@ -38,9 +36,7 @@ async function invokeAccessBridge(command: string, args?: Record<string, unknown
 }
 
 export const TelegramMonitorView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'monitor' | 'whitelist' | 'settings' | 'devices'>('monitor');
-  const [modelDrafts, setModelDrafts] = useState<Record<string, string[]>>({});
-  const [defaultModelDrafts, setDefaultModelDrafts] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<'monitor' | 'whitelist' | 'settings'>('monitor');
   const [standaloneRequests, setStandaloneRequests] = useState<string[]>([]);
   const message = useMessage();
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -75,12 +71,6 @@ export const TelegramMonitorView: React.FC = () => {
   const { pendingUsers, pendingCount, quickApprove, blockUser, unblockUser: unblockHookUser, dismissUser } = useTelegramPendingUsers();
   const settingsRecord = useLiveQuery(() => db.telegramSettings.get('default'));
   const whitelist = useLiveQuery(() => db.telegramWhitelist.toArray(), []) || [];
-  const devices = useLiveQuery(
-    () => db.telegramWhitelist.filter((row) => Boolean(row.telegramUserId)).toArray(),
-    []
-  ) || [];
-  const cachedModelsRecord = useLiveQuery(() => db.settings.get('ninerouter_cached_models'), []);
-  const cachedModels = Array.isArray(cachedModelsRecord?.value) ? (cachedModelsRecord.value as string[]) : [];
   const logs =
     useLiveQuery(
       () => db.telegramSessionLogs.orderBy('createdAt').reverse().limit(100).toArray(),
@@ -766,20 +756,6 @@ export const TelegramMonitorView: React.FC = () => {
                             </Space>
 
                             <Space wrap>
-                              {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') ? (
-                                <Button
-                                  size="small"
-                                  type="primary"
-                                  icon={<EditOutlined />}
-                                  onClick={() => {
-                                    setActiveTab('devices');
-                                    message.info('Chọn model cho user này trong tab AI Chat Devices, rồi bấm Áp dụng.');
-                                  }}
-                                >
-                                  Duyệt &amp; setup whitelist
-                                </Button>
-                              ) : (
-                                <>
                               <Button
                                 size="small"
                                 type="primary"
@@ -816,8 +792,6 @@ export const TelegramMonitorView: React.FC = () => {
                               >
                                 Tuỳ chỉnh & Duyệt
                               </Button>
-                                </>
-                              )}
 
                               {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') && (
                                 <Popconfirm
@@ -1107,160 +1081,6 @@ export const TelegramMonitorView: React.FC = () => {
                     </Space>
                   </Form>
                 </div>
-              ),
-            },
-            {
-              key: 'devices',
-              label: (
-                <span>
-                  <SafetyCertificateOutlined /> AI Chat Devices
-                </span>
-              ),
-              children: (
-                <Table
-                  rowKey={(row) => row.telegramUserId ?? row.chatId}
-                  dataSource={devices}
-                  pagination={false}
-                  size="small"
-                  columns={[
-                    {
-                      title: 'Telegram User ID',
-                      dataIndex: 'telegramUserId',
-                      render: (value: string | undefined, row) => <span>{value ?? row.chatId}</span>,
-                    },
-                    { title: 'Tên', dataIndex: 'name' },
-                    {
-                      title: 'Trạng thái',
-                      dataIndex: 'deviceStatus',
-                      render: (value: string | undefined) => {
-                        const status = value ?? 'pending';
-                        const color = status === 'approved' ? 'success' : status === 'revoked' ? 'error' : 'warning';
-                        return <Tag color={color}>{status}</Tag>;
-                      },
-                    },
-                    {
-                      title: 'Model được phép',
-                      key: 'allowedModels',
-                      render: (_: unknown, row) => (
-                        <Space wrap size={4}>
-                          {(row.allowedModels ?? []).map((model) => <Tag key={model}>{model}</Tag>)}
-                          <Select
-                            mode="tags"
-                            size="small"
-                            style={{ minWidth: 200 }}
-                            placeholder="Chọn hoặc nhập model"
-                            value={modelDrafts[row.chatId] ?? row.allowedModels ?? []}
-                            options={cachedModels.map((model) => ({ label: model, value: model }))}
-                            onChange={(values: string[]) =>
-                              setModelDrafts((prev) => ({ ...prev, [row.chatId]: values }))
-                            }
-                          />
-                        </Space>
-                      ),
-                    },
-                    {
-                      title: 'Model mặc định',
-                      key: 'defaultModel',
-                      render: (_: unknown, row) => (
-                        <Select
-                          size="small"
-                          allowClear
-                          style={{ minWidth: 140 }}
-                          placeholder="Chọn model mặc định"
-                          value={defaultModelDrafts[row.chatId] ?? row.remoteSettings?.defaultModel ?? undefined}
-                          options={Array.from(new Set(modelDrafts[row.chatId] ?? row.allowedModels ?? []))
-                            .map((model) => ({ label: model, value: model }))}
-                          onChange={(value: string | undefined) =>
-                            setDefaultModelDrafts((prev) => ({ ...prev, [row.chatId]: value ?? '' }))
-                          }
-                        />
-                      ),
-                    },
-                    {
-                      title: 'Pairing hết hạn',
-                      dataIndex: 'pairingCodeExpiresAt',
-                      render: (value: string | undefined) => value ?? '—',
-                    },
-                    {
-                      title: 'Thao tác',
-                      key: 'actions',
-                      render: (_: unknown, row) => (
-                        <Space size={4}>
-                          <Button
-                            size="small"
-                            type="primary"
-                            onClick={async () => {
-                              const models = modelDrafts[row.chatId] ?? row.allowedModels ?? [];
-                              if (!models.length) {
-                                message.error('Chọn ít nhất một model trước khi áp dụng.');
-                                return;
-                              }
-                              const defaultModel = defaultModelDrafts[row.chatId] ?? row.remoteSettings?.defaultModel;
-                              if (defaultModel && !models.includes(defaultModel)) {
-                                message.error('Model mặc định phải nằm trong danh sách model được phép.');
-                                return;
-                              }
-                              const identity = row.telegramUserId ?? row.chatId;
-                              try {
-                                const updated = await upsertDeviceEnrollment({
-                                  telegramUserId: identity,
-                                  chatId: row.chatId,
-                                  deviceStatus: 'approved',
-                                  allowedModels: models,
-                                  remoteSettings: {
-                                    ...row.remoteSettings,
-                                    ...(defaultModelDrafts[row.chatId]
-                                      ? { defaultModel: defaultModelDrafts[row.chatId] }
-                                      : {}),
-                                    maxHistoryTurns: row.maxHistoryTurns,
-                                  },
-                                });
-                                const token = buildPolicyPayload(
-                                  updated,
-                                  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-                                );
-                                await invokeAccessBridge('standalone_access_apply', {
-                                  telegramUserId: identity,
-                                  status: 'approved',
-                                  policyToken: token,
-                                });
-                                message.success('Đã áp dụng cấu hình; standalone sẽ nhận trong vài giây.');
-                              } catch (err) {
-                                message.error('Không thể áp dụng: ' + String(err));
-                              }
-                            }}
-                          >
-                            Áp dụng
-                          </Button>
-                          {row.deviceStatus !== 'revoked' && (
-                            <Button
-                              size="small"
-                              danger
-                              onClick={async () => {
-                                try {
-                                  await upsertDeviceEnrollment({
-                                    telegramUserId: row.telegramUserId ?? row.chatId,
-                                    chatId: row.chatId,
-                                    deviceStatus: 'revoked',
-                                  });
-                                  await invokeAccessBridge('standalone_access_apply', {
-                                    telegramUserId: row.telegramUserId ?? row.chatId,
-                                    status: 'revoked',
-                                  });
-                                  message.success('Đã thu hồi thiết bị.');
-                                } catch (err) {
-                                  message.error('Không thể thu hồi: ' + String(err));
-                                }
-                              }}
-                            >
-                              Thu hồi
-                            </Button>
-                          )}
-                        </Space>
-                      ),
-                    },
-                  ]}
-                />
               ),
             },
           ]}
