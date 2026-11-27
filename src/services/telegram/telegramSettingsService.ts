@@ -241,6 +241,26 @@ export async function getPendingTelegramUsers(
   return await db.telegramWhitelist.where('status').equals('pending').toArray();
 }
 
+/** Standalone bridge request lands in the existing whitelist as a pending device row. */
+export async function recordStandaloneAccessRequest(
+  telegramUserId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ user: TelegramWhitelistUser; isNew: boolean }> {
+  const identity = telegramUserId.trim();
+  if (!/^\d{6,12}$/.test(identity)) throw new Error('Telegram User ID không hợp lệ (cần 6-12 chữ số).');
+  const existing = await findWhitelistByIdentity(identity, db);
+  if (existing) return { user: existing, isNew: false };
+  return await recordPendingTelegramUser(identity, `Standalone ${identity}`, db, identity);
+}
+
+export async function denyStandaloneAccessRequest(
+  telegramUserId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser> {
+  const identity = telegramUserId.trim();
+  return await blockPendingUser(identity, db);
+}
+
 export async function approvePendingUser(
   chatId: string,
   overrides?: Partial<TelegramWhitelistUser>,

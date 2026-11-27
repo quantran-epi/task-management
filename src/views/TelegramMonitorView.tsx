@@ -8,7 +8,12 @@ import {
   upsertWhitelistUser,
   deleteWhitelistUser,
   upsertDeviceEnrollment,
+  recordStandaloneAccessRequest,
+  denyStandaloneAccessRequest,
 } from '../services/telegram/telegramSettingsService';
+
+import { buildPolicyPayload } from '../services/telegram/telegramDevicePolicy';
+import type { StandaloneAccessRecord } from '../services/telegram/standaloneAccessService';
 import { useTelegramPendingUsers } from '../hooks/useTelegramPendingUsers';
 import {
   sendTelegramDirectMessage,
@@ -29,6 +34,8 @@ const { Text, Title } = Typography;
 export const TelegramMonitorView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'monitor' | 'whitelist' | 'settings' | 'devices'>('monitor');
   const [modelDrafts, setModelDrafts] = useState<Record<string, string[]>>({});
+  const [defaultModelDrafts, setDefaultModelDrafts] = useState<Record<string, string>>({});
+  const [standaloneRequests, setStandaloneRequests] = useState<string[]>([]);
   const message = useMessage();
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [botError, setBotError] = useState<string | null>(null);
@@ -87,6 +94,27 @@ export const TelegramMonitorView: React.FC = () => {
       setDefaultMaxHistoryTurns(settingsRecord.maxHistoryTurns ?? 5);
     }
   }, [settingsRecord]);
+
+  // Import pending standalone bridge requests into the existing whitelist every 3s.
+  useEffect(() => {
+    if (!isTauriApp()) return undefined;
+    let active = true;
+    const poll = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const records = await invoke<StandaloneAccessRecord[]>('standalone_access_list');
+        if (!active || !Array.isArray(records)) return;
+        const pending = records.filter((record) => record?.status === 'pending');
+        setStandaloneRequests(pending.map((record) => record.telegramUserId));
+        for (const record of pending) await recordStandaloneAccessRequest(record.telegramUserId, db);
+      } catch {
+        // Bridge absent/unavailable: admin UI keeps working with persisted whitelist rows.
+      }
+    };
+    void poll();
+    const timer = setInterval(() => { void poll(); }, 3000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
 
   // Initial status check & listen to Tauri events
   useEffect(() => {
@@ -719,6 +747,9 @@ export const TelegramMonitorView: React.FC = () => {
                               <Space>
                                 <strong style={{ fontSize: 14 }}>{p.name || 'Người dùng mới'}</strong>
                                 <Tag color="warning">Pending</Tag>
+                                {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') && (
+                                  <Tag color="blue">Yêu cầu từ Chat standalone</Tag>
+                                )}
                                 <Text copyable style={{ fontSize: 'var(--font-size-small)', color: 'var(--accent)' }}>
                                   {p.chatId}
                                 </Text>
@@ -765,6 +796,27 @@ export const TelegramMonitorView: React.FC = () => {
                               >
                                 Tuỳ chỉnh & Duyệt
                               </Button>
+
+                              {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') && (
+                                <Popconfirm
+                                  title="Từ chối yêu cầu này?"
+                                  description="Standalone sẽ nhận trạng thái từ chối và phải gửi lại yêu cầu."
+                                  okText="Từ chối"
+                                  cancelText="Huỷ"
+                                  onConfirm={async () => {
+                                    try {
+                                      const { invoke } = await import('@tauri-apps/api/core');
+                                      await denyStandaloneAccessRequest(p.chatId, db);
+                                      await invoke('standalone_access_apply', { telegramUserId: p.chatId, status: 'denied' });
+                                      message.info('Đã từ chối yêu cầu.');
+                                    } catch (err) {
+                                      message.error('Không thể từ chối: ' + String(err));
+                                    }
+                                  }}
+                                >
+                                  <Button size="small" danger icon={<StopOutlined />}>Từ chối</Button>
+                                </Popconfirm>
+                              )}
 
                               <Popconfirm
                                 title="Chặn người dùng này?"
@@ -1086,20 +1138,24 @@ export const TelegramMonitorView: React.FC = () => {
                       ),
                     },
                     {
-                      title: 'Remote settings',
-                      key: 'remoteSettings',
-                      render: (_: unknown, row) => {
-                        const settings = row.remoteSettings;
-                        if (!settings) return <span>—</span>;
-                        return (
-                          <span>
-                            {settings.defaultModel ? `model: ${settings.defaultModel}; ` : ''}
-                            {settings.maxHistoryTurns !== undefined
-                              ? `turns: ${settings.maxHistoryTurns}`
-                              : ''}
-                          </span>
-                        );
-                      },
+                      title: 'Model mặc định',
+                      key: 'defaultModel',
+                      render: (_: unknown, row) => (
+                        <Select
+                          size="small"
+                          allowClear
+                          style={{ minWidth: 140 }}
+                          placeholder="Chọn model mặc định"
+                          value={defaultModelDrafts[row.chatId] ?? row.remoteSettings?.defaultModel ?? undefined}
+                          options={Array.from(new Set([
+                            ...cachedModels,
+                            ...(modelDrafts[row.chatId] ?? row.allowedModels ?? []),
+                          ])).map((model) => ({ label: model, value: model }))}
+                          onChange={(value: string | undefined) =>
+                            setDefaultModelDrafts((prev) => ({ ...prev, [row.chatId]: value ?? '' }))
+                          }
+                        />
+                      ),
                     },
                     {
                       title: 'Pairing hết hạn',
@@ -1114,47 +1170,70 @@ export const TelegramMonitorView: React.FC = () => {
                           <Button
                             size="small"
                             type="primary"
-                            disabled={row.deviceStatus === 'approved'}
                             onClick={async () => {
                               const models = modelDrafts[row.chatId] ?? row.allowedModels ?? [];
                               if (!models.length) {
-                                message.error('Chọn ít nhất một model trước khi duyệt.');
+                                message.error('Chọn ít nhất một model trước khi áp dụng.');
                                 return;
                               }
+                              const identity = row.telegramUserId ?? row.chatId;
                               try {
-                                await upsertDeviceEnrollment({
-                                  telegramUserId: row.telegramUserId ?? '',
+                                const updated = await upsertDeviceEnrollment({
+                                  telegramUserId: identity,
                                   chatId: row.chatId,
                                   deviceStatus: 'approved',
                                   allowedModels: models,
+                                  remoteSettings: {
+                                    ...row.remoteSettings,
+                                    ...(defaultModelDrafts[row.chatId]
+                                      ? { defaultModel: defaultModelDrafts[row.chatId] }
+                                      : {}),
+                                    maxHistoryTurns: row.maxHistoryTurns,
+                                  },
                                 });
-                                message.success('Đã duyệt thiết bị và phát mã ghép cặp.');
+                                const { invoke } = await import('@tauri-apps/api/core');
+                                const token = buildPolicyPayload(
+                                  updated,
+                                  new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                                );
+                                await invoke('standalone_access_apply', {
+                                  telegramUserId: identity,
+                                  status: 'approved',
+                                  policyToken: token,
+                                });
+                                message.success('Đã áp dụng cấu hình; standalone sẽ nhận trong vài giây.');
                               } catch (err) {
-                                message.error('Không thể duyệt: ' + String(err));
+                                message.error('Không thể áp dụng: ' + String(err));
                               }
                             }}
                           >
-                            Duyệt
+                            Áp dụng
                           </Button>
-                          <Button
-                            size="small"
-                            danger
-                            disabled={row.deviceStatus === 'revoked'}
-                            onClick={async () => {
-                              try {
-                                await upsertDeviceEnrollment({
-                                  telegramUserId: row.telegramUserId ?? '',
-                                  chatId: row.chatId,
-                                  deviceStatus: 'revoked',
-                                });
-                                message.success('Đã thu hồi thiết bị.');
-                              } catch (err) {
-                                message.error('Không thể thu hồi: ' + String(err));
-                              }
-                            }}
-                          >
-                            Thu hồi
-                          </Button>
+                          {row.deviceStatus !== 'revoked' && (
+                            <Button
+                              size="small"
+                              danger
+                              onClick={async () => {
+                                try {
+                                  await upsertDeviceEnrollment({
+                                    telegramUserId: row.telegramUserId ?? row.chatId,
+                                    chatId: row.chatId,
+                                    deviceStatus: 'revoked',
+                                  });
+                                  const { invoke } = await import('@tauri-apps/api/core');
+                                  await invoke('standalone_access_apply', {
+                                    telegramUserId: row.telegramUserId ?? row.chatId,
+                                    status: 'revoked',
+                                  });
+                                  message.success('Đã thu hồi thiết bị.');
+                                } catch (err) {
+                                  message.error('Không thể thu hồi: ' + String(err));
+                                }
+                              }}
+                            >
+                              Thu hồi
+                            </Button>
+                          )}
                         </Space>
                       ),
                     },

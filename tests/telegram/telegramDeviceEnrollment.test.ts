@@ -3,12 +3,14 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   findWhitelistByIdentity,
   recordPendingTelegramUser,
+  recordStandaloneAccessRequest,
+  denyStandaloneAccessRequest,
   upsertDeviceEnrollment,
   getWhitelistUser,
   blockPendingUser,
 } from '../../src/services/telegram/telegramSettingsService';
 import { processTelegramInboundMessage } from '../../src/services/telegram/telegramHeadlessWorker';
-import { parsePolicyPayload } from '../../src/services/telegram/telegramDevicePolicy';
+import { buildPolicyPayload, parsePolicyPayload } from '../../src/services/telegram/telegramDevicePolicy';
 import type { TelegramInboundEvent } from '../../src/services/telegram/telegramTypes';
 
 vi.mock('../../src/utils/desktopNotification', () => ({
@@ -182,6 +184,38 @@ describe('Telegram device enrollment', () => {
     await dispatch('/policy');
     expect(replies[0]).toContain('thu hồi');
     expect(replies[0]).not.toContain('TMMATE_POLICY_V1:');
+  });
+
+  it('imports a standalone request once without overwriting an existing row', async () => {
+    const first = await recordStandaloneAccessRequest('123456789', testDb);
+    expect(first.isNew).toBe(true);
+    expect(first.user).toMatchObject({ status: 'pending', deviceStatus: 'pending', chatId: '123456789' });
+    expect(first.user.name).toBe('Standalone 123456789');
+
+    await testDb.telegramWhitelist.update('123456789', { dailyLimit: 42 });
+    const again = await recordStandaloneAccessRequest('123456789', testDb);
+    expect(again.isNew).toBe(false);
+    expect(again.user.dailyLimit).toBe(42);
+    expect(again.user.chatId).toBe('123456789');
+    expect(again.user.status).toBe('pending');
+
+    const denied = await denyStandaloneAccessRequest('123456789', testDb);
+    expect(denied).toMatchObject({ status: 'blocked', deviceStatus: 'revoked' });
+  });
+
+  it('pins remoteSettings.defaultModel alongside the whitelist', async () => {
+    await recordStandaloneAccessRequest('123456789', testDb);
+    const row = await upsertDeviceEnrollment({
+      telegramUserId: '123456789',
+      chatId: '123456789',
+      deviceStatus: 'approved',
+      allowedModels: ['model-a', 'model-b'],
+      remoteSettings: { defaultModel: 'model-b', maxHistoryTurns: 5 },
+    }, testDb);
+    expect(row.allowedModels).toEqual(['model-a', 'model-b']);
+    expect(row.remoteSettings?.defaultModel).toBe('model-b');
+    const token = buildPolicyPayload(row, '2099-01-01T00:00:00.000Z');
+    expect(parsePolicyPayload(token).remoteSettings.defaultModel).toBe('model-b');
   });
 
   it('does not attach an identity to legacy rows approved through the old wizard', async () => {
