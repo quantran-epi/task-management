@@ -30,6 +30,7 @@ pub fn run() {
         .manage(tool_cancel::ToolTaskRegistry::default())
         .invoke_handler(tauri::generate_handler![
             open_devtools,
+            sqlcl_pty_debug::sqlcl_pty_dump_export,
             desktop_notification::send_clickable_notification,
             sqlite_persistence::select_sqlite_path,
             sqlite_persistence::sqlite_file_status,

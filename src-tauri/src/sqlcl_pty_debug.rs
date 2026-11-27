@@ -1,44 +1,38 @@
-//! Bounded, opt-in raw PTY dump for persistent SQLcl sessions.
+//! Bounded in-memory PTY trace for persistent SQLcl sessions.
 //!
-//! Enabled only when `TASKMATE_SQLCL_DUMP=1`. Default path:
-//! `$HOME/Library/Application Support/com.personal.taskplanner/sqlcl-pty-debug.log`
-//! on macOS, or `$TASKMATE_SQLCL_DUMP_PATH` when set. The dump escapes control bytes and applies
-//! a conservative redaction pass; it is a diagnostic aid, not proof that no secret can appear.
+//! Enabled in every build so a live debug session can be exported from Settings → Remote SSH.
+//! The buffer is capped at 64 KiB, stores escaped bytes only, and applies a conservative redaction
+//! pass at export time. Nothing is written to disk automatically.
 
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Mutex;
 
-const MAX_DUMP_BYTES: usize = 64 * 1024;
+const MAX_TRACE_BYTES: usize = 64 * 1024;
 
-static DUMP: Mutex<Option<DumpState>> = Mutex::new(None);
+static TRACE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
-struct DumpState {
-    file: File,
-    bytes: usize,
-}
-
-fn dump_path() -> PathBuf {
-    if let Ok(path) = std::env::var("TASKMATE_SQLCL_DUMP_PATH") {
-        return PathBuf::from(path);
+/// Append one labelled fragment. Excess bytes are dropped from the front so the newest evidence
+/// survives; this is diagnostic-only state, never domain data.
+pub(crate) fn dump(label: &str, bytes: &[u8]) {
+    let Ok(mut trace) = TRACE.lock() else { return };
+    let line = format!("{} {}\n", label, escaped(bytes));
+    trace.extend_from_slice(line.as_bytes());
+    if trace.len() > MAX_TRACE_BYTES {
+        let excess = trace.len() - MAX_TRACE_BYTES;
+        trace.drain(0..excess);
     }
-    let base = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(base)
-        .join("Library")
-        .join("Application Support")
-        .join("com.personal.taskplanner")
-        .join("sqlcl-pty-debug.log")
 }
 
-fn enabled() -> bool {
-    matches!(std::env::var("TASKMATE_SQLCL_DUMP").as_deref(), Ok("1") | Ok("true"))
+/// Export the current trace as one printable string. Redaction is applied here, once, on output.
+#[tauri::command]
+pub fn sqlcl_pty_dump_export(clear: bool) -> Result<String, String> {
+    let mut trace = TRACE.lock().map_err(|e| e.to_string())?;
+    let bytes = if clear { std::mem::take(&mut *trace) } else { trace.clone() };
+    Ok(redact(&String::from_utf8_lossy(&bytes)))
 }
 
-/// Escape bytes into a single printable line fragment. Keeps ASCII and common Unicode; renders
-/// CR/LF/TAB and other control bytes as `\xNN`. Truncates at a UTF-8 boundary.
+/// Escape bytes into a single printable line fragment. Keeps ASCII; renders CR/LF/TAB and other
+/// control bytes as `\xNN`. Truncates a single fragment at 2048 bytes so one noisy line cannot
+/// crowd out the rest of the trace.
 fn escaped(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().min(2048));
     for &b in input.iter().take(2048) {
@@ -55,13 +49,11 @@ fn escaped(input: &[u8]) -> String {
 
 fn redact(fragment: &str) -> String {
     let mut out = fragment.to_string();
-    // Conservative, case-insensitive token-like values. Deliberately broad for a local dump:
-    // better to lose a diagnostic than to write a credential to disk.
     let markers = [
         "password", "passwd", "pwd", "token", "secret", "keyring", "authorization",
         "bearer", "api_key", "apikey", "connection", "conn",
     ];
-    for pass in 0..8 {
+    for _ in 0..8 {
         let lower = out.to_lowercase();
         let mut changed = false;
         for marker in markers {
@@ -98,39 +90,11 @@ fn redact(fragment: &str) -> String {
                 from = key_end;
             }
         }
-        if !changed || pass == 7 {
+        if !changed {
             break;
         }
     }
     out
-}
-
-/// Public entry point. Never panics and never blocks on user input.
-pub(crate) fn dump(label: &str, bytes: &[u8]) {
-    if !enabled() {
-        return;
-    }
-    let Ok(mut guard) = DUMP.lock() else { return };
-    if guard.is_none() {
-        let path = dump_path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let file = OpenOptions::new().create(true).append(true).open(path);
-        let Ok(file) = file else { return };
-        *guard = Some(DumpState { file, bytes: 0 });
-    }
-    let state = guard.as_mut().expect("initialized above");
-    if state.bytes >= MAX_DUMP_BYTES {
-        return;
-    }
-    let fragment = redact(&escaped(bytes));
-    let line = format!("{} {}\n", label, fragment);
-    let take = line.len().min(MAX_DUMP_BYTES - state.bytes);
-    if state.file.write_all(&line.as_bytes()[..take]).is_ok() {
-        state.bytes += take;
-        let _ = state.file.flush();
-    }
 }
 
 #[cfg(test)]
@@ -154,5 +118,20 @@ mod tests {
         assert!(!out.contains("hunter2"));
         assert!(!out.contains("abc123"));
         assert!(out.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn trace_is_bounded_and_clearable() {
+        if let Ok(mut trace) = TRACE.lock() {
+            trace.clear();
+        }
+        for _ in 0..100 {
+            dump("TEST", &[b'x'; 1024]);
+        }
+        let exported = sqlcl_pty_dump_export(false).expect("export");
+        assert!(exported.len() <= MAX_TRACE_BYTES);
+        let cleared = sqlcl_pty_dump_export(true).expect("clear");
+        assert_eq!(cleared, exported);
+        assert!(sqlcl_pty_dump_export(false).expect("empty").is_empty());
     }
 }

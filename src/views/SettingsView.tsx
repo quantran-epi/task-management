@@ -23,6 +23,7 @@ import { StoragePersistenceCard } from '../components/settings/StoragePersistenc
 import { LocalSqlitePersistenceCard } from '../components/settings/LocalSqlitePersistenceCard';
 import { NotificationSettingsCard } from '../components/settings/NotificationSettingsCard';
 import { SshConfigCard } from '../components/settings/SshConfigCard';
+import { SqlclPtyDebugCard } from '../components/settings/SqlclPtyDebugCard';
 import { SystemTypeOptionsCard } from '../components/settings/SystemTypeOptionsCard';
 import { OracleAiToolConfigCard } from '../components/settings/OracleAiToolConfigCard';
 import { SshFsAiToolConfigCard } from '../components/settings/SshFsAiToolConfigCard';
@@ -287,6 +288,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Text strong>Kết nối SSH</Text>
           <SshConfigCard db={db} />
+          <SqlclPtyDebugCard />
           <Text strong>Phân loại hệ thống</Text>
           <SystemTypeOptionsCard db={db} />
         </Space>
