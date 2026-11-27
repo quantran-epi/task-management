@@ -65,12 +65,12 @@ describe('namedQuickLinks schema validation', () => {
     expect(isValidLinkUrl('javascript:alert(1)')).toBe(false);
   });
 
-  it('rejects empty/overlong names and unsafe URLs', () => {
+  it('accepts empty names but rejects overlong names and unsafe URLs', () => {
     for (const schema of [ChangeRequestInputSchema, TaskInputSchema]) {
       const base = schema === ChangeRequestInputSchema
         ? { name: 'CR', code: 'QL', targets: [] }
         : { crId: validTaskRow().crId, name: 'Task' };
-      expect(schema.safeParse({ ...base, links: [{ name: '', url: 'https://x.test' }] }).success).toBe(false);
+      expect(schema.safeParse({ ...base, links: [{ name: '', url: 'https://x.test' }] }).success).toBe(true);
       expect(schema.safeParse({ ...base, links: [{ name: 'x'.repeat(81), url: 'https://x.test' }] }).success).toBe(false);
       expect(schema.safeParse({ ...base, links: [{ name: 'OK', url: 'javascript:alert(1)' }] }).success).toBe(false);
       expect(schema.safeParse({ ...base, links: [{ name: 'OK', url: 'data:text/html,x' }] }).success).toBe(false);

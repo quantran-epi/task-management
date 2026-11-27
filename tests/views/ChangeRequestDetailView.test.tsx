@@ -469,4 +469,65 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     fireEvent.click(reloadBtn);
     expect(useLayoutStore.getState().tabReloadKeys[`cr-${cr.id}`]).toBe(1);
   }, 30000);
+
+  async function seedLinkView() {
+    const { cr } = await seed();
+    render(<ThemeAppHolder><ChangeRequestDetailView changeRequestId={cr.id} db={db} /></ThemeAppHolder>);
+    await screen.findByTestId('cr-detail-link-url');
+    return cr;
+  }
+
+  function setLinkInput(testId: string, value: string) {
+    const node = screen.getByTestId(testId);
+    const input = (node.matches('input') ? node : node.querySelector('input')) as HTMLInputElement;
+    fireEvent.change(input, { target: { value } });
+  }
+
+  it('adds a link with an empty name straight into cr.links and labels it with the URL', async () => {
+    const cr = await seedLinkView();
+    const url = 'https://example.com/runbook';
+
+    setLinkInput('cr-detail-link-url', url);
+    fireEvent.click(screen.getByTestId('cr-detail-link-add'));
+
+    await waitFor(async () => {
+      const stored = await db.changeRequests.get(cr.id);
+      expect(stored?.links).toEqual([{ name: '', url }]);
+    });
+    const linkButton = screen.getByRole('button', { name: `link ${url}` });
+    expect(linkButton).toHaveAttribute('title', url);
+    expect(screen.getByTestId('cr-detail-stats').textContent).toContain('LINKS1');
+    expect(screen.queryByText('Chỉnh sửa Change Request')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cr-detail-link-url')).toHaveValue('');
+  }, 30000);
+
+  it('adds a named link and shows the name with the URL as tooltip', async () => {
+    const cr = await seedLinkView();
+    const url = 'https://example.com/runbook';
+
+    setLinkInput('cr-detail-link-name', 'Runbook');
+    setLinkInput('cr-detail-link-url', url);
+    fireEvent.click(screen.getByTestId('cr-detail-link-add'));
+
+    await waitFor(async () => {
+      const stored = await db.changeRequests.get(cr.id);
+      expect(stored?.links).toEqual([{ name: 'Runbook', url }]);
+    });
+    expect(screen.getByRole('button', { name: 'link Runbook' })).toHaveAttribute('title', url);
+    expect(screen.getByTestId('cr-detail-link-name')).toHaveValue('');
+  }, 30000);
+
+  it('rejects an unsafe URL without writing to cr.links', async () => {
+    const cr = await seedLinkView();
+
+    setLinkInput('cr-detail-link-url', 'javascript:alert(1)');
+    fireEvent.click(screen.getByTestId('cr-detail-link-add'));
+
+    await waitFor(() => {
+      expect(screen.getByText('URL không hợp lệ')).toBeInTheDocument();
+    });
+    const stored = await db.changeRequests.get(cr.id);
+    expect(stored?.links).toBeUndefined();
+    expect(screen.getByTestId('cr-detail-stats').textContent).not.toContain('LINKS1');
+  }, 30000);
 });

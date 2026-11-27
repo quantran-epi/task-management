@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Dropdown, Empty, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Dropdown, Empty, Input, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -17,6 +17,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
+import { isValidLinkUrl } from '../validation/schemas';
 import { searchIncludes } from '../utils/searchText';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
@@ -73,6 +74,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
   const reloadTab = useLayoutStore((s) => s.reloadTab);
@@ -205,6 +208,26 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     });
   };
 
+  const handleAddLink = async () => {
+    const trimmed = linkUrl.trim();
+    if (!trimmed || !isValidLinkUrl(trimmed)) {
+      message.error('URL không hợp lệ');
+      return;
+    }
+    try {
+      await updateChangeRequest(
+        cr.id,
+        { links: [...(cr.links ?? []), { name: linkName.trim(), url: trimmed }] },
+        db
+      );
+      message.success('Đã thêm liên kết');
+      setLinkName('');
+      setLinkUrl('');
+    } catch {
+      message.error('Không thể thêm liên kết');
+    }
+  };
+
   const handleSubsystemChange = async (task: Task, value: string) => {
     try {
       await updateTask(
@@ -257,24 +280,49 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       testId: 'cr-detail-block-documents',
       header: 'Links',
       count: stats.linkCount,
-      body:
-        stats.linkCount > 0 ? (
-          <Space size={8} wrap>
-            {(cr.links ?? []).map((link, idx) => (
-              <Button
-                key={`${idx}-${link.url}`}
-                size="small"
-                title={link.url}
-                icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-              >
-                {link.name || link.url}
-              </Button>
-            ))}
+      body: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
+          {stats.linkCount > 0 ? (
+            <Space size={8} wrap>
+              {(cr.links ?? []).map((link, idx) => (
+                <Button
+                  key={`${idx}-${link.url}`}
+                  size="small"
+                  title={link.url}
+                  icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                  onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                >
+                  {link.name || link.url}
+                </Button>
+              ))}
+            </Space>
+          ) : (
+            <span style={mutedStyle}>Chưa có</span>
+          )}
+          <Space size={8} wrap style={{ display: 'flex', flexWrap: 'wrap' }}>
+            <Input
+              data-testid="cr-detail-link-name"
+              placeholder="Tên (tùy chọn)"
+              size="small"
+              style={{ width: 180, borderRadius: 'var(--radius-control)' }}
+              value={linkName}
+              onChange={(e) => setLinkName(e.target.value)}
+            />
+            <Input
+              data-testid="cr-detail-link-url"
+              placeholder="URL"
+              size="small"
+              style={{ width: 260, borderRadius: 'var(--radius-control)' }}
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              onPressEnter={() => void handleAddLink()}
+            />
+            <Button data-testid="cr-detail-link-add" size="small" onClick={() => void handleAddLink()}>
+              Thêm link
+            </Button>
           </Space>
-        ) : (
-          <span style={mutedStyle}>Chưa có</span>
-        ),
+        </div>
+      ),
     },
     {
       key: 'reminders',

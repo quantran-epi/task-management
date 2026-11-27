@@ -131,7 +131,7 @@ const linkSchema = z
   );
 
 export const namedLinkSchema = z.object({
-  name: z.string().trim().min(1, 'Tên liên kết không được trống').max(80, 'Tên liên kết tối đa 80 ký tự'),
+  name: z.string().trim().max(80, 'Tên liên kết tối đa 80 ký tự'),
   url: linkSchema,
 });
 
