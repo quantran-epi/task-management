@@ -58,11 +58,20 @@ fn is_wakeup_timeout(err: &std::io::Error) -> bool {
 
 fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
     let mut line = String::new();
-    for _ in 0..SQLCL_DRAIN_MAX_LINES {
+    let mut lines = 0usize;
+    let mut bytes = 0usize;
+    loop {
         line.clear();
-        match reader.read_line(&mut line) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {}
+        let got_new_bytes = match reader.read_line(&mut line) {
+            Ok(0) | Err(_) => false, // EOF/timeout: nothing new buffered; a real read error also stops
+            Ok(n) => {
+                lines += 1;
+                bytes += n;
+                true
+            }
+        };
+        if !sqlcl_drain_should_continue(got_new_bytes, false, lines, bytes) {
+            break;
         }
     }
 }
@@ -340,22 +349,37 @@ impl SqlclSession {
         // those bytes are already consumed from the BufReader. Clear only on a completed line.
         let mut line = String::new();
         let mut saw_sentinel = false;
+        let mut eof_diagnostics = String::new();
+        let mut last_progress = Instant::now();
         loop {
             if cancelled.load(Ordering::SeqCst) {
                 self.kill_remote(config, secret);
                 return Ok((output, self.stderr_snapshot(), true));
             }
+            if sqlcl_idle_timed_out(last_progress.elapsed()) {
+                self.kill_remote(config, secret);
+                return Err(format!(
+                    "SQLcl không tiến triển trong {:?}.\n{}\n{}",
+                    SQLCL_REPL_IDLE_DEADLINE,
+                    self.stderr_snapshot(),
+                    sqlcl_error_diagnostics(&output, &line)
+                ));
+            }
+            let line_len_before = line.len();
             match reader.read_line(&mut line) {
                 Ok(0) => {
                     // SQLcl can exit right after the marker with no trailing newline; the last
-                    // line may still be a complete marker sitting in the buffer.
+                    // line may still be a complete marker sitting in the buffer. Capture the
+                    // pending line before clearing it so ORA-/SP2- survives the EOF error.
                     if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                     }
+                    eof_diagnostics = sqlcl_error_diagnostics(&output, &line);
                     line.clear();
                     break;
                 }
                 Ok(_) => {
+                    last_progress = Instant::now();
                     if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                         break;
@@ -365,16 +389,25 @@ impl SqlclSession {
                 }
                 Err(e) => {
                     if is_wakeup_timeout(&e) {
+                        if line.len() > line_len_before {
+                            last_progress = Instant::now();
+                        }
                         continue; // wake-up only; keep the partial line
                     }
-                    return Err(format!("Đọc SQLcl thất bại: {}", e));
+                    return Err(format!(
+                        "Đọc SQLcl thất bại: {}\n{}\n{}",
+                        e,
+                        self.stderr_snapshot(),
+                        sqlcl_error_diagnostics(&output, &line)
+                    ));
                 }
             }
         }
         if !saw_sentinel && !cancelled.load(Ordering::SeqCst) {
             return Err(format!(
-                "Phiên SQLcl kết thúc trước khi có marker.\n{}",
-                self.stderr_snapshot()
+                "Phiên SQLcl kết thúc trước khi có marker.\n{}\n{}",
+                self.stderr_snapshot(),
+                eof_diagnostics
             ));
         }
         // After the marker, the REPL prints a fresh `SQL> ` prompt. Drop it (and any trailing
