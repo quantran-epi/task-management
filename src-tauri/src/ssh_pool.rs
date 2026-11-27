@@ -258,25 +258,19 @@ impl SqlclSession {
         // `setsid` prints its PID/PGID as a line; banners or a slow link may precede it. Scan a
         // bounded window of lines, ignoring wake-up timeouts (they are not transport errors).
         let mut reader = BufReader::new(channel.stream(0));
-        let pgid = {
-            let mut found = None;
-            let mut line = String::new();
-            for _ in 0..10 {
-                line.clear();
-                match reader.read_line(&mut line) {
-                    Ok(0) => break,
-                    Ok(_) => {
-                        if let Some(value) = scan_sqlcl_pgid_line(&line) {
-                            found = Some(value);
-                            break;
-                        }
-                    }
-                    Err(e) if is_wakeup_timeout(&e) => continue,
-                    Err(e) => return Err(format!("Đọc PGID SQLcl thất bại: {}", e)),
-                }
-            }
-            found.ok_or_else(|| "Không nhận dạng được PGID của phiên SQLcl.".to_string())?
-        };
+        let pgid = read_sqlcl_pgid(
+            std::iter::repeat_with(|| {
+                let mut chunk = String::new();
+                let status = match reader.read_line(&mut chunk) {
+                    Ok(0) => SqlclPgidReadStatus::Eof,
+                    Ok(_) => SqlclPgidReadStatus::Line,
+                    Err(e) if is_wakeup_timeout(&e) => SqlclPgidReadStatus::Wakeup,
+                    Err(e) => SqlclPgidReadStatus::Failed(e.to_string()),
+                };
+                (chunk, status)
+            })
+            .take(10),
+        )?;
 
         // Discard banner/prompt bytes already buffered before the first script is sent. Bounded
         // so a quiet REPL stops at its wake-up timeout instead of blocking session startup.
@@ -623,6 +617,62 @@ fn strip_sqlcl_prompt(line: &str) -> &str {
 /// banners or JSON payloads never end a query early.
 fn sqlcl_line_is_marker(line: &str, marker: &str) -> bool {
     strip_sqlcl_prompt(&strip_ansi_escapes(line)).trim() == marker
+}
+
+/// Outcome of one scripted `read_line` while scanning for the `setsid` PGID line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SqlclPgidReadStatus {
+    Line,
+    Eof,
+    Wakeup,
+    Failed(String),
+}
+
+/// Attach the pending PTY bytes to a PGID error as a bounded, UTF-8-safe diagnostic tail. Empty
+/// diagnostics leave the original message untouched; TS `redactOracleText` still applies downstream.
+fn sqlcl_pgid_error(message: &str, pending: &str) -> String {
+    let diag = sqlcl_error_diagnostics("", pending);
+    if diag.trim().is_empty() {
+        message.to_string()
+    } else {
+        format!("{}\n{}", message, diag)
+    }
+}
+
+/// Scan a bounded sequence of scripted reads for the PGID line. Pure so the wake-up/EOF split can
+/// be tested without SSH; the real reader is mapped to these outcomes at the call site. A wake-up
+/// timeout is only a poll tick — bytes already consumed from the reader stay in `line`, which is
+/// parsed on every attempt and cleared only after a complete line failed to match.
+fn read_sqlcl_pgid<I>(outcomes: I) -> Result<u32, String>
+where
+    I: IntoIterator<Item = (String, SqlclPgidReadStatus)>,
+{
+    let mut line = String::new();
+    for (chunk, status) in outcomes {
+        line.push_str(&chunk);
+        // A partial number at a wake-up tick is not a PGID yet: `TASKMATE_PGID:42` can still grow
+        // into `4242`. Accept a match only on a completed line or at EOF; keep accumulating otherwise.
+        let line_complete = matches!(status, SqlclPgidReadStatus::Eof)
+            || line.ends_with('\n')
+            || line.ends_with('\r');
+        if line_complete {
+            if let Some(value) = scan_sqlcl_pgid_line(&line) {
+                return Ok(value);
+            }
+        }
+        match status {
+            SqlclPgidReadStatus::Line => line.clear(),
+            SqlclPgidReadStatus::Wakeup => continue,
+            SqlclPgidReadStatus::Eof => break,
+            SqlclPgidReadStatus::Failed(e) => {
+                return Err(sqlcl_pgid_error(&format!("Đọc PGID SQLcl thất bại: {}", e), &line));
+            }
+        }
+    }
+    Err(sqlcl_pgid_error(
+        "Không nhận dạng được PGID của phiên SQLcl.",
+        &line,
+    ))
 }
 
 /// Parse the `setsid` PGID line from a PTY stream after ANSI/prompt normalization. Bare numbers
@@ -1013,6 +1063,62 @@ mod tests {
         assert_eq!(scan_sqlcl_pgid_line("\x1b[?2004hSQL>TASKMATE_PGID:9\r\n"), Some(9));
         assert_eq!(scan_sqlcl_pgid_line("4242"), None);
         assert_eq!(scan_sqlcl_pgid_line("banner TASKMATE_PGID:7"), None);
+    }
+
+    #[test]
+    fn read_sqlcl_pgid_keeps_partial_across_wakeups() {
+        let outcomes = vec![
+            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
+            ("42".to_string(), SqlclPgidReadStatus::Wakeup),
+            ("42\n".to_string(), SqlclPgidReadStatus::Line),
+        ];
+        assert_eq!(read_sqlcl_pgid(outcomes.into_iter().take(3)), Ok(4242));
+    }
+
+    #[test]
+    fn read_sqlcl_pgid_parses_pending_line_at_eof() {
+        let split = vec![
+            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
+            ("9".to_string(), SqlclPgidReadStatus::Eof),
+        ];
+        assert_eq!(read_sqlcl_pgid(split), Ok(9));
+
+        let no_newline = vec![
+            ("TASKMATE_PGID:9".to_string(), SqlclPgidReadStatus::Wakeup),
+            (String::new(), SqlclPgidReadStatus::Eof),
+        ];
+        assert_eq!(read_sqlcl_pgid(no_newline), Ok(9));
+    }
+
+    #[test]
+    fn read_sqlcl_pgid_discards_non_matching_line() {
+        let outcomes = vec![
+            ("banner TASKMATE_PGID:77\n".to_string(), SqlclPgidReadStatus::Line),
+            ("TASKMATE_PGID:".to_string(), SqlclPgidReadStatus::Wakeup),
+            ("8\n".to_string(), SqlclPgidReadStatus::Line),
+        ];
+        assert_eq!(read_sqlcl_pgid(outcomes), Ok(8));
+    }
+
+    #[test]
+    fn read_sqlcl_pgid_error_is_bounded_and_char_safe() {
+        let mut pending = "à".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+        pending.push_str("ORA-00942: table or view does not exist");
+        let outcomes = std::iter::repeat_with(|| {
+            ("🍕".to_string(), SqlclPgidReadStatus::Wakeup)
+        })
+        .take(12)
+        .chain(std::iter::once((pending, SqlclPgidReadStatus::Wakeup)));
+        let err = read_sqlcl_pgid(outcomes).expect_err("must fail after attempts");
+        assert!(err.contains("Không nhận dạng được PGID"));
+        assert!(err.contains("ORA-00942"));
+        let diag = err.split_once('\n').map(|(_, tail)| tail).unwrap_or("");
+        assert!(diag.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+        assert!(diag.is_char_boundary(diag.len()));
+
+        let failed = vec![("pending".to_string(), SqlclPgidReadStatus::Failed("boom".to_string()))];
+        let err = read_sqlcl_pgid(failed).expect_err("read failure must surface");
+        assert!(err.contains("boom"));
     }
 
     #[test]
