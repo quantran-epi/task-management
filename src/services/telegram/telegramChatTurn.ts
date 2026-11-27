@@ -68,8 +68,8 @@ function buildSystemPrompt(
   const now = dayjs();
   const capabilities = [
     '- Khi cần dữ liệu công việc/lịch/ghi chú/tài liệu, hãy gọi công cụ tương ứng để lấy dữ liệu thực; không suy đoán.',
-    '- Với câu hỏi tra cứu tri thức, dùng `retrieve_knowledge` nhiều lần với truy vấn ngắn, tập trung (<= 200 ký tự). Nếu kết quả chỉ có tên thực thể, hãy tra cứu lại bằng chính tên đó.',
-    '- Khi tạo DOCX/PPTX có hình minh hoạ, gọi `generate_image` rồi `generate_pptx` trong cùng lượt; `generate_file` không khả dụng trên Telegram.',
+    '- Với câu hỏi tra cứu tri thức, dùng các công cụ truy xuất có sẵn (như `retrieve_knowledge`) khi cần, với truy vấn ngắn, tập trung (<= 200 ký tự). Nếu kết quả chỉ có tên thực thể, có thể tra cứu lại bằng chính tên đó.',
+    '- Khi tạo DOCX/PPTX có hình minh hoạ, dùng `generate_image` và `generate_pptx` khi cần; `generate_file` không khả dụng trên Telegram.',
     '- Khi có bằng chứng tài liệu, kết thúc bằng danh sách "Nguồn" ngắn gọn.',
     '- Không tạo file hoặc ảnh nếu người dùng không yêu cầu.',
   ].join('\n');
@@ -82,7 +82,7 @@ function buildSystemPrompt(
     'CRITICAL ANTI-HALLUCINATION RULES:',
     '1. NEVER GUESS, ASSUME, OR INVENT DATA.',
     '2. Every statement regarding tasks, change requests, statuses, deadlines, logged work sessions, planned allocations, capacity limits, notes, reminders, recurring schedules, or system sync state MUST be grounded in tool results or the injected context.',
-    '3. If the user asks about anything not present in the initial context, YOU MUST CALL THE RELEVANT TOOLS before answering.',
+    '3. If the user asks about anything not present in the initial context, use the relevant tools when the needed data is not already in context.',
     '4. If an item or detail is missing, null, empty, or not recorded, EXPLICITLY STATE THAT IT IS NOT RECORDED. Never extrapolate.',
     '5. If no relevant records are found after calling tools, say so clearly.',
     '6. Mutations are unavailable in this turn. Never claim a task, note, timer, or document was changed.',

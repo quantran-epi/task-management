@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   buildReferencedFilesPrompt,
   buildStandaloneSystemPrompt,
@@ -51,5 +52,34 @@ describe('buildStandaloneSystemPrompt (quick 261127-mrx)', () => {
     expect(prompt).toContain('`/srv/repo/report handwriting.txt`');
     expect(prompt).toContain('AVAILABLE CAPABILITIES');
     expect(prompt).toContain('CRITICAL ANTI-HALLUCINATION RULES');
+  });
+});
+
+describe('neutral tool routing prompts (quick 261128-09x)', () => {
+  const chatSource = readFileSync(new URL('../AIChatDrawer.tsx', import.meta.url), 'utf8');
+  const telegramSource = readFileSync(
+    new URL('../../../services/telegram/telegramChatTurn.ts', import.meta.url),
+    'utf8'
+  );
+  const allSources = `${chatSource}\n${telegramSource}`;
+
+  it('has no directive that forces a specific tool call', () => {
+    for (const banned of [
+      'retrieve_knowledge` tool repeatedly',
+      'YOU MUST CALL THE RELEVANT DATABASE TOOLS',
+      'YOU MUST CALL THE RELEVANT TOOLS',
+      'FULL DATABASE MUTATION CAPABILITIES',
+      'in the SAME turn',
+      'dùng `retrieve_knowledge` nhiều lần',
+    ]) {
+      expect(allSources).not.toContain(banned);
+    }
+  });
+
+  it('keeps capability lists, anti-hallucination rules and Telegram read-only gate', () => {
+    expect(chatSource).toContain('AVAILABLE CAPABILITIES');
+    expect(chatSource).toContain('CRITICAL ANTI-HALLUCINATION RULES');
+    expect(telegramSource).toContain('CRITICAL ANTI-HALLUCINATION RULES');
+    expect(telegramSource).toContain('Mutations are unavailable in this turn');
   });
 });
