@@ -35,6 +35,7 @@ Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat 
 Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
 Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-session completion changed from PROMPT sentinel to SQL SELECT JSON marker with stdout stripping.
 Last activity: 2026-11-27 - Completed quick task 261127-eos: SQLcl completion changed to one plain-text marker line with exact-line reader and no JSON strip.
+Last activity: 2026-11-27 - Completed quick task 261127-hup: persistent SQLcl moved onto SSH PTY (xterm, ECHO off, wide columns) with ANSI/prompt-normalized marker reader; PGID, cancel, TTL and TS heredoc contract unchanged.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -163,6 +164,7 @@ Progress: [██████████] 100%
 | 261127-c3r | Add named quick links to CR detail and Task detail pages | 2026-11-27 | 488c8f69 | — | [261127-c3r-add-named-quick-links-to-cr-detail-and-t](./quick/261127-c3r-add-named-quick-links-to-cr-detail-and-t/) |
 | 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
 | 261127-eos | Sửa 2 lỗi review: marker hoàn tất là một dòng plain text, reader dừng bằng so sánh dòng chính xác, bỏ JSON strip/reserialize khỏi Rust | 2026-11-27 | bbe75d3c, 873570c4 | — | [261127-eos-fix-sqlcl-marker-reader-review-findings-](./quick/261127-eos-fix-sqlcl-marker-reader-review-findings-/) |
+| 261127-hup | Chuyển SQLcl thường trú sang SSH PTY (xterm, ECHO tắt, 65535 cột); reader chuẩn hoá ANSI/prompt, marker dòng plain, giữ PGID/cancel/TTL/restart-once | 2026-11-27 | c9c4cd90, 7af9a357 | — | [261127-hup-implement-pty-backed-persistent-sqlcl-se](./quick/261127-hup-implement-pty-backed-persistent-sqlcl-se/) |
 
 ## Accumulated Context
 
