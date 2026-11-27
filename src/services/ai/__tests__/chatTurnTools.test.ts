@@ -166,6 +166,47 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
     expect(tools.map((tool) => normalizeToolName(tool.function.name))).toEqual(expected);
   });
 
+  describe('intent-shaped tool payload (quick 261128-09x)', () => {
+    const names = (intent?: 'query_knowledge' | 'query_taskmate' | 'operate_taskmate' | 'mixed' | 'clarify') =>
+      chatTurnTools
+        .getToolsForTurnWithRemote({
+          effectiveAnalysisMode: true,
+          globalSshConfigReady: false,
+          hasRemoteTarget: true,
+          oracleConfigReady: false,
+          ...(intent ? { intent } : {}),
+        })
+        .map((tool) => normalizeToolName(tool.function.name));
+
+    it('query_knowledge drops operational tools but keeps retrieval', () => {
+      const knowledge = names('query_knowledge');
+      expect(knowledge).toContain('retrieve_knowledge');
+      expect(knowledge).not.toContain('create_task');
+      expect(knowledge).not.toContain('query_worklogs');
+    });
+
+    it('query_taskmate drops mutations but keeps read tools', () => {
+      const taskmate = names('query_taskmate');
+      expect(taskmate).toContain('query_tasks');
+      expect(taskmate).toContain('query_worklogs');
+      expect(taskmate).not.toContain('create_task');
+    });
+
+    it('operate, mixed, clarify and absent intent keep the full payload', () => {
+      const full = names();
+      expect(names('operate_taskmate')).toEqual(full);
+      expect(names('mixed')).toEqual(full);
+      expect(names('clarify')).toEqual(full);
+    });
+
+    it('git_read and chat-history tools survive knowledge pruning', () => {
+      const knowledge = names('query_knowledge');
+      expect(knowledge).toContain('git_read');
+      expect(knowledge).toContain('search_chat_history');
+      expect(knowledge).toContain('read_chat_turn');
+    });
+  });
+
   // D-12 / T-45-09: oracle_list_connections must join the same gated addendum as
   // query/describe, so a disabled Oracle advertises none of the three.
   it('advertises oracle_list_connections only under the Oracle enablement gate', () => {

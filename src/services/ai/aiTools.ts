@@ -85,6 +85,7 @@ import { preparePatch, readPatchTarget } from './patchProposal';
 import { executeKnowledgeRetrievalTool } from './knowledgeRetrievalTool';
 import { getImageConfig, getImageApiKey } from './nineRouterTokenService';
 import { redactApiKey } from './nineRouterClient';
+import type { IntentLabel } from './intentRouter';
 import {
   executeOracleQuery,
   executeOracleDescribe,
@@ -5356,9 +5357,8 @@ export function isMutationTool(toolName: string, args?: Record<string, any>): bo
 }
 
 /**
- * Filters available tools dynamically based on conversation intent and context.
- * For knowledge queries or technical schema lookups, personal operational/mutation tools
- * (create_task, timer, log_work_session, etc.) are pruned to save massive prompt tokens.
+ * Filters available tools to match the turn's intent. Pruning here neutralizes tool
+ * selection by shaping the payload — it is not a token-saving optimization.
  */
 export function pruneToolsForContext(
   allTools: AiToolDefinition[],
@@ -5403,6 +5403,20 @@ export function pruneToolsForContext(
   return allTools;
 }
 
+/** Intent-only adapter: reuses pruneToolsForContext without adding a second filter. */
+export function pruneToolsForIntent(
+  allTools: AiToolDefinition[],
+  intent: IntentLabel | null | undefined
+): AiToolDefinition[] {
+  if (!intent || intent === 'mixed' || intent === 'clarify') return allTools;
+  if (intent === 'operate_taskmate') {
+    return pruneToolsForContext(allTools, { isMutationTurn: true });
+  }
+  if (intent === 'query_taskmate') {
+    return pruneToolsForContext(allTools, { isTaskMateQuery: true });
+  }
+  return pruneToolsForContext(allTools, { isKnowledgeContinuation: true });
+}
 
 export function formatFieldChanges(args: Record<string, any>, ignoredKeys: string[] = ['id', 'taskId']): string {
   const fieldLabels: Record<string, string> = {

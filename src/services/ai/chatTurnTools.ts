@@ -5,7 +5,9 @@ import {
   type AiToolDefinition,
   isMutationTool,
   normalizeToolName,
+  pruneToolsForIntent,
 } from './aiTools';
+import type { IntentLabel } from './intentRouter';
 
 /** Core attached-file family — shared by standalone, dock and team chat. Never a UI flag. */
 export const SSH_ATTACHED_TOOL_NAMES: readonly string[] = [
@@ -157,6 +159,8 @@ export interface RemoteTurnToolOptions {
    * removes dynamic MCP/Graphiti tools, which standalone chat must keep.
    */
   standaloneCapability?: boolean;
+  /** Classified intent for this turn; absent means keep the legacy payload verbatim. */
+  intent?: IntentLabel | null;
 }
 
 const STANDALONE_BUILTIN_TOOL_NAMES: readonly string[] = [
@@ -189,16 +193,19 @@ export function getToolsForTurnWithRemote(options: RemoteTurnToolOptions): AiToo
         options.allowedToolNames,
         disabled
       );
+  // Intent prunes only the turn's advertised payload. Transcript and remote tools are added
+  // afterwards so both keep working regardless of classification.
+  const scopedTools = options.intent ? pruneToolsForIntent(tools, options.intent) : tools;
   if (options.hasRemoteTarget) {
     const gitReadDef = TEAM_TOOL_DEFINITIONS.find(
       (t) => normalizeToolName(t.function.name) === 'git_read'
     );
-    if (gitReadDef) tools.push(gitReadDef);
+    if (gitReadDef) scopedTools.push(gitReadDef);
   }
   // 261126-q7j: the chat panel's own transcript tools are available on every turn, including
   // the standalone capability set. Nothing else is added or removed.
-  tools.push(...CHAT_HISTORY_TOOL_DEFINITIONS);
-  return tools;
+  scopedTools.push(...CHAT_HISTORY_TOOL_DEFINITIONS);
+  return scopedTools;
 }
 
 // ---------------------------------------------------------------------------

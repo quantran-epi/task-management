@@ -46,6 +46,7 @@ import {
 import { runAiOrchestratorLoop } from '../../services/ai/aiOrchestratorLoop';
 import { getGraphitiSkillSegment, SOURCE_TOOL_NAMES } from '../../services/ai/graphitiRules';
 import { getToolsForTurnWithRemote } from '../../services/ai/chatTurnTools';
+import { routeIntent, type IntentLabel } from '../../services/ai/intentRouter';
 import {
   getMcpServers,
   discoverGatedMcpTools,
@@ -1592,6 +1593,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const historyMsgs = boundaryIndex >= 0 ? allThreadMsgs.slice(boundaryIndex + 1) : allThreadMsgs;
       const historyTurns = sanitizeHistoryTurns(historyMsgs, userMessageId ?? undefined);
 
+      // 261128-09x: classify once so the tool payload can be shaped by intent. A routing
+      // failure only logs and keeps the full payload — it never blocks the turn.
+      let turnIntent: IntentLabel | null = null;
+      try {
+        const routed = await routeIntent(promptText, {
+          completeJsonArgs: {
+            endpoint: config.endpoint,
+            apiKey,
+            model: resolveActiveModel(),
+          },
+          recentTurns: historyTurns.slice(-3),
+          signal: hostSignal(turnTabId),
+        });
+        turnIntent = routed.intent;
+      } catch (intentErr) {
+        logAiChatError('Intent routing unavailable', intentErr);
+      }
+
       const turnMcpEnabled = turnTab.config?.mcpEnabled !== false;
 
       // 261125-u4w: read the global standing instruction ONCE per turn, before the grounded
@@ -1790,6 +1809,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         globalSshConfigReady: Boolean(sshFsCfg?.sshConfigId),
         hasRemoteTarget: Boolean(isRemoteScope && currentRemoteTarget),
         oracleConfigReady: Boolean(oracleCfg?.sshConfigId && oracleCfg?.connectionString),
+        intent: turnIntent,
       });
 
       let conventionsSegment = '';
