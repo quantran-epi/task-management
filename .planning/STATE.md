@@ -39,6 +39,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-hup: persistent SQLcl mo
 Last activity: 2026-11-27 - Completed quick task 261127-j35: fixed 4 PTY SQLcl review findings — bounded ORA-/SP2- diagnostics in Err stderr, 60s idle PGID kill, inactivity drain with caps, prompt preserved on data lines.
 Last activity: 2026-11-27 - Completed quick task 261127-mrx: standalone chat system prompt now carries the shared referenced_files block with exact SSH-attached paths; no file content read or runtime path changed.
 Last activity: 2026-11-27 - Completed quick task 261127-nai: standalone AI chat SSH file browser now uses only the right-side folder browser; left-panel tree view removed.
+Last activity: 2026-11-27 - Completed quick task 261127-rkh: removed AI Chat Devices tab on Telegram page and Telegram Device group in standalone AI chat settings.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -175,6 +176,7 @@ Progress: [██████████] 100%
 | 261127-mrx | Fix standalone AI chat SSH attachments: include referenced_files block in standalone prompt and add targeted check | 2026-11-27 | 45842bec | — | [261127-mrx-fix-standalone-ai-chat-ssh-attachments-f](./quick/261127-mrx-fix-standalone-ai-chat-ssh-attachments-f/) |
 | 261127-mmz | Sửa scan PGID SQLcl: giữ byte partial qua wakeup, chỉ nhận dạng PGID trên dòng hoàn chỉnh/EOF, kèm diagnostic bounded | 2026-11-27 | 533c14d3, 5d43d2e4 | — | [261127-mmz-fix-pgid-partial-line](./quick/261127-mmz-fix-pgid-partial-line/) |
 | 261127-nai | Standalone AI chat: remove left-panel tree view in SSH file browser, keep only right-side folder browser | 2026-11-27 | d2be1fd3 | — | [261127-nai-standalone-ai-chat-remove-left-panel-tre](./quick/261127-nai-standalone-ai-chat-remove-left-panel-tre/) |
+| 261127-rkh | Bỏ tab AI Chat Devices trên trang Telegram và nhóm Telegram Device trong AI Settings standalone | 2026-11-27 | 1868012b, 5a516e4c, 650cab8d | — | [261127-rkh-b-qu-n-l-user-theo-tele-id-tr-n-ai-chat-](./quick/261127-rkh-b-qu-n-l-user-theo-tele-id-tr-n-ai-chat-/) |
 
 ## Accumulated Context
 
