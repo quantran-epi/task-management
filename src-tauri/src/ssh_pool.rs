@@ -11,7 +11,7 @@
 //! never enters the returned payload; a broken pipe restarts the session once and retries.
 //! Nothing is spawned on the host and no local filesystem API is added.
 
-use crate::ssh_service::{connect_and_auth_inner, SshConfig};
+use crate::ssh_service::{connect_and_auth_dedicated_wakeup, connect_and_auth_inner, SshConfig};
 pub(crate) use crate::ssh_service::SocketTimeout;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -753,12 +753,14 @@ pub fn run_persistent_sqlcl(
                 Arc::clone(existing)
             } else {
                 crate::sqlcl_pty_debug::event("SESSION_CREATE");
-                let ssh = state.pool.acquire(config, secret, SocketTimeout::Wakeup)?;
+                // A dedicated transport is mandatory: `ssh2::Session::clone()` shares the raw
+                // libssh2 session (and its timeout/mutex). A Wakeup clone would bleed the 250 ms
+                // poll timeout — and any blocked SQLcl read — into every other SSH tool call.
+                let ssh = connect_and_auth_dedicated_wakeup(config, secret)?;
                 let created = match SqlclSession::start(&ssh, &key) {
                     Ok(created) => Arc::new(created),
                     Err(e) => {
                         crate::sqlcl_pty_debug::event("SESSION_START_FAILED");
-                        state.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
                         if attempt == 0 { continue; }
                         return Err(e);
                     }

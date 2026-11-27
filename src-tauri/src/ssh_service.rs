@@ -107,6 +107,15 @@ pub fn connect_and_auth_dedicated(
     connect_and_auth_inner(config, secret, SocketTimeout::None)
 }
 
+/// Dedicated SSH transport with a short libssh2 poll timeout. Never pooled: a long-lived reader
+/// must not share its raw libssh2 session (or timeout) with unrelated SSH tool calls.
+pub(crate) fn connect_and_auth_dedicated_wakeup(
+    config: &SshConfig,
+    secret: Option<&str>,
+) -> Result<ssh2::Session, String> {
+    connect_and_auth_inner(config, secret, SocketTimeout::Wakeup)
+}
+
 /// Variant for long-running tool tasks: NO socket read timeout. A 30s socket error used to
 /// become `Done{error}` even though the user never cancelled — forbidden by the lifecycle
 /// contract. Only an explicit `cancel_tool_call` may end a tool task.
