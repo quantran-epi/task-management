@@ -6,6 +6,7 @@ import type {
 } from './telegramTypes';
 import { getTodayDateString } from '../../utils/date';
 import { generateId } from '../../utils/uuid';
+import type { TelegramDeviceStatus, TelegramRemoteSettings } from './telegramTypes';
 
 export const DEFAULT_TELEGRAM_SETTINGS: TelegramSettingsRecord = {
   id: 'default',
@@ -76,6 +77,13 @@ export async function upsertWhitelistUser(
     overQuotaCommandsUsed: user.overQuotaCommandsUsed ?? existing?.overQuotaCommandsUsed ?? 0,
     overQuotaAttempts: user.overQuotaAttempts ?? existing?.overQuotaAttempts ?? 0,
     aiModel: user.aiModel !== undefined ? user.aiModel : existing?.aiModel,
+    telegramUserId: user.telegramUserId !== undefined ? user.telegramUserId : existing?.telegramUserId,
+    deviceStatus: user.deviceStatus !== undefined ? user.deviceStatus : existing?.deviceStatus,
+    allowedModels: user.allowedModels !== undefined ? user.allowedModels : existing?.allowedModels,
+    remoteSettings: user.remoteSettings !== undefined ? user.remoteSettings : existing?.remoteSettings,
+    pairingCode: user.pairingCode !== undefined ? user.pairingCode : existing?.pairingCode,
+    pairingCodeExpiresAt:
+      user.pairingCodeExpiresAt !== undefined ? user.pairingCodeExpiresAt : existing?.pairingCodeExpiresAt,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -91,6 +99,91 @@ export async function deleteWhitelistUser(
   await db.telegramWhitelist.delete(chatId);
 }
 
+/** Ưu tiên danh tính Telegram; fallback row legacy khóa theo chatId. */
+export async function findWhitelistByIdentity(
+  identity: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser | undefined> {
+  if (!identity.trim()) return undefined;
+  const byIdentity = await db.telegramWhitelist.where('telegramUserId').equals(identity).first();
+  if (byIdentity) return byIdentity;
+  return await db.telegramWhitelist.get(identity);
+}
+
+function createPairingCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
+
+/** Xoay mã ghép cặp mỗi lần gọi /policy; hết hạn sau 24h. */
+export async function rotateDevicePairingCode(
+  identity: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<{ pairingCode: string; pairingCodeExpiresAt: string }> {
+  const row = await findWhitelistByIdentity(identity, db);
+  if (!row) throw new Error('Thiết bị chưa được đăng ký.');
+  const next = {
+    pairingCode: createPairingCode(),
+    pairingCodeExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+  };
+  await db.telegramWhitelist.put({ ...row, ...next, updatedAt: new Date().toISOString() });
+  return next;
+}
+
+/** Mutation duy nhất cho admin approve/revoke/gán model thiết bị. */
+export async function upsertDeviceEnrollment(input: {
+  telegramUserId: string;
+  chatId: string;
+  deviceStatus: TelegramDeviceStatus;
+  allowedModels?: string[] | undefined;
+  remoteSettings?: TelegramRemoteSettings | undefined;
+  botToken?: string | undefined;
+}, db: TaskPlannerDatabase = defaultDb): Promise<TelegramWhitelistUser> {
+  const identity = input.telegramUserId.trim();
+  const existing = identity ? await findWhitelistByIdentity(identity, db) : undefined;
+  const targetChatId = existing?.chatId ?? input.chatId;
+  const approved = input.deviceStatus === 'approved';
+
+  return await db.transaction('rw', db.telegramWhitelist, async () => {
+    const current = await db.telegramWhitelist.get(targetChatId);
+    const now = new Date().toISOString();
+    const record: TelegramWhitelistUser = {
+      ...current,
+      chatId: targetChatId,
+      name: current?.name ?? `User_${targetChatId}`,
+      status: approved ? 'active' : current?.status ?? 'active',
+      dataScope: current?.dataScope ?? 'full',
+      dailyLimit: current?.dailyLimit ?? 10,
+      usedToday: current?.usedToday ?? 0,
+      lastActiveDate: current?.lastActiveDate ?? getTodayDateString(),
+      maxHistoryTurns: current?.maxHistoryTurns ?? 5,
+      overQuotaCommandsUsed: current?.overQuotaCommandsUsed ?? 0,
+      overQuotaAttempts: current?.overQuotaAttempts ?? 0,
+      createdAt: current?.createdAt ?? now,
+      updatedAt: now,
+      ...(existing ? { telegramUserId: identity } : {}),
+      deviceStatus: input.deviceStatus,
+      allowedModels: input.allowedModels ?? current?.allowedModels ?? [],
+      remoteSettings: input.remoteSettings ?? current?.remoteSettings,
+      ...(approved
+        ? {
+            pairingCode: createPairingCode(),
+            pairingCodeExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          }
+        : {}),
+    };
+    // Revoke/pending: stale pairing fields must be removed from the indexed row, not set undefined.
+    if (!approved) {
+      delete record.pairingCode;
+      delete record.pairingCodeExpiresAt;
+    }
+    await db.telegramWhitelist.put(record);
+    return record;
+  });
+}
+
 /**
  * Records an unauthorized incoming user as a pending user in telegramWhitelist.
  * If user does not exist in telegramWhitelist, inserts record with status 'pending' and returns { user, isNew: true }.
@@ -99,12 +192,22 @@ export async function deleteWhitelistUser(
 export async function recordPendingTelegramUser(
   chatId: string,
   name?: string,
-  db: TaskPlannerDatabase = defaultDb
+  db: TaskPlannerDatabase = defaultDb,
+  telegramUserId?: string
 ): Promise<{ user: TelegramWhitelistUser; isNew: boolean }> {
   const settings = await getTelegramSettings(db);
+  const identity = telegramUserId?.trim();
   return await db.transaction('rw', db.telegramWhitelist, async () => {
-    const existing = await db.telegramWhitelist.get(chatId);
+    let existing = await db.telegramWhitelist.get(chatId);
+    if (!existing && identity) existing = await findWhitelistByIdentity(identity, db);
     if (existing) {
+      // Một Telegram user = một row thiết bị; cập nhật địa chỉ reply mới nhất, giữ trạng thái.
+      if (identity && existing.chatId !== chatId) {
+        const moved = { ...existing, chatId, updatedAt: new Date().toISOString() };
+        await db.telegramWhitelist.delete(existing.chatId);
+        await db.telegramWhitelist.put(moved);
+        return { user: moved, isNew: false };
+      }
       return { user: existing, isNew: false };
     }
 
@@ -121,6 +224,8 @@ export async function recordPendingTelegramUser(
       maxHistoryTurns: 5,
       overQuotaCommandsUsed: 0,
       overQuotaAttempts: 0,
+      ...(identity ? { telegramUserId: identity } : {}),
+      deviceStatus: 'pending',
       createdAt: now,
       updatedAt: now,
     };
@@ -163,10 +268,7 @@ export async function blockPendingUser(
   db: TaskPlannerDatabase = defaultDb
 ): Promise<TelegramWhitelistUser> {
   return await upsertWhitelistUser(
-    {
-      chatId,
-      status: 'blocked',
-    },
+    { chatId, status: 'blocked', deviceStatus: 'revoked' },
     db
   );
 }

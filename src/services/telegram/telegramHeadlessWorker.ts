@@ -11,8 +11,11 @@ import {
   getTelegramChatHistory,
   recordPendingTelegramUser,
   getWhitelistUser,
+  findWhitelistByIdentity,
+  rotateDevicePairingCode,
   refundQuota,
 } from './telegramSettingsService';
+import { buildPolicyPayload } from './telegramDevicePolicy';
 import {
   getPendingMutation,
   clearPendingMutation,
@@ -654,6 +657,7 @@ export async function notifyAdminsOnInboundMessage(
       header,
       '',
       `👤 **Người gửi:** ${event.from_name || 'Không rõ'}`,
+      ...(event.fromUserId ? [`🆔 **Telegram User ID:** \`${event.fromUserId}\``] : []),
       `🆔 **Chat ID:** \`${event.chat_id}\``,
       `⏰ **Thời điểm:** ${timeStr}`,
       `📊 **Trạng thái:** ${statusBadge}`,
@@ -685,6 +689,11 @@ export async function processTelegramInboundMessage(
   sendDirectFn?: (token: string, chatId: string, text: string) => Promise<void>
 ): Promise<void> {
   const { update_id, chat_id, from_name, text, message_id } = event;
+  // Rust phát fromUserId dạng string; payload cũ dùng from_id (number) thì vẫn đọc được.
+  // Thiếu cả hai thì fallback chat_id, không cấp quyền mới.
+  const rawIdentity = event.fromUserId ?? event.from_id;
+  const rawIdentityText = rawIdentity === undefined || rawIdentity === null ? '' : String(rawIdentity).trim();
+  const identity = rawIdentityText || chat_id;
 
   // Deduplicate incoming update_id
   if (update_id && processedUpdateIds.has(update_id)) {
@@ -893,11 +902,12 @@ export async function processTelegramInboundMessage(
     lowerText === '/reset' ||
     lowerText === '/clear' ||
     lowerText === '/help' ||
-    lowerText === '/start';
+    lowerText === '/start' ||
+    lowerText === '/policy';
 
   // Helper to handle and notify unauthorized (pending) users
   const handleUnauthorizedUser = async () => {
-    const { isNew } = await recordPendingTelegramUser(chat_id, from_name, db);
+    const { isNew } = await recordPendingTelegramUser(chat_id, from_name, db, identity);
     if (isNew) {
       try {
         await sendDesktopNotification({
@@ -912,13 +922,51 @@ export async function processTelegramInboundMessage(
     }
   };
 
+  // /policy không tốn hạn mức và phải báo đúng trạng thái enrollment ngay cả khi pending.
+  if (lowerText === '/policy') {
+    const device = await findWhitelistByIdentity(identity, db);
+    const statusText =
+      device?.status === 'blocked' || device?.deviceStatus === 'revoked'
+        ? 'đã bị thu hồi'
+        : device?.status === 'pending' || device?.deviceStatus === 'pending'
+          ? 'Chờ duyệt'
+          : 'chưa đăng ký';
+    const rawMsg = [
+      `⚠️ **Chưa thể phát chính sách**`,
+      `🆔 **Telegram User ID:** \`${identity}\``,
+      `Trạng thái thiết bị: ${statusText}.`,
+      '',
+      'Nhờ admin duyệt trong TaskMate, sau đó gõ /policy để nhận chính sách.',
+    ].join('\n');
+    const isEligible =
+      device?.deviceStatus === 'approved' &&
+      device.status !== 'blocked' &&
+      device.status !== 'pending' &&
+      Boolean(device.allowedModels?.length);
+    if (!isEligible) {
+      await sendReply(botToken, chat_id, markdownToTelegramHtml(rawMsg), message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: rawMsg,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+  }
+
   // Step 1: Whitelist & Authorization Check
   if (isSlashCommand) {
     const cmdAccess = await checkAndConsumeCommandQuota(chat_id, db);
     if (!cmdAccess.allowed) {
       if (cmdAccess.reason === 'not_whitelisted') {
         await handleUnauthorizedUser();
-        const rawMsg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\nVui lòng cung cấp ID của bạn cho admin @quan_tr96 để được phân quyền.`;
+        const rawMsg = `⚠️ **Chưa được phân quyền truy cập**\n\nXin chào ${from_name}, bạn chưa được phân quyền sử dụng TaskMate AI Bot.\n\n🆔 **Telegram User ID:** \`${identity}\`\n🆔 **Chat ID của bạn:** \`${chat_id}\`\n\n${lowerText === '/start' ? 'Nhờ admin duyệt trong TaskMate, sau đó gõ /policy để nhận chính sách thiết bị.' : 'Vui lòng cung cấp ID của bạn cho admin để được phân quyền.'}`;
         const htmlMsg = markdownToTelegramHtml(rawMsg);
         await sendReply(botToken, chat_id, htmlMsg, message_id);
         await logTelegramSession(
@@ -973,7 +1021,77 @@ export async function processTelegramInboundMessage(
     const cmdUser = cmdAccess.user!;
     const dataScope = cmdUser.dataScope || 'full';
 
-    // Step 2: Conversational Slash Command Handlers (/reset, /clear, /start, /help)
+    // Step 2: Conversational Slash Command Handlers (/reset, /clear, /start, /help, /policy)
+    if (lowerText === '/policy') {
+      const device = await findWhitelistByIdentity(identity, db);
+      const statusLine =
+        device?.status === 'blocked' || device?.deviceStatus === 'revoked'
+          ? 'đã bị thu hồi'
+          : device?.status === 'pending' || device?.deviceStatus === 'pending'
+            ? 'đang chờ duyệt'
+            : device?.deviceStatus === 'approved'
+              ? 'đã được duyệt'
+              : 'chưa đăng ký';
+      const userLine = `🆔 Telegram User ID: \`${identity}\`\n\nTrạng thái thiết bị: ${statusLine}.`;
+
+      if (
+        device?.deviceStatus === 'approved' &&
+        device.status !== 'blocked' &&
+        device.status !== 'pending' &&
+        device.allowedModels?.length
+      ) {
+        const rotated = await rotateDevicePairingCode(identity, db);
+        const policy = buildPolicyPayload(
+          { ...device, pairingCode: rotated.pairingCode, pairingCodeExpiresAt: rotated.pairingCodeExpiresAt },
+          rotated.pairingCodeExpiresAt
+        );
+        const rawMsg = [
+          `🔐 **Chính sách thiết bị TaskMate**`,
+          userLine,
+          `Mã ghép cặp: \`${rotated.pairingCode}\` (hết hạn ${rotated.pairingCodeExpiresAt})`,
+          '',
+          'Dán toàn bộ dòng dưới vào Cài đặt AI → Telegram Device:',
+          '',
+          policy,
+        ].join('\n');
+        const htmlMsg = markdownToTelegramHtml(rawMsg).replace(
+          /TMMATE_POLICY_V1:[A-Za-z0-9_-]+/g,
+          (token) => `<code>${token}</code>`
+        );
+        await sendReply(botToken, chat_id, htmlMsg, message_id);
+        await logTelegramSession(
+          {
+            chatId: chat_id,
+            userName: from_name,
+            userMessage: text,
+            aiResponse: rawMsg,
+            dataScopeUsed: 'pure_llm',
+            tokenCount: 0,
+          },
+          db
+        );
+        return;
+      }
+
+      const guidance = device?.status === 'blocked' || device?.deviceStatus === 'revoked'
+        ? 'Nhờ admin cấp lại quyền trong TaskMate trước khi yêu cầu /policy.'
+        : 'Nhờ admin duyệt trong TaskMate, sau đó gõ /policy để nhận chính sách.';
+      const rawMsg = [`⚠️ **Chưa thể phát chính sách**`, userLine, '', guidance].join('\n');
+      await sendReply(botToken, chat_id, markdownToTelegramHtml(rawMsg), message_id);
+      await logTelegramSession(
+        {
+          chatId: chat_id,
+          userName: from_name,
+          userMessage: text,
+          aiResponse: rawMsg,
+          dataScopeUsed: 'pure_llm',
+          tokenCount: 0,
+        },
+        db
+      );
+      return;
+    }
+
     if (lowerText === '/reset' || lowerText === '/clear') {
       await resetTelegramUserSession(chat_id, db);
       const graceNote = cmdAccess.isOverQuota

@@ -8,7 +8,7 @@ status: complete
 stopped_at: Phase 51 complete
 last_updated: "2026-11-26T09:22:04.240Z"
 last_activity: 2026-11-26
-last_activity_desc: "Completed quick task 261126-cff: add Windows-only workflow for both NSIS installers"
+last_activity_desc: "Completed quick task 261127-01z: Telegram device control for standalone AI chat (review fixes applied, UAT pending)"
 state_head: 7809e6c6039d5d33a0f2b84c1f6bf265d1d60e43
 progress:
   total_phases: 2
@@ -156,6 +156,7 @@ Progress: [██████████] 100%
 | 261126-vuy | Thêm dark/light theme switch cho AI chat standalone window | 2026-11-26 | 817ff15b | Verified | [261126-vuy-th-m-dark-light-theme-switch-cho-ai-chat](./quick/261126-vuy-th-m-dark-light-theme-switch-cho-ai-chat/) |
 | 261126-q7j | Add search_chat_history and read_chat_turn tools to AI chat panel, scoped to current thread | 2026-11-26 | 49b71e93, 6bc5f229, c8c851a3, 2e702ed9 | Verified | [261126-q7j-add-search-chat-history-and-read-chat-tu](./quick/261126-q7j-add-search-chat-history-and-read-chat-tu/) |
 | 261126-vra | Pool SSH sessions và giữ remote SQLcl persistent trong Tauri, bỏ handshake/spawn lặp lại | 2026-11-26 | 41949863, 3b1bfbef | Verified | [261126-vra-implement-ssh-connection-pool-persistent](./quick/261126-vra-implement-ssh-connection-pool-persistent/) |
+| 261127-01z | Quản lý thiết bị AI chat standalone qua Telegram user ID: đăng ký, duyệt, whitelist model, settings từ xa | 2026-11-26 | cc128ab0, b432da3a, 85dafc3a, 24e1e37f | Reviewed + UAT pending | [261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te](./quick/261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te/) |
 
 ## Accumulated Context
 

@@ -16,6 +16,7 @@ import {
   getPendingTelegramUsers,
   approvePendingUser,
   blockPendingUser,
+  upsertDeviceEnrollment,
 } from '../../src/services/telegram/telegramSettingsService';
 import { getTodayDateString } from '../../src/utils/date';
 
@@ -337,9 +338,44 @@ describe('Telegram Settings Service (Dexie V12)', () => {
     await recordPendingTelegramUser('pending_chat_2', 'Spammer', testDb);
     const blocked = await blockPendingUser('pending_chat_2', testDb);
     expect(blocked.status).toBe('blocked');
+    expect(blocked.deviceStatus).toBe('revoked');
     const quotaBlocked = await checkAndConsumeQuota('pending_chat_2', testDb);
     expect(quotaBlocked.allowed).toBe(false);
     expect(quotaBlocked.reason).toBe('blocked');
+  });
+
+  it('preserves isAdmin/sessionResetAt/quota on revoke and drops stale pairing fields', async () => {
+    await upsertWhitelistUser(
+      {
+        chatId: 'admin-device',
+        status: 'active',
+        isAdmin: true,
+        sessionResetAt: '2026-11-01T00:00:00.000Z',
+        usedToday: 7,
+        overQuotaAttempts: 2,
+        deviceStatus: 'approved',
+        allowedModels: ['model-a'],
+        pairingCode: 'ABC123',
+        pairingCodeExpiresAt: '2099-01-01T00:00:00.000Z',
+      },
+      testDb
+    );
+
+    const revoked = await upsertDeviceEnrollment(
+      { telegramUserId: '', chatId: 'admin-device', deviceStatus: 'revoked' },
+      testDb
+    );
+    expect(revoked.isAdmin).toBe(true);
+    expect(revoked.sessionResetAt).toBe('2026-11-01T00:00:00.000Z');
+    expect(revoked.usedToday).toBe(7);
+    expect(revoked.overQuotaAttempts).toBe(2);
+    expect(revoked.allowedModels).toEqual(['model-a']);
+    expect(revoked.pairingCode).toBeUndefined();
+    expect(revoked.pairingCodeExpiresAt).toBeUndefined();
+
+    const stored = await testDb.telegramWhitelist.get('admin-device');
+    expect(stored?.pairingCode).toBeUndefined();
+    expect(stored?.isAdmin).toBe(true);
   });
 
   it('supports custom aiModel per user and default dailyLimit 10 on upsert', async () => {

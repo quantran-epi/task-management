@@ -129,6 +129,11 @@ import { stageLabelFor } from './runtime/useChatTurn';
 import { aiTurnManager, ACTIVE_AI_STATUSES } from '../../services/ai/aiTurnManager';
 import { cancelToolCall } from '../../services/sshService';
 
+import {
+  isModelAllowed,
+  type TelegramDevicePolicy,
+} from '../../services/telegram/telegramDevicePolicy';
+
 // Module-level registry so background AI turns survive drawer unmounts and view navigation
 let globalTabTurnRegistry: TabTurnRegistry | null = null;
 let globalDbInstance: TaskPlannerDatabase | null = null;
@@ -244,6 +249,8 @@ export interface AIChatDrawerProps {
   isPopoutWindow?: boolean;
   isDockedPanel?: boolean;
   isStandaloneChat?: boolean;
+  devicePolicy?: TelegramDevicePolicy | undefined;
+  policyState?: 'unmanaged' | 'active' | 'blocked' | undefined;
 }
 
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
@@ -261,6 +268,8 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   isPopoutWindow = false,
   isDockedPanel = false,
   isStandaloneChat = false,
+  devicePolicy,
+  policyState = 'unmanaged',
 }) => {
   const appMessage = useMessage();
   const { modal, contextHolder } = useTaskMateModal();
@@ -542,6 +551,12 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   // ---------------------------------------------------------------------------
   const turnRegistryRef = useRef<TabTurnRegistry | null>(globalTabTurnRegistry);
   const configRef = useRef<{ endpoint: string; contextWindowTokens?: number } | null>(null);
+  // Live policy refs: the runtime enforces at start() so retry and programmatic starts see the
+  // latest policy even though the global registry is created once per db.
+  const policyStateRef = useRef(policyState);
+  policyStateRef.current = policyState;
+  const devicePolicyRef = useRef(devicePolicy);
+  devicePolicyRef.current = devicePolicy;
   // Host-side prelude (grounded routing, prompt assembly) is abortable per tab; the tool loop
   // itself is aborted by the runtime's own controller.
   const hostAbortRef = useRef(globalHostAbortMap);
@@ -593,6 +608,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         saveMessage,
         describeMutation: describeToolMutationWithContext,
         db,
+        enforceRequest: (request) => {
+          const state = policyStateRef.current;
+          const policy = devicePolicyRef.current;
+          if (state === 'blocked' || (state === 'active' && !policy)) return null;
+          if (state === 'active' && policy && policy.allowedModels.length) {
+            const model = String(request.model ?? '').trim();
+            return {
+              ...request,
+              model: isModelAllowed(policy, model) ? model : policy.allowedModels[0]!,
+            };
+          }
+          return request;
+        },
         onStatus: (status) => {
           patch({
             status: TURN_STATUS_TO_TAB[status],
@@ -802,12 +830,20 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
 
   // Runtime mirror first (patched synchronously), then durable config, then the persisted global default.
-  const resolveActiveModel = () =>
-    tabRuntimes.get(activeTabId)?.model ||
-    tabRuntimes.get(turnTabIdRef.current)?.model ||
-    activeTab?.config?.model ||
-    persistedDefaultModel ||
-    persistedDefaultModelRef.current;
+  const resolveActiveModel = () => {
+    const current =
+      tabRuntimes.get(activeTabId)?.model ||
+      tabRuntimes.get(turnTabIdRef.current)?.model ||
+      activeTab?.config?.model ||
+      persistedDefaultModel ||
+      persistedDefaultModelRef.current;
+    if (policyState === 'active' && devicePolicy?.allowedModels.length) {
+      return isModelAllowed(devicePolicy, current)
+        ? current.trim()
+        : devicePolicy.allowedModels[0]!;
+    }
+    return current;
+  };
 
   const writeTabModel = useCallback(
     async (tab: ChatTab | undefined, model: string) => {
@@ -829,8 +865,16 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const liveModels = await fetchAvailableModels(db);
       if (liveModels.length > 0) {
         setAvailableModels(liveModels);
+        const active =
+          policyState === 'active' && devicePolicy
+            ? liveModels.filter((model) => isModelAllowed(devicePolicy, model))
+            : liveModels;
+        if (active.length === 0) {
+          appMessage.warning('9router không có model nào nằm trong whitelist chính sách thiết bị.');
+          return;
+        }
         const current = resolveActiveModel();
-        const next = liveModels.includes(current) ? current : liveModels[0];
+        const next = active.includes(current) ? current : active[0];
         if (next) await writeTabModel(activeTab, next);
         appMessage.success(`Đã cập nhật ${liveModels.length} mô hình từ 9router`);
       } else {
@@ -841,7 +885,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     } finally {
       setIsRefreshingModels(false);
     }
-  }, [activeTab, db, writeTabModel]);
+  }, [activeTab, db, devicePolicy, policyState, writeTabModel]);
 
   useEffect(() => {
     let mounted = true;
@@ -895,6 +939,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   }, [db, open, scopeKey]);
 
   const handleModelChange = async (model: string) => {
+    if (policyState === 'active' && devicePolicy && !isModelAllowed(devicePolicy, model)) {
+      appMessage.error('Model nằm ngoài whitelist chính sách thiết bị.');
+      return;
+    }
     await writeTabModel(activeTab, model);
   };
 
@@ -1305,6 +1353,11 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   ) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (policyState === 'blocked') {
+      appMessage.error('Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.');
+      return;
+    }
 
     // A yes/no answer belongs to the tab that is waiting on a mutation, not the visible one.
     const approvalOwner = Object.entries(turnRegistryRef.current?.getSnapshot() ?? {}).find(
@@ -2075,6 +2128,10 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
   };
 
   const handleRetry = () => {
+    if (policyState === 'blocked') {
+      appMessage.error('Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.');
+      return;
+    }
     const tabRuntime = tabRuntimesRef.current.get(runtimeTabId);
     const turnRuntime = turnRegistryRef.current?.peek(runtimeTabId);
     const text = tabRuntime?.lastSubmittedText ?? '';
@@ -2346,7 +2403,10 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           error={activeRuntime?.error ? { code: activeRuntime.error.code, message: activeRuntime.error.message } : null}
           toolbox={{
             selectedModel: resolveActiveModel(),
-            availableModels,
+            availableModels:
+              policyState === 'active' && devicePolicy?.allowedModels.length
+                ? Array.from(new Set([...availableModels, ...devicePolicy.allowedModels]))
+                : availableModels,
             onModelChange: handleModelChange,
             onRefreshModels: handleRefreshModels,
             isRefreshingModels,

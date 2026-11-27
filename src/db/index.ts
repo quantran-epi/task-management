@@ -28,6 +28,7 @@ import {
   SCHEMA_V26,
   SCHEMA_V27,
   SCHEMA_V28,
+  SCHEMA_V29,
 } from './schema';
 import type {
   Task,
@@ -682,6 +683,21 @@ export class TaskPlannerDatabase extends Dexie {
           .modify((row: Record<string, unknown>) => {
             if (typeof row.name === 'string' && row.name.trim() === 'Agent Developer' && !row.agentKind) {
               row.agentKind = 'developer';
+            }
+          })
+      );
+
+    // V29: chỉ backfill danh tính cho row whitelist cũ có chatId là chuỗi số. Row khác
+    // giữ nguyên (dùng delete, không gán undefined, để index không thấy giá trị rỗng).
+    this.version(29)
+      .stores(SCHEMA_V29)
+      .upgrade((tx) =>
+        tx
+          .table('telegramWhitelist')
+          .toCollection()
+          .modify((row: Record<string, unknown>) => {
+            if (row.telegramUserId === undefined && typeof row.chatId === 'string' && /^\d+$/.test(row.chatId)) {
+              row.telegramUserId = row.chatId;
             }
           })
       );

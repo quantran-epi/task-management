@@ -201,4 +201,12 @@ export const SCHEMA_V28 = {
   ...SCHEMA_V27,
 } as const;
 
-export const LATEST_SCHEMA_VERSION = 28;
+// V29: các field policy là payload unindexed; chỉ thêm 1 index `telegramUserId` để lookup
+// danh tính thiết bị. Các field khác của whitelist giữ nguyên, row cũ không mất dữ liệu.
+export const SCHEMA_V29 = {
+  ...SCHEMA_V28,
+  telegramWhitelist:
+    'chatId, telegramUserId, name, status, dataScope, dailyLimit, usedToday, lastActiveDate',
+} as const;
+
+export const LATEST_SCHEMA_VERSION = 29;
