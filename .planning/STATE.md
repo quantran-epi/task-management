@@ -190,6 +190,7 @@ Progress: [██████████] 100%
 | 261127-ts3 | Quick create link inline trên CR detail và task insight, validate URL, atomic append | 2026-11-27 | 53276fea, 25b98c7e, db58092d | Reviewed + verified | [261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr](./quick/261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr/) |
 | 261127-uoi | Tách linked system thành section riêng trên task insight; click mở tab system_detail canonical | 2026-11-27 | 2c660c65, c900c3d6, a1daeaad, 959c1762 | Reviewed + verified | [261127-uoi-ki-m-tra-task-detail-page-t-ch-linked-sy](./quick/261127-uoi-ki-m-tra-task-detail-page-t-ch-linked-sy/) |
 | 261127-vya | Fix SSH Remote Explorer: untracked sâu/folder đã track, viewer working-copy-first khi ref==HEAD (giữ WR-01), search + reveal gồm staged/untracked | 2026-11-27 | pending | Verified | [261127-vya-fix-ssh-remote-explorer-gaps-untracked-s](./quick/261127-vya-fix-ssh-remote-explorer-gaps-untracked-s/) |
+| 261128-09x | Trung lập harness AI: prompt không ép tool, payload chọn theo intent, lỗi stream tools báo rõ, debug đếm tool theo tên | 2026-11-28 | c1a0bc77, 9e914784, 0f58b370, 433e9d2b | Reviewed + verified | [261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-](./quick/261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-/) |
 
 ## Accumulated Context
 
@@ -295,6 +296,7 @@ Progress: [██████████] 100%
 - [Quick 261127-mrx]: block `<referenced_files>` dựng một lần từ `allFiles` qua helper thuần dùng cho cả standalone lẫn ordinary prompt; standalone không đọc nội dung file và không đổi `attachedPaths`/`attachmentScope`/runtime.
 - [Quick 261127-vya]: Viewer ưu tiên working copy khi `resolve(ref) == resolve(HEAD)`; mọi guard/realpath/cat failure khác `PathOutsideRepoError` fail-closed về blob ref (WR-01). Untracked enum qua `--untracked-files=all`; search fetch status mỗi query, cache vẫn chỉ ls-tree; reveal fallback chỉ cho ancestor vắng mặt trong ref.
 - [Quick 261127-mmz]: wakeup 250ms là poll tick, byte `read_line` đã tiêu thụ phải giữ trong buffer; PGID được grant chỉ khi buffer là dòng hoàn chỉnh (`\n`/`\r`) hoặc EOF — parse ngay trên chunk partial có thể cấp nhầm `42` thay vì `4242`; buffer clear sau dòng hoàn chỉnh không khớp. Diagnostic pending đi qua `sqlcl_error_diagnostics("", pending)` (tail 8 KiB, cắt char boundary) rồi mới tới Err/TS `redactOracleText`; cap 10 attempt giữ nguyên.
+- [Quick 261128-09x]: Intent chỉ trừ tool khỏi payload (`pruneToolsForIntent` gọi lại `pruneToolsForContext`), `mixed`/`clarify`/null giữ nguyên; `git_read` và chat-history thêm sau khi lọc. Lỗi stream có tools ném thẳng, không retry bỏ tools — trả lời từ payload thiếu tools là sai sự thật. Debug modal chỉ gộp `toolExecutions[].name`. Không đụng `maxLoops`, compaction, endpoint hay dependency.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
