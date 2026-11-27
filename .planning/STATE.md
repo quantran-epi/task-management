@@ -6,10 +6,10 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-27T06:59:30Z"
+last_updated: "2026-11-27T07:37:22.778Z"
 last_activity: 2026-11-27
 last_activity_desc: "Completed quick task 261127-j35: bounded ORA-/SP2- diagnostics, 60s SQLcl idle kill, inactivity drain, SQL> data preservation"
-state_head: 488c8f69a08036d25cad121bd5ac2956ec647358
+state_head: 86a670ae4ad099bd3b90bf550c262ebed0bf770f
 progress:
   total_phases: 2
   completed_phases: 2
@@ -166,8 +166,10 @@ Progress: [██████████] 100%
 | 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
 | 261127-eos | Sửa 2 lỗi review: marker hoàn tất là một dòng plain text, reader dừng bằng so sánh dòng chính xác, bỏ JSON strip/reserialize khỏi Rust | 2026-11-27 | bbe75d3c, 873570c4 | — | [261127-eos-fix-sqlcl-marker-reader-review-findings-](./quick/261127-eos-fix-sqlcl-marker-reader-review-findings-/) |
 | 261127-fzv | Implement standalone Request access flow: local bridge, admin approval + per-user model whitelist in `#/telegram`, realtime fail-closed policy delivery to standalone chat | 2026-11-27 | 53c3ee6f, 2140f628, 7deb81f5, 29753376 | Verified | [261127-fzv-implement-standalone-access-request-flow](./quick/261127-fzv-implement-standalone-access-request-flow/) |
+| 261127-jvm | Implement sketch 015 winner A cho SSH file picker: explorer trái + file list phải + footer chip, multi-select giữ onAttach(paths)/search cancellable/không đọc nội dung | 2026-11-27 | 32cdfa4c, 86a670ae | — | [261127-jvm-implement-sketch-015-winner-a-v-o-standa](./quick/261127-jvm-implement-sketch-015-winner-a-v-o-standa/) |
 | 261127-hup | Chuyển SQLcl thường trú sang SSH PTY (xterm, ECHO tắt, 65535 cột); reader chuẩn hoá ANSI/prompt, marker dòng plain, giữ PGID/cancel/TTL/restart-once | 2026-11-27 | c9c4cd90, 7af9a357 | — | [261127-hup-implement-pty-backed-persistent-sqlcl-se](./quick/261127-hup-implement-pty-backed-persistent-sqlcl-se/) |
 | 261127-j35 | Sửa 4 finding review PTY SQLcl: error tail bounded vào stderr, idle deadline 60s + SIGTERM PGID, drain theo inactivity có cap, giữ prefix SQL> trên dữ liệu | 2026-11-27 | a094e622, 76faf6ad, 636b6f62 | — | [261127-j35-fix-pty-sqlcl-review-findings-merged-std](./quick/261127-j35-fix-pty-sqlcl-review-findings-merged-std/) |
+| 261127-jvm | Implement sketch 015 winner A: two-column SSH file picker | 2026-11-27 | 86a670ae | — | [261127-jvm-implement-sketch-015-winner-a-v-o-standa](./quick/261127-jvm-implement-sketch-015-winner-a-v-o-standa/) |
 
 ## Accumulated Context
 
@@ -268,6 +270,7 @@ Progress: [██████████] 100%
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
 - [Quick 261127-dsx]: Persistent SQLcl completion dùng SQL `SELECT '<marker>' AS TASKMATE_DONE FROM DUAL;` dưới `SET SQLFORMAT JSON`; Rust strip marker row trước khi trả stdout, TS heredoc production code giữ nguyên.
 - [Quick 261127-eos]: Completion marker là một dòng plain text duy nhất (`SELECT '<marker>' FROM DUAL;` sau `SET SQLFORMAT DEFAULT`, không alias `TASKMATE_DONE`); reader so sánh `line.trim() == marker` bằng equality (kể cả partial ở EOF), dòng marker không vào stdout, bỏ hoàn toàn JSON strip/reserialize trong Rust để stdout byte-identical.
+- [Quick 261127-jvm]: SSH picker chuẩn VS Code Remote Explorer — explorer trái (host/folder, navigate), file list phải (breadcrumb/Up/search, checkbox + size/mtime), footer chip; `onAttach(paths)`/search `find -iname | head -n 201` có cancel/không đọc nội dung giữ nguyên.
 - [Quick 261127-j35]: tail chẩn đoán 8 KiB (merged stdout + pending line, cắt char boundary) nằm trong Err string để TS `redactOracleText` che connection string; idle deadline 60s là policy riêng persistent SQLcl, khác `tool_cancel` no-timeout; drain dừng theo inactivity, cap 512 dòng/256 KiB chỉ làm safety; `SQL>` giữ nguyên trên data, prompt chỉ strip ở detection marker/PGID.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
@@ -411,3 +414,5 @@ Progress: [██████████] 100%
 | Phase 48 P02 | 14min | 2 tasks | 10 files |
 | Phase 48 P03 | 29min | 2 tasks | 13 files |
 | Phase 48 P04 | 20min | 2 tasks | 7 files |
+
+Last activity: 2026-11-27 - Completed quick task 261127-jvm: implemented sketch 015 winner A two-column SSH file picker.
