@@ -461,17 +461,31 @@ pub fn cleanup_on_exit(state: &SshRuntimeState) {
 
 // --- pure helpers --------------------------------------------------------------------------
 
-// RED-phase stubs — replaced by real implementations after the assertion-level failures below.
-fn sqlcl_error_diagnostics(_output: &str, _pending_line: &str) -> String {
-    String::new()
+/// Bounded tail of merged stdout plus the pending partial line. PTY folds stderr into fd1, so
+/// ORA-/SP2- text can sit in either buffer when the reader stops before the marker. Cut from the
+/// end on a UTF-8 char boundary; TS redacts the resulting stderr before the model sees it.
+fn sqlcl_error_diagnostics(output: &str, pending_line: &str) -> String {
+    let clean_line_owned = strip_ansi_escapes(pending_line);
+    let clean_line = strip_sqlcl_prompt(&clean_line_owned);
+    let mut joined = String::with_capacity(output.len() + clean_line.len());
+    joined.push_str(output);
+    joined.push_str(clean_line);
+    if joined.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES {
+        return joined;
+    }
+    let mut start = joined.len() - MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES;
+    while !joined.is_char_boundary(start) {
+        start += 1;
+    }
+    joined[start..].to_string()
 }
 
-fn sqlcl_idle_timed_out(_elapsed: Duration) -> bool {
-    false
+fn sqlcl_idle_timed_out(elapsed: Duration) -> bool {
+    elapsed >= SQLCL_REPL_IDLE_DEADLINE
 }
 
-fn sqlcl_drain_should_continue(_got_new_bytes: bool, _eof: bool, _lines: usize, _bytes: usize) -> bool {
-    false
+fn sqlcl_drain_should_continue(got_new_bytes: bool, eof: bool, lines: usize, bytes: usize) -> bool {
+    !eof && got_new_bytes && lines < SQLCL_DRAIN_MAX_LINES && bytes < SQLCL_DRAIN_MAX_BYTES
 }
 
 /// Unique per-request plain-text marker line. `PROMPT` is suppressed in `sqlcl -s`, so the marker
@@ -590,16 +604,16 @@ fn scan_sqlcl_pgid_line(line: &str) -> Option<u32> {
         .ok()
 }
 
-/// Append one normalized PTY line to stdout. Marker lines and prompt/ANSI-only lines are dropped;
-/// every other line is appended after stripping terminal control sequences and the leading
-/// prompt, so PTY decorations never leak into the returned payload. Returns true on the marker.
+/// Append one ANSI-stripped PTY line to stdout. Data bytes are kept verbatim — including a
+/// leading `SQL>` — because stripping it here corrupts JSON payloads. Prompt removal belongs only
+/// to marker/PGID detection. Marker lines and prompt/ANSI-only lines are dropped. Returns true on
+/// the marker.
 fn append_sqlcl_line(output: &mut String, line: &str, marker: &str) -> bool {
     let clean = strip_ansi_escapes(line);
-    let normalized = strip_sqlcl_prompt(&clean);
-    if normalized.trim() == marker {
+    if sqlcl_line_is_marker(line, marker) {
         true
-    } else if !normalized.trim().is_empty() {
-        output.push_str(normalized);
+    } else if !strip_sqlcl_prompt(&clean).trim().is_empty() {
+        output.push_str(&clean);
         false
     } else {
         false
