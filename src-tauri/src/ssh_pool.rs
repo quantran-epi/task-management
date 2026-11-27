@@ -311,7 +311,7 @@ impl SqlclSession {
     }
 
     /// Send one script and read until its unique SQL marker. `cancelled` is the shared token from
-    /// `ToolTaskRegistry`; on cancel the remote process group is SIGTERM'd and the session is
+    /// `ToolTaskRegistry`; on cancel the PTY receives Ctrl-C and the session is
     /// torn down, never left half-read.
     fn run_script(
         &self,
@@ -479,7 +479,7 @@ pub fn ssh_invalidate_pool() {
 
 pub fn cleanup_on_exit(state: &SshRuntimeState) {
     // No config here (registry deliberately keeps none); dropping channels closes the remote
-    // shells when SSH disconnects. Explicit Cancel is the path that kills a live SQLcl PGID.
+    // shells when SSH disconnects. Explicit Cancel interrupts a live SQLcl via its PTY.
     state.sqlcl.teardown();
     state.pool.teardown();
 }
@@ -619,7 +619,7 @@ fn sqlcl_line_is_marker(line: &str, marker: &str) -> bool {
 
 /// Append one ANSI-stripped PTY line to stdout. Data bytes are kept verbatim — including a
 /// leading `SQL>` — because stripping it here corrupts JSON payloads. Prompt removal belongs only
-/// to marker/PGID detection. Marker lines and prompt/ANSI-only lines are dropped. Returns true on
+/// to marker detection. Marker lines and prompt/ANSI-only lines are dropped. Returns true on
 /// the marker.
 fn append_sqlcl_line(output: &mut String, line: &str, marker: &str) -> bool {
     let clean = strip_ansi_escapes(line);
@@ -765,7 +765,7 @@ pub fn run_persistent_sqlcl(
 
         match session.run_script(&full_script, &marker, cancelled) {
             Ok((stdout, stderr, true)) => {
-                // Explicit cancel: SIGTERM already sent; drop the half-read session.
+                // Explicit cancel: Ctrl-C already sent; drop the half-read session.
                 if let Ok(mut sessions) = state.sqlcl.sessions.lock() {
                     sessions.remove(&key);
                 }
