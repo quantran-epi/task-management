@@ -1,6 +1,6 @@
 import type { SshConfig } from '../types/ssh';
 import type { RemoteGitTreeNode, RemoteFilePage } from '../types/gitRemote';
-import { runGitCommand, escapeShellArg } from './gitRemoteService';
+import { runGitCommand, escapeShellArg, getUncommittedFiles } from './gitRemoteService';
 import { execRemoteCommand } from './sshService';
 import { foldForSearch, searchIncludes } from '../utils/searchText';
 
@@ -88,48 +88,54 @@ export function mergeUncommittedFilesIntoTree(
       status = `${idx}${wt}` || 'M';
     }
 
+    // Keys stay repo-relative even when merging into a baseDir subtree: reveal/compact map
+    // paths against the full path, so `baseDir='tracked/new'` must not key a child as `new/x`.
+    // Materialize the WHOLE chain down to the file. A bare top folder would be unexpandable
+    // because `git ls-tree <ref>:<newdir>` fails for a path absent from the ref. Starting from
+    // an existing ref folder (parts.length > 1) keeps its badge but still adds the real child.
+    const materializeChain = (start: RemoteGitTreeNode[], segments: string[], parentKey = '') => {
+      let siblings = start;
+      for (let i = 0; i < segments.length; i += 1) {
+        const name = segments[i]!;
+        const isLeaf = i === segments.length - 1;
+        const key = [parentKey, ...segments.slice(0, i + 1)].filter(Boolean).join('/');
+        let node = siblings.find((n) => n.title === name);
+        if (!node) {
+          node = {
+            key,
+            title: name,
+            isLeaf,
+            sha: '',
+            ...(isLeaf ? { gitStatus: status } : { gitStatus: 'M', children: [] }),
+          };
+          siblings.push(node);
+        }
+        if (isLeaf) {
+          node.gitStatus = status;
+        } else {
+          node.children = node.children ?? [];
+          if (!node.gitStatus) node.gitStatus = 'M';
+          siblings = node.children;
+        }
+      }
+    };
+
     const existingNode = nodeMap.get(directName);
     if (existingNode) {
       if (parts.length === 1) {
         existingNode.gitStatus = status;
+      } else if (cleanBaseDir) {
+        // Lazy expansion inside this folder: materialize real children from uncommitted rows.
+        // At root (no baseDir) keep the ref folder lazy — its children arrive via onLoadData.
+        if (!existingNode.gitStatus) existingNode.gitStatus = 'M';
+        existingNode.children = existingNode.children ?? [];
+        materializeChain(existingNode.children, parts.slice(1), existingNode.key);
       } else if (!existingNode.gitStatus) {
-        // Directory containing uncommitted files - mark with indicator if not already set
         existingNode.gitStatus = 'M';
       }
-      // A nested dirty path under an existing ref folder is materialized on expansion by the
-      // baseDir-scoped merge in onLoadData; no need to fabricate folders here.
       continue;
     }
-
-    // New path not in the ref. Materialize the WHOLE chain down to the file: a bare top folder
-    // would be unexpandable because `git ls-tree <ref>:<newdir>` fails for a staged-new dir.
-    const keyAt = (segments: string[]) =>
-      [cleanBaseDir, ...segments].filter(Boolean).join('/');
-    let siblings = resultNodes;
-    for (let i = 0; i < parts.length; i += 1) {
-      const name = parts[i]!;
-      const isLeaf = i === parts.length - 1;
-      const key = keyAt(parts.slice(0, i + 1));
-      let node = siblings.find((n) => n.title === name);
-      if (!node) {
-        node = {
-          key,
-          title: name,
-          isLeaf,
-          sha: '',
-          ...(isLeaf ? { gitStatus: status } : { gitStatus: 'M', children: [] }),
-        };
-        siblings.push(node);
-      }
-      if (isLeaf) {
-        node.gitStatus = status;
-      } else {
-        // Folder in a brand-new chain: ensure it can hold the next segment and stays badged.
-        node.children = node.children ?? [];
-        if (!node.gitStatus) node.gitStatus = 'M';
-        siblings = node.children;
-      }
-    }
+    materializeChain(resultNodes, parts, cleanBaseDir);
   }
 
   // Rebuild the direct-child map so later items can merge into folders created in this pass.
@@ -182,11 +188,13 @@ export function confineRepoPath(filePath: string, label = 'Đường dẫn'): st
  * whose NAME contains the phrase (`invalid object name 'x does not exist in'`), letting a
  * model-chosen branch name force the fallback at will.
  */
-function isNotInRef(err: unknown, cleanPath: string, ref: string): boolean {
+export function isNotInRef(err: unknown, cleanPath: string, ref: string): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return (
     message.includes(`path '${cleanPath}' does not exist in '${ref}'`) ||
-    message.includes(`path '${cleanPath}' exists on disk, but not in '${ref}'`)
+    message.includes(`path '${cleanPath}' exists on disk, but not in '${ref}'`) ||
+    // `ls-tree <ref>:<dir>` uses a different wording than cat-file for a missing directory.
+    message.includes(`Not a valid object name ${ref}:${cleanPath}`)
   );
 }
 
@@ -265,12 +273,9 @@ export async function searchRemoteTree(
     folders.push({ path: clean, name, type: 'folder', ...nameMatch(name) });
   };
 
-  for (const line of stdout.split('\0')) {
-    if (!line.trim()) continue;
-    const node = parseLsTreeLine(line);
-    if (!node || !node.isLeaf) continue; // ls-tree -r lists blobs; folders derive from paths
-    const segments = node.key.split('/').filter(Boolean);
-    if (!segments.some((segment) => searchIncludes(segment, needle))) continue;
+  const addPath = (path: string, size?: number) => {
+    const segments = path.split('/').filter(Boolean);
+    if (!segments.some((segment) => searchIncludes(segment, needle))) return false;
 
     // Derive ancestors first so the final capped file still contributes its folder path.
     let ancestor = '';
@@ -278,9 +283,28 @@ export async function searchRemoteTree(
       ancestor = ancestor ? `${ancestor}/${segments[i]}` : segments[i]!;
       addFolder(ancestor, segments[i]!);
     }
-    const fileName = segments[segments.length - 1] ?? node.title;
-    addFile(node.key, fileName, node.size);
-    if (files.length >= SEARCH_RESULT_LIMIT) break;
+    addFile(path, segments[segments.length - 1] ?? '', size);
+    return files.length >= SEARCH_RESULT_LIMIT;
+  };
+
+  for (const line of stdout.split('\0')) {
+    if (!line.trim()) continue;
+    const node = parseLsTreeLine(line);
+    if (!node || !node.isLeaf) continue; // ls-tree -r lists blobs; folders derive from paths
+    if (addPath(node.key, node.size)) break;
+  }
+
+  // Untracked/staged files never appear in `ls-tree <ref>`. Fetch status per query (never cache
+  // it — it goes stale): the ls-tree listing stays one-per-ref above, so cache semantics are
+  // unchanged. A status failure degrades to ref-only results rather than crashing the search UI.
+  try {
+    const dirty = await getUncommittedFiles(config, repoPath, secret, callId);
+    for (const row of dirty) {
+      if (row.indexStatus === 'D' || row.workingTreeStatus === 'D') continue;
+      if (addPath(row.path)) break;
+    }
+  } catch {
+    // ref-only results are still useful; degraded, never a thrown UI error.
   }
 
   return [...files, ...folders];
@@ -322,12 +346,13 @@ export async function getRemoteTree(
 }
 
 /**
- * Fetches exact file blob content at a ref using git cat-file -p <ref>:<filePath>.
- * Invariant: Read-only command. NEVER calls git checkout or modifies working copy.
- * Falls back to reading directly from remote working copy ONLY when the path genuinely is
- * not in the ref (e.g. an untracked file). A bad ref, an SSH failure or an escaping path
- * propagates so the caller reports the real cause instead of silently returning the working
- * copy labelled as branch content (CR-02, WR-01).
+ * Fetches file content for the viewer. Read-only: never checks out or edits anything.
+ *
+ * Owner decision (2026-11-27): the viewer shows the CURRENT WORKING COPY whenever `ref`
+ * resolves to HEAD — staged (`A `/`AM`) and modified (`M `/` M`/`MM`) files otherwise show a
+ * stale ref blob. `cat-file -p <ref>:<path>` stays the first step: it keeps WR-01 (a different
+ * ref must not borrow the current branch's working copy) and the literal lookup that rejects
+ * globs. A failed cat-file keeps the untracked / staged-new fallback below.
  */
 export async function getRemoteFileContent(
   config: SshConfig,
@@ -344,7 +369,22 @@ export async function getRemoteFileContent(
   // cat-file does not invoke repo-local diff drivers or textconv.
   const gitArgs = ['cat-file', '-p', '--end-of-options', escapeShellArg(objectSpec)];
   try {
-    return await runGitCommand(config, repoPath, gitArgs, secret, callId);
+    const blob = await runGitCommand(config, repoPath, gitArgs, secret, callId);
+    // WR-01: only a ref resolving to HEAD may borrow the working copy. Fail closed on any
+    // resolve/realpath/cat failure; a symlink refusal (PathOutsideRepoError) always propagates.
+    try {
+      const revArgs = (rev: string) =>
+        ['rev-parse', '--verify', '--end-of-options', escapeShellArg(rev)];
+      const [refSha, headSha] = await Promise.all([
+        runGitCommand(config, repoPath, revArgs(ref), secret, callId),
+        runGitCommand(config, repoPath, revArgs('HEAD'), secret, callId),
+      ]);
+      if (refSha.trim() !== headSha.trim()) return blob;
+      return await getRemoteWorkingFileContent(config, repoPath, cleanPath, secret, callId);
+    } catch (err) {
+      if (err instanceof PathOutsideRepoError) throw err;
+      return blob;
+    }
   } catch (err: any) {
     if (!isNotInRef(err, cleanPath, ref)) throw err;
     // The path is absent from <ref>. Two cases share that message:
@@ -517,8 +557,8 @@ function parsePage(
  * `ref` stays in the signature for tool-contract compatibility but no longer selects the source.
  * Confinement (`confineRepoPath` + the realpath guard in `workingCopyCatSnippet`), byte/line
  * paging, the binary probe, and the paged total are unchanged — `readPageFromSource` is
- * source-agnostic. `getRemoteFileContent` stays whole-file and ref-first: `RemoteFileViewer`
- * needs it for the editor, and it is not an AI tool result.
+ * source-agnostic. `getRemoteFileContent` is now whole-file and working-copy-first when
+ * `ref == HEAD`: the viewer and `FindInRemoteFiles` preview both need uncommitted content.
  */
 export async function readRemoteFilePage(
   config: SshConfig,

@@ -820,6 +820,88 @@ describe('RemoteGitExplorer Component', () => {
     expect(screen.queryByText('acme')).toBeNull();
   });
 
+  it('reveals a deeply untracked file when its ancestor is absent from the ref', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'tracked/new/untracked.ts', indexStatus: '?', workingTreeStatus: '?' },
+      ],
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      if (!dirPath) return [{ key: 'tracked', title: 'tracked', isLeaf: false, sha: 't-tracked' }];
+      throw new Error(`fatal: Not a valid object name main:${dirPath}`);
+    });
+    act(() => {
+      (useLayoutStore.getState() as any).setPendingRevealTarget?.({
+        configId: 'ssh-1',
+        repoPath: '/home/dev/my-repo',
+        branch: 'main',
+        filePath: 'tracked/new/untracked.ts',
+      });
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => {
+      expect((useLayoutStore.getState() as any).pendingRevealTarget).toBeNull();
+    });
+    await waitFor(() => {
+      const node = screen.getByText('untracked.ts').closest('.ant-tree-treenode');
+      expect(node?.className).toContain('ant-tree-treenode-selected');
+    });
+  });
+
+  it('expands both compact parent.child branches even when one child is dirty', async () => {
+    act(() => {
+      useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');
+    });
+    // One root folder holds a dirty file two levels down; the other is clean. Both collapse to
+    // parent.child and both must reach their file on expand.
+    vi.spyOn(gitRemoteService, 'checkDirtyStatus').mockResolvedValue({
+      isClean: false,
+      uncommittedFiles: [
+        { path: 'dirty/child/FileB.ts', indexStatus: ' ', workingTreeStatus: 'M' },
+      ],
+    });
+    vi.spyOn(gitRemoteTreeService, 'getRemoteTree').mockImplementation(async (_cfg, _repo, _ref, dirPath) => {
+      const levels: Record<string, any[]> = {
+        '': [
+          { key: 'clean', title: 'clean', isLeaf: false, sha: 't-clean' },
+          { key: 'dirty', title: 'dirty', isLeaf: false, sha: 't-dirty' },
+        ],
+        clean: [{ key: 'clean/child', title: 'child', isLeaf: false, sha: 't-clean-child' }],
+        dirty: [{ key: 'dirty/child', title: 'child', isLeaf: false, sha: 't-dirty-child' }],
+        'clean/child': [{ key: 'clean/child/FileA.ts', title: 'FileA.ts', isLeaf: true, size: 10, sha: 'b-a' }],
+        'dirty/child': [{ key: 'dirty/child/FileB.ts', title: 'FileB.ts', isLeaf: true, size: 10, sha: 'b-b' }],
+      };
+      return levels[dirPath ?? ''] ?? [];
+    });
+
+    render(
+      <AntdThemeAdapter>
+        <RemoteGitExplorer />
+      </AntdThemeAdapter>
+    );
+
+    await waitFor(() => expect(screen.getByText('clean')).toBeDefined());
+    fireEvent.click(
+      screen.getByText('clean').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!
+    );
+    await waitFor(() => expect(screen.getByText('FileA.ts')).toBeDefined());
+
+    fireEvent.click(
+      screen.getByText('dirty').closest('.ant-tree-treenode')!.querySelector('.ant-tree-switcher')!
+    );
+    await waitFor(() => expect(screen.getByText('FileB.ts')).toBeDefined());
+  });
+
   it('reveal of a path inside a compact chain selects the stable first-path key', async () => {
     act(() => {
       useLayoutStore.getState().setActiveRemoteTarget('ssh-1', '/home/dev/my-repo', 'main');

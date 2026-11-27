@@ -16,6 +16,8 @@ import {
   getRemoteTree,
   mergeUncommittedFilesIntoTree,
   searchRemoteTree,
+  confineRepoPath,
+  isNotInRef,
   type RemoteTreeSearchResult,
 } from '../../services/gitRemoteTreeService';
 import type { SshConfig } from '../../types/ssh';
@@ -487,9 +489,11 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
       const chain: RemoteGitTreeNode[] = [];
       while (fetches < CHAIN_FETCH_CAP && level.length === 1) {
         const only = level[0]!;
+        // A gitStatus badge is NOT a descent boundary. compactRemoteTree already folds badged
+        // single-child folders into parent.child, so stopping here would leave the merged row
+        // childless — it expands to nothing while an equivalent clean row shows its files.
         if (
           only.isLeaf ||
-          only.gitStatus?.trim() ||
           Boolean(only.children?.length) ||
           revealPaths.includes(only.key) ||
           SOURCE_ROOT_RE.test(only.key)
@@ -642,7 +646,8 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
   };
 
   // Reveal an already-open remote file in the tree. The target comes from a remote tab; its path
-  // is passed only to the confined getRemoteTree service, never to a shell command (T-quick-01).
+  // is confined before tree access, and an ancestor absent from the ref is rebuilt from the
+  // uncommitted rows already in state (never from a new shell command, T-quick-01).
   const revealInFlightRef = useRef<string | null>(null);
   useEffect(() => {
     const target = pendingRevealTarget;
@@ -700,13 +705,24 @@ export function RemoteGitExplorer({ db = defaultDb }: RemoteGitExplorerProps) {
         for (const ancestor of ancestorPaths) {
           if (cancelled) return;
           if (findRawTreeNode(currentTree, ancestor)?.children) continue;
-          const rawChildren = await getRemoteTree(
-            selectedConfig,
-            repoPath.trim(),
-            selectedBranch,
-            ancestor,
-            secret ?? undefined
-          );
+          let rawChildren: RemoteGitTreeNode[];
+          try {
+            rawChildren = await getRemoteTree(
+              selectedConfig,
+              repoPath.trim(),
+              selectedBranch,
+              ancestor,
+              secret ?? undefined
+            );
+          } catch (err) {
+            // Untracked ancestors have no `ls-tree <ref>:<ancestor>` object. Materialize the
+            // chain from status rows already in state — no extra git call, no shell input from
+            // the path beyond the confined node creation in mergeUncommittedFilesIntoTree.
+            if (!isNotInRef(err, ancestor, selectedBranch)) throw err;
+            const relevant = uncommittedFiles.filter((row) => row.path.startsWith(`${ancestor}/`));
+            for (const row of relevant) confineRepoPath(row.path, 'Đường dẫn kết quả');
+            rawChildren = mergeUncommittedFilesIntoTree([], relevant, ancestor);
+          }
           if (cancelled) return;
           const merged = mergeUncommittedFilesIntoTree(rawChildren, uncommittedFiles, ancestor);
           currentTree = injectRawChildren(currentTree, ancestor, merged);

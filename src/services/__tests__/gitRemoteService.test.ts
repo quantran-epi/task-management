@@ -142,7 +142,29 @@ describe('gitRemoteService - Task 1 Tracer Slice', () => {
       ]);
       expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
         dummyConfig,
-        "git -C '/var/repo' -c core.fsmonitor=false --no-pager status --porcelain=v1 -z",
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager status --porcelain=v1 -z --untracked-files=all",
+        undefined,
+        undefined
+      );
+    });
+
+    it('enumerates every untracked file instead of a collapsed ?? directory token', async () => {
+      const mockPorcelain = ['?? newdir/deep.ts', '?? newdir/nested/leaf.ts'].join('\0');
+      vi.mocked(sshService.execRemoteCommand).mockResolvedValueOnce({
+        stdout: mockPorcelain,
+        stderr: '',
+        exitStatus: 0,
+      });
+
+      const status = await checkDirtyStatus(dummyConfig, '/var/repo');
+
+      expect(status.uncommittedFiles).toEqual([
+        { path: 'newdir/deep.ts', indexStatus: '?', workingTreeStatus: '?' },
+        { path: 'newdir/nested/leaf.ts', indexStatus: '?', workingTreeStatus: '?' },
+      ]);
+      expect(sshService.execRemoteCommand).toHaveBeenCalledWith(
+        dummyConfig,
+        "git -C '/var/repo' -c core.fsmonitor=false --no-pager status --porcelain=v1 -z --untracked-files=all",
         undefined,
         undefined
       );

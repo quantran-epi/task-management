@@ -6,7 +6,7 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-27T09:53:23.840Z"
+last_updated: "2026-11-27T16:20:54Z"
 last_activity: 2026-11-27
 last_activity_desc: "Completed quick task 261127-mmz: PGID scan keeps partial bytes across wakeups, accepts only complete line/EOF, bounded UTF-8-safe pending diagnostic"
 state_head: d2be1fd326fae105799cb0dfb0e20e3602f9fa48
@@ -189,6 +189,7 @@ Progress: [██████████] 100%
 | 261127-u5w | Mở rộng trace SQLcl PTY một lần: session tag, read status, retry/drain/marker/error events | 2026-11-27 | pending | — | [261127-u5w-mo-rong-sqlcl-pty-debug-trace-status-va-](./quick/261127-u5w-mo-rong-sqlcl-pty-debug-trace-status-va-/) |
 | 261127-ts3 | Quick create link inline trên CR detail và task insight, validate URL, atomic append | 2026-11-27 | 53276fea, 25b98c7e, db58092d | Reviewed + verified | [261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr](./quick/261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr/) |
 | 261127-uoi | Tách linked system thành section riêng trên task insight; click mở tab system_detail canonical | 2026-11-27 | 2c660c65, c900c3d6, a1daeaad, 959c1762 | Reviewed + verified | [261127-uoi-ki-m-tra-task-detail-page-t-ch-linked-sy](./quick/261127-uoi-ki-m-tra-task-detail-page-t-ch-linked-sy/) |
+| 261127-vya | Fix SSH Remote Explorer: untracked sâu/folder đã track, viewer working-copy-first khi ref==HEAD (giữ WR-01), search + reveal gồm staged/untracked | 2026-11-27 | pending | Verified | [261127-vya-fix-ssh-remote-explorer-gaps-untracked-s](./quick/261127-vya-fix-ssh-remote-explorer-gaps-untracked-s/) |
 
 ## Accumulated Context
 
@@ -292,6 +293,7 @@ Progress: [██████████] 100%
 - [Quick 261127-jvm]: SSH picker chuẩn VS Code Remote Explorer — explorer trái (host/folder, navigate), file list phải (breadcrumb/Up/search, checkbox + size/mtime), footer chip; `onAttach(paths)`/search `find -iname | head -n 201` có cancel/không đọc nội dung giữ nguyên.
 - [Quick 261127-j35]: tail chẩn đoán 8 KiB (merged stdout + pending line, cắt char boundary) nằm trong Err string để TS `redactOracleText` che connection string; idle deadline 60s là policy riêng persistent SQLcl, khác `tool_cancel` no-timeout; drain dừng theo inactivity, cap 512 dòng/256 KiB chỉ làm safety; `SQL>` giữ nguyên trên data, prompt chỉ strip ở detection marker/PGID.
 - [Quick 261127-mrx]: block `<referenced_files>` dựng một lần từ `allFiles` qua helper thuần dùng cho cả standalone lẫn ordinary prompt; standalone không đọc nội dung file và không đổi `attachedPaths`/`attachmentScope`/runtime.
+- [Quick 261127-vya]: Viewer ưu tiên working copy khi `resolve(ref) == resolve(HEAD)`; mọi guard/realpath/cat failure khác `PathOutsideRepoError` fail-closed về blob ref (WR-01). Untracked enum qua `--untracked-files=all`; search fetch status mỗi query, cache vẫn chỉ ls-tree; reveal fallback chỉ cho ancestor vắng mặt trong ref.
 - [Quick 261127-mmz]: wakeup 250ms là poll tick, byte `read_line` đã tiêu thụ phải giữ trong buffer; PGID được grant chỉ khi buffer là dòng hoàn chỉnh (`\n`/`\r`) hoặc EOF — parse ngay trên chunk partial có thể cấp nhầm `42` thay vì `4242`; buffer clear sau dòng hoàn chỉnh không khớp. Diagnostic pending đi qua `sqlcl_error_diagnostics("", pending)` (tail 8 KiB, cắt char boundary) rồi mới tới Err/TS `redactOracleText`; cap 10 attempt giữ nguyên.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
@@ -388,6 +390,7 @@ Progress: [██████████] 100%
 | Quick 261127-dsx | 6min | 2 | 2 |
 | Quick 261127-eos | 2min | 2 | 2 |
 | Quick 261127-j35 | 9min | 2 | 3 |
+| Quick 261127-vya | 16min | 3 | 7 |
 | Quick 261127-mmz | 21min | 1 | 3 |
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
@@ -436,5 +439,7 @@ Progress: [██████████] 100%
 | Phase 48 P02 | 14min | 2 tasks | 10 files |
 | Phase 48 P03 | 29min | 2 tasks | 13 files |
 | Phase 48 P04 | 20min | 2 tasks | 7 files |
+
+Last activity: 2026-11-27 - Completed quick task 261127-vya: SSH explorer untracked deep files materialized, viewer working-copy-first with WR-01 guard, global search + reveal include staged/untracked.
 
 Last activity: 2026-11-27 - Completed quick task 261127-mmz: PGID scan keeps partial bytes across wakeups, grants PGID only on complete line/EOF, bounded error diagnostic.

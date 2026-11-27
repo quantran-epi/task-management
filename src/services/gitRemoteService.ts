@@ -84,7 +84,16 @@ export async function checkDirtyStatus(
   // WR-03: `-z` emits unquoted, NUL-separated paths, so a path with spaces or a rename no
   // longer arrives quoted (`"a b.txt"`) or arrow-joined (`a -> b`). A rename record is
   // `XY <new>\0<old>\0`; the new path is the one that exists now.
-  const output = await runGitCommand(config, repoPath, ['status', '--porcelain=v1', '-z'], secret, callId);
+  // Default `--untracked-files=normal` collapses an untracked directory to `?? newdir/`; with
+  // `-z` that token is not a file path, so the explorer can neither open nor reveal its children.
+  // `all` enumerates each file verbatim, preserving the WR-03 rename/space parser below.
+  const output = await runGitCommand(
+    config,
+    repoPath,
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    secret,
+    callId
+  );
   const tokens = output.split('\0').filter((t) => t.length > 0);
 
   const uncommittedFiles: RemoteGitStatus['uncommittedFiles'] = [];
@@ -103,6 +112,17 @@ export async function checkDirtyStatus(
     isClean: uncommittedFiles.length === 0,
     uncommittedFiles,
   };
+}
+
+/** Raw uncommitted rows shared by the Explorer tree and global search; one status call shape. */
+export async function getUncommittedFiles(
+  config: SshConfig,
+  repoPath: string,
+  secret?: string,
+  callId?: string
+): Promise<NonNullable<RemoteGitStatus['uncommittedFiles']>> {
+  const status = await checkDirtyStatus(config, repoPath, secret, callId);
+  return status?.uncommittedFiles ?? [];
 }
 
 /** Shared `%x1e`-separated, `%x00`-fielded record parser for every `git log` caller. */

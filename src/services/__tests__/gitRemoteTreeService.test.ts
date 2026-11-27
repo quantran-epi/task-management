@@ -7,6 +7,7 @@ import { join, relative } from 'node:path';
 import {
   mergeUncommittedFilesIntoTree,
   getRemoteFileContent,
+  getRemoteTree,
   getRemoteWorkingFileContent,
   PathOutsideRepoError,
   searchRemoteTree,
@@ -183,6 +184,27 @@ describe('searchRemoteTree', () => {
     expect(gitRemoteService.runGitCommand).toHaveBeenCalledTimes(1);
   });
 
+  it('finds staged and untracked files alongside the committed ref with one cached listing', async () => {
+    vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lsTreeOutput);
+    const statusSpy = vi.spyOn(gitRemoteService, 'getUncommittedFiles').mockResolvedValue([
+      { path: 'newdir/deep/UNTRACKED_NEEDLE.ts', indexStatus: '?', workingTreeStatus: '?' },
+      { path: 'staged/STAGED_NEEDLE.ts', indexStatus: 'A', workingTreeStatus: ' ' },
+      { path: 'deleted/UNTRACKED_NEEDLE.ts', indexStatus: 'D', workingTreeStatus: ' ' },
+    ]);
+
+    const results = await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'NEEDLE');
+    const paths = results.map((r) => r.path);
+
+    expect(paths).toContain('newdir/deep/UNTRACKED_NEEDLE.ts');
+    expect(paths).toContain('newdir/deep');
+    expect(paths).toContain('staged/STAGED_NEEDLE.ts');
+    expect(paths).not.toContain('deleted/UNTRACKED_NEEDLE.ts');
+    // The listing is cached per ref; dirty rows are re-fetched per query, not cached.
+    await searchRemoteTree(mockConfig, '/home/dev/repo', 'main', 'NEEDLE2');
+    expect(gitRemoteService.runGitCommand).toHaveBeenCalledTimes(1);
+    expect(statusSpy).toHaveBeenCalledTimes(2);
+  });
+
   it('reuses one whole-ref listing across queries but refetches on a new ref', async () => {
     const cmdSpy = vi.spyOn(gitRemoteService, 'runGitCommand').mockResolvedValue(lsTreeOutput);
 
@@ -225,6 +247,10 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     return result.stdout;
   }
 
+  async function getRemoteTreeLive(dirPath: string) {
+    return await getRemoteTree(mockConfig, repo, 'HEAD', dirPath);
+  }
+
   beforeEach(() => {
     vi.restoreAllMocks();
     sandbox = mkdtempSync(join(tmpdir(), 'git-read-round3-'));
@@ -259,6 +285,39 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     rmSync(sandbox, { recursive: true, force: true });
   });
 
+  it('materializes an untracked file inside an already-tracked folder when expanding that folder', async () => {
+    mkdirSync(join(repo, 'tracked'));
+    writeFileSync(join(repo, 'tracked', 'old.txt'), 'committed');
+    git('add', '--', 'tracked');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'tracked');
+    mkdirSync(join(repo, 'tracked', 'new'));
+    writeFileSync(join(repo, 'tracked', 'new', 'untracked.ts'), 'brand new');
+
+    const status = await gitRemoteService.checkDirtyStatus(mockConfig, repo);
+    const raw = await getRemoteTreeLive('tracked');
+    const merged = mergeUncommittedFilesIntoTree(raw, status.uncommittedFiles, 'tracked');
+
+    const newFolder = merged.find((n) => n.title === 'new');
+    expect(newFolder?.isLeaf).toBe(false);
+    expect(newFolder?.children?.some((n) => n.title === 'untracked.ts' && n.gitStatus === '?')).toBe(true);
+  });
+
+  it('enumerates and materializes a nested untracked directory chain two levels deep', async () => {
+    mkdirSync(join(repo, 'newdir', 'deep'), { recursive: true });
+    writeFileSync(join(repo, 'newdir', 'deep', 'leaf.ts'), 'brand new');
+
+    const status = await gitRemoteService.checkDirtyStatus(mockConfig, repo);
+    expect(status.uncommittedFiles).toEqual([
+      { path: 'newdir/deep/leaf.ts', indexStatus: '?', workingTreeStatus: '?' },
+    ]);
+    expect(status.uncommittedFiles.some((row) => row.path.endsWith('/'))).toBe(false);
+
+    const merged = mergeUncommittedFilesIntoTree([], status.uncommittedFiles);
+    const newdir = merged.find((n) => n.title === 'newdir');
+    const deep = newdir?.children?.find((n) => n.title === 'deep');
+    expect(deep?.children?.some((n) => n.title === 'leaf.ts' && n.gitStatus === '?')).toBe(true);
+  });
+
   it.each([true, false])('refuses parent symlink escape (tracked=%s); old leaf guard leaks', async (tracked) => {
     symlinkSync(outside, join(repo, 'linkdir'));
     if (tracked) {
@@ -270,8 +329,7 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     expect(shell(`test -L ${target} && printf refused || cat -- ${target}`).stdout).toBe('SECRET-OUTSIDE');
     await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', 'linkdir/secret.txt'))
       .rejects.toBeInstanceOf(PathOutsideRepoError);
-    expect(commands).toHaveLength(3);
-    expect(commands[1]).toContain('--literal-pathspecs ls-files --error-unmatch');
+    expect(commands.some((c) => c.includes('--literal-pathspecs ls-files --error-unmatch'))).toBe(true);
   });
 
   it('refuses leaf symlink escape in both working-file and fallback entry points', async () => {
@@ -334,7 +392,7 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
   it.each(['*.txt', 'onl?.txt', '[id].txt', ':(bad)x'])('reads untracked literal filename %s', async (name) => {
     writeFileSync(join(repo, name), `literal ${name}`);
     await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', name)).resolves.toBe(`literal ${name}`);
-    expect(commands[1]).toContain('--literal-pathspecs ls-files --error-unmatch');
+    expect(commands.some((c) => c.includes('--literal-pathspecs ls-files --error-unmatch'))).toBe(true);
   });
 
   it('reads committed glob filename literally, preserves empty blob and rejects option-shaped ref', async () => {
@@ -345,7 +403,7 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', 'empty.txt')).resolves.toBe('');
     await expect(getRemoteFileContent(mockConfig, repo, '--output=PWNED', 'tracked.txt')).rejects.toThrow();
     expect(existsSync(join(sandbox, 'PWNED'))).toBe(false);
-    expect(commands).toHaveLength(3);
+    expect(commands.some((c) => c.includes("cat-file -p --end-of-options 'HEAD:"))).toBe(true);
   });
 
   it('reads a staged-new literal glob from the working copy (AM case)', async () => {
@@ -355,6 +413,29 @@ describe('round 3: real shell commands through execRemoteCommand', () => {
     writeFileSync(join(repo, '*.txt'), 'new branch content (edited after stage)');
     await expect(getRemoteFileContent(mockConfig, repo, oldRef, '*.txt'))
       .resolves.toBe('new branch content (edited after stage)');
+  });
+
+  it('reads the current working copy for a tracked file staged then edited again (AM)', async () => {
+    writeFileSync(join(repo, 'tracked.txt'), 'committed v2');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qam', 'update');
+    writeFileSync(join(repo, 'tracked.txt'), 'working-edit');
+    git('add', '--', 'tracked.txt');
+    writeFileSync(join(repo, 'tracked.txt'), 'working-edit-2');
+    await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', 'tracked.txt'))
+      .resolves.toBe('working-edit-2');
+  });
+
+  it('reads the current working copy for a modified tracked file ( M) and a staged-only change (M )', async () => {
+    writeFileSync(join(repo, 'modified.txt'), 'committed');
+    git('add', '--', 'modified.txt');
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'tracked');
+    writeFileSync(join(repo, 'modified.txt'), 'working-edit');
+    await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', 'modified.txt'))
+      .resolves.toBe('working-edit');
+
+    git('add', '--', 'modified.txt');
+    await expect(getRemoteFileContent(mockConfig, repo, 'HEAD', 'modified.txt'))
+      .resolves.toBe('working-edit');
   });
 
   it('does not substitute working content for a path present at HEAD but absent from an old ref (WR-01)', async () => {

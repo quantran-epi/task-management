@@ -37,7 +37,7 @@ function hasBadge(node: RemoteGitTreeNode): boolean {
  * Pure, synchronous single-child folder chain compaction over already-fetched tree nodes.
  *
  * Stop conditions (D-12/D-13): branch points, a non-directory single child, source roots,
- * reveal targets, and any node carrying a meaningful gitStatus badge (status is never hidden).
+ * and reveal targets. A gitStatus badge rides along on the merged row but is not a boundary.
  * Never mutates the input nodes. No React/db/service imports — cheap to call from render.
  */
 export function compactRemoteTree(
