@@ -15,10 +15,10 @@ import { useAIChat } from '../context/AIChatContext';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { NoteEditor } from '../components/notes/NoteEditor';
-import { updateTask, createTask } from '../db/repositories/taskRepo';
+import { appendTaskLink, updateTask, createTask } from '../db/repositories/taskRepo';
 import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
 import { getAllSystems } from '../db/repositories/systemRepo';
-import { isValidLinkUrl } from '../validation/schemas';
+import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -247,12 +247,12 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       message.error('URL không hợp lệ');
       return;
     }
+    if (linkName.trim().length > LINK_NAME_MAX_LENGTH) {
+      message.error('Tên liên kết tối đa 80 ký tự');
+      return;
+    }
     try {
-      await updateTask(
-        currentTask.id,
-        { links: [...(currentTask.links ?? []), { name: linkName.trim(), url: trimmed }] },
-        db
-      );
+      await appendTaskLink(currentTask.id, { name: linkName.trim(), url: trimmed }, db);
       message.success('Đã thêm liên kết');
       setLinkName('');
       setLinkUrl('');
@@ -690,6 +690,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                   size="small"
                   style={{ width: 180, borderRadius: 'var(--radius-control)' }}
                   value={linkName}
+                  maxLength={LINK_NAME_MAX_LENGTH}
                   onChange={(e) => setLinkName(e.target.value)}
                 />
                 <Input

@@ -130,8 +130,10 @@ const linkSchema = z
     { message: 'Liên kết phải là URL (http/https), đường dẫn thư mục, file URI, hoặc ID tài liệu hợp lệ.' }
   );
 
+export const LINK_NAME_MAX_LENGTH = 80;
+
 export const namedLinkSchema = z.object({
-  name: z.string().trim().max(80, 'Tên liên kết tối đa 80 ký tự'),
+  name: z.string().trim().max(LINK_NAME_MAX_LENGTH, 'Tên liên kết tối đa 80 ký tự'),
   url: linkSchema,
 });
 

@@ -15,8 +15,8 @@ import {
   BackupTaskRecordSchema,
 } from '../../../validation/backupSchemas';
 import { validateBackupPayload } from '../../../services/backup/validateBackup';
-import { createChangeRequest, updateChangeRequest } from '../changeRequestRepo';
-import { createTask, updateTask } from '../taskRepo';
+import { appendChangeRequestLink, createChangeRequest, updateChangeRequest } from '../changeRequestRepo';
+import { appendTaskLink, createTask, updateTask } from '../taskRepo';
 
 function validNamedLink() {
   return { name: 'API spec', url: 'https://example.com/spec' };
@@ -189,6 +189,30 @@ describe('namedQuickLinks repo round-trip', () => {
     await updateTask(task.id, { links: [renamed] }, db);
     expect((await db.tasks.get(task.id))?.links).toEqual([renamed]);
     await updateTask(task.id, { links: undefined }, db);
+    expect((await db.tasks.get(task.id))?.links).toBeUndefined();
+  });
+
+  it('append helpers keep links written since the caller last read the row', async () => {
+    const cr = await createChangeRequest({ name: 'CR QL', code: 'QL', status: 'Open', type: 'ENHANCEMENT', targets: [] }, db);
+    const task = await createTask({ crId: cr.id, name: 'Task QL' }, db);
+    const concurrent = { name: '', url: 'https://example.com/from-other-tab' };
+    await db.changeRequests.update(cr.id, { links: [concurrent] });
+    await db.tasks.update(task.id, { links: [concurrent] });
+
+    const added = { name: 'Quick', url: 'https://example.com/quick' };
+    await appendChangeRequestLink(cr.id, added, db);
+    await appendTaskLink(task.id, added, db);
+
+    expect((await db.changeRequests.get(cr.id))?.links).toEqual([concurrent, added]);
+    expect((await db.tasks.get(task.id))?.links).toEqual([concurrent, added]);
+  });
+
+  it('append helpers reject invalid links without writing', async () => {
+    const cr = await createChangeRequest({ name: 'CR QL', code: 'QL', status: 'Open', type: 'ENHANCEMENT', targets: [] }, db);
+    const task = await createTask({ crId: cr.id, name: 'Task QL' }, db);
+    await expect(appendChangeRequestLink(cr.id, { name: 'x'.repeat(81), url: 'https://x.test' }, db)).rejects.toThrow();
+    await expect(appendTaskLink(task.id, { name: 'OK', url: 'javascript:alert(1)' }, db)).rejects.toThrow();
+    expect((await db.changeRequests.get(cr.id))?.links).toBeUndefined();
     expect((await db.tasks.get(task.id))?.links).toBeUndefined();
   });
 });

@@ -1,9 +1,10 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { ChangeRequest, CrTarget, Task } from '../../types/models';
+import type { ChangeRequest, CrTarget, NamedLink, Task } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import {
   ChangeRequestInputSchema,
   ChangeRequestUpdateSchema,
+  namedLinkSchema,
   type ChangeRequestInput,
   type ChangeRequestUpdate,
   type CrTargetInput,
@@ -179,6 +180,26 @@ export async function updateChangeRequest(
 
   await db.changeRequests.put(updated);
   return updated;
+}
+
+/** Appends one link inside a transaction so a stale view snapshot cannot drop another writer's links. */
+export async function appendChangeRequestLink(
+  id: string,
+  link: NamedLink,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<ChangeRequest> {
+  const validated = namedLinkSchema.parse(link);
+  return db.transaction('rw', db.changeRequests, async () => {
+    const existing = await db.changeRequests.get(id);
+    if (!existing) throw new Error(`ChangeRequest not found: ${id}`);
+    const updated: ChangeRequest = {
+      ...existing,
+      links: [...(existing.links ?? []), validated],
+      updatedAt: new Date().toISOString(),
+    };
+    await db.changeRequests.put(updated);
+    return updated;
+  });
 }
 
 export async function getChangeRequest(

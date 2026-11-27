@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems } from '../db/repositories/systemRepo';
 import {
+  appendChangeRequestLink,
   deleteChangeRequest,
   getChangeRequest,
   updateChangeRequest,
@@ -17,7 +18,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
-import { isValidLinkUrl } from '../validation/schemas';
+import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
 import { searchIncludes } from '../utils/searchText';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
@@ -214,12 +215,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       message.error('URL không hợp lệ');
       return;
     }
+    if (linkName.trim().length > LINK_NAME_MAX_LENGTH) {
+      message.error('Tên liên kết tối đa 80 ký tự');
+      return;
+    }
     try {
-      await updateChangeRequest(
-        cr.id,
-        { links: [...(cr.links ?? []), { name: linkName.trim(), url: trimmed }] },
-        db
-      );
+      await appendChangeRequestLink(cr.id, { name: linkName.trim(), url: trimmed }, db);
       message.success('Đã thêm liên kết');
       setLinkName('');
       setLinkUrl('');
@@ -306,6 +307,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
               size="small"
               style={{ width: 180, borderRadius: 'var(--radius-control)' }}
               value={linkName}
+              maxLength={LINK_NAME_MAX_LENGTH}
               onChange={(e) => setLinkName(e.target.value)}
             />
             <Input

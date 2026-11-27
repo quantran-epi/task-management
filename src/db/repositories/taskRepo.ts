@@ -1,7 +1,8 @@
 import { db as defaultDb, type TaskPlannerDatabase } from '../index';
-import type { Task, TaskStatus } from '../../types/models';
+import type { NamedLink, Task, TaskStatus } from '../../types/models';
 import { generateId } from '../../utils/uuid';
 import {
+  namedLinkSchema,
   TaskInputSchema,
   TaskUpdateSchema,
   type TaskInput,
@@ -301,6 +302,26 @@ export async function reparentTask(
 
   await db.tasks.put(updated);
   return updated;
+}
+
+/** Appends one link inside a transaction so a stale view snapshot cannot drop another writer's links. */
+export async function appendTaskLink(
+  id: string,
+  link: NamedLink,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<Task> {
+  const validated = namedLinkSchema.parse(link);
+  return db.transaction('rw', db.tasks, async () => {
+    const existing = await db.tasks.get(id);
+    if (!existing) throw new Error(`Task not found: ${id}`);
+    const updated: Task = {
+      ...existing,
+      links: [...(existing.links ?? []), validated],
+      updatedAt: new Date().toISOString(),
+    };
+    await db.tasks.put(updated);
+    return updated;
+  });
 }
 
 export async function deleteTaskDirect(
