@@ -33,6 +33,7 @@ Status: Phase 51 complete — goal đạt được sau quick fix `261126-1kz`, `
 Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat.
 Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat dark/light theme switch.
 Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
+Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-session completion changed from PROMPT sentinel to SQL SELECT JSON marker with stdout stripping.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -159,6 +160,7 @@ Progress: [██████████] 100%
 | 261126-vra | Pool SSH sessions và giữ remote SQLcl persistent trong Tauri, bỏ handshake/spawn lặp lại | 2026-11-26 | 41949863, 3b1bfbef | Verified | [261126-vra-implement-ssh-connection-pool-persistent](./quick/261126-vra-implement-ssh-connection-pool-persistent/) |
 | 261127-01z | Quản lý thiết bị AI chat standalone qua Telegram user ID: đăng ký, duyệt, whitelist model, settings từ xa | 2026-11-26 | cc128ab0, b432da3a, 85dafc3a, 24e1e37f | Reviewed + UAT pending | [261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te](./quick/261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te/) |
 | 261127-c3r | Add named quick links to CR detail and Task detail pages | 2026-11-27 | 488c8f69 | — | [261127-c3r-add-named-quick-links-to-cr-detail-and-t](./quick/261127-c3r-add-named-quick-links-to-cr-detail-and-t/) |
+| 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
 
 ## Accumulated Context
 
@@ -257,6 +259,7 @@ Progress: [██████████] 100%
 - [Phase 37]: retryAssignment claims the assignment id before any await and checks it before the busy-phase guard, so a double click is ignored rather than refused as a busy team
 - [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
+- [Quick 261127-dsx]: Persistent SQLcl completion dùng SQL `SELECT '<marker>' AS TASKMATE_DONE FROM DUAL;` dưới `SET SQLFORMAT JSON`; Rust strip marker row trước khi trả stdout, TS heredoc production code giữ nguyên.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
@@ -349,6 +352,7 @@ Progress: [██████████] 100%
 
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
+| Quick 261127-dsx | 6min | 2 | 2 |
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |
