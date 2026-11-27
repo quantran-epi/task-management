@@ -205,6 +205,20 @@ describe('getAllAvailableToolDefinitions (tool catalog aggregate)', () => {
       expect(knowledge).toContain('search_chat_history');
       expect(knowledge).toContain('read_chat_turn');
     });
+
+    it('keeps artifact generation and reminder reading available under every intent', () => {
+      const preserved = [
+        'generate_file',
+        'generate_pptx',
+        'generate_image',
+        'manage_reminders',
+      ];
+      for (const intent of ['query_knowledge', 'query_taskmate', 'operate_taskmate', 'mixed', 'clarify'] as const) {
+        const payload = names(intent);
+        for (const tool of preserved) expect(payload).toContain(tool);
+      }
+      for (const tool of preserved) expect(names()).toContain(tool);
+    });
   });
 
   // D-12 / T-45-09: oracle_list_connections must join the same gated addendum as

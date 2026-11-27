@@ -64,8 +64,11 @@ describe('neutral tool routing prompts (quick 261128-09x)', () => {
   const allSources = `${chatSource}\n${telegramSource}`;
 
   it('has no directive that forces a specific tool call', () => {
+    // Source is TypeScript: prompt backticks appear escaped as \\` in the template literal.
+    // Assert on the literal as stored, not the rendered text, or the guard silently passes
+    // while the directive is still in the prompt.
     for (const banned of [
-      'retrieve_knowledge` tool repeatedly',
+      'retrieve_knowledge\\` tool repeatedly',
       'YOU MUST CALL THE RELEVANT DATABASE TOOLS',
       'YOU MUST CALL THE RELEVANT TOOLS',
       'FULL DATABASE MUTATION CAPABILITIES',

@@ -1843,7 +1843,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_file',
       description:
-        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting. DOCX/PPTX embed images written as ![alt](src) in content, including data: URLs returned by generate_image, http(s) URLs, attachment:/a: tokens, and ```mermaid blocks which are rasterized automatically. When the user asks for a document with illustrations, call generate_image first in the same turn and paste its "markdown" value into content.',
+        'Generate and prepare a downloadable file in specified format (Word .docx, Excel .xlsx, PowerPoint .pptx, Markdown .md, plain text .txt, or CSV .csv). You can provide structured text/markdown via "content", OR full JavaScript code via "script" executed directly in the browser sandbox with ExcelJS, docx, or pptxgen for advanced styling, formulas, custom tables, and formatting. DOCX/PPTX embed images written as ![alt](src) in content, including data: URLs returned by generate_image, http(s) URLs, attachment:/a: tokens, and ```mermaid blocks which are rasterized automatically. When the user asks for a document with illustrations, use generate_image when an image is needed and paste its "markdown" value into content.',
       parameters: {
         type: 'object',
         properties: {
@@ -1878,7 +1878,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_pptx',
       description:
-        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content. Markdown images ![alt](src) are embedded as real slide images (data: URLs from generate_image, http(s) URLs, attachment:/a: tokens); ```mermaid blocks are rendered to PNG automatically. For illustration requests, call generate_image first in the same turn and insert its "markdown" value into markdownContent.',
+        'Generate and prepare a downloadable PowerPoint presentation (.pptx). CRITICAL: Provide complete slide definitions via "slides" array or full markdown text via "markdownContent". The file will be saved directly with this content. Markdown images ![alt](src) are embedded as real slide images (data: URLs from generate_image, http(s) URLs, attachment:/a: tokens); ```mermaid blocks are rendered to PNG automatically. For illustration requests, use generate_image when an image is needed and insert its "markdown" value into markdownContent.',
       parameters: {
         type: 'object',
         properties: {
@@ -1925,7 +1925,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'generate_image',
       description:
-        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation. When the user also asks for a document, pass the returned "markdown" value into generate_file "content" or generate_pptx "markdownContent" in the SAME turn so the image is embedded in the file.',
+        'Generate an image based on a descriptive text prompt using an OpenAI-compatible image model (e.g. DALL-E 3, Flux, Stable Diffusion). Returns the generated image data URL and markdown embed to display directly in the conversation. When the user also asks for a document, pass the returned "markdown" value into generate_file "content" or generate_pptx "markdownContent" so the image is embedded in the file.',
       parameters: {
         type: 'object',
         properties: {
@@ -5403,19 +5403,33 @@ export function pruneToolsForContext(
   return allTools;
 }
 
-/** Intent-only adapter: reuses pruneToolsForContext without adding a second filter. */
+/**
+ * Intent-only adapter: reuse pruneToolsForContext, then restore the read-oriented
+ * helpers that are not TaskMate mutations. Artifact generation stays available when
+ * the user asks for a document; reminders include a list/read action.
+ */
+const INTENT_PRESERVED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'generate_file',
+  'generate_pptx',
+  'generate_image',
+  'manage_reminders',
+]);
+
 export function pruneToolsForIntent(
   allTools: AiToolDefinition[],
   intent: IntentLabel | null | undefined
 ): AiToolDefinition[] {
   if (!intent || intent === 'mixed' || intent === 'clarify') return allTools;
-  if (intent === 'operate_taskmate') {
-    return pruneToolsForContext(allTools, { isMutationTurn: true });
-  }
-  if (intent === 'query_taskmate') {
-    return pruneToolsForContext(allTools, { isTaskMateQuery: true });
-  }
-  return pruneToolsForContext(allTools, { isKnowledgeContinuation: true });
+  const pruned =
+    intent === 'operate_taskmate'
+      ? pruneToolsForContext(allTools, { isMutationTurn: true })
+      : intent === 'query_taskmate'
+        ? pruneToolsForContext(allTools, { isTaskMateQuery: true })
+        : pruneToolsForContext(allTools, { isKnowledgeContinuation: true });
+  const preserved = allTools.filter((tool) =>
+    INTENT_PRESERVED_TOOL_NAMES.has(normalizeToolName(tool.function.name))
+  );
+  return [...pruned, ...preserved.filter((tool) => !pruned.includes(tool))];
 }
 
 export function formatFieldChanges(args: Record<string, any>, ignoredKeys: string[] = ['id', 'taskId']): string {
