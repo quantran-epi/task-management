@@ -113,7 +113,7 @@ export interface ChatTurnOutcome {
 export const POLICY_BLOCKED_TURN_ERROR: ChatTurnErrorInfo = {
   code: 'policy_blocked',
   message:
-    'Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.',
+    'Chính sách thiết bị hết hạn hoặc bị thu hồi. Liên hệ admin để cập nhật quyền.',
 };
 
 export interface ChatTurnRuntimeDeps {

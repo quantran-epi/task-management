@@ -164,7 +164,7 @@ describe('standalone chat shell', () => {
     fireEvent.change(composer, { target: { value: 'chưa có quyền' } });
     fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
     await waitFor(() => {
-      expect(messages.error).toHaveBeenCalledWith('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
+      expect(messages.error).toHaveBeenCalledWith('Chưa có quyền dùng Chat. Liên hệ admin để được cấp quyền.');
     });
     expect(screen.getByTestId('chat-settings-gear')).toBeInTheDocument();
     view.unmount();

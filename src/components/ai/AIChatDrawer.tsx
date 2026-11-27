@@ -1404,7 +1404,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (!trimmed) return;
 
     if (policyState === 'blocked') {
-      appMessage.error('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
+      appMessage.error('Chưa có quyền dùng Chat. Liên hệ admin để được cấp quyền.');
       return;
     }
 
@@ -2171,7 +2171,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
   const handleRetry = () => {
     if (policyState === 'blocked') {
-      appMessage.error('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
+      appMessage.error('Chưa có quyền dùng Chat. Liên hệ admin để được cấp quyền.');
       return;
     }
     const tabRuntime = tabRuntimesRef.current.get(runtimeTabId);
