@@ -191,7 +191,7 @@ describe("261126-rfx persistent attachment chips", () => {
     );
   });
 
-  it("explorer giữ thư mục cha và không cho Up vượt quá basePath", async () => {
+  it("panel giữ thư mục cha và không cho Up vượt quá basePath", async () => {
     const ssh = await import("../../src/services/sshService");
     render(<StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
@@ -202,11 +202,26 @@ describe("261126-rfx persistent attachment chips", () => {
     await waitFor(() =>
       expect(ssh.listRemoteDir).toHaveBeenCalledWith(expect.anything(), "/repo/folder"),
     );
-    expect(screen.getByText("folder/")).toBeInTheDocument(); // vẫn là node trong explorer
+    expect(screen.getByText("folder/")).toBeInTheDocument(); // folder row trong panel
     expect(screen.getByLabelText("Thư mục cha")).not.toBeDisabled();
     fireEvent.click(screen.getByLabelText("Thư mục cha"));
     await waitFor(() =>
       expect(ssh.listRemoteDir).toHaveBeenLastCalledWith(expect.anything(), "/repo"),
+    );
+  });
+
+  it("picker là single-panel: không render cây explorer, folder row vẫn navigate", async () => {
+    const ssh = await import("../../src/services/sshService");
+    render(<StandaloneSshFileBrowser open onClose={vi.fn()} onAttach={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Duyệt tệp SSH")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("folder/")).toBeInTheDocument());
+    expect(document.querySelector(".ant-tree")).toBeNull();
+    expect(screen.queryByText("Explorer · SSH")).toBeNull();
+    const folderRow = document.querySelector('[data-file-path="/repo/folder"]');
+    expect(folderRow).toBeTruthy();
+    fireEvent.click(folderRow!);
+    await waitFor(() =>
+      expect(ssh.listRemoteDir).toHaveBeenCalledWith(expect.anything(), "/repo/folder"),
     );
   });
 
