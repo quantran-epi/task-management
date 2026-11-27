@@ -404,6 +404,26 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           <div style={{ flex: 1, minWidth: 280 }}>
             <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
               {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}
+              {itemType === 'task' &&
+                (parentSystem ? (
+                  <Tag
+                    color="cyan"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() =>
+                      onNavigate('insight', {
+                        type: 'system',
+                        id: parentSystem.id,
+                        name: parentSystem.name,
+                      })
+                    }
+                  >
+                    {parentSystem.code} — {parentSystem.name}
+                  </Tag>
+                ) : (
+                  <Tag color="default">
+                    {currentTask?.systemId ?? 'Chung (không gắn)'}
+                  </Tag>
+                ))}
               {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
               {itemType === 'system' && <Tag color="cyan">Subsystem</Tag>}
 

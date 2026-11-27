@@ -6,6 +6,7 @@ import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createNote } from '../../src/db/repositories/noteRepo';
 import { ChangeRequestDetailView } from '../../src/views/ChangeRequestDetailView';
+import { ThemeAppHolder } from '../../src/components/ui';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
 
 /**
@@ -101,16 +102,36 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(screen.getByText('Chọn subsystem')).toBeInTheDocument();
   }, 30000);
 
-  it('renders exactly the Task, Subsystem, Status, Ước lượng and Hạn columns in order', async () => {
+  it('renders exactly the Task, Subsystem, Status, Ước lượng, Hạn and Thao tác columns in order', async () => {
     const { cr } = await seed({ taskSystemId: 'a' });
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
     await screen.findByText('Implement OAuth callback');
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers).toEqual(['Task', 'Subsystem', 'Status', 'Ước lượng', 'Hạn']);
+    expect(headers).toEqual(['Task', 'Subsystem', 'Status', 'Ước lượng', 'Hạn', 'Thao tác']);
   }, 30000);
 
-  it('renders the task table full width with four secondary blocks in one stacked column', async () => {
+  it('deletes the task via the shared action menu without double-deleting the placeholder', async () => {
+    const { cr, task } = await seed({ taskSystemId: 'a' });
+    render(<ThemeAppHolder><ChangeRequestDetailView changeRequestId={cr.id} db={db} /></ThemeAppHolder>);
+
+    await screen.findByText('Implement OAuth callback');
+    const more = screen.getAllByRole('button', { name: 'Thao tác khác' })[0]!;
+    fireEvent.click(more);
+    const deleteItems = await screen.findAllByText('Xóa');
+    fireEvent.click(deleteItems[deleteItems.length - 1]!);
+
+    expect(await screen.findByText(/Bạn có chắc muốn xóa "Implement OAuth callback"/)).toBeInTheDocument();
+    const okButtons = screen.getAllByRole('button', { name: 'Xóa' });
+    fireEvent.click(okButtons[okButtons.length - 1]!);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Implement OAuth callback')).not.toBeInTheDocument();
+    });
+    expect(await db.tasks.get(task.id)).toBeUndefined();
+  }, 30000);
+
+  it('renders the task table full width with five secondary blocks in one stacked column', async () => {
     const { cr } = await seed();
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
@@ -122,6 +143,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       'cr-detail-block-notes',
       'cr-detail-block-jira',
       'cr-detail-block-documents',
+      'cr-detail-block-quick-links',
       'cr-detail-block-reminders',
     ];
     const blocks = blockIds.map((id) => screen.getByTestId(id));
@@ -142,6 +164,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       tableIndex + 2,
       tableIndex + 3,
       tableIndex + 4,
+      tableIndex + 5,
     ]);
   }, 30000);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { ItemInsightView } from '../../src/views/ItemInsightView';
 import { TaskPlannerDatabase } from '../../src/db/index';
@@ -91,6 +91,56 @@ describe('ItemInsightView', () => {
 
     expect(screen.getByRole('button', { name: /bắt đầu làm/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /phân bổ lịch/i })).toBeInTheDocument();
+  }, 30000);
+
+  it('renders system tag in task header, click navigates to system insight, with both fallbacks', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
+      {
+        code: 'CR-2026-010',
+        name: 'Thanh toán QR',
+        type: 'NEW_FEATURE',
+        status: 'In Progress',
+        targets: [{ systemId: system.id }],
+      },
+      testDb
+    );
+    const attached = await createTask(
+      { crId: cr.id, systemId: system.id, name: 'Tác vụ có hệ thống', status: 'Open', priority: 'Medium', estimateMinutes: 0 },
+      testDb
+    );
+    const unattached = await createTask(
+      { crId: cr.id, name: 'Tác vụ chung', status: 'Open', priority: 'Medium', estimateMinutes: 0 },
+      testDb
+    );
+    const view = render(
+      <ItemInsightView itemType="task" itemId={attached.id} onNavigate={mockNavigate} db={testDb} />
+    );
+    const tag = await screen.findByText('PAYMENT_SVC — Payment Service');
+    fireEvent.click(tag);
+    expect(mockNavigate).toHaveBeenCalledWith('insight', {
+      type: 'system',
+      id: system.id,
+      name: 'Payment Service',
+    });
+    view.unmount();
+
+    mockNavigate.mockClear();
+    const unattachedView = render(
+      <ItemInsightView itemType="task" itemId={unattached.id} onNavigate={mockNavigate} db={testDb} />
+    );
+    expect(await screen.findByText('Chung (không gắn)')).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    unattachedView.unmount();
+
+    const orphanId = '00000000-0000-4000-8000-000000000999';
+    await testDb.tasks.update(attached.id, { systemId: orphanId });
+    const orphanView = render(
+      <ItemInsightView itemType="task" itemId={attached.id} onNavigate={mockNavigate} db={testDb} />
+    );
+    expect(await screen.findByText(orphanId)).toBeInTheDocument();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    orphanView.unmount();
   }, 30000);
 
   it('renders CR insight listing that CR tasks', async () => {

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Empty, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
-import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
+import { Button, Dropdown, Empty, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems } from '../db/repositories/systemRepo';
@@ -11,6 +11,7 @@ import {
 } from '../db/repositories/changeRequestRepo';
 import { createTask, getTasksByCr, updateTask } from '../db/repositories/taskRepo';
 import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
+import { useTaskMenuItems } from '../hooks/useTaskMenuItems';
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { EntityNotesSection } from '../components/notes/EntityNotesSection';
@@ -68,14 +69,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const message = useMessage();
   const { modal, contextHolder } = useTaskMateModal();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+  const placeholderTaskIdRef = useRef<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [taskSearch, setTaskSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
-  // ponytail: placeholderTaskIdRef tracks in-memory creation; upgrade when TaskDrawer supports unpersisted creation.
-  const placeholderTaskIdRef = useRef<string | null>(null);
-
   const reloadTab = useLayoutStore((s) => s.reloadTab);
 
   const cr = useLiveQuery(
@@ -128,6 +127,20 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     );
   }, [tasks, taskSearch, statusFilter]);
 
+  const openTaskDrawer = (taskId: string | null, isPlaceholder = false) => {
+    placeholderTaskIdRef.current = isPlaceholder ? taskId : null;
+    taskSavedRef.current = false;
+    setDrawerTaskId(taskId);
+    setDrawerOpen(true);
+  };
+
+  const { getTaskMenuItems, reminderModal, contextHolder: taskMenuContextHolder } = useTaskMenuItems({
+    db,
+    onOpenDrawer: openTaskDrawer,
+    onDeleted: (taskId) => {
+      if (placeholderTaskIdRef.current === taskId) placeholderTaskIdRef.current = null;
+    },
+  });
   if (!cr) {
     return (
       <div style={{ padding: 32, textAlign: 'center' }}>
@@ -140,12 +153,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     .map((t) => systemMap.get(t.systemId))
     .filter((s): s is System => Boolean(s));
 
-  const openTaskDrawer = (taskId: string | null, isPlaceholder = false) => {
-    placeholderTaskIdRef.current = isPlaceholder ? taskId : null;
-    taskSavedRef.current = false;
-    setDrawerTaskId(taskId);
-    setDrawerOpen(true);
-  };
 
   const handleCreateTask = async () => {
     // TaskDrawer has no crId-prefill prop, so create the row first (same pattern as
@@ -327,6 +334,8 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       }}
     >
       {contextHolder}
+      {taskMenuContextHolder}
+      {reminderModal}
       {/* 3a. Header */}
       <div
         style={{
@@ -574,6 +583,16 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                   ) : (
                     <span style={mutedStyle}>—</span>
                   ),
+              },
+              {
+                title: 'Thao tác',
+                key: 'actions',
+                width: 80,
+                render: (_, record: Task) => (
+                  <Dropdown menu={{ items: getTaskMenuItems(record) }} trigger={['click']}>
+                    <Button type="text" size="small" icon={<MoreOutlined />} aria-label="Thao tác khác" />
+                  </Dropdown>
+                ),
               },
             ]}
           />
