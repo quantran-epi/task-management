@@ -362,7 +362,7 @@ Progress: [██████████] 100%
 |------|----------|-------|-------|
 | Quick 261127-dsx | 6min | 2 | 2 |
 | Quick 261127-eos | 2min | 2 | 2 |
-| Quick 261127-j35 | 8min | 2 | 3 |
+| Quick 261127-j35 | 9min | 2 | 3 |
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |
