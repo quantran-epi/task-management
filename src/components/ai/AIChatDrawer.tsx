@@ -887,6 +887,21 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     }
   }, [activeTab, db, devicePolicy, policyState, writeTabModel]);
 
+  const appliedDefaultModelKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (policyState !== 'active' || !devicePolicy?.remoteSettings.defaultModel) return;
+    const activeTabIdForPolicy = activeTab?.id;
+    if (!activeTabIdForPolicy) return;
+    const key = `${devicePolicy.issuedAt}:${devicePolicy.telegramUserId}:${activeTabIdForPolicy}`;
+    if (appliedDefaultModelKey.current === key) return;
+    appliedDefaultModelKey.current = key;
+    const model = devicePolicy.remoteSettings.defaultModel;
+    if (!isModelAllowed(devicePolicy, model)) return;
+    const current = tabRuntimesRef.current.get(activeTabIdForPolicy)?.model || activeTab?.config?.model;
+    if (current === model) return;
+    void writeTabModel(activeTab, model);
+  }, [devicePolicy, policyState, activeTab, writeTabModel]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -1355,7 +1370,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (!trimmed) return;
 
     if (policyState === 'blocked') {
-      appMessage.error('Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.');
+      appMessage.error('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
       return;
     }
 
@@ -2129,7 +2144,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
 
   const handleRetry = () => {
     if (policyState === 'blocked') {
-      appMessage.error('Chính sách thiết bị hết hạn hoặc bị thu hồi. Vào Cài đặt AI → Telegram Device để cập nhật /policy.');
+      appMessage.error('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
       return;
     }
     const tabRuntime = tabRuntimesRef.current.get(runtimeTabId);
@@ -2405,7 +2420,7 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
             selectedModel: resolveActiveModel(),
             availableModels:
               policyState === 'active' && devicePolicy?.allowedModels.length
-                ? Array.from(new Set([...availableModels, ...devicePolicy.allowedModels]))
+                ? devicePolicy.allowedModels.filter((model) => availableModels.length === 0 || availableModels.includes(model))
                 : availableModels,
             onModelChange: handleModelChange,
             onRefreshModels: handleRefreshModels,

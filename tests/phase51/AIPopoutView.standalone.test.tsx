@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -5,6 +7,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIChatProvider, useAIChat } from '../../src/context/AIChatContext';
 import { AIPopoutView } from '../../src/views/AIPopoutView';
 import { AI_DRAFT_EVENT, AI_SCOPE_EVENT } from '../../src/utils/aiPopout';
+import { TaskPlannerDatabase } from '../../src/db';
+import { DEVICE_POLICY_SETTINGS_KEY, buildPolicyPayload } from '../../src/services/telegram/telegramDevicePolicy';
+import { saveAccessState } from '../../src/services/telegram/standaloneAccessService';
+import type { TelegramWhitelistUser } from '../../src/services/telegram/telegramTypes';
+
+const { invokeMock, messages } = vi.hoisted(() => ({ invokeMock: vi.fn(), messages: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('../../src/components/ui/message', () => ({ useMessage: () => messages }));
 
 const { tauriListen, webviewWindow, tauriWindow } = vi.hoisted(() => ({
   tauriListen: { listen: vi.fn() },
@@ -129,5 +139,36 @@ describe('standalone chat shell', () => {
     expect(source).toContain("import { chatWindowDb } from '../db/chatWindowDb'");
     expect(source).toMatch(/standaloneChat\s*\?\s*chatWindowDb\s*:\s*defaultDb/);
     expect(source).toContain('db={activeDb}');
+  });
+
+  it('blocks chat while access state is pending even with a stored policy', async () => {
+    const dbName = `StandalonePopoutTestDB_${Math.random().toString(36).slice(2)}`;
+    const db = new TaskPlannerDatabase(dbName);
+    await db.open();
+    const now = new Date().toISOString();
+    const row: TelegramWhitelistUser = {
+      chatId: '123456789', telegramUserId: '123456789', name: 'Standalone', status: 'active',
+      deviceStatus: 'approved', dataScope: 'full', dailyLimit: 10, usedToday: 0,
+      lastActiveDate: '2026-11-27', maxHistoryTurns: 5, overQuotaCommandsUsed: 0, overQuotaAttempts: 0,
+      allowedModels: ['model-a'], remoteSettings: {}, createdAt: now, updatedAt: now,
+    };
+    await db.settings.put({ key: DEVICE_POLICY_SETTINGS_KEY, value: buildPolicyPayload(row, '2099-01-01T00:00:00.000Z') });
+    await saveAccessState(db, { status: 'pending', telegramUserId: '123456789' });
+    const blockedSource = readFileSync(resolve(process.cwd(), 'src/views/AIPopoutView.tsx'), 'utf8');
+    expect(blockedSource).toContain('ACCESS_STATE_SETTINGS_KEY');
+    expect(blockedSource).toContain("saveAccessState");
+    expect(blockedSource).toContain('pollStandaloneAccess');
+
+    const view = render(<AIChatProvider><AIPopoutView standaloneChat db={db} /></AIChatProvider>);
+    const composer = screen.getByLabelText('Nội dung tin nhắn trò chuyện AI');
+    fireEvent.change(composer, { target: { value: 'chưa có quyền' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
+    await waitFor(() => {
+      expect(messages.error).toHaveBeenCalledWith('Chưa có quyền dùng Chat. Vào Cài đặt AI → Telegram Device để gửi lại yêu cầu.');
+    });
+    expect(screen.getByTestId('chat-settings-gear')).toBeInTheDocument();
+    view.unmount();
+    db.close();
+    await TaskPlannerDatabase.delete(dbName);
   });
 });

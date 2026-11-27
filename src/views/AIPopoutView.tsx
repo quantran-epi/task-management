@@ -23,8 +23,25 @@ import {
   resolveEffectiveChatConfig,
   type TelegramDevicePolicy,
 } from '../services/telegram/telegramDevicePolicy';
+import {
+  ACCESS_STATE_SETTINGS_KEY,
+  pollStandaloneAccess,
+  saveAccessState,
+  type StandaloneAccessState,
+} from '../services/telegram/standaloneAccessService';
 
 const AI_GEOMETRY_STORAGE_KEY = 'planner:ai_popout_geometry';
+
+function readAccessStateFromRecord(value: unknown): StandaloneAccessState | undefined {
+  // Poll writes through saveAccessState; this mirror keeps the live-query path synchronous
+  // and refuses malformed cache rows so a bad value can never grant access.
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<StandaloneAccessState>;
+  if (candidate.status !== 'approved' && candidate.status !== 'pending' &&
+      candidate.status !== 'denied' && candidate.status !== 'revoked' && candidate.status !== 'expired') return undefined;
+  if (!/^\d{6,12}$/.test(candidate.telegramUserId ?? '')) return undefined;
+  return candidate as StandaloneAccessState;
+}
 
 export interface AIPopoutViewProps {
   db?: TaskPlannerDatabase | undefined;
@@ -45,6 +62,8 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
   );
   const parsed = devicePolicySchema.safeParse(policyRecord?.value);
   const devicePolicy: TelegramDevicePolicy | undefined = parsed.success ? parsed.data : undefined;
+  const accessRecord = useLiveQuery(() => activeDb.settings.get(ACCESS_STATE_SETTINGS_KEY), [activeDb]);
+  const accessState: StandaloneAccessState | undefined = readAccessStateFromRecord(accessRecord?.value);
   const [activeScope, setActiveScope] = useState<ActiveScope>(() => {
     if (standaloneChat || typeof window === 'undefined') return { type: 'global' };
     const hash = window.location.hash || '';
@@ -62,8 +81,20 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
   });
 
   const effectiveChat = resolveEffectiveChatConfig({ defaultModel: '' }, devicePolicy);
-  // UI has no separate 'expired' state: treat it as blocked (no sends until renewed).
-  const policyState = effectiveChat.policyState === 'expired' ? 'blocked' : effectiveChat.policyState;
+  // Standalone needs BOTH a valid policy and a matching approved access state.
+  const policyState = standaloneChat && accessState?.status !== 'approved'
+    ? 'blocked'
+    : effectiveChat.policyState === 'expired' ? 'blocked' : effectiveChat.policyState;
+
+  // Standalone: poll the local bridge so admin Apply/revoke lands in this open window.
+  const bridgeIdentity = devicePolicy?.telegramUserId ?? accessState?.telegramUserId;
+  useEffect(() => {
+    if (!standaloneChat || !bridgeIdentity) return undefined;
+    const cleanup = pollStandaloneAccess(activeDb, bridgeIdentity, (state) => {
+      void saveAccessState(activeDb, state);
+    });
+    return cleanup;
+  }, [standaloneChat, bridgeIdentity, activeDb]);
 
   // Tauri window listeners and geometry persistence
   useEffect(() => {

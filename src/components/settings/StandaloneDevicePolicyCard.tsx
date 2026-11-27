@@ -1,32 +1,48 @@
 import React, { useEffect, useState } from 'react';
-import { Badge, Button, Card, Input, Space, Tag, TextArea, useMessage } from '../ui';
+import { Badge, Button, Card, Input, Space, Tag, useMessage } from '../ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
-  clearDevicePolicy,
   loadDevicePolicy,
-  parsePolicyPayload,
-  saveDevicePolicy,
   type TelegramDevicePolicy,
 } from '../../services/telegram/telegramDevicePolicy';
+import {
+  clearStandaloneAccess,
+  readAccessState,
+  requestStandaloneAccess,
+  type StandaloneAccessState,
+} from '../../services/telegram/standaloneAccessService';
 
 export interface StandaloneDevicePolicyCardProps {
   db?: TaskPlannerDatabase | undefined;
 }
 
-/** Standalone chỉ dán payload do bot phát; không gọi Bot API, không lưu token. */
+const ID_PATTERN = /^\d{6,12}$/;
+const BLOCKED_MESSAGE: Record<'denied' | 'revoked' | 'expired', string> = {
+  denied: 'Yêu cầu bị từ chối. Gửi lại để admin cấp quyền.',
+  revoked: 'Yêu cầu đã bị thu hồi. Gửi lại để admin cấp quyền.',
+  expired: 'Yêu cầu đã hết hạn. Gửi lại để admin cấp quyền.',
+};
+const blockedKind = (state: StandaloneAccessState | undefined): 'denied' | 'revoked' | 'expired' => {
+  if (state?.status === 'denied') return 'denied';
+  if (state?.status === 'revoked') return 'revoked';
+  return 'expired';
+};
+
+/** Standalone xin quyền nội bộ bằng Telegram User ID; không dán /policy, không lưu bot token. */
 export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProps> = ({ db = defaultDb }) => {
   const message = useMessage();
   const [telegramUserId, setTelegramUserId] = useState('');
-  const [policyText, setPolicyText] = useState('');
   const [policy, setPolicy] = useState<TelegramDevicePolicy | undefined>();
+  const [accessState, setAccessState] = useState<StandaloneAccessState | undefined>();
 
   useEffect(() => {
     let mounted = true;
-    loadDevicePolicy(db).then((stored) => {
-      if (mounted && stored) {
-        setPolicy(stored);
-        setTelegramUserId(stored.telegramUserId);
-      }
+    Promise.all([loadDevicePolicy(db), readAccessState(db)]).then(([storedPolicy, storedState]) => {
+      if (!mounted) return;
+      setPolicy(storedPolicy);
+      setAccessState(storedState);
+      if (storedPolicy?.telegramUserId) setTelegramUserId(storedPolicy.telegramUserId);
+      else if (storedState?.telegramUserId) setTelegramUserId(storedState.telegramUserId);
     });
     return () => {
       mounted = false;
@@ -34,39 +50,50 @@ export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProp
   }, [db]);
 
   const expired = policy ? Date.parse(policy.expiresAt) <= Date.now() : false;
-  const status = !policy ? 'Chưa liên kết' : expired ? 'Hết hạn' : 'Đang áp dụng';
+  const status = expired || accessState?.status === 'expired'
+    ? 'Hết hạn'
+    : accessState?.status === 'denied'
+      ? 'Bị từ chối'
+      : accessState?.status === 'revoked'
+        ? 'Đã thu hồi'
+        : accessState?.status === 'pending'
+          ? 'Đang chờ duyệt'
+          : policy && accessState?.status === 'approved' ? 'Đang áp dụng' : 'Chưa có quyền';
 
-  const applyPolicy = async () => {
-    const expectedId = telegramUserId.trim();
-    if (!expectedId) {
-      message.error('Vui lòng nhập Telegram User ID.');
+  const requestAccess = async () => {
+    const id = telegramUserId.trim();
+    if (!ID_PATTERN.test(id)) {
+      message.error('Telegram User ID không hợp lệ (cần 6-12 chữ số).');
       return;
     }
     try {
-      const parsed = parsePolicyPayload(policyText);
-      if (parsed.telegramUserId !== expectedId) {
-        message.error('Telegram User ID trong policy không khớp với ID đã nhập.');
-        return;
-      }
-      await saveDevicePolicy(db, parsed);
-      setPolicy(parsed);
-      setPolicyText('');
-      message.success('Đã áp dụng chính sách thiết bị.');
+      const requestedAt = new Date().toISOString();
+      await requestStandaloneAccess(db, id, requestedAt);
+      setAccessState({ status: 'pending', telegramUserId: id, requestedAt });
+      setPolicy(undefined);
+      message.success('Đã gửi yêu cầu. Giữ app mở để nhận cấu hình.');
     } catch (err) {
-      message.error(err instanceof Error ? err.message : 'Không đọc được nội dung /policy.');
+      message.error(err instanceof Error ? err.message : 'Không gửi được yêu cầu.');
     }
   };
 
   const unlink = async () => {
-    await clearDevicePolicy(db);
-    setPolicy(undefined);
-    setPolicyText('');
-    setTelegramUserId('');
-    message.success('Đã gỡ liên kết thiết bị.');
+    try {
+      await clearStandaloneAccess(db, telegramUserId.trim());
+      setPolicy(undefined);
+      setAccessState({ status: 'revoked', telegramUserId: telegramUserId.trim() });
+      message.success('Đã gỡ liên kết thiết bị.');
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Không gỡ được liên kết.');
+    }
   };
 
+  const requestedAt = accessState?.requestedAt
+    ? new Date(accessState.requestedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+    : '';
+
   return (
-    <Card size="small" title="Telegram Device" extra={<Badge status={expired ? 'danger' : policy ? 'success' : 'info'} text={status} />}>
+    <Card size="small" title="Telegram Device" extra={<Badge status={expired || accessState?.status === 'denied' || accessState?.status === 'revoked' ? 'danger' : accessState?.status === 'pending' ? 'warning' : accessState?.status === 'approved' && policy ? 'success' : 'info'} text={status} />}>
       <Space direction="vertical" style={{ width: '100%' }} size={12}>
         <div>
           <div style={{ marginBottom: 4 }}>Telegram User ID</div>
@@ -77,32 +104,37 @@ export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProp
             aria-label="Telegram User ID"
           />
         </div>
-        <div>
-          <div style={{ marginBottom: 4 }}>Dán nội dung /policy</div>
-          <TextArea
-            rows={4}
-            value={policyText}
-            onChange={(event) => setPolicyText(event.target.value)}
-            placeholder="Dán toàn bộ nội dung bot trả cho /policy"
-            aria-label="Dán nội dung /policy"
-          />
-        </div>
-        <Button type="primary" onClick={() => void applyPolicy()}>
-          Áp dụng chính sách
-        </Button>
-        {policy && (
-          <div>
-            <div style={{ marginBottom: 4 }}>Model được phép</div>
-            <Space wrap size={4}>
-              {policy.allowedModels.map((model) => (
-                <Tag key={model}>{model}</Tag>
-              ))}
-            </Space>
-            <div style={{ marginTop: 8 }}>Hết hạn: {policy.expiresAt}</div>
-            <Button danger size="small" style={{ marginTop: 8 }} onClick={() => void unlink()}>
-              Gỡ liên kết
+        {accessState?.status === 'pending' ? (
+          <>
+            <div>{`Đã gửi yêu cầu lúc ${requestedAt}. Giữ app mở để nhận cấu hình.`}</div>
+            <Button onClick={() => void requestAccess()}>Gửi lại</Button>
+          </>
+        ) : accessState?.status === 'denied' || accessState?.status === 'revoked' || accessState?.status === 'expired' || expired ? (
+          <>
+            <div>{BLOCKED_MESSAGE[blockedKind(accessState)]}</div>
+            <Button type="primary" onClick={() => void requestAccess()}>Gửi lại yêu cầu</Button>
+          </>
+        ) : policy && accessState?.status === 'approved' ? (
+          <>
+            <div>
+              <div style={{ marginBottom: 4 }}>Model được phép</div>
+              <Space wrap size={4}>
+                {policy.allowedModels.map((model) => (
+                  <Tag key={model}>{model}</Tag>
+                ))}
+              </Space>
+              <div style={{ marginTop: 8 }}>Model mặc định: {policy.remoteSettings.defaultModel ?? '—'}</div>
+              <div style={{ marginTop: 8 }}>Hạn policy: {policy.expiresAt}</div>
+            </div>
+            <Button danger size="small" onClick={() => void unlink()}>Gỡ liên kết</Button>
+          </>
+        ) : (
+          <>
+            <div>Chưa có quyền dùng Chat. Gửi yêu cầu để admin cấp model.</div>
+            <Button type="primary" disabled={!ID_PATTERN.test(telegramUserId.trim())} onClick={() => void requestAccess()}>
+              Request access
             </Button>
-          </div>
+          </>
         )}
       </Space>
     </Card>
