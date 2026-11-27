@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { ItemInsightView } from '../../src/views/ItemInsightView';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { createSystem } from '../../src/db/repositories/systemRepo';
+import { ThemeAppHolder } from '../../src/components/ui';
 
 const SYSTEM_INPUT = {
   code: 'PAYMENT_SVC',
@@ -203,5 +204,107 @@ describe('ItemInsightView', () => {
     expect((await screen.findAllByText('Payment Service')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Wire payment gateway')).toBeInTheDocument();
     expect(screen.getByText(/Danh sách tác vụ liên quan \(1\)/i)).toBeInTheDocument();
+  }, 30000);
+
+  async function seedInsight(opts: { links?: Array<{ name: string; url: string }>; linkOnCr?: boolean } = {}) {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
+      {
+        code: 'CR-2026-020',
+        name: 'Thanh toán QR',
+        type: 'NEW_FEATURE',
+        status: 'In Progress',
+        targets: [{ systemId: system.id }],
+        ...(opts.linkOnCr ? { links: opts.links ?? [] } : {}),
+      },
+      testDb
+    );
+    const task = await createTask(
+      {
+        crId: cr.id,
+        systemId: system.id,
+        name: 'Tác vụ có link',
+        status: 'Open',
+        priority: 'Medium',
+        estimateMinutes: 0,
+        ...(!opts.linkOnCr ? { links: opts.links ?? [] } : {}),
+      },
+      testDb
+    );
+    return { system, cr, task };
+  }
+
+  function openInsight(itemType: 'task' | 'cr' | 'system', id: string) {
+    render(
+      <ThemeAppHolder>
+        <ItemInsightView itemType={itemType} itemId={id} onNavigate={mockNavigate} db={testDb} />
+      </ThemeAppHolder>
+    );
+  }
+
+  function setLinkInput(testId: string, value: string) {
+    const node = screen.getByTestId(testId);
+    const input = (node.matches('input') ? node : node.querySelector('input')) as HTMLInputElement;
+    fireEvent.change(input, { target: { value } });
+  }
+
+  it('adds a link with an empty name to a task with no existing links and labels it with the URL', async () => {
+    const { task } = await seedInsight();
+    openInsight('task', task.id);
+    await screen.findByTestId('item-insight-link-url');
+    const url = 'https://example.com/task-spec';
+
+    setLinkInput('item-insight-link-url', url);
+    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+
+    await waitFor(async () => {
+      const stored = await testDb.tasks.get(task.id);
+      expect(stored?.links).toEqual([{ name: '', url }]);
+    });
+    expect(screen.getByRole('button', { name: `link ${url}` })).toHaveAttribute('title', url);
+    expect(screen.getByTestId('item-insight-link-url')).toHaveValue('');
+  }, 30000);
+
+  it('adds a named link and shows the name on task insight', async () => {
+    const { task } = await seedInsight();
+    openInsight('task', task.id);
+    await screen.findByTestId('item-insight-link-url');
+    const url = 'https://example.com/task-named';
+
+    setLinkInput('item-insight-link-name', 'Spec');
+    setLinkInput('item-insight-link-url', url);
+    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+
+    await waitFor(async () => {
+      const stored = await testDb.tasks.get(task.id);
+      expect(stored?.links).toEqual([{ name: 'Spec', url }]);
+    });
+    expect(screen.getByRole('button', { name: 'link Spec' })).toHaveAttribute('title', url);
+  }, 30000);
+
+  it('rejects an unsafe URL without writing to task.links', async () => {
+    const { task } = await seedInsight();
+    openInsight('task', task.id);
+    await screen.findByTestId('item-insight-link-url');
+
+    setLinkInput('item-insight-link-url', 'javascript:alert(1)');
+    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+
+    await waitFor(() => {
+      expect(screen.getByText('URL không hợp lệ')).toBeInTheDocument();
+    });
+    const stored = await testDb.tasks.get(task.id);
+    expect(stored?.links).toEqual([]);
+  }, 30000);
+
+  it('keeps legacy CR links visible without rendering a task-only quick create row', async () => {
+    const { cr } = await seedInsight({
+      linkOnCr: true,
+      links: [{ name: 'Spec', url: 'https://example.com/cr-spec' }],
+    });
+    openInsight('cr', cr.id);
+
+    expect(await screen.findByRole('button', { name: 'link Spec' })).toBeInTheDocument();
+    expect(screen.queryByTestId('item-insight-link-url')).not.toBeInTheDocument();
   }, 30000);
 });

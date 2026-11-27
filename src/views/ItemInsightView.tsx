@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, Input, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
 import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -18,6 +18,7 @@ import { NoteEditor } from '../components/notes/NoteEditor';
 import { updateTask, createTask } from '../db/repositories/taskRepo';
 import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
 import { getAllSystems } from '../db/repositories/systemRepo';
+import { isValidLinkUrl } from '../validation/schemas';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -76,6 +77,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   const { modal, contextHolder } = useTaskMateModal();
   const [inspectingNote, setInspectingNote] = useState<Note | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [linkName, setLinkName] = useState('');
+  const [linkUrl, setLinkUrl] = useState('');
 
   // Live queries
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
@@ -234,6 +237,27 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       await updateTask(currentTask.id, { checklist: nextChecklist }, db);
     } catch {
       message.error('Không thể cập nhật checklist');
+    }
+  };
+
+  const handleAddLink = async () => {
+    if (!currentTask) return;
+    const trimmed = linkUrl.trim();
+    if (!trimmed || !isValidLinkUrl(trimmed)) {
+      message.error('URL không hợp lệ');
+      return;
+    }
+    try {
+      await updateTask(
+        currentTask.id,
+        { links: [...(currentTask.links ?? []), { name: linkName.trim(), url: trimmed }] },
+        db
+      );
+      message.success('Đã thêm liên kết');
+      setLinkName('');
+      setLinkUrl('');
+    } catch {
+      message.error('Không thể thêm liên kết');
     }
   };
 
@@ -642,7 +666,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Row>
 
         {/* Named links */}
-        {((currentTask?.links || currentCr?.links)?.length ?? 0) > 0 && (
+        {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
           <div style={{ marginTop: 12 }} data-testid="item-insight-links">
             <Text type="secondary">Links: </Text>
             <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
@@ -658,6 +682,30 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 </Button>
               ))}
             </Space>
+            {itemType === 'task' && currentTask && (
+              <Space size={8} wrap style={{ display: 'flex', marginTop: 8, maxWidth: '100%' }}>
+                <Input
+                  data-testid="item-insight-link-name"
+                  placeholder="Tên (tùy chọn)"
+                  size="small"
+                  style={{ width: 180, borderRadius: 'var(--radius-control)' }}
+                  value={linkName}
+                  onChange={(e) => setLinkName(e.target.value)}
+                />
+                <Input
+                  data-testid="item-insight-link-url"
+                  placeholder="URL"
+                  size="small"
+                  style={{ width: 260, borderRadius: 'var(--radius-control)' }}
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onPressEnter={() => void handleAddLink()}
+                />
+                <Button data-testid="item-insight-link-add" size="small" onClick={() => void handleAddLink()}>
+                  Thêm link
+                </Button>
+              </Space>
+            )}
           </div>
         )}
       </Card>
