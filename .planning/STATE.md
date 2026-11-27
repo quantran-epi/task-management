@@ -6,9 +6,9 @@ current_phase: 51
 current_phase_name: taskmate-chat-standalone
 status: complete
 stopped_at: Phase 51 complete
-last_updated: "2026-11-27T02:04:50.764Z"
-last_activity: 2026-11-26
-last_activity_desc: "Completed quick task 261127-eos: SQLcl completion changed to plain-line marker with exact-line reader"
+last_updated: "2026-11-27T06:59:30Z"
+last_activity: 2026-11-27
+last_activity_desc: "Completed quick task 261127-j35: bounded ORA-/SP2- diagnostics, 60s SQLcl idle kill, inactivity drain, SQL> data preservation"
 state_head: 488c8f69a08036d25cad121bd5ac2956ec647358
 progress:
   total_phases: 2
@@ -35,6 +35,8 @@ Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat 
 Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
 Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-session completion changed from PROMPT sentinel to SQL SELECT JSON marker with stdout stripping.
 Last activity: 2026-11-27 - Completed quick task 261127-eos: SQLcl completion changed to one plain-text marker line with exact-line reader and no JSON strip.
+Last activity: 2026-11-27 - Completed quick task 261127-hup: persistent SQLcl moved onto SSH PTY (xterm, ECHO off, wide columns) with ANSI/prompt-normalized marker reader; PGID, cancel, TTL and TS heredoc contract unchanged.
+Last activity: 2026-11-27 - Completed quick task 261127-j35: fixed 4 PTY SQLcl review findings — bounded ORA-/SP2- diagnostics in Err stderr, 60s idle PGID kill, inactivity drain with caps, prompt preserved on data lines.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -164,6 +166,8 @@ Progress: [██████████] 100%
 | 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
 | 261127-eos | Sửa 2 lỗi review: marker hoàn tất là một dòng plain text, reader dừng bằng so sánh dòng chính xác, bỏ JSON strip/reserialize khỏi Rust | 2026-11-27 | bbe75d3c, 873570c4 | — | [261127-eos-fix-sqlcl-marker-reader-review-findings-](./quick/261127-eos-fix-sqlcl-marker-reader-review-findings-/) |
 | 261127-fzv | Implement standalone Request access flow: local bridge, admin approval + per-user model whitelist in `#/telegram`, realtime fail-closed policy delivery to standalone chat | 2026-11-27 | 53c3ee6f, 2140f628, 7deb81f5, 29753376 | Verified | [261127-fzv-implement-standalone-access-request-flow](./quick/261127-fzv-implement-standalone-access-request-flow/) |
+| 261127-hup | Chuyển SQLcl thường trú sang SSH PTY (xterm, ECHO tắt, 65535 cột); reader chuẩn hoá ANSI/prompt, marker dòng plain, giữ PGID/cancel/TTL/restart-once | 2026-11-27 | c9c4cd90, 7af9a357 | — | [261127-hup-implement-pty-backed-persistent-sqlcl-se](./quick/261127-hup-implement-pty-backed-persistent-sqlcl-se/) |
+| 261127-j35 | Sửa 4 finding review PTY SQLcl: error tail bounded vào stderr, idle deadline 60s + SIGTERM PGID, drain theo inactivity có cap, giữ prefix SQL> trên dữ liệu | 2026-11-27 | a094e622, 76faf6ad, 636b6f62 | — | [261127-j35-fix-pty-sqlcl-review-findings-merged-std](./quick/261127-j35-fix-pty-sqlcl-review-findings-merged-std/) |
 
 ## Accumulated Context
 
@@ -264,6 +268,7 @@ Progress: [██████████] 100%
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
 - [Quick 261127-dsx]: Persistent SQLcl completion dùng SQL `SELECT '<marker>' AS TASKMATE_DONE FROM DUAL;` dưới `SET SQLFORMAT JSON`; Rust strip marker row trước khi trả stdout, TS heredoc production code giữ nguyên.
 - [Quick 261127-eos]: Completion marker là một dòng plain text duy nhất (`SELECT '<marker>' FROM DUAL;` sau `SET SQLFORMAT DEFAULT`, không alias `TASKMATE_DONE`); reader so sánh `line.trim() == marker` bằng equality (kể cả partial ở EOF), dòng marker không vào stdout, bỏ hoàn toàn JSON strip/reserialize trong Rust để stdout byte-identical.
+- [Quick 261127-j35]: tail chẩn đoán 8 KiB (merged stdout + pending line, cắt char boundary) nằm trong Err string để TS `redactOracleText` che connection string; idle deadline 60s là policy riêng persistent SQLcl, khác `tool_cancel` no-timeout; drain dừng theo inactivity, cap 512 dòng/256 KiB chỉ làm safety; `SQL>` giữ nguyên trên data, prompt chỉ strip ở detection marker/PGID.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
@@ -358,6 +363,7 @@ Progress: [██████████] 100%
 |------|----------|-------|-------|
 | Quick 261127-dsx | 6min | 2 | 2 |
 | Quick 261127-eos | 2min | 2 | 2 |
+| Quick 261127-j35 | 9min | 2 | 3 |
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |

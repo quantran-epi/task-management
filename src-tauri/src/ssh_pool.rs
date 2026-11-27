@@ -30,12 +30,50 @@ pub(crate) const SESSION_IDLE_TTL: Duration = Duration::from_secs(15 * 60);
 /// Cap buffered stderr per persistent session — same ceiling as `tool_cancel`'s readers.
 const MAX_SQLCL_STDERR_BYTES: usize = 2 * 1024 * 1024;
 
+/// Bounded tail of merged stdout carried into an error string before the completion marker.
+/// PTY merges stderr into stdout, so this is the only diagnostics channel for ORA-/SP2- errors.
+const MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES: usize = 8 * 1024;
+
+/// Persistent SQLcl only: give up on a marker that makes no progress for 60 s. This is a stricter
+/// policy than `tool_cancel`'s no-timeout readers — a quiet REPL can be cut off with a clear error
+/// instead of hanging the session forever.
+const SQLCL_REPL_IDLE_DEADLINE: Duration = Duration::from_secs(60);
+
+/// Safety ceilings for draining buffered banner/prompt bytes. A normal drain stops on the first
+/// wake-up timeout or EOF; these caps only bound work while the remote keeps sending output.
+const SQLCL_DRAIN_MAX_LINES: usize = 512;
+const SQLCL_DRAIN_MAX_BYTES: usize = 256 * 1024;
+
 /// Wake-up socket timeout is only a poll tick, never a transport failure.
 fn is_wakeup_timeout(err: &std::io::Error) -> bool {
     matches!(
         err.kind(),
         std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
     )
+}
+
+/// Drain already-buffered bytes (banner tail, `SQL>` prompt) without blocking the caller. PTY
+/// streams use the wake-up socket timeout, so a quiet REPL returns quickly; the line/byte caps
+/// only bound work when the remote keeps sending output.
+
+fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
+    let mut line = String::new();
+    let mut lines = 0usize;
+    let mut bytes = 0usize;
+    loop {
+        line.clear();
+        let got_new_bytes = match reader.read_line(&mut line) {
+            Ok(0) | Err(_) => false, // EOF/timeout: nothing new buffered; a real read error also stops
+            Ok(n) => {
+                lines += 1;
+                bytes += n;
+                true
+            }
+        };
+        if !sqlcl_drain_should_continue(got_new_bytes, false, lines, bytes) {
+            break;
+        }
+    }
 }
 
 /// Identity of one pooled SSH session. `secret_digest` is a salted digest, never plaintext.
@@ -204,6 +242,16 @@ impl SqlclSession {
             key.bin,
             key.conn
         );
+        // PTY keeps SQLcl's REPL alive between queries. With a plain stdin pipe, `-s` runs the
+        // script as a batch and exits at EOF before the trailing marker can be read. ECHO is off
+        // so the script itself is never echoed back into stdout; the wide column count avoids
+        // wrapping long JSON result lines.
+        let mut modes = ssh2::PtyModes::new();
+        modes.set_boolean(ssh2::PtyModeOpcode::ECHO, false);
+        channel
+            .request_pty("xterm", Some(modes), Some((65535, 24, 0, 0)))
+            .map_err(|e| format!("Yêu cầu PTY SQLcl thất bại: {}", e))?;
+
         let remote_command = crate::tool_cancel::build_remote_command(&launcher);
         channel.exec(&remote_command).map_err(|e| format!("Khởi động SQLcl thất bại: {}", e))?;
 
@@ -211,7 +259,6 @@ impl SqlclSession {
         // bounded window of lines, ignoring wake-up timeouts (they are not transport errors).
         let mut reader = BufReader::new(channel.stream(0));
         let pgid = {
-            let prefix = crate::tool_cancel::PGID_LINE_PREFIX;
             let mut found = None;
             let mut line = String::new();
             for _ in 0..10 {
@@ -219,8 +266,8 @@ impl SqlclSession {
                 match reader.read_line(&mut line) {
                     Ok(0) => break,
                     Ok(_) => {
-                        if let Some(value) = line.trim().strip_prefix(prefix) {
-                            found = value.trim().parse::<u32>().ok();
+                        if let Some(value) = scan_sqlcl_pgid_line(&line) {
+                            found = Some(value);
                             break;
                         }
                     }
@@ -230,6 +277,10 @@ impl SqlclSession {
             }
             found.ok_or_else(|| "Không nhận dạng được PGID của phiên SQLcl.".to_string())?
         };
+
+        // Discard banner/prompt bytes already buffered before the first script is sent. Bounded
+        // so a quiet REPL stops at its wake-up timeout instead of blocking session startup.
+        drain_sqlcl_prefix(&mut reader);
 
         let stderr = Arc::new(Mutex::new(String::new()));
         let stderr_reader = channel.stderr();
@@ -298,38 +349,71 @@ impl SqlclSession {
         // those bytes are already consumed from the BufReader. Clear only on a completed line.
         let mut line = String::new();
         let mut saw_sentinel = false;
+        let mut eof_diagnostics = String::new();
+        let mut last_progress = Instant::now();
         loop {
             if cancelled.load(Ordering::SeqCst) {
                 self.kill_remote(config, secret);
                 return Ok((output, self.stderr_snapshot(), true));
             }
+            if sqlcl_idle_timed_out(last_progress.elapsed()) {
+                self.kill_remote(config, secret);
+                return Err(format!(
+                    "SQLcl không tiến triển trong {:?}.\n{}\n{}",
+                    SQLCL_REPL_IDLE_DEADLINE,
+                    self.stderr_snapshot(),
+                    sqlcl_error_diagnostics(&output, &line)
+                ));
+            }
+            let line_len_before = line.len();
             match reader.read_line(&mut line) {
                 Ok(0) => {
                     // SQLcl can exit right after the marker with no trailing newline; the last
-                    // line may still be a complete marker sitting in the buffer.
-                    if append_sqlcl_line(&mut output, &line, marker) {
+                    // line may still be a complete marker sitting in the buffer. Capture the
+                    // pending line before clearing it so ORA-/SP2- survives the EOF error.
+                    if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                     }
+                    eof_diagnostics = sqlcl_error_diagnostics(&output, &line);
                     line.clear();
                     break;
                 }
                 Ok(_) => {
-                    if append_sqlcl_line(&mut output, &line, marker) {
+                    last_progress = Instant::now();
+                    if sqlcl_line_is_marker(&line, marker) {
                         saw_sentinel = true;
                         break;
                     }
+                    append_sqlcl_line(&mut output, &line, marker);
                     line.clear();
                 }
                 Err(e) => {
                     if is_wakeup_timeout(&e) {
+                        if line.len() > line_len_before {
+                            last_progress = Instant::now();
+                        }
                         continue; // wake-up only; keep the partial line
                     }
-                    return Err(format!("Đọc SQLcl thất bại: {}", e));
+                    return Err(format!(
+                        "Đọc SQLcl thất bại: {}\n{}\n{}",
+                        e,
+                        self.stderr_snapshot(),
+                        sqlcl_error_diagnostics(&output, &line)
+                    ));
                 }
             }
         }
         if !saw_sentinel && !cancelled.load(Ordering::SeqCst) {
-            return Err("Phiên SQLcl kết thúc trước khi có sentinel.".to_string());
+            return Err(format!(
+                "Phiên SQLcl kết thúc trước khi có marker.\n{}\n{}",
+                self.stderr_snapshot(),
+                eof_diagnostics
+            ));
+        }
+        // After the marker, the REPL prints a fresh `SQL> ` prompt. Drop it (and any trailing
+        // banner bytes) so the next query cannot read stale output.
+        if saw_sentinel {
+            drain_sqlcl_prefix(&mut reader);
         }
         Ok((output, self.stderr_snapshot(), false))
     }
@@ -410,6 +494,33 @@ pub fn cleanup_on_exit(state: &SshRuntimeState) {
 
 // --- pure helpers --------------------------------------------------------------------------
 
+/// Bounded tail of merged stdout plus the pending partial line. PTY folds stderr into fd1, so
+/// ORA-/SP2- text can sit in either buffer when the reader stops before the marker. Cut from the
+/// end on a UTF-8 char boundary; TS redacts the resulting stderr before the model sees it.
+fn sqlcl_error_diagnostics(output: &str, pending_line: &str) -> String {
+    let clean_line_owned = strip_ansi_escapes(pending_line);
+    let clean_line = strip_sqlcl_prompt(&clean_line_owned);
+    let mut joined = String::with_capacity(output.len() + clean_line.len());
+    joined.push_str(output);
+    joined.push_str(clean_line);
+    if joined.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES {
+        return joined;
+    }
+    let mut start = joined.len() - MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES;
+    while !joined.is_char_boundary(start) {
+        start += 1;
+    }
+    joined[start..].to_string()
+}
+
+fn sqlcl_idle_timed_out(elapsed: Duration) -> bool {
+    elapsed >= SQLCL_REPL_IDLE_DEADLINE
+}
+
+fn sqlcl_drain_should_continue(got_new_bytes: bool, eof: bool, lines: usize, bytes: usize) -> bool {
+    !eof && got_new_bytes && lines < SQLCL_DRAIN_MAX_LINES && bytes < SQLCL_DRAIN_MAX_BYTES
+}
+
 /// Unique per-request plain-text marker line. `PROMPT` is suppressed in `sqlcl -s`, so the marker
 /// is selected as a bare value after switching that one statement back to default format.
 pub fn make_sqlcl_sentinel() -> (String, String) {
@@ -437,14 +548,107 @@ pub fn build_sqlcl_script(sql: &str, marker_sql: &str) -> String {
     )
 }
 
-/// Append one stdout line unless it is exactly the completion marker. Comparison is equality on
-/// the trimmed line, never substring, so a marker inside a banner or JSON payload cannot trigger
-/// an early stop. The marker line is dropped entirely; every other line is kept byte-for-byte.
+/// Drop terminal control sequences from one PTY line: CSI (`ESC [` .. final byte 0x40..=0x7E)
+/// and OSC (`ESC ]` .. BEL or ST). No regex or extra crate needed.
+fn strip_ansi_escapes(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = String::with_capacity(input.len());
+    let mut kept_from = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b {
+            i += 1;
+            continue;
+        }
+        let esc_start = i;
+        i += 1;
+        let end = match bytes.get(i) {
+            Some(b'[') => {
+                i += 1;
+                let mut end = None;
+                while i < bytes.len() {
+                    let b = bytes[i];
+                    i += 1;
+                    if (0x40..=0x7e).contains(&b) {
+                        end = Some(i);
+                        break;
+                    }
+                }
+                end
+            }
+            Some(b']') => {
+                i += 1;
+                let mut end = None;
+                while i < bytes.len() {
+                    if bytes[i] == 0x07 {
+                        i += 1;
+                        end = Some(i);
+                        break;
+                    }
+                    if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
+                        i += 2;
+                        end = Some(i);
+                        break;
+                    }
+                    i += 1;
+                }
+                end
+            }
+            Some(_) => {
+                i += 1;
+                Some(i)
+            }
+            None => None,
+        };
+        if let Some(end) = end {
+            out.push_str(&input[kept_from..esc_start]);
+            kept_from = end;
+        }
+    }
+    out.push_str(&input[kept_from..]);
+    out
+}
+
+/// Remove only a leading `SQL>` prompt (optionally followed by one space) from an already
+/// ANSI-stripped line. A `SQL>` inside data is never touched.
+fn strip_sqlcl_prompt(line: &str) -> &str {
+    let without_prompt = match line.trim_start().strip_prefix("SQL>") {
+        Some(rest) => rest,
+        None => return line,
+    };
+    without_prompt.strip_prefix(' ').unwrap_or(without_prompt)
+}
+
+/// True only when the whole normalized line equals the completion marker. Substring matches in
+/// banners or JSON payloads never end a query early.
+fn sqlcl_line_is_marker(line: &str, marker: &str) -> bool {
+    strip_sqlcl_prompt(&strip_ansi_escapes(line)).trim() == marker
+}
+
+/// Parse the `setsid` PGID line from a PTY stream after ANSI/prompt normalization. Bare numbers
+/// in SQLcl banners do not carry the sentinel prefix and are ignored.
+fn scan_sqlcl_pgid_line(line: &str) -> Option<u32> {
+    let clean = strip_ansi_escapes(line);
+    strip_sqlcl_prompt(&clean)
+        .trim()
+        .strip_prefix(crate::tool_cancel::PGID_LINE_PREFIX)?
+        .trim()
+        .parse::<u32>()
+        .ok()
+}
+
+/// Append one ANSI-stripped PTY line to stdout. Data bytes are kept verbatim — including a
+/// leading `SQL>` — because stripping it here corrupts JSON payloads. Prompt removal belongs only
+/// to marker/PGID detection. Marker lines and prompt/ANSI-only lines are dropped. Returns true on
+/// the marker.
 fn append_sqlcl_line(output: &mut String, line: &str, marker: &str) -> bool {
-    if line.trim() == marker {
+    let clean = strip_ansi_escapes(line);
+    if sqlcl_line_is_marker(line, marker) {
         true
+    } else if !strip_sqlcl_prompt(&clean).trim().is_empty() {
+        output.push_str(&clean);
+        false
     } else {
-        output.push_str(line);
         false
     }
 }
@@ -771,6 +975,135 @@ mod tests {
         assert_eq!(output, "TASKMATE_SQLCL_DONE_");
         assert!(append_sqlcl_line(&mut output, &format!("{marker}\n"), marker));
         assert_eq!(output, "TASKMATE_SQLCL_DONE_");
+    }
+
+    #[test]
+    fn strip_ansi_escapes_removes_csi_and_osc() {
+        assert_eq!(
+            strip_ansi_escapes("\x1b[31mSQL>\x1b[0m TASKMATE_SQLCL_DONE_1"),
+            "SQL> TASKMATE_SQLCL_DONE_1"
+        );
+        assert_eq!(strip_ansi_escapes("\x1b]0;title\x07SQL> ok"), "SQL> ok");
+        assert_eq!(strip_ansi_escapes("a\x1b]0;title\x1b\\b\x1b[?2004hc"), "abc");
+    }
+
+    #[test]
+    fn strip_sqlcl_prompt_removes_only_leading_prompt() {
+        assert_eq!(strip_sqlcl_prompt("SQL> TASKMATE_SQLCL_DONE_1"), "TASKMATE_SQLCL_DONE_1");
+        assert_eq!(strip_sqlcl_prompt("SQL>[{\"ID\":1}]"), "[{\"ID\":1}]");
+        assert_eq!(strip_sqlcl_prompt("a SQL> b"), "a SQL> b");
+    }
+
+    #[test]
+    fn sqlcl_line_is_marker_after_ansi_and_prompt() {
+        assert!(sqlcl_line_is_marker(
+            "\x1b[?2004hSQL> TASKMATE_SQLCL_DONE_1\r\n",
+            "TASKMATE_SQLCL_DONE_1"
+        ));
+        assert!(sqlcl_line_is_marker("SQL>TASKMATE_SQLCL_DONE_1", "TASKMATE_SQLCL_DONE_1"));
+        assert!(!sqlcl_line_is_marker(
+            "banner TASKMATE_SQLCL_DONE_1 noise\n",
+            "TASKMATE_SQLCL_DONE_1"
+        ));
+    }
+
+    #[test]
+    fn scan_sqlcl_pgid_line_after_prompt_and_ansi() {
+        assert_eq!(scan_sqlcl_pgid_line("SQL> TASKMATE_PGID:4242"), Some(4242));
+        assert_eq!(scan_sqlcl_pgid_line("\x1b[?2004hSQL>TASKMATE_PGID:9\r\n"), Some(9));
+        assert_eq!(scan_sqlcl_pgid_line("4242"), None);
+        assert_eq!(scan_sqlcl_pgid_line("banner TASKMATE_PGID:7"), None);
+    }
+
+    #[test]
+    fn append_sqlcl_line_strips_ansi_but_keeps_prompt_on_data() {
+        let marker = "TASKMATE_SQLCL_DONE_1_6";
+        let mut output = String::new();
+        assert!(!append_sqlcl_line(
+            &mut output,
+            "\x1b[?2004hSQL> [{\"ID\":1}]\n",
+            marker
+        ));
+        assert_eq!(output, "SQL> [{\"ID\":1}]\n");
+    }
+
+    #[test]
+    fn append_sqlcl_line_drops_prompt_only_lines() {
+        let marker = "TASKMATE_SQLCL_DONE_1_7";
+        let mut output = String::new();
+        assert!(!append_sqlcl_line(&mut output, "\x1b[?2004hSQL> \n", marker));
+        assert!(!append_sqlcl_line(&mut output, "SQL>", marker));
+        assert!(append_sqlcl_line(
+            &mut output,
+            &format!("SQL> \x1b[32m{marker}\x1b[0m\r\n"),
+            marker
+        ));
+        assert_eq!(output, "");
+    }
+
+    #[test]
+    fn append_sqlcl_line_keeps_prompt_on_banner_and_partial_marker() {
+        let marker = "TASKMATE_SQLCL_DONE_1_8";
+        let mut output = String::new();
+        let banner = format!("SQL> banner {marker} noise\n");
+        assert!(!append_sqlcl_line(&mut output, &banner, marker));
+        assert_eq!(output, banner);
+        assert!(!append_sqlcl_line(&mut output, "SQL> TASKMATE_SQLCL_DONE_", marker));
+        assert_eq!(output, format!("{banner}SQL> TASKMATE_SQLCL_DONE_"));
+    }
+
+    #[test]
+    fn sqlcl_error_diagnostics_keeps_error_tokens_bound_and_char_safe() {
+        let simple = sqlcl_error_diagnostics("some output\n", "ORA-00942: table or view does not exist");
+        assert!(simple.contains("ORA-00942: table or view does not exist"));
+
+        let mut long = "A".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES * 2);
+        long.push_str("ORA-00942: table or view does not exist");
+        let tail = sqlcl_error_diagnostics(&long, "SP2-0042: unknown command");
+        assert!(tail.contains("ORA-00942: table or view does not exist"));
+        assert!(tail.contains("SP2-0042: unknown command"));
+        assert!(tail.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+
+        let mut multibyte = "à".repeat(MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+        multibyte.push_str("ORA-00942");
+        let cut = sqlcl_error_diagnostics(&multibyte, "");
+        assert!(cut.is_char_boundary(cut.len()));
+        assert!(cut.len() <= MAX_SQLCL_ERROR_DIAGNOSTICS_BYTES);
+    }
+
+    #[test]
+    fn sqlcl_idle_deadline_boundary_is_inclusive() {
+        assert!(!sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE - Duration::from_secs(1)));
+        assert!(sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE));
+        assert!(sqlcl_idle_timed_out(SQLCL_REPL_IDLE_DEADLINE + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn sqlcl_drain_stops_on_timeout_eof_and_safety_caps() {
+        assert!(sqlcl_drain_should_continue(true, false, 0, 0));
+        assert!(!sqlcl_drain_should_continue(false, false, 0, 0));
+        assert!(!sqlcl_drain_should_continue(true, true, 0, 0));
+        assert!(!sqlcl_drain_should_continue(true, false, SQLCL_DRAIN_MAX_LINES, 0));
+        assert!(!sqlcl_drain_should_continue(true, false, 0, SQLCL_DRAIN_MAX_BYTES));
+    }
+
+    #[test]
+    fn marker_and_pgid_detection_still_strip_prompt_and_ansi() {
+        let marker = "TASKMATE_SQLCL_DONE_1_9";
+        assert!(sqlcl_line_is_marker(
+            "\x1b[?2004hSQL> \x1b[32mTASKMATE_SQLCL_DONE_1_9\x1b[0m\r\n",
+            marker
+        ));
+        assert_eq!(
+            scan_sqlcl_pgid_line("\x1b[?2004hSQL> TASKMATE_PGID:4242\r\n"),
+            Some(4242)
+        );
+        let mut output = String::new();
+        assert!(append_sqlcl_line(&mut output, &format!("SQL> {marker}\n"), marker));
+        assert_eq!(output, "");
+        assert!(!append_sqlcl_line(&mut output, "\x1b[?2004hSQL> \n", marker));
+        assert!(!append_sqlcl_line(&mut output, "SQL>", marker));
+        assert_eq!(output, "");
     }
 
     #[test]
