@@ -61,6 +61,7 @@ interface TaskDrawerFormValues {
   actualEndDate?: Dayjs | null;
   progress: number;
   documentLinks?: string[];
+  quickLinks?: { name: string; url: string }[];
   reminderDate?: Dayjs | null;
   reminderNote?: string;
   reminders?: unknown[];
@@ -222,6 +223,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             progress: taskData.progress,
             checklist: taskData.checklist ?? [],
             documentLinks: taskData.documentLinks ?? [],
+            quickLinks: taskData.quickLinks ?? [],
             reminders: formatRemindersForForm(taskData),
             notes: taskData.notes ?? '',
             isRecurring: taskData.isRecurring ?? false,
@@ -341,6 +343,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       const cleanedLinks = (values.documentLinks ?? [])
         .map((link) => link?.trim())
         .filter((link): link is string => Boolean(link && link.length > 0));
+      const cleanedQuickLinks = (values.quickLinks ?? [])
+        .map((link) => ({ name: link?.name?.trim() ?? '', url: link?.url?.trim() ?? '' }))
+        .filter((link) => link.name && link.url);
 
       const savedReminders = formatRemindersForSave(values.reminders);
 
@@ -364,6 +369,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             ? values.actualEndDate.format('YYYY-MM-DD')
             : undefined,
           documentLinks: cleanedLinks.length > 0 ? cleanedLinks : undefined,
+          quickLinks: cleanedQuickLinks.length > 0 ? cleanedQuickLinks : undefined,
           reminders: savedReminders ?? [],
           reminderDate: savedReminders?.[0]?.date,
           reminderNote: savedReminders?.[0]?.note,
@@ -861,6 +867,35 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                       Chọn thư mục từ máy
                     </Button>
                   </div>
+                </Space>
+              )}
+            </FormList>
+          </FormItem>
+
+          <FormItem label="Liên kết nhanh">
+            <FormList name="quickLinks">
+              {(fields, { add, remove }) => (
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {fields.map((field) => (
+                    <div key={field.key} style={{ display: 'flex', gap: 'var(--gap-6)', alignItems: 'center' }}>
+                      <FormItem {...field} name={[field.name, 'name']} noStyle>
+                        <Input placeholder="Tên liên kết" style={{ flex: 1, minWidth: 0 }} />
+                      </FormItem>
+                      <FormItem {...field} name={[field.name, 'url']} noStyle>
+                        <Input placeholder="https://..." style={{ flex: 2, minWidth: 0 }} />
+                      </FormItem>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(field.name)}
+                        aria-label="Xóa liên kết nhanh"
+                      />
+                    </div>
+                  ))}
+                  <Button type="dashed" onClick={() => add({ name: '', url: '' })} icon={<PlusOutlined />} style={{ width: '100%' }}>
+                    Thêm liên kết
+                  </Button>
                 </Space>
               )}
             </FormList>
