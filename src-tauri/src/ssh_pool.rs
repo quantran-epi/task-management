@@ -68,7 +68,10 @@ fn drain_sqlcl_prefix(reader: &mut BufReader<ssh2::Stream>) {
                 crate::sqlcl_pty_debug::event("DRAIN_EOF");
                 false
             }
-            Err(_) => false,
+            Err(_) => {
+                crate::sqlcl_pty_debug::event("DRAIN_TIMEOUT");
+                false
+            }
             Ok(n) => {
                 read_calls += 1;
                 bytes += n;

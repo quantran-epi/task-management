@@ -181,6 +181,11 @@ pub(crate) fn connect_and_auth_inner(
 
     let mut session = ssh2::Session::new().map_err(|e| format!("Khởi tạo SSH session thất bại: {}", e))?;
     session.set_tcp_stream(tcp);
+    // TcpStream::set_read_timeout does not bound libssh2's channel reads: libssh2 uses its own
+    // timeout via libssh2_session_set_timeout. Without this, Wakeup reads block forever.
+    if matches!(socket_timeout, SocketTimeout::Wakeup) {
+        session.set_timeout(250);
+    }
     session.handshake().map_err(|e| format!("SSH handshake thất bại: {}", e))?;
 
     match config.auth_type.as_str() {
