@@ -188,6 +188,40 @@ export const REFERENCED_FILES_HINT =
   'TaskMate then reads it client-side and sanitizes it before adding it to this chat. ' +
   'Do not claim to have read, or ask for, local file content that was not provided in the conversation. ' +
   'For remote paths, use the SSH FS tools.';
+
+/** Pure formatter for the single `<referenced_files>` block shared by both prompt branches. */
+export function buildReferencedFilesPrompt(paths: readonly string[]): string {
+  if (paths.length === 0) return '';
+  const filesList = paths.map((filePath) => `- \`${filePath}\``).join('\n');
+  return `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session (name/path only):\n${filesList}\n${REFERENCED_FILES_HINT}\n</referenced_files>`;
+}
+
+/** Pure standalone system prompt; an empty block leaves the legacy prompt byte-identical. */
+export function buildStandaloneSystemPrompt(params: {
+  todayStr: string;
+  weekday: string;
+  time: string;
+  graphitiSkillSegment: string;
+  referencedFilesBlock: string;
+}): string {
+  const { todayStr, weekday, time, graphitiSkillSegment, referencedFilesBlock } = params;
+  return `You are an expert AI assistant embedded inside ${APP_NAME}.
+Current Date: ${todayStr} (${weekday}). Time: ${time}.
+
+AVAILABLE CAPABILITIES:
+- Knowledge retrieval with \`retrieve_knowledge\`, \`search_knowledge_base\` and \`get_document_details\`.
+- Artifact generation with \`generate_file\`, \`generate_pptx\` and \`generate_image\`.
+- Read-only MCP, Graphiti, Oracle and SSH tools when configured. No TaskMate task, change request, allocation, timer or note mutation tools are available here.
+- Turns older than the current context window: use \`search_chat_history\` to find them and \`read_chat_turn\` to read the full text. Never guess their content.
+
+CRITICAL ANTI-HALLUCINATION RULES:
+1. NEVER GUESS, ASSUME, OR INVENT DATA.
+2. When breaking down goals or proposing steps, output clear actionable bullet points.
+3. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). ${APP_NAME} will automatically render interactive diagrams from these blocks.
+9. ILLUSTRATED DOCUMENTS: When the user asks for a DOCX/PPTX with pictures or diagrams, call \`generate_image\` (and/or write \`\`\`mermaid blocks) and then \`generate_file\`/\`generate_pptx\` in the SAME turn. Insert the returned image markdown \`![alt](data:...)\` into the document content. Never just describe the document in prose.
+${graphitiSkillSegment}${STANDALONE_ANALYSIS_PROMPT_SEGMENT}${referencedFilesBlock ? `\n\n${referencedFilesBlock}` : ''}`;
+}
+
 const DRAWER_QUICK_PROMPTS = [
   { id: 'plan-today', label: 'Lập kế hoạch hôm nay', prompt: 'Lập kế hoạch công việc hôm nay' },
   { id: 'status', label: 'Báo cáo tiến độ', prompt: 'Báo cáo tiến độ hiện tại' },
@@ -1501,6 +1535,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       }
       const attachedPaths = allFiles.length > 0 ? allFiles : undefined;
       const attachmentScope = attachedPaths ? { attachedPaths } : undefined;
+      const referencedFilesBlock = buildReferencedFilesPrompt(allFiles);
       let userMessageId = options.retryUserMessageId ?? null;
       const existingUserRow = userMessageId ? await db.chatMessages.get(userMessageId) : undefined;
       if (
@@ -1703,10 +1738,10 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           systemInstruction = systemInstruction ? `${systemInstruction}\n\n${mentionsBlock}` : mentionsBlock;
         }
       }
-      if (allFiles.length > 0) {
-        const filesList = allFiles.map((filePath) => `- \`${filePath}\``).join('\n');
-        const filesPrompt = `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session (name/path only):\n${filesList}\n${REFERENCED_FILES_HINT}\n</referenced_files>`;
-        systemInstruction = systemInstruction ? `${systemInstruction}\n\n${filesPrompt}` : filesPrompt;
+      if (referencedFilesBlock) {
+        systemInstruction = systemInstruction
+          ? `${systemInstruction}\n\n${referencedFilesBlock}`
+          : referencedFilesBlock;
       }
 
       let dynamicMcpTools: AiToolDefinition[] = [];
@@ -1782,21 +1817,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
       const now = dayjs();
       // Quick 261126-1od: standalone chat must not claim TaskMate DB capabilities — the
       // payload no longer carries those tools. Legacy prompt stays byte-identical below.
-      const standalonePrompt = `You are an expert AI assistant embedded inside ${APP_NAME}.
-Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
-
-AVAILABLE CAPABILITIES:
-- Knowledge retrieval with \`retrieve_knowledge\`, \`search_knowledge_base\` and \`get_document_details\`.
-- Artifact generation with \`generate_file\`, \`generate_pptx\` and \`generate_image\`.
-- Read-only MCP, Graphiti, Oracle and SSH tools when configured. No TaskMate task, change request, allocation, timer or note mutation tools are available here.
-- Turns older than the current context window: use \`search_chat_history\` to find them and \`read_chat_turn\` to read the full text. Never guess their content.
-
-CRITICAL ANTI-HALLUCINATION RULES:
-1. NEVER GUESS, ASSUME, OR INVENT DATA.
-2. When breaking down goals or proposing steps, output clear actionable bullet points.
-3. DIAGRAMS & FLOWCHARTS: When the user asks for a flowchart, workflow diagram, sequence diagram, architecture chart, or visual representation, or when visualizing processes/hierarchies, you CAN and SHOULD generate Mermaid.js code blocks using \`\`\`mermaid syntax (e.g. flowchart TD, sequenceDiagram, classDiagram, graph LR, etc.). ${APP_NAME} will automatically render interactive diagrams from these blocks.
-9. ILLUSTRATED DOCUMENTS: When the user asks for a DOCX/PPTX with pictures or diagrams, call \`generate_image\` (and/or write \`\`\`mermaid blocks) and then \`generate_file\`/\`generate_pptx\` in the SAME turn. Insert the returned image markdown \`![alt](data:...)\` into the document content. Never just describe the document in prose.
-${graphitiSkillSegment}${STANDALONE_ANALYSIS_PROMPT_SEGMENT}`;
+      const standalonePrompt = buildStandaloneSystemPrompt({
+        todayStr,
+        weekday: now.format('dddd'),
+        time: now.format('HH:mm'),
+        graphitiSkillSegment,
+        referencedFilesBlock,
+      });
       const ordinaryPrompt = `You are an expert AI assistant embedded inside ${APP_NAME}.
 Current Date: ${todayStr} (${now.format('dddd')}). Time: ${now.format('HH:mm')}.
 
