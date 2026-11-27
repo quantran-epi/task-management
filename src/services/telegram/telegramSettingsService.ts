@@ -249,7 +249,17 @@ export async function recordStandaloneAccessRequest(
   const identity = telegramUserId.trim();
   if (!/^\d{6,12}$/.test(identity)) throw new Error('Telegram User ID không hợp lệ (cần 6-12 chữ số).');
   const existing = await findWhitelistByIdentity(identity, db);
-  if (existing) return { user: existing, isNew: false };
+  if (existing) {
+    // Re-request after deny/revoke must resurface in admin pending queue.
+    if (existing.status === 'blocked' || existing.deviceStatus === 'revoked') {
+      const reset = await upsertWhitelistUser(
+        { chatId: existing.chatId, status: 'pending', deviceStatus: 'pending' },
+        db
+      );
+      return { user: reset, isNew: false };
+    }
+    return { user: existing, isNew: false };
+  }
   return await recordPendingTelegramUser(identity, `Standalone ${identity}`, db, identity);
 }
 

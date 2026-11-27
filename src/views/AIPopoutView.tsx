@@ -82,12 +82,12 @@ export const AIPopoutView: React.FC<AIPopoutViewProps> = ({ db, standaloneChat =
 
   const effectiveChat = resolveEffectiveChatConfig({ defaultModel: '' }, devicePolicy);
   // Standalone needs BOTH a valid policy and a matching approved access state.
-  const policyState = standaloneChat && accessState?.status !== 'approved'
+  const policyState = standaloneChat && (accessState?.status !== 'approved' || !devicePolicy)
     ? 'blocked'
     : effectiveChat.policyState === 'expired' ? 'blocked' : effectiveChat.policyState;
 
   // Standalone: poll the local bridge so admin Apply/revoke lands in this open window.
-  const bridgeIdentity = devicePolicy?.telegramUserId ?? accessState?.telegramUserId;
+  const bridgeIdentity = accessState?.telegramUserId ?? devicePolicy?.telegramUserId;
   useEffect(() => {
     if (!standaloneChat || !bridgeIdentity) return undefined;
     const cleanup = pollStandaloneAccess(activeDb, bridgeIdentity, (state) => {

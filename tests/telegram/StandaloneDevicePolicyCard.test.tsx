@@ -8,8 +8,12 @@ import { DEVICE_POLICY_SETTINGS_KEY, buildPolicyPayload, parsePolicyPayload } fr
 import { saveAccessState } from '../../src/services/telegram/standaloneAccessService';
 import type { TelegramWhitelistUser } from '../../src/services/telegram/telegramTypes';
 
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, messages } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  messages: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('../../src/components/ui/message', () => ({ useMessage: () => messages }));
 
 const ID = '123456789';
 
@@ -100,13 +104,30 @@ describe('StandaloneDevicePolicyCard', () => {
     }));
   });
 
+  it('reflects admin approval live while the settings card stays open', async () => {
+    await saveAccessState(db, { status: 'pending', telegramUserId: ID, requestedAt: '2026-11-27T00:00:00.000Z' });
+    render(<StandaloneDevicePolicyCard db={db} />);
+    await waitFor(() => expect(screen.getByText(/Đã gửi yêu cầu lúc/)).toBeInTheDocument());
+
+    await db.settings.put({
+      key: DEVICE_POLICY_SETTINGS_KEY,
+      value: parsePolicyPayload(buildPolicyPayload(approvedRow(), '2099-01-01T00:00:00.000Z')),
+    });
+    await saveAccessState(db, { status: 'approved', telegramUserId: ID });
+
+    await waitFor(() => {
+      expect(screen.getByText('model-a')).toBeInTheDocument();
+      expect(screen.getByText('model-b')).toBeInTheDocument();
+    });
+  });
+
   it('keeps the ID and offers resend for denied, revoked and expired states', async () => {
     for (const status of ['denied', 'revoked', 'expired'] as const) {
       await saveAccessState(db, { status, telegramUserId: ID });
       const view = render(<StandaloneDevicePolicyCard db={db} />);
       await waitFor(() => expect(screen.getByText(`Yêu cầu ${status === 'denied' ? 'bị từ chối' : status === 'revoked' ? 'đã bị thu hồi' : 'đã hết hạn'}. Gửi lại để admin cấp quyền.`)).toBeInTheDocument());
       expect(screen.getByRole('button', { name: 'Gửi lại yêu cầu' })).toBeInTheDocument();
-      expect(screen.getByLabelText('Telegram User ID')).toHaveValue(ID);
+      await waitFor(() => expect(screen.getByLabelText('Telegram User ID')).toHaveValue(ID));
       view.unmount();
     }
   });

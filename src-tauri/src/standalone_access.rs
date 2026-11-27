@@ -46,12 +46,12 @@ fn record_path(telegram_user_id: &str) -> Result<PathBuf, String> {
     Ok(access_dir()?.join(format!("{}.json", sanitize_identity(telegram_user_id)?)))
 }
 
-fn now_iso() -> String {
+fn now_stamp() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    format!("{}Z", secs)
+    format!("epoch-seconds:{}", secs)
 }
 
 fn write_record_atomic(record: &StandaloneAccessRecord) -> Result<(), String> {
@@ -102,7 +102,7 @@ pub fn standalone_access_request(telegram_user_id: String, requested_at: String)
         requested_at: Some(requested_at),
         policy_token: None,
         issued_at: None,
-        updated_at: now_iso(),
+        updated_at: now_stamp(),
     })
 }
 
@@ -121,8 +121,8 @@ pub fn standalone_access_apply(
         status,
         requested_at: None,
         policy_token: if approved { policy_token } else { None },
-        issued_at: if approved { Some(now_iso()) } else { None },
-        updated_at: now_iso(),
+        issued_at: if approved { Some(now_stamp()) } else { None },
+        updated_at: now_stamp(),
     })
 }
 

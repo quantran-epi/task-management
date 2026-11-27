@@ -31,6 +31,12 @@ import { foldForSearch, searchIncludes } from '../utils/searchText';
 
 const { Text, Title } = Typography;
 
+async function invokeAccessBridge(command: string, args?: Record<string, unknown>): Promise<void> {
+  if (!isTauriApp()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke(command, args);
+}
+
 export const TelegramMonitorView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'monitor' | 'whitelist' | 'settings' | 'devices'>('monitor');
   const [modelDrafts, setModelDrafts] = useState<Record<string, string[]>>({});
@@ -760,6 +766,20 @@ export const TelegramMonitorView: React.FC = () => {
                             </Space>
 
                             <Space wrap>
+                              {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') ? (
+                                <Button
+                                  size="small"
+                                  type="primary"
+                                  icon={<EditOutlined />}
+                                  onClick={() => {
+                                    setActiveTab('devices');
+                                    message.info('Chọn model cho user này trong tab AI Chat Devices, rồi bấm Áp dụng.');
+                                  }}
+                                >
+                                  Duyệt &amp; setup whitelist
+                                </Button>
+                              ) : (
+                                <>
                               <Button
                                 size="small"
                                 type="primary"
@@ -796,6 +816,8 @@ export const TelegramMonitorView: React.FC = () => {
                               >
                                 Tuỳ chỉnh & Duyệt
                               </Button>
+                                </>
+                              )}
 
                               {p.telegramUserId === p.chatId && standaloneRequests.includes(p.telegramUserId ?? '') && (
                                 <Popconfirm
@@ -805,9 +827,8 @@ export const TelegramMonitorView: React.FC = () => {
                                   cancelText="Huỷ"
                                   onConfirm={async () => {
                                     try {
-                                      const { invoke } = await import('@tauri-apps/api/core');
                                       await denyStandaloneAccessRequest(p.chatId, db);
-                                      await invoke('standalone_access_apply', { telegramUserId: p.chatId, status: 'denied' });
+                                      await invokeAccessBridge('standalone_access_apply', { telegramUserId: p.chatId, status: 'denied' });
                                       message.info('Đã từ chối yêu cầu.');
                                     } catch (err) {
                                       message.error('Không thể từ chối: ' + String(err));
@@ -1147,10 +1168,8 @@ export const TelegramMonitorView: React.FC = () => {
                           style={{ minWidth: 140 }}
                           placeholder="Chọn model mặc định"
                           value={defaultModelDrafts[row.chatId] ?? row.remoteSettings?.defaultModel ?? undefined}
-                          options={Array.from(new Set([
-                            ...cachedModels,
-                            ...(modelDrafts[row.chatId] ?? row.allowedModels ?? []),
-                          ])).map((model) => ({ label: model, value: model }))}
+                          options={Array.from(new Set(modelDrafts[row.chatId] ?? row.allowedModels ?? []))
+                            .map((model) => ({ label: model, value: model }))}
                           onChange={(value: string | undefined) =>
                             setDefaultModelDrafts((prev) => ({ ...prev, [row.chatId]: value ?? '' }))
                           }
@@ -1176,6 +1195,11 @@ export const TelegramMonitorView: React.FC = () => {
                                 message.error('Chọn ít nhất một model trước khi áp dụng.');
                                 return;
                               }
+                              const defaultModel = defaultModelDrafts[row.chatId] ?? row.remoteSettings?.defaultModel;
+                              if (defaultModel && !models.includes(defaultModel)) {
+                                message.error('Model mặc định phải nằm trong danh sách model được phép.');
+                                return;
+                              }
                               const identity = row.telegramUserId ?? row.chatId;
                               try {
                                 const updated = await upsertDeviceEnrollment({
@@ -1191,12 +1215,11 @@ export const TelegramMonitorView: React.FC = () => {
                                     maxHistoryTurns: row.maxHistoryTurns,
                                   },
                                 });
-                                const { invoke } = await import('@tauri-apps/api/core');
                                 const token = buildPolicyPayload(
                                   updated,
                                   new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
                                 );
-                                await invoke('standalone_access_apply', {
+                                await invokeAccessBridge('standalone_access_apply', {
                                   telegramUserId: identity,
                                   status: 'approved',
                                   policyToken: token,
@@ -1220,8 +1243,7 @@ export const TelegramMonitorView: React.FC = () => {
                                     chatId: row.chatId,
                                     deviceStatus: 'revoked',
                                   });
-                                  const { invoke } = await import('@tauri-apps/api/core');
-                                  await invoke('standalone_access_apply', {
+                                  await invokeAccessBridge('standalone_access_apply', {
                                     telegramUserId: row.telegramUserId ?? row.chatId,
                                     status: 'revoked',
                                   });

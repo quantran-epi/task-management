@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Badge, Button, Card, Input, Space, Tag, useMessage } from '../ui';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
-import {
-  loadDevicePolicy,
-  type TelegramDevicePolicy,
-} from '../../services/telegram/telegramDevicePolicy';
+import { loadDevicePolicy } from '../../services/telegram/telegramDevicePolicy';
 import {
   clearStandaloneAccess,
   readAccessState,
@@ -32,22 +30,19 @@ const blockedKind = (state: StandaloneAccessState | undefined): 'denied' | 'revo
 export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProps> = ({ db = defaultDb }) => {
   const message = useMessage();
   const [telegramUserId, setTelegramUserId] = useState('');
-  const [policy, setPolicy] = useState<TelegramDevicePolicy | undefined>();
-  const [accessState, setAccessState] = useState<StandaloneAccessState | undefined>();
 
+  const stored = useLiveQuery(
+    () => Promise.all([loadDevicePolicy(db), readAccessState(db)]),
+    [db]
+  );
   useEffect(() => {
-    let mounted = true;
-    Promise.all([loadDevicePolicy(db), readAccessState(db)]).then(([storedPolicy, storedState]) => {
-      if (!mounted) return;
-      setPolicy(storedPolicy);
-      setAccessState(storedState);
-      if (storedPolicy?.telegramUserId) setTelegramUserId(storedPolicy.telegramUserId);
-      else if (storedState?.telegramUserId) setTelegramUserId(storedState.telegramUserId);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [db]);
+    const [storedPolicy, storedState] = stored ?? [];
+    if (!storedPolicy && !storedState) return;
+    if (!telegramUserId) setTelegramUserId(storedState?.telegramUserId ?? storedPolicy?.telegramUserId ?? '');
+  }, [stored, telegramUserId]);
+
+  const policy = stored?.[0];
+  const accessState = stored?.[1];
 
   const expired = policy ? Date.parse(policy.expiresAt) <= Date.now() : false;
   const status = expired || accessState?.status === 'expired'
@@ -69,8 +64,6 @@ export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProp
     try {
       const requestedAt = new Date().toISOString();
       await requestStandaloneAccess(db, id, requestedAt);
-      setAccessState({ status: 'pending', telegramUserId: id, requestedAt });
-      setPolicy(undefined);
       message.success('Đã gửi yêu cầu. Giữ app mở để nhận cấu hình.');
     } catch (err) {
       message.error(err instanceof Error ? err.message : 'Không gửi được yêu cầu.');
@@ -80,8 +73,6 @@ export const StandaloneDevicePolicyCard: React.FC<StandaloneDevicePolicyCardProp
   const unlink = async () => {
     try {
       await clearStandaloneAccess(db, telegramUserId.trim());
-      setPolicy(undefined);
-      setAccessState({ status: 'revoked', telegramUserId: telegramUserId.trim() });
       message.success('Đã gỡ liên kết thiết bị.');
     } catch (err) {
       message.error(err instanceof Error ? err.message : 'Không gỡ được liên kết.');

@@ -894,9 +894,9 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
     if (!activeTabIdForPolicy) return;
     const key = `${devicePolicy.issuedAt}:${devicePolicy.telegramUserId}:${activeTabIdForPolicy}`;
     if (appliedDefaultModelKey.current === key) return;
-    appliedDefaultModelKey.current = key;
     const model = devicePolicy.remoteSettings.defaultModel;
     if (!isModelAllowed(devicePolicy, model)) return;
+    appliedDefaultModelKey.current = key;
     const current = tabRuntimesRef.current.get(activeTabIdForPolicy)?.model || activeTab?.config?.model;
     if (current === model) return;
     void writeTabModel(activeTab, model);

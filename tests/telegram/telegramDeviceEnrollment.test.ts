@@ -86,6 +86,20 @@ describe('Telegram device enrollment', () => {
     expect(await getWhitelistUser('chat-old', testDb)).toBeUndefined();
   });
 
+  it('resurfaces a standalone re-request after deny/revoke as pending', async () => {
+    await recordStandaloneAccessRequest('123456789', testDb);
+    await denyStandaloneAccessRequest('123456789', testDb);
+    const denied = await findWhitelistByIdentity('123456789', testDb);
+    expect(denied?.status).toBe('blocked');
+    expect(denied?.deviceStatus).toBe('revoked');
+
+    const result = await recordStandaloneAccessRequest('123456789', testDb);
+    expect(result.user.status).toBe('pending');
+    expect(result.user.deviceStatus).toBe('pending');
+    expect(result.user.chatId).toBe(denied?.chatId);
+    expect(result.user.dailyLimit).toBe(denied?.dailyLimit);
+  });
+
   it('falls back to chat_id identity for legacy payloads without fromUserId', async () => {
     await dispatch('/start', { chat_id: '999888777', fromUserId: undefined });
 

@@ -90,6 +90,23 @@ describe('standalone access bridge service', () => {
     expect(await readAccessState(db)).toMatchObject({ status: 'pending', telegramUserId: ID });
   });
 
+  it('clears a stale policy when requesting with a corrected identity', async () => {
+    await db.settings.put({ key: DEVICE_POLICY_SETTINGS_KEY, value: {
+      version: 1,
+      telegramUserId: '999888777',
+      status: 'approved',
+      allowedModels: ['old-model'],
+      remoteSettings: { defaultModel: 'old-model' },
+      issuedAt: '2026-11-27T00:00:00.000Z',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    } satisfies TelegramDevicePolicy });
+
+    await requestStandaloneAccess(db, ID);
+
+    expect(await loadDevicePolicy(db)).toBeUndefined();
+    expect(await readAccessState(db)).toMatchObject({ status: 'pending', telegramUserId: ID });
+  });
+
   it('polls every 2s, saves a valid approved policy and updates state', async () => {
     const token = buildPolicyPayload(approvedRow(), '2099-01-01T00:00:00.000Z');
     invokeMock.mockResolvedValue([record('approved', token)]);

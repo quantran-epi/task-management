@@ -54,6 +54,8 @@ export async function requestStandaloneAccess(
 ): Promise<void> {
   const id = identity(telegramUserId);
   await invokeBridge('standalone_access_request', { telegramUserId: id, requestedAt });
+  // A new request invalidates any policy bound to a previous identity.
+  await clearDevicePolicy(db);
   await saveAccessState(db, { status: 'pending', telegramUserId: id, requestedAt });
 }
 
