@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Tree, SearchInput, Button, Empty, Tag, Typography, Dropdown, useMessage, useTaskMateModal } from '../../components/ui';
 import type { MenuProps } from 'antd';
-import { InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined } from '../../components/ui/icon';
+import { InboxOutlined, PlusOutlined, ThunderboltOutlined, ToolOutlined, BugOutlined, FolderOutlined, FolderOpenOutlined, FileTextOutlined, ExportOutlined, EditOutlined, DeleteOutlined, CloudServerOutlined, CodeOutlined, RocketOutlined } from '../../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import {
@@ -10,6 +10,9 @@ import {
   updateChangeRequest,
   deleteChangeRequest,
 } from '../../db/repositories/changeRequestRepo';
+import { getAllSystems } from '../../db/repositories/systemRepo';
+import { useSystemActions } from '../hooks/useSystemActions';
+import { useTaskMenuItems } from '../../hooks/useTaskMenuItems';
 import { useLayoutStore } from '../store/layoutStore';
 import { ChangeRequestModal } from '../../components/changeRequests/ChangeRequestModal';
 import type { DataNode } from 'antd/es/tree';
@@ -51,9 +54,9 @@ function MutedRow({ label }: { label: string }) {
   return <span style={MUTED_ROW_STYLE}>{label}</span>;
 }
 
-function TaskLeafTitle({ task }: { task: Task }) {
+function TaskLeafTitle({ task, ...rest }: { task: Task } & React.HTMLAttributes<HTMLSpanElement>) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 'var(--gap-6)' }}>
+    <span {...rest} style={{ display: 'inline-flex', alignItems: 'center', width: '100%', minWidth: 0, gap: 'var(--gap-6)' }}>
       <Typography.Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 'var(--font-size-ui)', lineHeight: 1.2 }}>
         {task.name}
       </Typography.Text>
@@ -66,13 +69,17 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
   const message = useMessage();
   const [searchQuery, setSearchQuery] = useState('');
   const [crModalOpen, setCrModalOpen] = useState(false);
+  const [crModalTargets, setCrModalTargets] = useState<Array<{ systemId: string }>>([]);
   const [editingCR, setEditingCR] = useState<ChangeRequest | null>(null);
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
 
   const openTab = useLayoutStore((s) => s.openTab);
+  const { openGit, openTerminal, disabledReason } = useSystemActions();
 
   const changeRequests = useLiveQuery(() => getAllChangeRequests(db), [db]) ?? [];
   const tasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
+  const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
+  const systemMap = useMemo(() => new Map(systems.map((s) => [s.id, s])), [systems]);
 
   const crKeys = useMemo(() => changeRequests.map((cr) => `cr:${cr.id}`), [changeRequests]);
 
@@ -101,6 +108,57 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
     });
   };
 
+  const { getTaskMenuItems, reminderModal, contextHolder: taskMenuContextHolder } = useTaskMenuItems({
+    db,
+    onOpenDrawer: (taskId) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (task) openTaskInsight(task);
+    },
+  });
+
+  const systemActionItems = (cr: ChangeRequest): NonNullable<MenuProps['items']> => {
+    const targets = cr.targets
+      .map((t) => ({ target: t, system: systemMap.get(t.systemId) }))
+      .filter((entry) => entry.system);
+    if (targets.length === 0) return [];
+
+    const makeAction = (kind: 'git' | 'terminal'): MenuProps['items'] => {
+      const open = kind === 'git' ? openGit : openTerminal;
+      const label = kind === 'git' ? 'Mở Git' : 'Mở Terminal';
+      const icon = kind === 'git' ? <CloudServerOutlined /> : <CodeOutlined />;
+      if (targets.length === 1) {
+        const system = targets[0]!.system!;
+        const reason = disabledReason(system);
+        return [{
+          key: `open-${kind}`,
+          icon,
+          label,
+          disabled: !!reason,
+          ...(reason ? { title: reason } : {}),
+          onClick: () => open(system),
+        }];
+      }
+      return [{
+        key: `open-${kind}`,
+        icon,
+        label,
+        children: targets.map(({ system: maybeSystem }) => {
+          const system = maybeSystem!;
+          const reason = disabledReason(system);
+          return {
+            key: `${kind}:${system.id}`,
+            label: `${system.code} — ${system.name}`,
+            disabled: !!reason,
+            ...(reason ? { title: reason } : {}),
+            onClick: () => open(system),
+          };
+        }),
+      }];
+    };
+
+    return [...(makeAction('git') ?? []), ...(makeAction('terminal') ?? [])];
+  };
+
   const getCrMenu = (cr: ChangeRequest): MenuProps['items'] => [
     {
       key: 'open-detail',
@@ -109,11 +167,23 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       onClick: () => openCrDetail(cr),
     },
     {
+      key: 'create-cr',
+      icon: <RocketOutlined style={{ color: 'var(--accent, #3871e1)' }} />,
+      label: 'Tạo CR',
+      onClick: () => {
+        setEditingCR(null);
+        setCrModalTargets(cr.targets);
+        setCrModalOpen(true);
+      },
+    },
+    ...(systemActionItems(cr) ?? []),
+    {
       key: 'edit',
       icon: <EditOutlined />,
       label: 'Sửa',
       onClick: () => {
         setEditingCR(cr);
+        setCrModalTargets(cr.targets);
         setCrModalOpen(true);
       },
     },
@@ -156,7 +226,11 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
 
         const taskNodes: DataNode[] = visibleTasks.map((task) => ({
           key: `task:${task.id}`,
-          title: <TaskLeafTitle task={task} />,
+          title: (
+            <Dropdown menu={{ items: getTaskMenuItems(task) }} trigger={['contextMenu']}>
+              <TaskLeafTitle task={task} />
+            </Dropdown>
+          ),
           icon: <FileTextOutlined style={{ color: 'var(--fg-muted, #6c707e)' }} />,
           isLeaf: true,
         }));
@@ -205,7 +279,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
         };
       })
       .filter(Boolean) as DataNode[];
-  }, [changeRequests, tasks, searchQuery]);
+  }, [changeRequests, tasks, searchQuery, systemMap, getTaskMenuItems]);
 
   const handleSelect = (selectedKeys: React.Key[]) => {
     const key = selectedKeys[0]?.toString();
@@ -225,6 +299,8 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {contextHolder}
+      {taskMenuContextHolder}
+      {reminderModal}
       {/* Header strip */}
       <div
         style={{
@@ -247,6 +323,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
           icon={<PlusOutlined />}
           onClick={() => {
             setEditingCR(null);
+            setCrModalTargets([]);
             setCrModalOpen(true);
           }}
           data-testid="cr-explorer-btn-new-cr"
@@ -288,6 +365,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
               icon={<PlusOutlined />}
               onClick={() => {
                 setEditingCR(null);
+                setCrModalTargets([]);
                 setCrModalOpen(true);
               }}
             >
@@ -300,6 +378,7 @@ export function CRExplorer({ db = defaultDb, onSelectChangeRequest }: CRExplorer
       <ChangeRequestModal
         open={crModalOpen}
         changeRequest={editingCR}
+        initialTargets={crModalTargets}
         onClose={() => setCrModalOpen(false)}
         onSave={async (values) => {
           try {
