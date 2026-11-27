@@ -54,6 +54,7 @@ import { DocumentSetDetail } from './DocumentSetDetail';
 import { DocSetLibrary } from './DocSetLibrary';
 import { UtilityToolPanel, utilityToolIcon } from './toolwindows/UtilityToolPanel';
 import type { TaskPlannerDatabase } from '../db';
+import type { System } from '../types/models';
 
 export interface EditorAreaProps {
   db?: TaskPlannerDatabase | undefined;
@@ -684,6 +685,15 @@ export function EditorArea({ db }: EditorAreaProps) {
           <ItemInsightView
             itemType={(tab.params?.itemType || tab.params?.type || 'task') as any}
             itemId={tab.params?.itemId || tab.params?.id || ''}
+            onOpenSystemDetail={(system: System) =>
+              openTab({
+                id: `system-${system.id}`,
+                title: system.name,
+                viewType: 'system_detail',
+                closable: true,
+                params: { systemId: system.id },
+              })
+            }
             onNavigate={(route, params) => {
               if (route === 'insight') {
                 const targetType = (params?.itemType || params?.type || 'task') as string;
