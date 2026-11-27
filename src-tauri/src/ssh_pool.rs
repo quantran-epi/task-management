@@ -140,58 +140,96 @@ fn digest_secret(secret: Option<&str>) -> String {
     format!("{hash:016x}")
 }
 
+#[derive(Default)]
+pub struct SshConnectionPool {
+    /// Idle authenticated sessions per identity. Each live session is leased to at most one
+    /// caller: `ssh2::Session::clone()` shares the raw libssh2 session and its mutex, so sharing
+    /// one between concurrent channel reads blocks unrelated tools.
+    sessions: Mutex<HashMap<PoolKey, Vec<PooledSession>>>,
+}
+
 struct PooledSession {
     session: ssh2::Session,
     last_used: Instant,
-    /// Sessions that failed a channel operation are dropped on the next acquire.
-    unhealthy: bool,
 }
 
-#[derive(Default)]
-pub struct SshConnectionPool {
-    sessions: Mutex<HashMap<PoolKey, PooledSession>>,
+/// Exclusive lease on one authenticated transport. Returned to the idle pool on drop unless
+/// `report_unhealthy` was called.
+pub(crate) struct PooledSessionGuard {
+    pool: Arc<SshConnectionPool>,
+    key: PoolKey,
+    session: Option<ssh2::Session>,
+    unhealthy: Arc<AtomicBool>,
+}
+
+impl PooledSessionGuard {
+    pub(crate) fn session(&self) -> &ssh2::Session {
+        self.session.as_ref().expect("lease holds a session until drop")
+    }
+}
+
+impl std::ops::Deref for PooledSessionGuard {
+    type Target = ssh2::Session;
+    fn deref(&self) -> &Self::Target { self.session() }
+}
+
+impl Drop for PooledSessionGuard {
+    fn drop(&mut self) {
+        let Some(session) = self.session.take() else { return };
+        if self.unhealthy.load(Ordering::SeqCst) { return; }
+        if let Ok(mut sessions) = self.pool.sessions.lock() {
+            sessions.entry(self.key.clone()).or_default().push(PooledSession {
+                session,
+                last_used: Instant::now(),
+            });
+        }
+    }
 }
 
 impl SshConnectionPool {
-    /// Return a reusable authenticated session or open one. Connect happens outside the lock
-    /// so a slow handshake never blocks a different identity.
+    /// Lease a reusable authenticated session or connect a new one. A session is never leased to
+    /// two callers; a second concurrent call either picks another idle session or connects fresh.
     pub fn acquire(
-        &self,
+        self: &Arc<Self>,
         config: &SshConfig,
         secret: Option<&str>,
         timeout: SocketTimeout,
-    ) -> Result<ssh2::Session, String> {
+    ) -> Result<PooledSessionGuard, String> {
+        Self::acquire_leased(self, config, secret, timeout)
+    }
+
+    pub(crate) fn acquire_leased(
+        pool: &Arc<Self>,
+        config: &SshConfig,
+        secret: Option<&str>,
+        timeout: SocketTimeout,
+    ) -> Result<PooledSessionGuard, String> {
         let key = PoolKey::with_mode(config, secret, timeout);
-        if let Ok(mut sessions) = self.sessions.lock() {
-            sessions.retain(|_, entry| entry.last_used.elapsed() < SESSION_IDLE_TTL && !entry.unhealthy);
-            if let Some(entry) = sessions.get_mut(&key) {
-                entry.last_used = Instant::now();
-                return Ok(entry.session.clone());
+        if let Ok(mut sessions) = pool.sessions.lock() {
+            let idle = sessions.entry(key.clone()).or_default();
+            idle.retain(|entry| entry.last_used.elapsed() < SESSION_IDLE_TTL);
+            if let Some(index) = idle.iter().position(|_| true) {
+                let entry = idle.remove(index);
+                return Ok(PooledSessionGuard {
+                    pool: Arc::clone(pool),
+                    key,
+                    session: Some(entry.session),
+                    unhealthy: Arc::new(AtomicBool::new(false)),
+                });
             }
         }
 
         let session = connect_and_auth_inner(config, secret, timeout)?;
-        if let Ok(mut sessions) = self.sessions.lock() {
-            // Another thread may have connected while we were handshaking; keep its session.
-            let entry = sessions.entry(key).or_insert(PooledSession {
-                session: session.clone(),
-                last_used: Instant::now(),
-                unhealthy: false,
-            });
-            entry.last_used = Instant::now();
-        }
-        Ok(session)
+        Ok(PooledSessionGuard {
+            pool: Arc::clone(pool),
+            key,
+            session: Some(session),
+            unhealthy: Arc::new(AtomicBool::new(false)),
+        })
     }
 
-    /// Mark one identity unhealthy; the next acquire replaces it. Called on every transport
-    /// error (channel open, exec, read) so a dead TCP connection is never sticky.
-    pub fn report_unhealthy(&self, config: &SshConfig, secret: Option<&str>, mode: SocketTimeout) {
-        let key = PoolKey::with_mode(config, secret, mode);
-        if let Ok(mut sessions) = self.sessions.lock() {
-            if let Some(entry) = sessions.get_mut(&key) {
-                entry.unhealthy = true;
-            }
-        }
+    pub(crate) fn report_unhealthy_shared(flag: &Arc<AtomicBool>) {
+        flag.store(true, Ordering::SeqCst);
     }
 
     /// Explicit teardown: close every pooled session (app exit / config reload).
@@ -200,7 +238,10 @@ impl SshConnectionPool {
             sessions.clear();
         }
     }
+}
 
+impl PooledSessionGuard {
+    pub(crate) fn unhealthy_flag(&self) -> Arc<AtomicBool> { Arc::clone(&self.unhealthy) }
 }
 
 // --- Persistent SQLcl session --------------------------------------------------------------
@@ -461,7 +502,7 @@ impl SqlclSessionRegistry {
 /// commands that have no `AppHandle` parameter.
 #[derive(Default)]
 pub struct SshRuntimeState {
-    pub pool: SshConnectionPool,
+    pub pool: Arc<SshConnectionPool>,
     pub sqlcl: SqlclSessionRegistry,
 }
 
@@ -784,7 +825,7 @@ pub fn run_persistent_sqlcl(
                 if let Ok(mut sessions) = state.sqlcl.sessions.lock() {
                     sessions.remove(&key);
                 }
-                state.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
+                // SQLcl uses a dedicated transport; no pooled session to invalidate.
                 if attempt == 0 { continue; }
                 return Err(e);
             }
@@ -873,23 +914,25 @@ mod tests {
         let old = PoolKey::new(&config("db.internal", 22, "oracle"), Some("old"));
         pool.sessions.lock().unwrap().insert(
             old.clone(),
-            PooledSession { session: ssh2::Session::new().unwrap(), last_used: Instant::now(), unhealthy: false },
+            vec![PooledSession { session: ssh2::Session::new().unwrap(), last_used: Instant::now() }],
         );
         pool.teardown(); // teardown clears all on config/keyring change
         assert!(pool.sessions.lock().unwrap().is_empty());
     }
 
     #[test]
-    fn report_unhealthy_marks_entry_for_next_acquire() {
-        let pool = SshConnectionPool::default();
+    fn unhealthy_lease_is_not_returned_to_pool() {
+        let pool = Arc::new(SshConnectionPool::default());
         let cfg = config("db.internal", 22, "oracle");
         let key = PoolKey::with_mode(&cfg, Some("secret"), SocketTimeout::Wakeup);
         pool.sessions.lock().unwrap().insert(
             key.clone(),
-            PooledSession { session: ssh2::Session::new().unwrap(), last_used: Instant::now(), unhealthy: false },
+            vec![PooledSession { session: ssh2::Session::new().unwrap(), last_used: Instant::now() }],
         );
-        pool.report_unhealthy(&cfg, Some("secret"), SocketTimeout::Wakeup);
-        assert!(pool.sessions.lock().unwrap().get(&key).unwrap().unhealthy);
+        let mut guard = SshConnectionPool::acquire_leased(&pool, &cfg, Some("secret"), SocketTimeout::Wakeup).unwrap();
+        guard.unhealthy.store(true, Ordering::SeqCst);
+        drop(guard);
+        assert!(pool.sessions.lock().unwrap().get(&key).unwrap().is_empty());
     }
 
     #[test]

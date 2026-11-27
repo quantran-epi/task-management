@@ -93,7 +93,7 @@ pub struct SshStreamExitEvent {
 
 /// Short one-shot commands (FS, test, git) reuse the pooled authenticated transport. Each
 /// command still opens a fresh channel, so no two calls share stream state.
-pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<ssh2::Session, String> {
+pub fn connect_and_auth(config: &SshConfig, secret: Option<&str>) -> Result<crate::ssh_pool::PooledSessionGuard, String> {
     crate::ssh_pool::runtime().pool.acquire(config, secret, SocketTimeout::Interactive)
 }
 

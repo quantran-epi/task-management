@@ -395,10 +395,11 @@ pub fn run_cancellable_remote_command(
             return Err(e);
         }
     };
+    let unhealthy = session.unhealthy_flag();
     let mut channel = match session.channel_session() {
         Ok(channel) => channel,
         Err(e) => {
-            runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
+            crate::ssh_pool::SshConnectionPool::report_unhealthy_shared(&unhealthy);
             registry.remove(&call_id);
             return Err(format!("Không thể mở channel session: {}", e));
         }
@@ -406,7 +407,7 @@ pub fn run_cancellable_remote_command(
 
     let remote_command = build_remote_command(&command);
     if let Err(e) = channel.exec(&remote_command) {
-        runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
+        crate::ssh_pool::SshConnectionPool::report_unhealthy_shared(&unhealthy);
         registry.remove(&call_id);
         return Err(format!("Thực thi lệnh thất bại: {}", e));
     }
@@ -463,6 +464,7 @@ pub fn run_cancellable_remote_command(
         }
     };
 
+    let reader_unhealthy = Arc::clone(&unhealthy);
     thread::Builder::new()
         .name(format!("tool-reader-{}", call_id))
         .spawn(move || {
@@ -635,7 +637,7 @@ pub fn run_cancellable_remote_command(
             stderr_coalescer.flush();
             let errors: Vec<String> = [stdout_error, stderr_error].into_iter().flatten().collect();
             if !errors.is_empty() {
-                runtime.pool.report_unhealthy(config, secret, SocketTimeout::Wakeup);
+                crate::ssh_pool::SshConnectionPool::report_unhealthy_shared(&reader_unhealthy);
             }
             let finish_reason = if was_cancelled || cancelled.load(Ordering::SeqCst) {
                 "cancelled"
