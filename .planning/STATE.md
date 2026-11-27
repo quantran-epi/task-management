@@ -44,6 +44,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-qrn: CR detail task acti
 Last activity: 2026-11-27 - Completed quick task 261127-t6n: opt-in bounded SQLcl PTY dump instrumentation for live debug before triage fix.
 Last activity: 2026-11-27 - Completed quick task 261127-td8: SQLcl PTY trace exportable from Settings via native save dialog for Windows live debug.
 Last activity: 2026-11-27 - Completed quick task 261127-u5w: full session-tagged SQLcl PTY trace for one-shot Windows live debug.
+Last activity: 2026-11-27 - Completed quick task 261127-ts3: inline quick create link trên CR detail và task insight; review fixes (name limit + atomic append) applied and Chrome verified.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -185,6 +186,7 @@ Progress: [██████████] 100%
 | 261127-t6n | Instrument raw PTY dump cho debug Oracle SQLcl persistent session trước khi fix triệt để | 2026-11-27 | 038ad7eb | — | [261127-t6n-instrument-raw-pty-dump-cho-debug-oracle](./quick/261127-t6n-instrument-raw-pty-dump-cho-debug-oracle/) |
 | 261127-td8 | Chuyển SQLcl PTY dump thành tính năng debug trong app: trace in-memory, nút export file trong Settings | 2026-11-27 | 1496b153 | — | [261127-td8-chuyen-sqlcl-pty-dump-thanh-tinh-nang-de](./quick/261127-td8-chuyen-sqlcl-pty-dump-thanh-tinh-nang-de/) |
 | 261127-u5w | Mở rộng trace SQLcl PTY một lần: session tag, read status, retry/drain/marker/error events | 2026-11-27 | pending | — | [261127-u5w-mo-rong-sqlcl-pty-debug-trace-status-va-](./quick/261127-u5w-mo-rong-sqlcl-pty-debug-trace-status-va-/) |
+| 261127-ts3 | Quick create link inline trên CR detail và task insight, validate URL, atomic append | 2026-11-27 | 53276fea, 25b98c7e, db58092d | Reviewed + verified | [261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr](./quick/261127-ts3-th-m-quick-create-link-tr-c-ti-p-tr-n-cr/) |
 
 ## Accumulated Context
 
