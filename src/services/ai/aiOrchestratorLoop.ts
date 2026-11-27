@@ -423,41 +423,9 @@ export async function runAiOrchestratorLoop(
       }
     } catch (streamErr: any) {
       if (streamErr?.name === 'AbortError') throw streamErr;
-      // If model rejected tools payload on first loop, fallback to completion without tools
-      if (loopCount === 1 && !fullResponse && tools && tools.length > 0) {
-        console.warn('[runAiOrchestratorLoop] Tools stream error, retrying without tools:', streamErr);
-        const fallbackStream = streamChatEvents({
-          endpoint,
-          apiKey,
-          payload: {
-            model,
-            messages: messagesToSend,
-            temperature,
-            ...outputLimit,
-          },
-          ...(signal ? { signal } : {}),
-        });
-        for await (const chunk of fallbackStream) {
-          if (chunk.type === 'text') {
-            fullResponse += chunk.delta;
-            onTextChunk?.(chunk.delta);
-          } else if (chunk.type === 'finish') {
-            finishReason = chunk.finish_reason;
-          } else if (chunk.type === 'usage') {
-            accumulatedTokenUsage = {
-              promptTokens: (accumulatedTokenUsage.promptTokens || 0) + (chunk.usage.promptTokens || 0),
-              completionTokens: (accumulatedTokenUsage.completionTokens || 0) + (chunk.usage.completionTokens || 0),
-              totalTokens: (accumulatedTokenUsage.totalTokens || 0) + (chunk.usage.totalTokens || 0),
-              // WR-09: cache tokens are charged as input (D-09) — accumulate them here too.
-              cacheReadTokens: (accumulatedTokenUsage.cacheReadTokens || 0) + (chunk.usage.cacheReadTokens || 0),
-              cacheCreationTokens:
-                (accumulatedTokenUsage.cacheCreationTokens || 0) + (chunk.usage.cacheCreationTokens || 0),
-            };
-            onUsage?.(chunk.usage);
-          }
-        }
-        break;
-      }
+      // 261128-09x: a tools-payload stream failure is a real error. Retrying without tools
+      // produced a plausible answer from a payload that no longer had the advertised tools.
+      console.warn('[runAiOrchestratorLoop] Tools stream error:', streamErr);
       throw streamErr;
     }
 

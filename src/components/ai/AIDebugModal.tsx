@@ -6,6 +6,15 @@ import { isTauriApp } from '../../utils/timerPopout';
 
 const { Text } = Typography;
 
+/** Name-only aggregate — never reads args, results, prompts or responses. */
+export function summarizeToolCounts(executions: readonly { name: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const { name } of executions) {
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts].map(([name, count]) => `${name} ×${count}`).join(', ');
+}
+
 function eventLabel(payload: AiDebugTurn['events'][number]['payload'] | undefined): string {
   if (!payload) return '';
   if ('status' in payload && typeof payload.status === 'string') return payload.status;
@@ -32,6 +41,7 @@ export const AIDebugModal: React.FC<AIDebugModalProps> = ({ open, onClose }) => 
   }, [open]);
 
   const activeTurn = turns.find((turn) => turn.id === selectedTurnId) ?? turns[0] ?? null;
+  const toolCounts = activeTurn ? summarizeToolCounts(activeTurn.toolExecutions) : '';
   const renderStatusTag = (status: AiDebugTurn['status']) => {
     switch (status) {
       case 'completed': return <Tag icon={<CheckCircleOutlined />} color="success">Completed</Tag>;
@@ -73,7 +83,7 @@ export const AIDebugModal: React.FC<AIDebugModalProps> = ({ open, onClose }) => 
         <Space wrap>{isTauriApp() && <Button size="small" onClick={() => void handleOpenTauriDevTools()} icon={<CodeOutlined />}>Mở Tauri DevTools</Button>}<Button size="small" icon={<CopyOutlined />} onClick={handleCopyTurnJson} disabled={!activeTurn}>Sao chép JSON an toàn</Button><Button size="small" danger icon={<DeleteOutlined />} onClick={() => { aiDebugService.clearLogs(); appMessage.success('Đã xóa nhật ký gỡ lỗi AI'); }} disabled={turns.length === 0}>Xóa nhật ký</Button></Space>
       </div>
       {!activeTurn ? <Empty image={EmptyImageSimple} description="Chưa có dữ liệu gỡ lỗi." /> : <div>
-        <div style={{ display: 'flex', gap: 'var(--gap-16)', marginBottom: 12, fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, flexWrap: 'wrap' }}><span><strong>Model:</strong> {activeTurn.model}</span><span><strong>Ngữ cảnh:</strong> {activeTurn.scope}</span><span><strong>Thời gian:</strong> {new Date(activeTurn.timestamp).toLocaleString()}</span>{activeTurn.durationMs !== undefined && <span><strong>Độ trễ:</strong> {activeTurn.durationMs}ms</span>}<span><strong>Chunk:</strong> {activeTurn.chunkCount} ({activeTurn.responseStreamLength} ký tự)</span><span><strong>Tin nhắn:</strong> {activeTurn.messageCount} ({activeTurn.messageChars} ký tự)</span><span><strong>System prompt:</strong> {activeTurn.systemPromptLength} ký tự</span><span><strong>Tools:</strong> {activeTurn.toolCount}</span></div>
+        <div style={{ display: 'flex', gap: 'var(--gap-16)', marginBottom: 12, fontSize: 'var(--font-size-small)', color: token.colorTextSecondary, flexWrap: 'wrap' }}><span><strong>Model:</strong> {activeTurn.model}</span><span><strong>Ngữ cảnh:</strong> {activeTurn.scope}</span><span><strong>Thời gian:</strong> {new Date(activeTurn.timestamp).toLocaleString()}</span>{activeTurn.durationMs !== undefined && <span><strong>Độ trễ:</strong> {activeTurn.durationMs}ms</span>}<span><strong>Chunk:</strong> {activeTurn.chunkCount} ({activeTurn.responseStreamLength} ký tự)</span><span><strong>Tin nhắn:</strong> {activeTurn.messageCount} ({activeTurn.messageChars} ký tự)</span><span><strong>System prompt:</strong> {activeTurn.systemPromptLength} ký tự</span><span><strong>Tools:</strong> {activeTurn.toolCount}{toolCounts ? ` (${toolCounts})` : ''}</span></div>
         <Tabs defaultActiveKey="metadata" size="small" items={[{ key: 'metadata', label: 'Metadata', children: <Card size="small"><Text type="secondary">Chẩn đoán chỉ giữ số lượng, độ dài, tên công cụ, thời lượng và mã lỗi ổn định. Nội dung yêu cầu, phản hồi, tham số và lỗi không được lưu.</Text>{activeTurn.errorCode && <div style={{ marginTop: 8 }}><Text strong>Mã lỗi:</Text> <Tag color="error">{activeTurn.errorCode}</Tag></div>}{activeTurn.finalResponseLength !== undefined && <div style={{ marginTop: 8 }}><Text strong>Độ dài phản hồi cuối:</Text> {activeTurn.finalResponseLength} ký tự</div>}</Card> }, { key: 'tools', label: `Tools (${activeTurn.toolExecutions.length})`, children: activeTurn.toolExecutions.length === 0 ? <Text type="secondary">Không có công cụ.</Text> : <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-10)' }}>{activeTurn.toolExecutions.map((tool) => <Card key={tool.id} size="small" title={<div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}><ToolOutlined style={{ color: token.colorPrimary }} /><Text strong code>{tool.name}</Text>{tool.durationMs !== undefined && <Tag icon={<FieldTimeOutlined />}>{tool.durationMs}ms</Tag>}</div>}><Text type="secondary">{tool.argumentCount} tham số, kết quả {tool.resultLength ?? 0} ký tự</Text></Card>)}</div> }, { key: 'events', label: `Dòng thời gian (${activeTurn.events.length})`, children: <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-6)' }}>{activeTurn.events.map((event) => <div key={event.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', background: token.colorFillQuaternary, borderRadius: 4, fontSize: 'var(--font-size-small)' }}><Space><Tag color="blue">{event.type}</Tag><Text code style={{ fontSize: 'var(--font-size-xs)' }}>+{event.timestamp - activeTurn.timestamp}ms</Text>{eventLabel(event.payload) && <Text strong>{eventLabel(event.payload)}</Text>}</Space><Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>{new Date(event.timestamp).toLocaleTimeString()}</Text></div>)}</div> }]}/>
       </div>}
     </Modal>
