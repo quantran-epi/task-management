@@ -8,7 +8,7 @@ status: complete
 stopped_at: Phase 51 complete
 last_updated: "2026-11-27T02:04:50.764Z"
 last_activity: 2026-11-26
-last_activity_desc: "Completed quick task 261127-01z: Telegram device control for standalone AI chat (review fixes applied, UAT pending)"
+last_activity_desc: "Completed quick task 261127-eos: SQLcl completion changed to plain-line marker with exact-line reader"
 state_head: 488c8f69a08036d25cad121bd5ac2956ec647358
 progress:
   total_phases: 2
@@ -34,6 +34,7 @@ Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investi
 Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat dark/light theme switch.
 Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
 Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-session completion changed from PROMPT sentinel to SQL SELECT JSON marker with stdout stripping.
+Last activity: 2026-11-27 - Completed quick task 261127-eos: SQLcl completion changed to one plain-text marker line with exact-line reader and no JSON strip.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -161,6 +162,7 @@ Progress: [██████████] 100%
 | 261127-01z | Quản lý thiết bị AI chat standalone qua Telegram user ID: đăng ký, duyệt, whitelist model, settings từ xa | 2026-11-26 | cc128ab0, b432da3a, 85dafc3a, 24e1e37f | Reviewed + UAT pending | [261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te](./quick/261127-01z-qu-n-l-thi-t-b-ai-chat-standalone-qua-te/) |
 | 261127-c3r | Add named quick links to CR detail and Task detail pages | 2026-11-27 | 488c8f69 | — | [261127-c3r-add-named-quick-links-to-cr-detail-and-t](./quick/261127-c3r-add-named-quick-links-to-cr-detail-and-t/) |
 | 261127-dsx | Sửa lỗi SQLcl persistent session: thay PROMPT sentinel bằng SQL SELECT marker trong SQLFORMAT JSON, strip marker khỏi stdout | 2026-11-27 | dbf6beba | — | [261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s](./quick/261127-dsx-fix-oracle-sqlcl-sentinel-by-using-sql-s/) |
+| 261127-eos | Sửa 2 lỗi review: marker hoàn tất là một dòng plain text, reader dừng bằng so sánh dòng chính xác, bỏ JSON strip/reserialize khỏi Rust | 2026-11-27 | bbe75d3c, 873570c4 | — | [261127-eos-fix-sqlcl-marker-reader-review-findings-](./quick/261127-eos-fix-sqlcl-marker-reader-review-findings-/) |
 
 ## Accumulated Context
 
@@ -260,6 +262,7 @@ Progress: [██████████] 100%
 - [Phase 37]: the delegate_batch result keeps its array shape and gains a final kind:'unfinished' entry, because a wrapper object would break every caller and the tool contract
 - [Phase 37]: persisted message.runStatus beats the live agentStatus: terminal agents are filtered out of snapshot.agents, so a stopped attempt has no live status and a remount has none at all
 - [Quick 261127-dsx]: Persistent SQLcl completion dùng SQL `SELECT '<marker>' AS TASKMATE_DONE FROM DUAL;` dưới `SET SQLFORMAT JSON`; Rust strip marker row trước khi trả stdout, TS heredoc production code giữ nguyên.
+- [Quick 261127-eos]: Completion marker là một dòng plain text duy nhất (`SELECT '<marker>' FROM DUAL;` sau `SET SQLFORMAT DEFAULT`, không alias `TASKMATE_DONE`); reader so sánh `line.trim() == marker` bằng equality (kể cả partial ở EOF), dòng marker không vào stdout, bỏ hoàn toàn JSON strip/reserialize trong Rust để stdout byte-identical.
 - [Phase ?]: beforeToolRound returns messages instead of being fire-and-forget; the loop appends them verbatim
 - [Phase ?]: The round-boundary hook runs after in-loop compaction and fires on round 1 too
 - [Phase 37.1]: 'steer' is widened in all six messageKind declarations at once — a partial widen either fails tsc or silently strips the row on restore
@@ -353,6 +356,7 @@ Progress: [██████████] 100%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Quick 261127-dsx | 6min | 2 | 2 |
+| Quick 261127-eos | 2min | 2 | 2 |
 | Phase 37-runtime-reliability-concurrency P01 | 6 min | 3 tasks | 10 files |
 | Phase 37 P02 | 15 min | 3 tasks | 6 files |
 | Phase 37 P05 | 10 min | 3 tasks | 18 files |
