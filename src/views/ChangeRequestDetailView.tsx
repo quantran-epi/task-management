@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Button, Empty, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
-import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
+import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems } from '../db/repositories/systemRepo';
@@ -17,6 +17,7 @@ import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import { formatMinutes } from '../utils/time';
 import { searchIncludes } from '../utils/searchText';
+import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
 
 export interface ChangeRequestDetailViewProps {
@@ -113,6 +114,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     estimateLabel: formatMinutes(tasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0)),
     noteCount: crNotesCount,
     docCount: cr?.documentLinks?.length ?? 0,
+    quickLinkCount: cr?.quickLinks?.length ?? 0,
     reminderCount: Math.max(cr?.reminders?.length ?? 0, cr?.reminderDate ? 1 : 0),
   }), [tasks, crNotesCount, cr]);
 
@@ -263,6 +265,30 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         ),
     },
     {
+      key: 'quick-links',
+      testId: 'cr-detail-block-quick-links',
+      header: 'Liên kết nhanh',
+      count: stats.quickLinkCount,
+      body:
+        stats.quickLinkCount > 0 ? (
+          <Space size={8} wrap>
+            {(cr.quickLinks ?? []).map((link, idx) => (
+              <Button
+                key={`${idx}-${link.url}`}
+                size="small"
+                title={link.url}
+                icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+              >
+                {link.name || link.url}
+              </Button>
+            ))}
+          </Space>
+        ) : (
+          <span style={mutedStyle}>Chưa có</span>
+        ),
+    },
+    {
       key: 'reminders',
       testId: 'cr-detail-block-reminders',
       header: 'Nhắc nhở',
@@ -394,6 +420,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           ['HOÀN THÀNH', `${stats.doneCount}/${stats.taskCount}`],
           ['GHI CHÚ', String(stats.noteCount)],
           ['DOC / REMINDER', `${stats.docCount} / ${stats.reminderCount}`],
+          ['LIÊN KẾT NHANH', String(stats.quickLinkCount)],
         ] as const).map(([label, value], index) => (
           <React.Fragment key={label}>
             {index > 0 && <span style={{ width: 1, height: 20, background: 'var(--border)' }} />}

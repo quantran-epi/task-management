@@ -657,6 +657,26 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             </Space>
           </div>
         )}
+
+        {/* Named quick links — separate from documentLinks (UUID/path for knowledge/AI) */}
+        {((currentTask?.quickLinks || currentCr?.quickLinks)?.length ?? 0) > 0 && (
+          <div style={{ marginTop: 12 }} data-testid="item-insight-quick-links">
+            <Text type="secondary">Liên kết nhanh: </Text>
+            <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
+              {(currentTask?.quickLinks ?? currentCr?.quickLinks ?? []).map((link, idx) => (
+                <Button
+                  key={`${idx}-${link.url}`}
+                  size="small"
+                  icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                  onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                  title={link.url}
+                >
+                  {link.name || link.url}
+                </Button>
+              ))}
+            </Space>
+          </div>
+        )}
       </Card>
 
       {itemType !== 'task' && (
