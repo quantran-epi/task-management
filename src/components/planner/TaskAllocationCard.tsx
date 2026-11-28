@@ -169,12 +169,8 @@ export const TaskAllocationCard: React.FC<TaskAllocationCardProps> = ({
   return (
     <Card
       size="small"
-      style={{
-        marginBottom: 8,
-        opacity: isActive ? 1 : 0.5,
-        borderLeft: isActive ? '3px solid var(--accent)' : '3px solid #d9d9d9',
-        backgroundColor: isActive ? 'var(--bg-island)' : '#fafafa',
-      }}
+      className={isActive ? 'tm-planner-card tm-planner-card--active' : 'tm-planner-card'}
+      style={{ opacity: isActive ? 1 : 0.5 }}
       bodyStyle={{ padding: '8px 10px' }}
       data-testid={`allocation-card-${allocation.id}`}
     >

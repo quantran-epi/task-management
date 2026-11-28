@@ -371,12 +371,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
         {/* Estimate Comparison & Soft Warning (D-10, PLAN-06) */}
         {selectedTask && (
           <div
-            style={{
-              padding: 12,
-              backgroundColor: '#f5f5f5',
-              borderRadius: 'var(--radius-control)',
-              marginBottom: 16,
-            }}
+            className="tm-planner-modal-panel"
             data-testid="estimate-comparison"
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -385,7 +380,10 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <Text type="secondary">Tổng đã phân bổ (Tích lũy):</Text>
-              <Text strong style={{ color: isOverEstimate ? '#fa8c16' : undefined }}>
+              <Text
+                strong
+                className={isOverEstimate ? 'tm-planner-modal-panel--warning' : ''}
+              >
                 {formatMinutes(newTotalAllocated)}
               </Text>
             </div>

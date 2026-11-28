@@ -60,7 +60,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
   const formattedNetBalance = `${netBalanceSign}${formatMinutes(
     Math.abs(metrics.netBalanceMinutes)
   )}`;
-  const netBalanceColor = metrics.netBalanceMinutes >= 0 ? '#52c41a' : '#ff4d4f';
+  const isNegative = metrics.netBalanceMinutes < 0;
 
   const ariaDescription = `${day.dayName}, ${formattedDate}: Sức chứa ${formatMinutes(
     metrics.effectiveCapacityMinutes
@@ -73,17 +73,7 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
       data-testid={`day-column-header-${date}`}
       data-is-today={isToday ? 'true' : 'false'}
       aria-label={ariaDescription}
-      style={{
-        padding: '8px 10px',
-        borderRadius: '6px',
-        backgroundColor: isToday ? 'rgba(22, 119, 255, 0.05)' : undefined,
-        border: isToday ? '1px solid var(--accent)' : '1px solid #f0f0f0',
-        marginBottom: '8px',
-        minHeight: 142,
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
+      className={isToday ? 'tm-planner-day-header tm-planner-day-header--today' : 'tm-planner-day-header'}
     >
       {/* Date & Today Highlight */}
       <div
@@ -148,7 +138,10 @@ export const DayColumnHeader: React.FC<DayColumnHeaderProps> = ({
         <Text type="secondary">
           Phân bổ: {formatMinutes(metrics.activeAllocatedMinutes)}
         </Text>
-        <Text strong style={{ color: netBalanceColor }}>
+        <Text
+          strong
+          className={isNegative ? 'tm-planner-day-header__balance tm-planner-day-header__balance--negative' : 'tm-planner-day-header__balance'}
+        >
           Còn lại: {formattedNetBalance}
         </Text>
       </div>

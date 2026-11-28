@@ -351,17 +351,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
               }
             >
               <div
-                style={{
-                  cursor: 'pointer',
-                  padding: '6px 8px',
-                  borderRadius: 'var(--radius-control)',
-                  border: '1px solid #f0f0f0',
-                  backgroundColor: actualMins > 0 ? '#fafafa' : 'var(--bg-island)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--gap-4)',
-                  minHeight: 52,
-                }}
+                className={actualMins > 0 ? 'tm-planner-actual-row tm-planner-actual-row--filled' : 'tm-planner-actual-row'}
               >
                 {/* Line 1: Planned vs Actual */}
                 <div
@@ -420,17 +410,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
         const variance = computeVariance(taskActual, taskPlanned);
 
         return (
-          <div
-            style={{
-              padding: '6px 8px',
-              borderRadius: 'var(--radius-control)',
-              backgroundColor: '#f5f5f5',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--gap-4)',
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
+          <div className="tm-planner-actual-total">
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--font-size-small)' }}>
               <Text type="secondary">P: {formatMinutes(taskPlanned)}</Text>
               <Text strong>A: {formatMinutes(taskActual)}</Text>
@@ -460,19 +440,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
       {/* Actual Worklog Toolbar: Searchable Add Task & Week Total Chips */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 'var(--gap-12)',
-          padding: '12px 16px',
-          backgroundColor: 'var(--bg-island)',
-          borderRadius: 'var(--radius-control)',
-          border: '1px solid #f0f0f0',
-        }}
-      >
+      <div className="tm-planner-toolbar">
         <Space wrap size="middle">
           <Select
             showSearch
@@ -546,7 +514,7 @@ export const ActualWorklogPlanner: React.FC<ActualWorklogPlannerProps> = ({
           scroll={{ x: 1200 }}
           bordered
           size="middle"
-          style={{ backgroundColor: 'var(--bg-island)', borderRadius: 'var(--radius-control)' }}
+          className="tm-planner-actual-table"
         />
       )}
 

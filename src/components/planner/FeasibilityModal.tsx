@@ -311,12 +311,9 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
         {task && (
           <div
             data-testid="feasibility-task-context"
+            className="tm-planner-modal-panel"
             style={{
               padding: '10px 14px',
-              backgroundColor: '#fafafa',
-              borderRadius: 'var(--radius-control)',
-              marginBottom: 16,
-              border: '1px solid #f0f0f0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -342,14 +339,7 @@ export const FeasibilityModal: React.FC<FeasibilityModalProps> = ({
         )}
 
         {/* Section 1: Scope & Parameters */}
-        <div
-          style={{
-            padding: 12,
-            backgroundColor: '#fafafa',
-            borderRadius: 'var(--radius-control)',
-            marginBottom: 16,
-          }}
-        >
+        <div className="tm-planner-modal-panel">
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-16)', alignItems: 'center' }}>
               <div>

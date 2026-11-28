@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented, useAntdToken } from '../components/ui';
+import { Button, Switch, Space, Typography, Grid, Modal, Select, Segmented } from '../components/ui';
 import { PlusOutlined, ThunderboltOutlined } from '../components/ui/icon';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -17,6 +17,7 @@ import { useDayInsight } from '../hooks/useDayInsight';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { PageHeader } from '../components/common/PageHeader';
 import { getTodayDateString } from '../utils/date';
+import '../components/planner/planner-surface.css';
 import type { Task, ChangeRequest } from '../types/models';
 import { foldForSearch, searchIncludes } from '../utils/searchText';
 
@@ -53,7 +54,6 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
 
   const screens = Grid.useBreakpoint();
   const isMobile = screens.md === false;
-  const { token } = useAntdToken();
 
   const weeklyState = useWeeklyPlanner(currentDate, db);
 
@@ -214,19 +214,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
       />
 
       {/* 2. Top Toolbar: Week Navigator + Segmented Subview (D-02, D-05, D-16, D-26) */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 'var(--gap-12)',
-          padding: '12px 16px',
-          backgroundColor: token.colorBgContainer,
-          borderRadius: token.borderRadius,
-          border: `1px solid ${token.colorBorderSecondary}`,
-        }}
-      >
+      <div className="tm-planner-toolbar">
         <WeekNavigator
           currentDate={currentDate}
           onDateChange={setCurrentDate}
@@ -254,14 +242,7 @@ export const PlannerView: React.FC<PlannerViewProps> = ({
         /* Weekly Grid (D-01, D-04) */
         <div
           data-testid="planner-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(7, minmax(230px, 1fr))',
-            gap: 'var(--gap-12)',
-            overflowX: isMobile ? 'visible' : 'auto',
-            minHeight: 520,
-            alignItems: 'stretch',
-          }}
+          className={isMobile ? 'tm-planner-grid tm-planner-grid--mobile' : 'tm-planner-grid'}
         >
           {weeklyState.days.map((day) => (
             <DayColumn

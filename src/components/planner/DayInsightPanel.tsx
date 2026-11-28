@@ -17,10 +17,10 @@ function pct(part: number, whole: number): number {
   return Math.round((part / whole) * 100);
 }
 
-function deltaColor(row: DayInsightRow): string | undefined {
+function deltaClass(row: DayInsightRow): string | undefined {
   if (row.plannedMinutes === 0 && row.actualMinutes === 0) return undefined;
-  if (row.deltaMinutes === 0) return '#52c41a';
-  return row.deltaMinutes > 0 ? '#faad14' : '#ff4d4f';
+  if (row.deltaMinutes === 0) return 'tm-planner-delta--balanced';
+  return row.deltaMinutes > 0 ? 'tm-planner-delta--ahead' : 'tm-planner-delta--behind';
 }
 
 function signedMinutes(m: number): string {
@@ -93,7 +93,7 @@ export const DayInsightPanel: React.FC<DayInsightPanelProps> = ({ data }) => {
       width: 120,
       align: 'right' as const,
       render: (_: number, row: DayInsightRow) => (
-        <Text strong style={{ color: deltaColor(row) }}>
+        <Text strong className={deltaClass(row) ?? ''}>
           {signedMinutes(row.deltaMinutes)}
         </Text>
       ),

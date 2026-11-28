@@ -222,13 +222,7 @@ export const WorkSessionDetailModal: React.FC<WorkSessionDetailModalProps> = ({
               const isSelected = editingSession?.id === s.id;
               return (
                 <ListItem
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 'var(--radius-control)',
-                    backgroundColor: isSelected ? '#e6f4ff' : '#fafafa',
-                    border: isSelected ? '1px solid #91caff' : '1px solid #f0f0f0',
-                    marginBottom: 8,
-                  }}
+                  className={isSelected ? 'tm-planner-session tm-planner-session--selected' : 'tm-planner-session'}
                   actions={[
                     <Button
                       key="edit"
