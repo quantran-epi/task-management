@@ -37,7 +37,7 @@
   .splash.fading{opacity:0;transform:scale(1.02)}
   .ambient{position:absolute;border-radius:50%;filter:blur(50px);pointer-events:none}
   .mark{position:relative;width:76px;height:76px;border-radius:20px;background:linear-gradient(145deg,#18233a,#0d1524);border:1px solid #263a5c;display:grid;place-items:center;box-shadow:0 18px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);animation:settle .45s ease-out 1 both}
-  .mark svg{width:46px;height:46px}
+  .mark img{width:56px;height:56px;object-fit:contain}
   .title{position:relative;margin-top:24px;font-size:26px;font-weight:800;letter-spacing:.02em;color:var(--tm-ink-text)}
   .eyebrow{position:relative;margin-top:4px;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--tm-ink-muted)}
   .progress{position:relative;width:280px;max-width:70%;height:4px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:32px}
@@ -52,7 +52,7 @@
   .rail{position:absolute;inset:0 auto 0 0;width:248px;background:#0d1420;border-right:1px solid var(--tm-ink-line);padding:18px 14px;display:flex;flex-direction:column;gap:10px}
   .rail-brand{display:flex;align-items:center;gap:10px;color:var(--tm-ink-text);font-weight:700;font-size:13px}
   .rail-brand .mini{width:28px;height:28px;border-radius:8px;border:1px solid #263a5c;display:grid;place-items:center;background:#18233a}
-  .rail-brand .mini svg{width:18px;height:18px}
+  .rail-brand .mini img{width:20px;height:20px;object-fit:contain}
   .rail-item{padding:8px 10px;border:1px solid transparent;border-radius:var(--radius-sm);font-size:12px;color:var(--tm-ink-muted)}
   .rail-item.on{background:#152238;border-color:#263a5c;color:var(--tm-ink-text)}
   .rail-foot{margin-top:auto;font-size:10px;color:#6e829e}
@@ -63,7 +63,7 @@
   .card{position:relative;width:min(420px,80%);padding:24px 28px;border:1px solid #263a5c;border-radius:var(--radius-lg);background:linear-gradient(180deg,rgba(20,30,48,.94),rgba(12,19,31,.96));box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.05);text-align:left}
   .card-top{display:flex;align-items:center;gap:14px}
   .card .mark{margin:0;width:56px;height:56px;border-radius:14px;animation:none}
-  .card .mark svg{width:34px;height:34px}
+  .card .mark img{width:40px;height:40px;object-fit:contain}
   .card h1{margin:0;font-size:22px;letter-spacing:.01em}
   .card .sub{margin-top:2px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--tm-ink-muted)}
   .card .progress,.card .progress-meta{width:100%;max-width:none;margin-left:0}
@@ -92,7 +92,7 @@
     <div class="frame" data-w="1280">
       <div class="splash" data-splash>
         <div class="ambient" style="width:720px;height:360px;top:-160px;background:radial-gradient(ellipse,rgba(47,98,216,.18),transparent 70%)"></div>
-        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+        <div class="mark"><img src="logo.svg" alt="TaskMate logo"></div>
         <div class="title">TaskMate</div>
         <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
         <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
@@ -108,7 +108,7 @@
         <div class="ambient" style="width:640px;height:320px;left:-180px;top:-120px;background:radial-gradient(ellipse,rgba(19,194,194,.14),transparent 70%)"></div>
         <div class="track-bg" style="width:420px;height:420px"></div>
         <div class="track-bg" style="width:280px;height:280px;border-style:dashed;opacity:.6"></div>
-        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+        <div class="mark"><img src="logo.svg" alt="TaskMate logo"></div>
         <div class="title">TaskMate</div>
         <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
         <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
@@ -125,7 +125,7 @@
         <div class="ambient" style="width:560px;height:560px;background:radial-gradient(ellipse,rgba(47,98,216,.16),transparent 75%)"></div>
         <div class="card">
           <div class="card-top">
-            <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+            <div class="mark"><img src="logo.svg" alt="TaskMate logo"></div>
             <div><h1>TaskMate</h1><div class="sub">Plan work. Stay clear. Stay local.</div></div>
           </div>
           <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
