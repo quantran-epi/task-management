@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../db';
 import { computeSha256, createDocumentSet, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
 import type { Note, PublishAttemptCache } from '../../types/models';
 import { DocSetLibrary } from '../DocSetLibrary';
 import { DocumentSetDetail } from '../DocumentSetDetail';
+import { ThemeAppHolder } from '../../components/ui';
 
 // jsdom không có layout engine: điều khiển width qua ResizeObserver để test layout narrow/wide.
 interface ObservedElement {
@@ -84,9 +85,9 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
 
     const documents = await screen.findByTestId('doc-set-documents');
     await waitFor(() =>
-      expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeGreaterThan(0)
+      expect(documents.querySelectorAll('[role="option"]').length).toBeGreaterThan(0)
     );
-    const rows = documents.querySelectorAll('[data-testid^="doc-row-"]');
+    const rows = documents.querySelectorAll('[role="option"]');
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThanOrEqual(25);
     expect(document.body.textContent).not.toContain('Nội dung bí mật');
@@ -160,6 +161,101 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
   });
 });
 
+describe('doc-set inspector tách bạch và thao tác nhanh (sketch 016A)', () => {
+  let db: TaskPlannerDatabase;
+
+  beforeEach(() => {
+    observedElements = [];
+    globalThis.ResizeObserver = class MockResizeObserver {
+      private readonly callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+      }
+
+      observe(target: Element) {
+        const testId = target.getAttribute('data-testid') ?? '';
+        Object.defineProperty(target, 'clientWidth', { configurable: true, value: 900 });
+        observedElements.push({
+          testId,
+          notify: (width) => {
+            Object.defineProperty(target, 'clientWidth', { configurable: true, value: width });
+            this.callback(
+              [{ target, contentRect: { width } } as unknown as ResizeObserverEntry],
+              this as unknown as ResizeObserver
+            );
+          },
+        });
+      }
+
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    db = new TaskPlannerDatabase(`DocSetInspector_${Math.random()}`);
+  });
+
+  afterEach(async () => {
+    globalThis.ResizeObserver = baseResizeObserver;
+    cleanup();
+    await db.delete();
+  });
+
+  it('mở cấu hình trong dialog riêng, giữ inspector chỉ đọc ở wide và không chen form ở narrow', async () => {
+    const set = await seedLayoutSet(db, 3);
+    await act(async () => {
+      render(<DocumentSetDetail setId={set.id} db={db} />);
+    });
+    await screen.findByTestId('doc-set-detail');
+    await waitFor(() => expect(observedElements.some((item) => item.testId === 'doc-set-detail')).toBe(true));
+    await setObservedWidth('doc-set-detail', 900);
+
+    const documents = await screen.findByTestId('doc-set-documents');
+    const aside = documents.querySelector('aside') as HTMLElement;
+    expect(aside).toBeInTheDocument();
+    expect(aside.textContent).toContain('Chọn một tài liệu để xem chi tiết.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cấu hình bộ tài liệu' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Phạm vi bộ tài liệu')).toBeInTheDocument();
+    expect(within(aside).queryByRole('textbox')).not.toBeInTheDocument();
+
+    await setObservedWidth('doc-set-detail', 479);
+    expect(documents.querySelector('aside')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cấu hình bộ tài liệu' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(documents.querySelector('.doc-set-form-compact')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Tìm tài liệu trong bộ')).toBeInTheDocument();
+  });
+
+  it('row menu đổi tên và xoá khỏi bộ nhưng giữ lại note gốc', async () => {
+    const set = await seedLayoutSet(db, 2);
+    await act(async () => {
+      render(<ThemeAppHolder><DocumentSetDetail setId={set.id} db={db} /></ThemeAppHolder>);
+    });
+    await screen.findByTestId('doc-set-detail');
+    const targetId = set.documentIds[1]!; // default sort: newest updatedAt first
+    const menuButton = await screen.findByTestId(`doc-row-menu-${targetId}`);
+
+    fireEvent.click(menuButton);
+    expect(await screen.findByText('Sao chép đường dẫn')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Đổi tên'));
+    const renameDialog = await screen.findByRole('dialog');
+    fireEvent.change(within(renameDialog).getByLabelText('Tên tài liệu'), { target: { value: 'Tên mới' } });
+    fireEvent.click(within(renameDialog).getByRole('button', { name: 'Lưu' }));
+    await waitFor(async () => expect((await db.notes.get(targetId))?.title).toBe('Tên mới'));
+
+    fireEvent.click(menuButton);
+    fireEvent.click(screen.getByText('Xoá khỏi bộ'));
+    const confirmButton = await screen.findByRole('button', { name: 'Xoá khỏi bộ' });
+    fireEvent.click(confirmButton);
+    await waitFor(async () => {
+      const updated = await db.documentSets.get(set.id);
+      expect(updated?.documentIds).not.toContain(targetId);
+    });
+    expect((await db.notes.get(targetId))?.title).toBe('Tên mới');
+  });
+});
+
 describe('doc-set layout ở center hẹp/rộng', () => {
   let db: TaskPlannerDatabase;
 
@@ -229,7 +325,7 @@ describe('doc-set layout ở center hẹp/rộng', () => {
 
     const documents = await screen.findByTestId('doc-set-documents');
     await waitFor(() =>
-      expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeGreaterThan(0)
+      expect(documents.querySelectorAll('[role="option"]').length).toBeGreaterThan(0)
     );
     for (const label of ['Tìm tài liệu trong bộ', 'Lọc trạng thái', 'Sắp xếp']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
@@ -243,7 +339,7 @@ describe('doc-set layout ở center hẹp/rộng', () => {
     });
     expect(selectedTitle).toBeTruthy();
     expect(documents.textContent).toContain(selectedTitle as string);
-    expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeLessThanOrEqual(25);
+    expect(documents.querySelectorAll('[role="option"]').length).toBeLessThanOrEqual(25);
 
     await setObservedWidth('doc-set-detail', 900);
     await waitFor(() => expect(documents.querySelector('aside')).toBeInTheDocument());

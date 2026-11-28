@@ -156,9 +156,9 @@ describe('Docs workspace + doc_set library tab (D-06, D-07, D-08)', () => {
     const detail = screen.getByTestId('doc-set-detail');
     const documents = within(detail).getByTestId('doc-set-documents');
     await waitFor(() =>
-      expect(documents.querySelectorAll('[data-testid^="doc-row-"]').length).toBeGreaterThan(0)
+      expect(documents.querySelectorAll('[role="option"]').length).toBeGreaterThan(0)
     );
-    const rows = Array.from(documents.querySelectorAll('[data-testid^="doc-row-"]'));
+    const rows = Array.from(documents.querySelectorAll('[role="option"]'));
     expect(rows.length).toBeLessThanOrEqual(25);
     // WR-01: default "Mới nhất" sort is updatedAt descending; newest (last seeded) first.
     expect(rows[0]?.textContent).toContain('Bộ lớn tài liệu 60');
