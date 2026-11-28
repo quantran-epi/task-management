@@ -1,5 +1,5 @@
-import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
-import { Alert, Button, Card, Descriptions, Empty, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, DescriptionsItem, SearchInput } from '../components/ui';
+import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, MoreOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
+import { Alert, Button, Card, Descriptions, Dropdown, Empty, Input, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, useTaskMateModal, DescriptionsItem, SearchInput } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -7,6 +7,8 @@ import {
   computeNoteHashesCached,
   updateDocumentSet,
 } from '../db/repositories/documentSetRepo';
+import { updateNote } from '../db/repositories/noteRepo';
+import { useLayoutStore } from './store/layoutStore';
 import { AttemptHistoryList } from '../components/knowledge/AttemptHistoryList';
 import { DocumentSetDeleteDialog } from '../components/knowledge/DocumentSetDeleteDialog';
 import { DocumentSetForm, type DocumentSetFormHandle } from '../components/knowledge/DocumentSetForm';
@@ -106,16 +108,38 @@ const STATUS_SHORT: Record<PublishPrimaryState, string> = {
 
 const DOC_ROW_HEIGHT = 38;
 
+interface DocumentRowActions {
+  onQuickEdit: (row: DocumentRow) => void;
+  onRename: (row: DocumentRow) => void;
+  onCopyPath: (row: DocumentRow) => void;
+  onRemove: (row: DocumentRow) => void;
+}
+
 const DocumentRowView = memo(function DocumentRowView({
   row,
   selected,
   onSelect,
+  actions,
 }: {
   row: DocumentRow;
   selected: boolean;
   onSelect: (id: string) => void;
+  actions: DocumentRowActions;
 }) {
   const ui = STATE_UI[row.status];
+  const menuItems = useMemo(() => [
+    { key: 'edit', label: 'Sửa nhanh' },
+    { key: 'rename', label: 'Đổi tên' },
+    { key: 'copy', label: 'Sao chép đường dẫn' },
+    { key: 'remove', label: 'Xoá khỏi bộ', danger: true },
+  ], []);
+  const onMenuClick = useCallback(({ key, domEvent }: { key: string; domEvent: React.SyntheticEvent<HTMLElement> }) => {
+    domEvent.stopPropagation();
+    if (key === 'edit') actions.onQuickEdit(row);
+    else if (key === 'rename') actions.onRename(row);
+    else if (key === 'copy') actions.onCopyPath(row);
+    else if (key === 'remove') actions.onRemove(row);
+  }, [actions, row]);
   return (
     <div
       data-testid={`doc-row-${row.id}`}
@@ -142,6 +166,17 @@ const DocumentRowView = memo(function DocumentRowView({
       <Text type="secondary" style={{ width: 70, flexShrink: 0 }}>{formatBytes(row.sizeBytes)}</Text>
       <Text type="secondary" style={{ width: 92, flexShrink: 0 }}>{row.updatedAt.slice(0, 10)}</Text>
       <Tag color={ui.color} icon={ui.icon}>{STATUS_SHORT[row.status]}</Tag>
+      <Dropdown menu={{ items: menuItems, onClick: onMenuClick }} trigger={['click']} placement="bottomRight">
+        <Button
+          type="text"
+          size="small"
+          className="doc-row-action"
+          aria-label={`Thao tác: ${row.title}`}
+          data-testid={`doc-row-menu-${row.id}`}
+          onClick={(event) => event.stopPropagation()}
+          icon={<MoreOutlined />}
+        />
+      </Dropdown>
     </div>
   );
 });
@@ -582,9 +617,80 @@ export function DocumentSetDetail({
   const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
   const [configOpen, setConfigOpen] = useState(false);
   const [pendingPicker, setPendingPicker] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const { modal: confirmModal, contextHolder: confirmContextHolder } = useTaskMateModal();
+  const openTab = useLayoutStore((state) => state.openTab);
   const formRef = useRef<DocumentSetFormHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useState(0);
+
+  const handleQuickEdit = useCallback((row: DocumentRow) => {
+    openTab({
+      id: `doc-${row.id}`,
+      title: row.title,
+      viewType: 'notes',
+      closable: true,
+      params: { doc: row.id },
+    });
+  }, [openTab]);
+
+  const openRename = useCallback((row: DocumentRow) => {
+    setRenameTarget(row);
+    setRenameValue(row.title);
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!renameTarget) return;
+    const title = renameValue.trim();
+    if (!title) return;
+    try {
+      const updated = await updateNote(renameTarget.id, { title }, db);
+      if (!updated) {
+        message.error('Không tìm thấy tài liệu để đổi tên.');
+        return;
+      }
+      message.success('Đã đổi tên tài liệu');
+      setRenameTarget(null);
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : 'Không thể đổi tên tài liệu');
+    }
+  }, [db, message, renameTarget, renameValue]);
+
+  const handleCopyPath = useCallback((row: DocumentRow) => {
+    if (!navigator.clipboard?.writeText) {
+      message.error('Trình duyệt không hỗ trợ sao chép đường dẫn.');
+      return;
+    }
+    navigator.clipboard.writeText(row.path)
+      .then(() => message.success('Đã sao chép đường dẫn'))
+      .catch(() => message.error('Không thể sao chép đường dẫn'));
+  }, [message]);
+
+  const handleRemoveFromSet = useCallback((row: DocumentRow) => {
+    confirmModal.confirm({
+      title: 'Xoá tài liệu khỏi bộ?',
+      content: `Tài liệu "${row.title}" sẽ bị gỡ khỏi bộ này. Tài liệu gốc vẫn được giữ lại.`,
+      okText: 'Xoá khỏi bộ',
+      okButtonProps: { danger: true },
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await updateDocumentSet(setId, { documentIds: set?.documentIds.filter((id) => id !== row.id) ?? [] }, db);
+          message.success('Đã xoá tài liệu khỏi bộ');
+        } catch (err) {
+          message.error(err instanceof Error ? err.message : 'Không thể xoá tài liệu khỏi bộ');
+        }
+      },
+    });
+  }, [confirmModal, db, message, set?.documentIds, setId]);
+
+  const rowActions = useMemo<DocumentRowActions>(() => ({
+    onQuickEdit: handleQuickEdit,
+    onRename: openRename,
+    onCopyPath: handleCopyPath,
+    onRemove: handleRemoveFromSet,
+  }), [handleQuickEdit, openRename, handleCopyPath, handleRemoveFromSet]);
 
   useEffect(() => {
     if (configOpen && pendingPicker) {
@@ -819,7 +925,7 @@ export function DocumentSetDetail({
               role="listbox"
               aria-label="Danh sách tài liệu trong bộ"
               renderItem={(row) => (
-                <DocumentRowView row={row} selected={row.id === selectedDocId} onSelect={setSelectedDocId} />
+                <DocumentRowView row={row} selected={row.id === selectedDocId} onSelect={setSelectedDocId} actions={rowActions} />
               )}
             />
           )}
@@ -842,6 +948,11 @@ export function DocumentSetDetail({
                     <dt>Bộ chứa</dt><dd>{set.name}</dd>
                     <dt>ID</dt><dd><Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text></dd>
                   </dl>
+                  <div className="doc-set-inspector__actions">
+                    <Button size="small" icon={<EyeOutlined />} onClick={() => handleQuickEdit(selectedDoc)}>Mở tài liệu</Button>
+                    <Button size="small" icon={<EditOutlined />} onClick={() => openRename(selectedDoc)}>Đổi tên</Button>
+                    <Button size="small" icon={<DeleteOutlined />} onClick={() => handleRemoveFromSet(selectedDoc)}>Xoá khỏi bộ</Button>
+                  </div>
                 </>
               ) : (
                 <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
@@ -1033,6 +1144,8 @@ export function DocumentSetDetail({
       </section>
       </div>
 
+      {confirmContextHolder}
+
       <Modal
         className="doc-set-config-modal"
         open={configOpen}
@@ -1047,6 +1160,24 @@ export function DocumentSetDetail({
           initialSet={set}
           availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
           onSave={(value) => void handleSaveDocumentSet(value)}
+        />
+      </Modal>
+
+      <Modal
+        open={renameTarget !== null}
+        title="Đổi tên tài liệu"
+        width={420}
+        onCancel={() => setRenameTarget(null)}
+        onOk={() => void handleRename()}
+        okText="Lưu"
+        cancelText="Hủy"
+      >
+        <Input
+          aria-label="Tên tài liệu"
+          value={renameValue}
+          maxLength={200}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onPressEnter={() => void handleRename()}
         />
       </Modal>
 
