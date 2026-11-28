@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sketch 017 — Task List Command Deck</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  :root[data-scheme="dark"] {
+    --color-bg:#141922; --color-surface:#1c2330; --color-surface-soft:#232b3a;
+    --color-border:#2c3646; --color-border-strong:#3c4860;
+    --color-text:#f7fbff; --color-text-muted:#b8c7dc; --color-text-tertiary:#8fa3bd;
+    --color-primary-soft:#243a6d; --color-warning-bg:#3a2d13;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:52px 16px 56px;background:var(--color-bg);color:var(--color-text);font-family:var(--font-sans);font-size:var(--text-base)}
+  button,input,select{font:inherit;color:inherit}
+  #variant-nav{position:fixed;top:0;left:0;right:0;z-index:9998;background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:8px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .variant-tab{background:transparent;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:5px 10px;cursor:pointer;color:var(--color-text-muted)}
+  .variant-tab.active{background:var(--color-primary);color:#fff;border-color:var(--color-primary)}
+  .hint{margin-left:auto;color:var(--color-text-tertiary);font-size:var(--text-xs)}
+  .variant{display:none;max-width:1280px;margin:0 auto}
+  .variant.active{display:block}
+  .deck{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-sm)}
+  .deck-head{display:flex;align-items:center;gap:var(--space-3);padding:12px 14px;border-bottom:1px solid var(--color-border)}
+  .deck-head h1{font-size:var(--text-xl);margin:0;letter-spacing:-.02em}
+  .deck-sub{color:var(--color-text-muted);font-size:var(--text-sm)}
+  .stats{margin-left:auto;display:flex;gap:var(--space-4);font-size:var(--text-sm);color:var(--color-text-muted)}
+  .stats b{color:var(--color-text);font-family:var(--font-mono);font-size:var(--text-base)}
+  .btn{border:1px solid var(--color-border);background:var(--color-surface);border-radius:var(--radius-sm);height:var(--control-h);padding:0 10px;cursor:pointer;transition:all .15s ease}
+  .btn:hover{border-color:var(--color-primary);color:var(--color-primary)}
+  .btn.primary{background:var(--color-primary);border-color:var(--color-primary);color:#fff}
+  .btn.primary:hover{background:var(--color-primary-hover);color:#fff}
+  .command{display:flex;gap:var(--space-2);align-items:center;padding:10px 14px;background:var(--color-surface-soft);border-bottom:1px solid var(--color-border);flex-wrap:wrap}
+  .command input,.command select{height:var(--control-h);border:1px solid var(--color-border);background:var(--color-surface);border-radius:var(--radius-sm);padding:0 8px}
+  .command input.search{flex:1;min-width:200px}
+  .seg{display:flex;border:1px solid var(--color-border);border-radius:var(--radius-sm);overflow:hidden}
+  .seg button{border:0;border-right:1px solid var(--color-border);background:var(--color-surface);padding:0 10px;height:var(--control-h);cursor:pointer;color:var(--color-text-muted)}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:var(--color-primary-soft);color:var(--color-primary);font-weight:600}
+  .countline{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;font-size:var(--text-sm);color:var(--color-text-muted);border-bottom:1px solid var(--color-border)}
+  .table{width:100%;border-collapse:collapse;table-layout:fixed}
+  .table th{position:sticky;top:0;z-index:2;background:var(--color-surface-soft);border-bottom:1px solid var(--color-border);text-align:left;font-size:var(--text-xs);color:var(--color-text-muted);font-weight:600;letter-spacing:.03em;padding:8px 10px;white-space:nowrap}
+  .table td{border-bottom:1px solid var(--color-border);padding:9px 10px;vertical-align:middle;font-size:var(--text-base)}
+  .table tbody tr{transition:background .15s ease;cursor:default}
+  .table tbody tr:hover{background:var(--color-surface-soft)}
+  .table tbody tr.selected{background:var(--color-primary-soft)}
+  .col-check{width:36px}.col-status{width:110px}.col-prio{width:104px}.col-due{width:104px}.col-owner{width:116px}.col-ops{width:74px}
+  .task-name{font-weight:600;line-height:1.35;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta{font-family:var(--font-mono);font-size:var(--text-xs);color:var(--color-text-tertiary);margin-top:3px;display:flex;gap:6px;align-items:center}
+  .tag{display:inline-flex;align-items:center;padding:1px 6px;border-radius:var(--radius-full);background:var(--color-surface-soft);border:1px solid var(--color-border);font-size:var(--text-xs)}
+  .tag.status-open{color:var(--color-primary);border-color:var(--color-primary)}
+  .tag.status-doing{color:var(--color-warning);border-color:var(--color-warning)}
+  .tag.status-done{color:var(--color-success);border-color:var(--color-success)}
+  .dots{display:flex;gap:3px}
+  .dot{width:8px;height:8px;border-radius:50%;border:1px solid var(--color-border-strong)}
+  .dot.on{background:var(--color-danger);border-color:var(--color-danger)}
+  .due{font-family:var(--font-mono);font-size:var(--text-sm)}
+  .due.late{color:var(--color-danger);font-weight:600}
+  .due.today{color:var(--color-warning);font-weight:600}
+  .avatar{width:22px;height:22px;border-radius:50%;background:var(--color-primary-soft);color:var(--color-primary);display:inline-flex;align-items:center;justify-content:center;font-size:var(--text-xs);font-weight:700}
+  .rowops{opacity:.45}
+  tr:hover .rowops{opacity:1}
+  .batch{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:20;background:var(--color-surface);border:1px solid var(--color-primary);border-radius:var(--radius-md);box-shadow:var(--shadow-md);padding:8px 12px;gap:8px;align-items:center}
+  .batch.show{display:flex}
+  .empty{padding:54px 16px;text-align:center;color:var(--color-text-muted)}
+  .empty .icon{font-size:30px;opacity:.5}
+  #sketch-tools{position:fixed;bottom:12px;right:12px;z-index:9999;font-family:var(--font-sans);font-size:12px;background:rgba(0,0,0,.72);color:#fff;padding:8px 12px;border-radius:8px;opacity:.42;transition:opacity .2s;display:flex;gap:8px;align-items:center}
+  #sketch-tools:hover{opacity:1}
+  #sketch-tools select,#sketch-tools button{background:#263043;color:#fff;border:1px solid #48546b;border-radius:4px;height:24px}
+  .annotation{position:fixed;pointer-events:none;background:#111827;color:#fff;font:11px var(--font-mono);padding:3px 6px;border-radius:4px;z-index:10000;display:none}
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" data-v="a">A: Dense Table ★</button>
+  <button class="variant-tab" data-v="b">B: Grouped Triage</button>
+  <button class="variant-tab" data-v="c">C: Card-Events</button>
+  <span class="hint">Gợi ý: bật Dark, gõ search, tick checkbox</span>
+</div>
+
+<div id="variant-a" class="variant active"></div>
+<div id="variant-b" class="variant"></div>
+<div id="variant-c" class="variant"></div>
+
+<div class="batch" id="batch"><b id="batch-count">Đã chọn 0 tác vụ</b><button class="btn" onclick="clearSel()">Bỏ chọn</button><button class="btn primary" onclick="toast('Đã cập nhật trạng thái')">Đổi trạng thái</button></div>
+<div id="sketch-tools">
+  <select id="scheme" aria-label="Scheme"><option value="light">Light</option><option value="dark">Dark</option></select>
+  <button data-w="375">Phone</button><button data-w="768">Tablet</button><button data-w="1280">Full</button>
+  <button id="ann-btn">Annotation: off</button>
+</div>
+<div class="annotation" id="annotation"></div>
+
+<script>
+const TASKS = [
+  {id:'t1', name:'Review API contract cho CR-12', cr:'CR-12', milestone:'M1 · Auth', sub:'Backend', status:'Mở', prio:4, due:'Hôm nay', late:true, owner:'QD'},
+  {id:'t2', name:'Viết unit test cho allocation planner', cr:'CR-09', milestone:'M3 · Planner', sub:'Backend', status:'Đang làm', prio:3, due:'28/11', late:false, owner:'NL'},
+  {id:'t3', name:'Cập nhật copy trên splash screen', cr:'Chung', milestone:'—', sub:'Frontend', status:'Mở', prio:2, due:'02/12', late:false, owner:'QD'},
+  {id:'t4', name:'Audit dark mode workbench', cr:'CR-14', milestone:'M2 · Theme', sub:'Frontend', status:'Xong', prio:1, due:'25/11', late:false, owner:'HT'},
+  {id:'t5', name:'Chuẩn hoá backup schema v15', cr:'CR-11', milestone:'M1 · Backup', sub:'Data', status:'Đang làm', prio:5, due:'26/11', late:true, owner:'QD'},
+];
+const statusClass = s => s==='Mở'?'status-open':s==='Đang làm'?'status-doing':'status-done';
+const prioDots = n => `<span class="dots" aria-label="Ưu tiên ${n}/5">${[1,2,3,4,5].map(i=>`<i class="dot ${i<=n?'on':''}"></i>`).join('')}</span>`;
+const meta = t => `<span class="meta"><span class="tag">${t.cr}</span><span>${t.milestone}</span><span>·</span><span>${t.sub}</span></span>`;
+const dueClass = t => t.late?'late':t.due==='Hôm nay'?'today':'';
+
+function denseRow(t){return `<tr data-id="${t.id}"><td><input type="checkbox" class="pick" data-id="${t.id}" aria-label="Chọn ${t.name}"></td><td><span class="task-name">${t.name}</span>${meta(t)}</td><td><span class="tag ${statusClass(t.status)}">${t.status}</span></td><td>${prioDots(t.prio)}</td><td><span class="due ${dueClass(t)}">${t.due}</span></td><td><span class="avatar">${t.owner}</span></td><td><button class="btn rowops" onclick="toast('Mở ${t.id}')">⋯</button></td></tr>`}
+function groupedRow(t){return `<tr data-id="${t.id}"><td><input type="checkbox" class="pick" data-id="${t.id}" aria-label="Chọn ${t.name}"></td><td><span class="task-name">${t.name}</span>${meta(t)}</td><td><span class="tag ${statusClass(t.status)}">${t.status}</span></td><td>${prioDots(t.prio)}</td><td><span class="due ${dueClass(t)}">${t.due}</span></td><td><button class="btn rowops" onclick="toast('Mở ${t.id}')">⋯</button></td></tr>`}
+function cardRow(t){return `<article class="evt" data-id="${t.id}"><input type="checkbox" class="pick" data-id="${t.id}" aria-label="Chọn ${t.name}"><div class="evt-main"><div class="task-name">${t.name}</div>${meta(t)}</div><div><span class="tag ${statusClass(t.status)}">${t.status}</span></div><div>${prioDots(t.prio)}</div><div class="due ${dueClass(t)}">${t.due}</div><button class="btn rowops" onclick="toast('Mở ${t.id}')">⋯</button></article>`}
+
+function head(cols){return `<thead><tr>${cols.map(c=>`<th class="${c.w||''}">${c.t}</th>`).join('')}</tr></thead>`}
+function shell(body, style){
+ return `<div class="deck"><div class="deck-head"><div><h1>Danh sách tác vụ</h1><div class="deck-sub">.command deck · quản lý, phân bổ, theo dõi</div></div><div class="stats"><span>Đang làm <b>2</b></span><span>Quá hạn <b>2</b></span><span>Tổng <b>5</b></span></div><button class="btn primary" onclick="toast('Tác vụ mới')">+ Thêm</button></div><div class="command"><input class="search" id="task-search" placeholder="Tìm kiếm tác vụ (Nhấn '/' để tìm)..." oninput="applyFilter()"><div class="seg"><button class="on" data-seg>Tất cả</button><button data-seg>CR</button><button data-seg>Độc lập</button></div><select onchange="toast('Lọc theo CR')"><option>Lọc theo CR</option><option>CR-12</option><option>CR-09</option></select><select onchange="toast('Lọc theo Subsystem')"><option>Lọc theo Subsystem</option><option>Backend</option><option>Frontend</option></select><select onchange="toast('Sắp xếp')"><option>Sắp xếp: Hạn gần nhất</option><option>Ưu tiên cao</option></select><button class="btn" onclick="toast('Tuỳ biến cột')">⚙ Tuỳ biến cột</button></div><div class="countline"><span id="count">Hiển thị 5 tác vụ</span><span>Sticky header · keyboard nav · testid giữ nguyên</span></div>${style||''}${body}</div>`
+}
+
+document.getElementById('variant-a').innerHTML = shell(
+ `<table class="table">${head([{t:'',w:'col-check'},{t:'Tên tác vụ · CR · Mốc'},{t:'Trạng thái',w:'col-status'},{t:'Ưu tiên',w:'col-prio'},{t:'Hạn',w:'col-due'},{t:'Người',w:'col-owner'},{t:'',w:'col-ops'}])}<tbody id="tbody-a">${TASKS.map(denseRow).join('')}</tbody></table>`);
+document.getElementById('variant-b').innerHTML = shell(
+ `<table class="table">${head([{t:'',w:'col-check'},{t:'Tên tác vụ · CR · Mốc'},{t:'Trạng thái',w:'col-status'},{t:'Ưu tiên',w:'col-prio'},{t:'Hạn',w:'col-due'},{t:'',w:'col-ops'}])}<tbody id="tbody-b"><tr><th colspan="6" style="position:static;text-align:left;padding:9px 10px;background:var(--color-surface-soft);border-bottom:1px solid var(--color-border)">QUÁ HẠN · 2</th></tr>${TASKS.filter(t=>t.late).map(groupedRow).join('')}<tr><th colspan="6" style="position:static;text-align:left;padding:9px 10px;background:var(--color-surface-soft);border-bottom:1px solid var(--color-border)">SẮP TỚI · 3</th></tr>${TASKS.filter(t=>!t.late).map(groupedRow).join('')}</tbody></table>`);
+document.getElementById('variant-c').innerHTML = shell(
+ `<div style="padding:10px 14px;display:flex;flex-direction:column;gap:6px" id="tbody-c">${TASKS.map(cardRow).join('')}</div>`,
+ `<style>.evt{display:grid;grid-template-columns:20px 1fr 90px 90px 90px 40px;gap:10px;align-items:center;border:1px solid var(--color-border);border-left:3px solid var(--color-primary);border-radius:var(--radius-sm);padding:9px 10px;background:var(--color-surface);transition:all .15s ease}.evt:hover{background:var(--color-surface-soft);border-color:var(--color-primary)}</style>`);
+
+function showVariant(v){
+ document.querySelectorAll('.variant').forEach(el=>el.classList.remove('active'));
+ document.querySelectorAll('.variant-tab').forEach(t=>t.classList.remove('active'));
+ document.getElementById('variant-'+v).classList.add('active');
+ document.querySelector(`.variant-tab[data-v="${v}"]`).classList.add('active');
+}
+document.querySelectorAll('.variant-tab').forEach(btn=>btn.addEventListener('click',()=>showVariant(btn.dataset.v)));
+
+let selected=new Set();
+document.addEventListener('change',e=>{
+ if(!e.target.classList.contains('pick')) return;
+ const id=e.target.dataset.id;
+ if(e.target.checked) selected.add(id); else selected.delete(id);
+ document.querySelectorAll(`tr[data-id="${id}"],.evt[data-id="${id}"]`).forEach(row=>row.classList.toggle('selected',e.target.checked));
+ document.getElementById('batch').classList.toggle('show',selected.size>0);
+ document.getElementById('batch-count').textContent=`Đã chọn ${selected.size} tác vụ`;
+});
+function clearSel(){selected.clear();document.querySelectorAll('.pick').forEach(c=>c.checked=false);document.querySelectorAll('.selected').forEach(r=>r.classList.remove('selected'));document.getElementById('batch').classList.remove('show')}
+let toastTimer;
+function toast(msg){let el=document.getElementById('toast');if(!el){el=document.createElement('div');el.id='toast';el.style='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:10001;background:#111827;color:#fff;padding:8px 14px;border-radius:8px;font-size:12px';document.body.appendChild(el)}el.textContent=msg;el.style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.style.display='none',1600)}
+function applyFilter(){
+ const q=document.getElementById('task-search').value.trim().toLowerCase();
+ document.querySelectorAll('#tbody-a tr,#tbody-b tr[data-id],#tbody-c .evt').forEach(row=>{
+  const id=row.dataset.id; if(!id) return;
+  const t=TASKS.find(x=>x.id===id); row.style.display=(!q||(t.name+t.cr+t.milestone+t.sub).toLowerCase().includes(q))?'':'none';
+ });
+ document.getElementById('count').textContent=`Hiển thị ${q?document.querySelectorAll('#tbody-a tr:not([style*="none"])').length:TASKS.length} tác vụ`;
+}
+document.querySelectorAll('[data-seg]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-seg]').forEach(x=>x.classList.remove('on'));b.classList.add('on');toast('Đổi chế độ lọc: '+b.textContent)}));
+document.getElementById('scheme').addEventListener('change',e=>document.documentElement.dataset.scheme=e.target.value);
+document.querySelectorAll('#sketch-tools button[data-w]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.variant').forEach(v=>v.style.maxWidth=b.dataset.w==='1280'?'1280px':b.dataset.w+'px');toast('Viewport '+b.dataset.w+'px')}));
+let ann=false;
+document.getElementById('ann-btn').addEventListener('click',e=>{ann=!ann;e.target.textContent='Annotation: '+(ann?'on':'off')});
+document.addEventListener('mouseover',e=>{
+ if(!ann||!e.target.closest('.table td,.evt,.command'))return;
+ const s=getComputedStyle(e.target.closest('.table td,.evt,.command'));
+ const el=document.getElementById('annotation');el.textContent=`${s.fontSize} · pad ${s.padding} · bg ${s.backgroundColor}`;el.style.display='block';el.style.left=(e.clientX+12)+'px';el.style.top=(e.clientY+12)+'px';
+});
+document.addEventListener('mouseout',()=>document.getElementById('annotation').style.display='none');
+</script>
+</body>
+</html>
