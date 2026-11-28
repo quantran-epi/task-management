@@ -420,3 +420,77 @@ html, body, #root {
 .utility-tool-btn.primary:active {
   background: var(--accent-hover, #2f5fc4) !important;
 }
+
+/* Doc editor outline — token-driven so dark mode stays readable. */
+.doc-outline-toc__title {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-6);
+  margin-bottom: 8px;
+  padding-left: 4px;
+  color: var(--fg-secondary);
+  font-size: var(--font-size-small);
+}
+
+.doc-outline-toc__item {
+  padding-right: 4px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-default);
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+
+.doc-outline-toc__item--sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-secondary);
+}
+
+.doc-outline-toc__item:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+.doc-outline-toc__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Document-set form: compact layout for the 260px inspector. */
+.doc-set-form-compact .ant-form-item {
+  margin-bottom: 8px;
+}
+
+.doc-set-form-compact input,
+.doc-set-form-compact .ant-select-selector,
+.doc-set-form-compact .ant-radio-wrapper,
+.doc-set-form-compact .ant-btn {
+  min-height: 28px;
+  font-size: var(--font-size-small);
+}
+
+.doc-set-form-compact .ant-form-item-label > label {
+  font-size: var(--font-size-small);
+}
+
+.doc-set-form-compact .doc-set-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: 4px;
+  width: 100%;
+}
+
+.doc-set-form-group-title {
+  border-top: 1px solid var(--border-strong);
+  padding-top: 8px;
+  margin-top: 12px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+}

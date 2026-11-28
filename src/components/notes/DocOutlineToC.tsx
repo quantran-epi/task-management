@@ -66,11 +66,9 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
 
   return (
     <div className="doc-outline-toc" style={{ padding: '8px 4px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', marginBottom: 8, paddingLeft: 4 }}>
-        <OrderedListOutlined style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-secondary)' }} />
-        <Text strong style={{ fontSize: 'var(--font-size-small)', color: '#595959' }}>
-          Mục lục
-        </Text>
+      <div className="doc-outline-toc__title">
+        <OrderedListOutlined style={{ fontSize: 'var(--font-size-small)' }} />
+        <Text strong>Mục lục</Text>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
         {headings.map((item, idx) => {
@@ -78,6 +76,7 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
           return (
             <div
               key={`${item.id}-${idx}`}
+              className={`doc-outline-toc__item${item.level === 1 ? '' : ' doc-outline-toc__item--sub'}`}
               role="button"
               tabIndex={0}
               onClick={() => handleClick(item)}
@@ -87,29 +86,7 @@ export const DocOutlineToC: React.FC<DocOutlineToCProps> = ({
                   handleClick(item);
                 }
               }}
-              style={{
-                paddingLeft: indent,
-                paddingRight: 4,
-                paddingTop: 3,
-                paddingBottom: 3,
-                fontSize: item.level === 1 ? 13 : 12,
-                fontWeight: item.level === 1 ? 600 : 400,
-                color: item.level === 1 ? '#262626' : '#595959',
-                cursor: 'pointer',
-                borderRadius: 4,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#f5f5f5';
-                e.currentTarget.style.color = 'var(--accent)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = item.level === 1 ? '#262626' : '#595959';
-              }}
+              style={{ paddingLeft: indent }}
             >
               {item.text}
             </div>

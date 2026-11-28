@@ -253,15 +253,16 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
   };
 
   return (
-    <Form layout="vertical" style={{ width: '100%', minWidth: 0 }}>
+    <Form layout="vertical" className="doc-set-form-compact" style={{ width: '100%', minWidth: 0 }}>
       {/* 1. Friendly Presets Radio (D-18) */}
+      <div className="doc-set-form-group-title">Phạm vi bộ tài liệu</div>
       <FormItem label="Mẫu thiết lập phạm vi (Preset)">
         <RadioGroup
           aria-label="Scope preset"
           value={preset}
           onChange={(e) => handlePresetChange(e.target.value)}
         >
-          <Space direction="vertical">
+          <Space className="doc-set-preset-grid" direction="vertical">
             {PRESET_OPTIONS.map((opt) => (
               <Radio key={opt.value} value={opt.value}>
                 {opt.label}
@@ -348,9 +349,11 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
               value={supplementRelationKind}
               onChange={(e) => setSupplementRelationKind(e.target.value)}
             >
-              <Radio value="EXTENDS">EXTENDS (Mở rộng)</Radio>
-              <Radio value="SUPPLEMENTS">SUPPLEMENTS (Bổ trợ)</Radio>
-              <Radio value="SUPERSEDES">SUPERSEDES (Thay thế)</Radio>
+              <Space className="doc-set-preset-grid" direction="vertical">
+                <Radio value="EXTENDS">EXTENDS (Mở rộng)</Radio>
+                <Radio value="SUPPLEMENTS">SUPPLEMENTS (Bổ trợ)</Radio>
+                <Radio value="SUPERSEDES">SUPERSEDES (Thay thế)</Radio>
+              </Space>
             </RadioGroup>
           </FormItem>
 
@@ -371,10 +374,11 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
       )}
 
       {/* 3. Collapsed Advanced Panel (D-18) */}
+      <div className="doc-set-form-group-title">Cấu hình nâng cao</div>
       <Collapse
         activeKey={activeCollapseKeys}
         onChange={(keys) => setActiveCollapseKeys(typeof keys === 'string' ? [keys] : keys)}
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: 12 }}
         items={[
           {
             key: 'advanced',
@@ -429,6 +433,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
       />
 
       {/* 4. Name */}
+      <div className="doc-set-form-group-title">Thông tin bộ tài liệu</div>
       <FormItem label="Tên bộ tài liệu" required>
         <Input
           aria-label="Tên bộ tài liệu"
@@ -441,7 +446,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
       {!initialSet && (
         <FormItem label="Khởi tạo từ">
           <RadioGroup value={mode} onChange={(event) => chooseMode(event.target.value)}>
-            <Space direction="vertical">
+            <Space className="doc-set-preset-grid" direction="vertical">
               <Radio value="empty">Bộ trống</Radio>
               <Radio value="folder">Từ thư mục hiện tại</Radio>
               <Radio value="manual">Chọn tài liệu</Radio>
@@ -456,6 +461,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
       )}
 
       {/* 6. Document membership list */}
+      <div className="doc-set-form-group-title">Tài liệu thành viên</div>
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Button
           aria-label="Thêm tài liệu"
