@@ -28,6 +28,7 @@
   .stage{margin:56px auto 0;max-width:1280px;padding:24px 16px 60px}
   .variant{display:none}
   .variant.active{display:block}
+  .grad-label{position:absolute;top:16px;left:18px;font:11px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:rgba(247,251,255,.72);z-index:2}
   .frame{position:relative;min-height:620px;border:1px solid var(--color-border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:var(--tm-ink)}
   .frame[data-w="375"]{max-width:375px;margin:0 auto}
   .frame[data-w="768"]{max-width:768px;margin:0 auto}
@@ -84,6 +85,9 @@
   <button class="variant-tab active" data-v="a">A: Centered Mark ★ Recommended</button>
   <button class="variant-tab" data-v="b">B: Workbench Rail</button>
   <button class="variant-tab" data-v="c">C: Boot Card</button>
+  <button class="variant-tab" data-v="d">D: Aurora</button>
+  <button class="variant-tab" data-v="e">E: Midnight Slate</button>
+  <button class="variant-tab" data-v="f">F: Deep Ocean</button>
   <span class="hint">Nhấn "Replay" để xem lại motion · đổi viewport ở góc phải</span>
 </div>
 
@@ -136,6 +140,51 @@
       </div>
     </div>
   </section>
+
+  <section id="variant-d" class="variant">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash style="background:radial-gradient(ellipse 90% 70% at 18% 8%,rgba(19,194,194,.22) 0%,transparent 58%),radial-gradient(ellipse 70% 60% at 82% 92%,rgba(47,98,216,.32) 0%,transparent 64%),linear-gradient(135deg,#071520 0%,#0d2330 45%,#132038 100%)">
+        <div class="grad-label">D · Aurora — teal + electric blue</div>
+        <div class="ambient" style="width:640px;height:360px;left:-120px;top:80px;background:radial-gradient(ellipse,rgba(19,194,194,.14),transparent 70%)"></div>
+        <div class="mark"><img src="logo.svg" alt="TaskMate logo"></div>
+        <div class="title">TaskMate</div>
+        <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
+        <div class="progress"><div class="fill" data-fill style="width:15%;background:linear-gradient(90deg,#13c2c2,#2f62d8 55%,#6c5ce7)"></div></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot" style="background:#13c2c2;box-shadow:0 0 0 4px rgba(19,194,194,.16)"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-e" class="variant">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash style="background:radial-gradient(ellipse 80% 80% at 50% 0%,rgba(112,96,214,.22) 0%,transparent 62%),linear-gradient(180deg,#12141f 0%,#1b1c2b 52%,#101522 100%)">
+        <div class="grad-label">E · Midnight Slate — indigo + slate</div>
+        <div class="ambient" style="width:720px;height:360px;top:-140px;background:radial-gradient(ellipse,rgba(108,92,231,.2),transparent 72%)"></div>
+        <div class="mark" style="border-color:#3a3a58;background:linear-gradient(145deg,#22243a,#151626)"><img src="logo.svg" alt="TaskMate logo"></div>
+        <div class="title">TaskMate</div>
+        <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
+        <div class="progress"><div class="fill" data-fill style="width:15%;background:linear-gradient(90deg,#6c5ce7,#2f62d8 70%,#13c2c2)"></div></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot" style="background:#8b7cf6;box-shadow:0 0 0 4px rgba(139,124,246,.16)"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-f" class="variant">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash style="background:radial-gradient(ellipse 60% 60% at 50% 110%,rgba(19,194,194,.25) 0%,transparent 72%),radial-gradient(ellipse 60% 50% at 50% -10%,rgba(22,119,255,.3) 0%,transparent 70%),linear-gradient(160deg,#040b14 0%,#08182a 54%,#06222b 100%)">
+        <div class="grad-label">F · Deep Ocean — cyan horizon</div>
+        <div class="ambient" style="width:760px;height:380px;bottom:-180px;top:auto;background:radial-gradient(ellipse,rgba(19,194,194,.18),transparent 72%)"></div>
+        <div class="mark" style="border-color:#1d4566;background:linear-gradient(145deg,#10283a,#091621)"><img src="logo.svg" alt="TaskMate logo"></div>
+        <div class="title">TaskMate</div>
+        <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
+        <div class="progress"><div class="fill" data-fill style="width:15%;background:linear-gradient(90deg,#1677ff,#13c2c2)"></div></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot" style="background:#13c2c2;box-shadow:0 0 0 4px rgba(19,194,194,.16)"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div id="sketch-tools">
@@ -152,7 +201,7 @@ const STEPS = [
   ['Đang chuẩn bị giao diện',80],
   ['Sẵn sàng',100],
 ];
-const variantIds=['a','b','c'];
+const variantIds=['a','b','c','d','e','f'];
 const activeVariant=()=>variantIds.find(id=>document.getElementById('variant-'+id).classList.contains('active'));
 let timers=[];
 function clearTimers(){timers.forEach(clearTimeout);timers=[]}
