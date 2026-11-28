@@ -108,14 +108,15 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
         style={{
           width: narrow ? 160 : 248,
           flexShrink: 0,
-          borderRight: '1px solid var(--ant-color-border, #f0f0f0)',
+          borderRight: '1px solid var(--border, var(--ant-color-border))',
+          background: 'var(--bg-elev)',
           display: 'flex',
           flexDirection: 'column',
           minHeight: 0,
           minWidth: 0,
         }}
       >
-        <Space direction="vertical" size="small" style={{ padding: 12 }}>
+        <Space className="doc-set-library-head" direction="vertical" size="small" style={{ padding: 12 }}>
           <Button icon={<PlusOutlined />} onClick={() => setCreating(true)} block>
             Tạo bộ tài liệu
           </Button>
@@ -144,6 +145,7 @@ export function DocSetLibrary({ db = defaultDb, selectedSetId, embedded = false 
                   key={set.id}
                   role="button"
                   aria-label={`Mở bộ tài liệu ${set.name}`}
+                  className="doc-set-library-item"
                   onClick={() => selectSet(set.id, set.name)}
                   style={{
                     cursor: 'pointer',

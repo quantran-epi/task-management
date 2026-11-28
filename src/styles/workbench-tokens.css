@@ -495,6 +495,28 @@ html, body, #root {
   color: var(--fg-secondary);
 }
 
+/* Doc-set shell: rail/detail boundary and sticky-filter spacing stay token-driven. */
+.doc-set-library-head {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-set-library-item {
+  gap: var(--gap-8);
+}
+
+.doc-set-detail-actions {
+  row-gap: var(--gap-8);
+}
+
+.doc-set-docs-list {
+  overflow: hidden;
+}
+
+.doc-set-docs-toolbar {
+  flex-shrink: 0;
+}
+
 /* Sketch 016 winner A: read-only doc inspector, no form controls in the aside. */
 .doc-set-inspector {
   width: 260px;

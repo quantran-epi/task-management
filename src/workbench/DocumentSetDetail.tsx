@@ -802,7 +802,7 @@ export function DocumentSetDetail({
             {set.description}
           </Paragraph>
         ) : null}
-        <Space wrap style={{ marginTop: 8 }}>
+        <Space className="doc-set-detail-actions" wrap size={8} style={{ marginTop: 8 }}>
           <Tooltip title={stateUi.label}>
             <Tag color={stateUi.color} icon={stateUi.icon}>{stateUi.label}</Tag>
           </Tooltip>
@@ -878,9 +878,9 @@ export function DocumentSetDetail({
       )}
 
       {/* Docs list owns the viewport: graph/history fold into a compact pane below. */}
-      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: '1 1 auto', minHeight: 160, minWidth: 0, gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', background: 'var(--ant-color-bg-layout, #f5f6f8)' }}>
+      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: '1 1 auto', minHeight: 0, minWidth: 0, gap: 12 }}>
+        <div className="doc-set-docs-list" style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
+          <div className="doc-set-docs-toolbar" style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border, var(--ant-color-border))', background: 'var(--bg-elev)' }}>
             <SearchInput
               aria-label="Tìm tài liệu trong bộ"
               placeholder="Tên hoặc đường dẫn"
@@ -921,6 +921,7 @@ export function DocumentSetDetail({
               items={filteredRows}
               estimateSize={() => DOC_ROW_HEIGHT}
               height="100%"
+              style={{ flex: '1 1 auto', minHeight: 0 }}
               overscan={4}
               role="listbox"
               aria-label="Danh sách tài liệu trong bộ"
