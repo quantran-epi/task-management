@@ -5,6 +5,7 @@ import 'fake-indexeddb/auto';
 import { TaskPlannerDatabase } from '../../src/db';
 import { TimerProvider } from '../../src/context/TimerContext';
 import { useTimer } from '../../src/hooks/useTimer';
+import { useTimerTick } from '../../src/hooks/useTimerTick';
 import type { Task } from '../../src/types/models';
 
 describe('TimerContext & useTimer', () => {
@@ -251,28 +252,33 @@ describe('TimerContext & useTimer', () => {
     expect(elapsed).toBeGreaterThanOrEqual(45);
   });
 
-  it('re-renders subscribers every 1000ms when at least one active timer is running', async () => {
+  it('keeps the context value stable while the tick store updates every 1000ms', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 
-    const { result } = renderHook(() => useTimer(), { wrapper });
+    const { result: timer } = renderHook(
+      () => ({ timer: useTimer(), tick: useTimerTick() }),
+      { wrapper }
+    );
 
     await act(async () => {
-      await result.current.startTimer('task-1');
+      await timer.current.timer.startTimer('task-1');
     });
 
     await vi.waitFor(() => {
-      expect(result.current.activeTimers).toHaveLength(1);
+      expect(timer.current.timer.activeTimers).toHaveLength(1);
     });
 
-    const initialContextValue = result.current;
+    const initialContextValue = timer.current.timer;
+    const initialTick = timer.current.tick;
 
-    // Advance 1000ms
     act(() => {
       vi.advanceTimersByTime(1000);
     });
 
-    // Subscriber value reference should have updated because tick is in useMemo dependencies
-    expect(result.current).not.toBe(initialContextValue);
+    // Tick subscribers re-render; TimerContext consumers keep the same value.
+    expect(timer.current.tick).toBe(initialTick + 1);
+    expect(timer.current.timer).toBe(initialContextValue);
+    expect(timer.current.timer.tick).toBe(0);
 
     vi.useRealTimers();
   });

@@ -3,6 +3,7 @@ import { useMessage } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../db';
 import { useTimer } from '../hooks/useTimer';
+import { useTimerTick } from '../hooks/useTimerTick';
 import { getTodayDateString } from '../utils/date';
 import { evaluateLiveTaskDailyAllocationAlert } from '../utils/timerAlerts';
 import { sendDesktopNotification } from '../utils/desktopNotification';
@@ -26,7 +27,8 @@ export interface UseTimerAlertMonitorOptions {
 export function useTimerAlertMonitor(options: UseTimerAlertMonitorOptions = {}): void {
   const targetDb = options.database || db;
   const message = useMessage();
-  const { activeTimers, getElapsedSeconds, tick } = useTimer();
+  const { activeTimers, getElapsedSeconds } = useTimer();
+  const tick = useTimerTick();
   const alertedTasksRef = useRef<Set<string>>(new Set());
 
   const todayStr = getTodayDateString();

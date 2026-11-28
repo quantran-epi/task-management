@@ -1,7 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import React from 'react';
-import { message } from 'antd';
+import React, { createElement } from 'react';
+import { App as AntApp, message } from 'antd';
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>();
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      // jsdom has no real message holder; route useMessage() to the spied static API.
+      useApp: () => ({ message }),
+    },
+  };
+});
 import { useTimerAlertMonitor } from '../../src/hooks/useTimerAlertMonitor';
 import { TimerContext, type TimerContextValue } from '../../src/context/TimerContext';
 import { TaskPlannerDatabase } from '../../src/db';
@@ -93,8 +105,11 @@ describe('useTimerAlertMonitor', () => {
       <TimerContext.Provider value={timerValue}>{children}</TimerContext.Provider>
     );
 
+    const OuterWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <AntApp>{createElement(wrapper, { children })}</AntApp>
+    );
     const { rerender } = renderHook(() => useTimerAlertMonitor({ database: testDb }), {
-      wrapper,
+      wrapper: OuterWrapper,
     });
 
     // Wait for live query async resolution
@@ -163,8 +178,11 @@ describe('useTimerAlertMonitor', () => {
       <TimerContext.Provider value={timerValue}>{children}</TimerContext.Provider>
     );
 
+    const OuterWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <AntApp>{createElement(wrapper, { children })}</AntApp>
+    );
     const { rerender } = renderHook(() => useTimerAlertMonitor({ database: testDb }), {
-      wrapper,
+      wrapper: OuterWrapper,
     });
 
     await act(async () => {
@@ -257,7 +275,10 @@ describe('useTimerAlertMonitor', () => {
       <TimerContext.Provider value={timerValue}>{children}</TimerContext.Provider>
     );
 
-    renderHook(() => useTimerAlertMonitor({ database: testDb }), { wrapper });
+    const OuterWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+      <AntApp>{createElement(wrapper, { children })}</AntApp>
+    );
+    renderHook(() => useTimerAlertMonitor({ database: testDb }), { wrapper: OuterWrapper });
 
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));

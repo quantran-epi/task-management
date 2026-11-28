@@ -1,8 +1,11 @@
-import React, { createContext, useEffect, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useEffect, useMemo, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type TaskPlannerDatabase } from '../db';
 import type { ActiveTimer, WorkSession } from '../types/models';
 import { generateId } from '../utils/uuid';
+import { acquireTimerTicker, useTimerSyncListener } from '../hooks/useTimerTick';
+
+export { useTimerTick } from '../hooks/useTimerTick';
 
 export interface TimerContextValue {
   activeTimers: ActiveTimer[];
@@ -12,6 +15,7 @@ export interface TimerContextValue {
   pauseTimer: (taskId: string) => Promise<void>;
   finishTimer: (taskId: string, note?: string) => Promise<WorkSession | null>;
   cancelTimer: (taskId: string) => Promise<void>;
+  /** Deprecated: use useTimerTick(). Always 0; kept for API compatibility. */
   tick?: number;
 }
 
@@ -44,42 +48,19 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
   // Reactive query from Dexie - survives reload (D-04, D-05)
   const activeTimers = useLiveQuery(() => database.activeTimers.toArray(), [database]) ?? [];
 
-  // Local ticker state for re-rendering UI subscribers every second
-  // Does NOT write to IndexedDB per second (D-06)
-  const [tick, setTick] = useState<number>(0);
-
-  // Cross-window synchronization via BroadcastChannel (Tauri multi-window & browser popout)
-  useEffect(() => {
-    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
-    try {
-      const channel = new BroadcastChannel(TIMER_SYNC_CHANNEL);
-      channel.onmessage = () => {
-        setTick((prev) => prev + 1);
-      };
-      return () => {
-        channel.close();
-      };
-    } catch {
-      return undefined;
-    }
-  }, []);
+  // Cross-window synchronization via BroadcastChannel (Tauri multi-window & browser popout).
+  // Only the tick store changes — provider consumers no longer re-render each second.
+  useTimerSyncListener(TIMER_SYNC_CHANNEL);
 
   const hasRunningTimer = useMemo(
     () => activeTimers.some((t) => t.status === 'running'),
     [activeTimers]
   );
 
-  // T-12.1-04: Only run interval when at least 1 timer is running
+  // T-12.1-04: Only run the shared 1s ticker when at least 1 timer is running.
   useEffect(() => {
     if (!hasRunningTimer) return;
-
-    const intervalId = window.setInterval(() => {
-      setTick((prev) => prev + 1);
-    }, 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
+    return acquireTimerTicker();
   }, [hasRunningTimer]);
 
   const getTimerForTask = useCallback(
@@ -268,7 +249,7 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
       pauseTimer,
       finishTimer,
       cancelTimer,
-      tick,
+      tick: 0,
     }),
     [
       activeTimers,
@@ -278,7 +259,6 @@ export const TimerProvider: React.FC<TimerProviderProps> = ({
       pauseTimer,
       finishTimer,
       cancelTimer,
-      tick,
     ]
   );
 

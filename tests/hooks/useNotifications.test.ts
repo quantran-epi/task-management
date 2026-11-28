@@ -134,4 +134,40 @@ describe('useNotifications hook (NOTIF-02, D-01, D-05)', () => {
       expect(result.current.items.some((i) => i.id.includes('rem-1001'))).toBe(true);
     });
   });
+
+  it('shares one live query and clock across multiple subscribers of the same db', async () => {
+    await testDb.tasks.add({ crId: '11111111-1111-4111-8111-111111111111',
+      id: 't-shared',
+      name: 'Shared Alert',
+      status: 'Open',
+      progress: 0,
+      priority: 'Urgent',
+      estimateMinutes: 30,
+      deadline: '2026-01-01',
+      createdAt: '2026-01-01',
+      updatedAt: '2026-01-01',
+    });
+
+    const first = renderHook(() => useNotifications(testDb));
+    const second = renderHook(() => useNotifications(testDb));
+
+    await waitFor(() => {
+      expect(first.result.current.isLoading).toBe(false);
+      expect(second.result.current.isLoading).toBe(false);
+    });
+    expect(first.result.current).toBe(second.result.current);
+
+    await act(async () => {
+      await testDb.tasks.update('t-shared', { status: 'Done' });
+    });
+
+    await waitFor(() => {
+      expect(first.result.current.activeCount).toBe(0);
+      expect(second.result.current.activeCount).toBe(0);
+    });
+    expect(first.result.current).toBe(second.result.current);
+
+    first.unmount();
+    second.unmount();
+  });
 });
