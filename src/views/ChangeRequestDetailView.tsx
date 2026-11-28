@@ -339,7 +339,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
               {(cr.links ?? []).map((link, idx) => (
                 <div key={`${idx}-${link.url}`} style={{ display: 'inline-flex' }}>
                   <Button
+                    type="link"
                     size="small"
+                    style={{ padding: 0, height: 'auto' }}
                     title={link.url}
                     icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
                     onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
@@ -756,7 +758,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             minWidth: 0,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 'var(--gap-8)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)', marginBottom: 'var(--gap-8)' }}>
             <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600 }}>
               {block.header}
               {block.count > 0 && (
