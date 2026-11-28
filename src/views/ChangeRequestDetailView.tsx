@@ -211,6 +211,48 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     });
   };
 
+  const handleRemoveLink = (index: number) => {
+    const link = cr.links?.[index];
+    if (!link) return;
+    modal.confirm({
+      title: 'Xóa liên kết',
+      content: `Xóa liên kết '${link.name || link.url}'?`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await updateChangeRequest(cr.id, { links: (cr.links ?? []).filter((_, i) => i !== index) }, db);
+          message.success('Đã xóa liên kết');
+        } catch {
+          message.error('Không thể xóa liên kết');
+        }
+      },
+    });
+  };
+
+  const handleRemoveReminder = (reminderId: string) => {
+    modal.confirm({
+      title: 'Xóa nhắc nhở',
+      content: 'Xóa nhắc nhở này khỏi Change Request?',
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          await updateChangeRequest(
+            cr.id,
+            { reminders: (cr.reminders ?? []).filter((r) => r.id !== reminderId) },
+            db
+          );
+          message.success('Đã xóa nhắc nhở');
+        } catch {
+          message.error('Không thể xóa nhắc nhở');
+        }
+      },
+    });
+  };
+
   const handleAddLink = async () => {
     const trimmed = linkUrl.trim();
     if (!trimmed || !isValidLinkUrl(trimmed)) {
@@ -288,15 +330,31 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           {stats.linkCount > 0 ? (
             <Space size={8} wrap>
               {(cr.links ?? []).map((link, idx) => (
-                <Button
-                  key={`${idx}-${link.url}`}
-                  size="small"
-                  title={link.url}
-                  icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                  onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-                >
-                  {link.name || link.url}
-                </Button>
+                <div key={`${idx}-${link.url}`} style={{ display: 'inline-flex' }}>
+                  <Button
+                    size="small"
+                    title={link.url}
+                    icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                    onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                  >
+                    {link.name || link.url}
+                  </Button>
+                  <Button
+                    size="small"
+                    title="Sửa liên kết"
+                    aria-label="Sửa liên kết"
+                    icon={<EditOutlined />}
+                    onClick={() => setEditModalOpen(true)}
+                  />
+                  <Button
+                    size="small"
+                    danger
+                    title="Xóa liên kết"
+                    aria-label="Xóa liên kết"
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleRemoveLink(idx)}
+                  />
+                </div>
               ))}
             </Space>
           ) : (
@@ -333,19 +391,40 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       testId: 'cr-detail-block-reminders',
       header: 'Nhắc nhở',
       count: stats.reminderCount,
+      action: (
+        <Button data-testid="cr-detail-reminder-add" type="link" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
+          Thêm nhắc nhở
+        </Button>
+      ),
       body: (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--gap-8)' }}>
-          <Button data-testid="cr-detail-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
-            Thêm nhắc nhở
-          </Button>
           {cr.reminders && cr.reminders.length > 0 ? (
-            <Space direction="vertical" size={2}>
+            <Space direction="vertical" size={4}>
               {cr.reminders.map((r) => (
-                <span key={r.id} style={{ fontSize: 'var(--font-size-small)' }}>
-                  {r.date}
-                  {r.time ? ` ${r.time}` : ''}
-                  {r.note ? ` — ${r.note}` : ''}
-                </span>
+                <div key={r.id} style={{ display: 'inline-flex' }}>
+                  <span style={{ fontSize: 'var(--font-size-small)' }}>
+                    {r.date}
+                    {r.time ? ` ${r.time}` : ''}
+                    {r.note ? ` — ${r.note}` : ''}
+                  </span>
+                  <Button
+                    size="small"
+                    type="text"
+                    title="Sửa nhắc nhở"
+                    aria-label="Sửa nhắc nhở"
+                    icon={<EditOutlined />}
+                    onClick={() => setEditModalOpen(true)}
+                  />
+                  <Button
+                    size="small"
+                    type="text"
+                    danger
+                    title="Xóa nhắc nhở"
+                    aria-label="Xóa nhắc nhở"
+                    icon={<DeleteOutlined />}
+                    onClick={() => handleRemoveReminder(r.id)}
+                  />
+                </div>
               ))}
             </Space>
           ) : cr.reminderDate ? (
@@ -658,14 +737,17 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             minWidth: 0,
           }}
         >
-          <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600, marginBottom: 'var(--gap-8)' }}>
-            {block.header}
-            {block.count > 0 && (
-              <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
-                {block.count}
-              </Tag>
-            )}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', marginBottom: 'var(--gap-8)' }}>
+            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600 }}>
+              {block.header}
+              {block.count > 0 && (
+                <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
+                  {block.count}
+                </Tag>
+              )}
+            </span>
+            {block.action}
+          </div>
           <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
         </div>
       ))}
