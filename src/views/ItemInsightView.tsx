@@ -812,7 +812,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             </Card>
 
             <Card
-              title={<Space><FileTextOutlined /><span>Ghi chú liên quan ({relatedNotes.length})</span></Space>}
+              title={<Space><FileTextOutlined /><span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>Ghi chú liên quan ({relatedNotes.length})</span></Space>}
+              styles={{ header: { flexWrap: 'wrap', gap: 'var(--gap-8)' }, title: { minWidth: 0, overflowWrap: 'anywhere', whiteSpace: 'normal', textOverflow: 'clip' } }}
               extra={<Button size="small" icon={<PlusOutlined />} onClick={() => setEditingNote({ id: '', title: '', body: '', entityType: itemType, entityId: itemId, isPinned: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })}>Thêm ghi chú</Button>}
             >
               {relatedNotes.length === 0 ? (
@@ -821,8 +822,11 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 <List
                   dataSource={relatedNotes}
                   renderItem={(note) => (
-                    <ListItem key={note.id} actions={[<Button key="view" type="link" onClick={() => setInspectingNote(note)}>Xem</Button>, <Button key="edit" type="link" onClick={() => setEditingNote(note)}>Sửa</Button>]}>
-                      <ListItem.Meta title={note.title || 'Ghi chú không tiêu đề'} description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`} />
+                    <ListItem key={note.id} style={{ alignItems: 'flex-start' }} actions={[<Button key="view" type="link" onClick={() => setInspectingNote(note)}>Xem</Button>, <Button key="edit" type="link" onClick={() => setEditingNote(note)}>Sửa</Button>]}>
+                      <ListItem.Meta
+                        title={<span data-testid="insight-note-title" style={{ display: 'block', minWidth: 0, overflowWrap: 'anywhere' }}>{note.title || 'Ghi chú không tiêu đề'}</span>}
+                        description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`}
+                      />
                     </ListItem>
                   )}
                 />

@@ -6,6 +6,8 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { createSystem } from '../../src/db/repositories/systemRepo';
+import { createNote } from '../../src/db/repositories/noteRepo';
+import { NOTE_TITLE_MAX_LENGTH } from '../../src/validation/schemas';
 import { ThemeAppHolder } from '../../src/components/ui';
 
 const SYSTEM_INPUT = {
@@ -141,6 +143,38 @@ describe('ItemInsightView', () => {
     expect(screen.getByText('Ưu tiên High')).toBeInTheDocument();
     expect(screen.getAllByText('PAYMENT_SVC')).toHaveLength(1);
     expect(screen.getByTestId('item-insight-linked-system')).toHaveTextContent('PAYMENT_SVC — Payment Service');
+  }, 30000);
+
+  it('wraps a 120-character note title in the task Notes card without covering the add button', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
+      { code: 'CR-2026-NOTE', name: 'Thanh toán QR', type: 'NEW_FEATURE', status: 'In Progress', targets: [{ systemId: system.id }] },
+      testDb
+    );
+    const task = await createTask(
+      { crId: cr.id, systemId: system.id, name: 'Tác vụ có ghi chú dài', status: 'Open', priority: 'Medium', estimateMinutes: 0 },
+      testDb
+    );
+    const phrase = 'Tiêu đề ghi chú dài để kiểm tra khả năng hiển thị trọn vẹn trên cột hẹp ';
+    const longTitle = phrase.repeat(4).slice(0, NOTE_TITLE_MAX_LENGTH);
+    expect(longTitle).toHaveLength(120);
+    await createNote({ entityType: 'task', entityId: task.id, title: longTitle, body: 'Nội dung test' }, testDb);
+
+    render(<ItemInsightView itemType="task" itemId={task.id} onNavigate={mockNavigate} db={testDb} />);
+
+    const titleEl = await screen.findByTestId('insight-note-title');
+    expect(titleEl).toHaveTextContent(longTitle);
+    expect(titleEl.style.minWidth).toBe('0px');
+    expect(titleEl.style.overflowWrap).toBe('anywhere');
+
+    const card = screen.getByText(/Ghi chú liên quan \(1\)/).closest('.ant-card') as HTMLElement;
+    const head = card.querySelector('.ant-card-head') as HTMLElement;
+    const headTitle = card.querySelector('.ant-card-head-title') as HTMLElement;
+    expect(head).toBeTruthy();
+    expect(head).toHaveStyle({ flexWrap: 'wrap' });
+    expect(headTitle).toHaveStyle({ minWidth: '0px', overflowWrap: 'anywhere', whiteSpace: 'normal', textOverflow: 'clip' });
+
+    expect(within(card).getByRole('button', { name: /thêm ghi chú/i })).toBeEnabled();
   }, 30000);
 
   it('shows linked system in its own section, opens canonical detail from tag and breadcrumb, with both fallbacks', async () => {
