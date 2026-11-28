@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Table, Tabs, Tag, Tooltip, useMessage, EmptyImageSimple, Paragraph, Text, Title } from '../components/ui';
+import { Alert, Breadcrumb, Button, Card, Descriptions, Empty, Space, Spin, Table, Tabs, Tag, Tooltip, Typography, useMessage, EmptyImageSimple, Paragraph, Text, Title } from '../components/ui';
 import type { DescriptionsProps, TabsProps } from 'antd';
 import { ApartmentOutlined, BranchesOutlined, CodeOutlined, EditOutlined, FolderOutlined, PlusOutlined, RocketOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -97,6 +97,13 @@ async function loadBranchDetails(
     });
   }
   return details;
+}
+
+/** Short display label for a git link; keeps SCP syntax intact. */
+function gitLinkLabel(url: string): string {
+  const value = url.replace(/\.git$/, '');
+  const match = /^(?:[a-z]+:\/\/)?[^/@]+@([^:/]+)[:/](.+)$/i.exec(value);
+  return match ? `${match[1]}/${match[2]}` : value;
 }
 
 const CONNECTION_STATUS: Record<'connected' | 'unconfigured' | 'error', { color: string; label: string }> = {
@@ -277,6 +284,36 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
     ...(system.description
       ? [{ key: 'description', label: 'Mô tả', children: system.description }]
       : []),
+    {
+      key: 'gitSourceUrl',
+      label: 'Link Git Source',
+      children: system.gitSourceUrl ? (
+        <Typography.Link
+          href={system.gitSourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {gitLinkLabel(system.gitSourceUrl)}
+        </Typography.Link>
+      ) : (
+        <Text type="secondary">—</Text>
+      ),
+    },
+    {
+      key: 'gitOpsUrl',
+      label: 'Link Git GitOps',
+      children: system.gitOpsUrl ? (
+        <Typography.Link
+          href={system.gitOpsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {gitLinkLabel(system.gitOpsUrl)}
+        </Typography.Link>
+      ) : (
+        <Text type="secondary">—</Text>
+      ),
+    },
     ...(isSubsystem(system)
       ? [
           {

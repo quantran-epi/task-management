@@ -13,6 +13,13 @@ import {
 } from '../../services/system/systemTypeSettings';
 
 const { Text } = Typography;
+const { Link } = Typography;
+
+function gitLinkLabel(url: string): string {
+  const value = url.replace(/\.git$/, '');
+  const match = /^(?:[a-z]+:\/\/)?[^/@]+@([^:/]+)[:/](.+)$/i.exec(value);
+  return match ? `${match[1]}/${match[2]}` : value;
+}
 
 export interface SystemTableRow extends System {
   key: string;
@@ -218,6 +225,48 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               title="Sao chép đường dẫn"
               style={{ width: 22, height: 22, padding: 0 }}
             />
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Link Git',
+      key: 'gitLinks',
+      width: 220,
+      render: (_: unknown, record: SystemTableRow) => {
+        if (!record.gitSourceUrl && !record.gitOpsUrl) {
+          return <Text type="secondary" style={{ fontSize: 'var(--font-size-small)' }}>—</Text>;
+        }
+        return (
+          <Space direction="vertical" size={2}>
+            {record.gitSourceUrl && (
+              <Text style={{ fontSize: 'var(--font-size-small)' }}>
+                Source:{' '}
+                <Link
+                  href={record.gitSourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ellipsis
+                  style={{ fontSize: 'var(--font-size-small)' }}
+                >
+                  {gitLinkLabel(record.gitSourceUrl)}
+                </Link>
+              </Text>
+            )}
+            {record.gitOpsUrl && (
+              <Text style={{ fontSize: 'var(--font-size-small)' }}>
+                GitOps:{' '}
+                <Link
+                  href={record.gitOpsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  ellipsis
+                  style={{ fontSize: 'var(--font-size-small)' }}
+                >
+                  {gitLinkLabel(record.gitOpsUrl)}
+                </Link>
+              </Text>
+            )}
           </Space>
         );
       },

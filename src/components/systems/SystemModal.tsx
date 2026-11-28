@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Form, Input, Select, AutoComplete, Button, useMessage, FormItem, SpaceCompact, TextArea, useForm, useWatch } from '../ui';
-import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined } from '../ui/icon';
+import { ApartmentOutlined, CloudServerOutlined, FolderOpenOutlined, LinkOutlined } from '../ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { getParentSystems } from '../../db/repositories/systemRepo';
@@ -14,6 +14,7 @@ import {
   useSystemTypeOptions,
 } from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
+import { isValidGitRepoUrl } from '../../validation/schemas';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface SystemModalProps {
@@ -73,6 +74,8 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           description: system.description || undefined,
           sshConfigId: system.sshConfigId || undefined,
           remoteRepoPath: system.remoteRepoPath || undefined,
+          gitSourceUrl: system.gitSourceUrl || undefined,
+          gitOpsUrl: system.gitOpsUrl || undefined,
           defaultBaseBranch: system.defaultBaseBranch || 'origin/main',
         });
       } else {
@@ -100,6 +103,8 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         code: values.code.trim().toUpperCase(),
         type: normalizedType as SystemType,
         description: values.description?.trim() || undefined,
+        gitSourceUrl: values.gitSourceUrl?.trim() || undefined,
+        gitOpsUrl: values.gitOpsUrl?.trim() || undefined,
       };
 
       if (normalizedType !== LOGICAL_GROUP_TYPE) {
@@ -235,6 +240,64 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         <FormItem name="description" label="Mô tả chức năng">
           <TextArea rows={2} placeholder="Mô tả chức năng chính của hệ thống hoặc dịch vụ..." />
         </FormItem>
+
+        <div
+          style={{
+            padding: 12,
+            borderRadius: 'var(--radius-control)',
+            background: 'var(--bg-elev, #f7f8fa)',
+            border: '1px solid var(--border, #e9eaee)',
+            marginTop: 6,
+            marginBottom: 12,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--gap-6)',
+              marginBottom: 10,
+              fontSize: 'var(--font-size-small)',
+              fontWeight: 600,
+              color: 'var(--fg-strong, #000000)',
+            }}
+          >
+            <LinkOutlined style={{ color: 'var(--accent)' }} />
+            <span>Link Git</span>
+          </div>
+
+          <FormItem
+            name="gitSourceUrl"
+            label="Link Git Source Code"
+            rules={[
+              {
+                validator: async (_, value) => {
+                  if (!value || isValidGitRepoUrl(value)) return;
+                  throw new Error('Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git');
+                },
+              },
+            ]}
+            style={{ marginBottom: 10 }}
+          >
+            <Input placeholder="https://github.com/owner/repo.git" />
+          </FormItem>
+
+          <FormItem
+            name="gitOpsUrl"
+            label="Link Git GitOps"
+            rules={[
+              {
+                validator: async (_, value) => {
+                  if (!value || isValidGitRepoUrl(value)) return;
+                  throw new Error('Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git');
+                },
+              },
+            ]}
+            style={{ marginBottom: 0 }}
+          >
+            <Input placeholder="git@github.com:owner/repo.git" />
+          </FormItem>
+        </div>
 
         {!isLogicalGroup && (
           <div
