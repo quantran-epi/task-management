@@ -689,6 +689,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             </Col>
           ) : null}
         </Row>
+      </Card>
 
       {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
         <Card
@@ -763,8 +764,6 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           </div>
         </Card>
       )}
-
-      </Card>
 
       {itemType === 'task' && currentTask && (
         <Card
