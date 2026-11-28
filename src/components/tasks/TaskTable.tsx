@@ -193,9 +193,7 @@ export const TaskColumnCustomization: React.FC<TaskColumnCustomizationProps> = (
       placement="bottomRight"
     >
       <Tooltip title="Cột hiển thị">
-        <Button size="small" icon={<SettingOutlined />} aria-label="Cột hiển thị">
-          Tuỳ biến cột
-        </Button>
+        <Button size="small" icon={<SettingOutlined />} aria-label="Cột hiển thị" />
       </Tooltip>
     </Popover>
   );
@@ -858,15 +856,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           )}
         </div>
         <div className="tm-tasklist__countline-actions">
-          <Button
-            type="primary"
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={handleCopyStandup}
-            aria-label="Sao chép Standup"
-          >
-            Sao chép Standup
-          </Button>
+          <Tooltip title="Sao chép Standup">
+            <Button
+              className="tm-tasklist__countline-standup"
+              type="text"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={handleCopyStandup}
+              aria-label="Sao chép Standup"
+            />
+          </Tooltip>
           <span className="tm-tasklist__countline-hint">Sticky header · keyboard nav · testid giữ nguyên</span>
         </div>
       </div>

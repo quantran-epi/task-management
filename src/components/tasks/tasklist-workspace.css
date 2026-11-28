@@ -7,6 +7,19 @@
   min-width: 0;
 }
 
+/* Deck head is the single title source; keep PageHeader only for its extra action. */
+.tm-tasklist__page-header {
+  margin-bottom: 0;
+}
+
+.tm-tasklist__page-header > div:first-child > div:first-child {
+  display: none;
+}
+
+.tm-tasklist__page-header > div:first-child {
+  justify-content: flex-end;
+}
+
 .tm-tasklist__toolstrip {
   display: flex;
   flex-direction: column;
@@ -62,10 +75,31 @@
 .tm-tasklist__filter-row--primary .tm-tasklist__filter-controls {
   flex-wrap: nowrap;
   width: 100%;
+  overflow: hidden;
 }
 
 .tm-tasklist__filter-row--primary .tm-tasklist__sort-select {
-  width: 170px;
+  width: 100px;
+}
+
+/* Short placeholders + truncation: full labels stay in aria-label and dropdown. */
+.tm-tasklist__filter-controls .tm-tasklist__cr-select { width: 64px; }
+.tm-tasklist__filter-controls .tm-tasklist__system-select { width: 76px; }
+.tm-tasklist__filter-controls .ant-segmented-item-label { padding-inline: 5px; }
+
+.tm-tasklist__advanced-shadow {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tm-tasklist__filter-controls .ant-select-selection-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Fixed-width controls stay whole; the search box absorbs the remaining space. */
@@ -76,15 +110,16 @@
   flex: 0 0 auto;
 }
 
+.tm-tasklist__filter-controls > .tm-tasklist__search {
+  flex: 1 1 45%;
+  min-width: 240px;
+}
+
 .tm-tasklist__filter-controls {
   display: flex;
   gap: var(--gap-6);
   align-items: center;
   min-width: 0;
-}
-
-.tm-tasklist__filter-row--secondary {
-  justify-content: flex-start;
 }
 
 .tm-tasklist__filter-advanced {
@@ -111,15 +146,6 @@
 .tm-tasklist__filter-label {
   font-size: var(--font-size-xs);
   color: var(--fg-secondary);
-}
-
-.tm-tasklist__advanced-shadow {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
 }
 
 .tm-tasklist__batch {
@@ -239,6 +265,13 @@
   align-items: center;
   gap: var(--gap-8);
   flex-wrap: nowrap;
+}
+
+.tm-tasklist__countline-standup.ant-btn {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
 }
 
 .tm-tasklist__countline-label {
@@ -439,6 +472,7 @@
 
   .tm-tasklist__filter-controls {
     flex-wrap: wrap;
+    overflow: visible;
   }
 
   .tm-tasklist__countline-hint {

@@ -66,6 +66,9 @@ describe('TasksView workspace chrome', () => {
     const quickAdd = screen.getByLabelText('Thêm nhanh tên tác vụ và ước tính') as HTMLInputElement;
     expect(quickAdd.id).toBe('quick-add-input');
     expect(quickAdd.dataset.shortcutId).toBe('quick-add-input');
+    // Deck head owns the only tasklist title; PageHeader keeps only its extra action.
+    expect(container.querySelectorAll('.tm-tasklist__deck-title')).toHaveLength(1);
+    expect(container.querySelector('.tm-tasklist__page-header')?.className).toContain('tm-tasklist__page-header');
   });
 
   it('passes the filtered tasks array straight to TaskTable', () => {

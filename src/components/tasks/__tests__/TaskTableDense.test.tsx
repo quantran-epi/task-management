@@ -116,6 +116,11 @@ describe('TaskTable dense layout (sketch 017 winner A)', () => {
     expect(container.querySelector('.tm-tasklist__meta')).not.toBeNull();
     expect(container.querySelector('.tm-tasklist__status')).not.toBeNull();
 
+    // Sketch 017: countline is text + hint only; standup stays as an icon action with the same label.
+    const standup = screen.getByLabelText('Sao chép Standup');
+    expect(standup.textContent).toBe('');
+    expect(standup.closest('.tm-tasklist__countline')).not.toBeNull();
+
     fireEvent.click(screen.getByLabelText('Chọn Review API contract'));
     expect(mocks.onSelectRows).toHaveBeenCalledWith(['task-late']);
 

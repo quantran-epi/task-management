@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Input, Select, Segmented, Checkbox, Button, Badge, Row, Col, useAntdToken, DateRangePicker, RadioGroup, RadioButton, Popover } from '../ui';
+import { Input, Select, Segmented, Checkbox, Button, Badge, Row, Col, useAntdToken, DateRangePicker, Popover, Tooltip } from '../ui';
 import type { InputRef } from 'antd';
 import { SearchOutlined, FilterOutlined, ClearOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -100,7 +100,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             placeholder="Tìm kiếm tác vụ (Nhấn '/' để tìm)..."
             value={filters.search}
             onChange={(e) => onFilterChange({ search: e.target.value })}
-            style={{ maxWidth: 420, flex: '1 1 240px' }}
+            style={{ width: 'auto', flex: '1 1 45%', minWidth: 240 }}
             allowClear
             aria-label="Tìm kiếm tác vụ"
           />
@@ -123,8 +123,9 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             allowClear
             showSearch
             optionFilterProp="label"
-            placeholder="Lọc theo CR"
-            style={{ width: 120 }}
+            className="tm-tasklist__cr-select"
+            placeholder="CR…"
+            style={{ width: 'auto', minWidth: 70 }}
             value={filters.crId || undefined}
             onChange={(val) => {
               onFilterChange({
@@ -150,8 +151,9 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             allowClear
             showSearch
             optionFilterProp="label"
-            placeholder="Lọc theo Subsystem"
-            style={{ width: 124 }}
+            className="tm-tasklist__system-select"
+            placeholder="Sub…"
+            style={{ width: 'auto', minWidth: 80 }}
             value={filters.systemId || undefined}
             onChange={(val) => onFilterChange({ systemId: val || null })}
             options={eligibleSystems.map((s) => ({ label: s.name, value: s.id }))}
@@ -188,6 +190,22 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
               content={
                 <div className="tm-tasklist__filter-advanced">
                   <div className="tm-tasklist__filter-advanced-row">
+                    <div className="tm-tasklist__filter-field">
+                      <span className="tm-tasklist__filter-label">Khoảng thời gian:</span>
+                      <Select
+                        size="small"
+                        style={{ minWidth: 140 }}
+                        value={filters.horizon}
+                        onChange={(val) => onFilterChange({ horizon: val })}
+                        options={[
+                          { label: 'Tất cả', value: 'all' },
+                          { label: 'Quá hạn', value: 'overdue' },
+                          { label: 'Hôm nay', value: 'today' },
+                          { label: 'Tuần này', value: 'this_week' },
+                        ]}
+                        aria-label="Khoảng thời gian"
+                      />
+                    </div>
                     <div className="tm-tasklist__filter-field">
                       <span className="tm-tasklist__filter-label">Trạng thái:</span>
                       <Select
@@ -406,7 +424,6 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                 aria-expanded={advancedOpen}
                 aria-label="Bộ lọc nâng cao"
               >
-                Bộ lọc nâng cao
                 <span className="tm-tasklist__advanced-shadow" aria-hidden="true">
                   Bao gồm Hoàn thành &amp; Đã hủy
                 </span>
@@ -416,33 +433,16 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           </Badge>
 
           {onResetFilters && hasActiveFilters && (
-            <Button
-              size="small"
-              icon={<ClearOutlined />}
-              onClick={onResetFilters}
-              aria-label="Xóa bộ lọc"
-            >
-              Xóa bộ lọc
-            </Button>
+            <Tooltip title="Xóa bộ lọc">
+              <Button
+                size="small"
+                icon={<ClearOutlined />}
+                onClick={onResetFilters}
+                aria-label="Xóa bộ lọc"
+              />
+            </Tooltip>
           )}
         </div>
-      </div>
-
-      {/* Secondary row: horizon. */}
-      <div className="tm-tasklist__filter-row tm-tasklist__filter-row--secondary">
-        <RadioGroup
-          value={filters.horizon}
-          onChange={(e) => onFilterChange({ horizon: e.target.value })}
-          optionType="button"
-          buttonStyle="solid"
-          size="small"
-          aria-label="Khoảng thời gian"
-        >
-          <RadioButton value="all">Tất cả</RadioButton>
-          <RadioButton value="overdue">Quá hạn</RadioButton>
-          <RadioButton value="today">Hôm nay</RadioButton>
-          <RadioButton value="this_week">Tuần này</RadioButton>
-        </RadioGroup>
       </div>
     </div>
   );

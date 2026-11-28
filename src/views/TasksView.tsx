@@ -305,8 +305,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
       {contextHolder}
       {/* 1. Page Header */}
       <PageHeader
+        className="tm-tasklist__page-header"
         title="Danh sách tác vụ"
-        subtitle=".command deck · quản lý, phân bổ, theo dõi"
         extra={
           <Button
             icon={<ThunderboltOutlined />}
@@ -318,7 +318,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         }
       />
 
-      {/* 2–3. Dense table deck — sketch 017 winner A */}
+      {/* 2–3. Dense table deck — sketch 017 winner A; deck head owns the only title/subtitle. */}
       <section className="tm-tasklist__deck" aria-label="Bảng danh sách tác vụ">
         <div className="tm-tasklist__deck-head">
           <div className="tm-tasklist__deck-identity">
