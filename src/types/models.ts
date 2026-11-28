@@ -101,10 +101,21 @@ export interface TaskChecklistItem {
   done: boolean;
 }
 
+/** Phase 52 D-01: một mốc triển khai thuộc đúng một CR; Task chỉ giữ reference optional. */
+export interface CrMilestone {
+  id: string; // RFC 4122 v4 UUID
+  crId: string; // Reference to ChangeRequest.id
+  name: string;
+  targetDate?: string; // YYYY-MM-DD
+  createdAt: string; // ISO string metadata
+  updatedAt: string; // ISO string metadata
+}
+
 export interface Task {
   id: string; // RFC 4122 v4 UUID
   crId: string; // Required reference to ChangeRequest.id
   systemId?: string; // Optional reference to System.id; must be one of the CR's targets
+  milestoneId?: string; // Optional reference to CrMilestone.id; milestone must belong to this CR
   name: string;
   description?: string;
   deadline?: string; // YYYY-MM-DD

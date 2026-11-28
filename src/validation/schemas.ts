@@ -303,9 +303,18 @@ export type SystemUpdate = z.infer<typeof SystemUpdateSchema>;
 export type ChangeRequestInput = z.infer<typeof ChangeRequestInputSchema>;
 export type ChangeRequestUpdate = z.infer<typeof ChangeRequestUpdateSchema>;
 
+// Phase 52 (D-01): UI gọi repo verbs; schema chỉ validate input ở trust boundary.
+export const CrMilestoneInputSchema = z.object({
+  name: z.string().trim().min(1, 'Tên mốc không được trống').max(120, 'Tên mốc tối đa 120 ký tự'),
+  targetDate: calendarDateSchema.optional(),
+});
+
+export type CrMilestoneInput = z.infer<typeof CrMilestoneInputSchema>;
+
 export const TaskInputSchema = z.object({
   crId: uuidSchema,
   systemId: uuidSchema.optional(),
+  milestoneId: uuidSchema.optional(),
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -336,6 +345,7 @@ export const TaskInputSchema = z.object({
 export const TaskUpdateSchema = z.object({
   crId: uuidSchema.optional(),
   systemId: uuidSchema.optional(),
+  milestoneId: uuidSchema.optional(),
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),

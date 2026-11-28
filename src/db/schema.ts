@@ -213,4 +213,11 @@ export const SCHEMA_V30 = {
   ...SCHEMA_V29,
 } as const;
 
-export const LATEST_SCHEMA_VERSION = 30;
+// Phase 52 (D-01): mới table `crMilestones`, KHÔNG hồi sinh legacy `milestones`.
+// tasks index giữ nguyên — cascade dùng filter, không query theo milestoneId (Pitfall 2).
+export const SCHEMA_V31 = {
+  ...SCHEMA_V30,
+  crMilestones: 'id, crId',
+} as const;
+
+export const LATEST_SCHEMA_VERSION = 31;

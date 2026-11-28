@@ -30,6 +30,7 @@ import {
   SCHEMA_V28,
   SCHEMA_V29,
   SCHEMA_V30,
+  SCHEMA_V31,
 } from './schema';
 import type {
   Task,
@@ -55,6 +56,7 @@ import type {
   TelegramSessionLog,
   System,
   ChangeRequest,
+  CrMilestone,
 } from '../types/models';
 import type {
   AiEmployee,
@@ -103,6 +105,7 @@ export class TaskPlannerDatabase extends Dexie {
   telegramSessionLogs!: Table<TelegramSessionLog, string>;
   systems!: Table<System, string>;
   changeRequests!: Table<ChangeRequest, string>;
+  crMilestones!: Table<CrMilestone, string>;
   aiEmployees!: Table<AiEmployee, string>;
   aiLeads!: Table<AiLead, string>;
   aiSkills!: Table<AiSkill, string>;
@@ -732,6 +735,10 @@ export class TaskPlannerDatabase extends Dexie {
           });
         await Promise.all([migrate(tx.table('tasks')), migrate(tx.table('changeRequests'))]);
       });
+
+    // Phase 52 (D-01/D-02): store `crMilestones` mới, rỗng. Không backfill — task cũ
+    // giữ nguyên không có milestoneId, sẽ hiện ở nhóm "Chưa gán mốc" ở UI sau.
+    this.version(31).stores(SCHEMA_V31);
 
     // Multi-tab concurrency handlers (DATA-04, D-09, D-10)
     this.on('blocked', () => {
