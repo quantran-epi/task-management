@@ -26,6 +26,18 @@ async function assertSystemInCrTargets(
   }
 }
 
+/** Phase 52 D-03: milestoneId, nếu có, phải trỏ tới một mốc của chính CR đó. */
+async function assertMilestoneMatchesCr(
+  crId: string,
+  milestoneId: string | undefined,
+  db: TaskPlannerDatabase
+): Promise<void> {
+  if (milestoneId === undefined) return;
+  const milestone = await db.crMilestones.get(milestoneId);
+  if (!milestone) throw new Error('Mốc triển khai không tồn tại.');
+  if (milestone.crId !== crId) throw new Error('Mốc triển khai không thuộc CR đã chọn.');
+}
+
 export async function createTask(
   input: TaskInput,
   db: TaskPlannerDatabase = defaultDb
@@ -34,6 +46,7 @@ export async function createTask(
   const now = new Date().toISOString();
 
   await assertSystemInCrTargets(validated.crId, validated.systemId, db);
+  await assertMilestoneMatchesCr(validated.crId, validated.milestoneId, db);
 
   const task: Task = {
     id: generateId(),
@@ -49,6 +62,7 @@ export async function createTask(
   };
 
   if (validated.systemId !== undefined) task.systemId = validated.systemId;
+  if (validated.milestoneId !== undefined) task.milestoneId = validated.milestoneId;
   if (validated.description !== undefined) task.description = validated.description;
   if (validated.deadline !== undefined) task.deadline = validated.deadline;
   if (validated.notes !== undefined) task.notes = validated.notes;
@@ -96,16 +110,27 @@ export async function updateTask(
   if (validated.priority !== undefined) updated.priority = validated.priority;
   if (validated.estimateMinutes !== undefined) updated.estimateMinutes = validated.estimateMinutes;
   if (validated.workType !== undefined) updated.workType = validated.workType;
+  const crChanged = 'crId' in patch && validated.crId !== undefined && validated.crId !== existing.crId;
   if ('crId' in patch && validated.crId !== undefined) updated.crId = validated.crId;
   if ('systemId' in patch) {
     if (validated.systemId !== undefined) updated.systemId = validated.systemId;
     else delete updated.systemId;
+  }
+  // D-02: CR change clears milestoneId like it clears subsystem; the old milestone
+  // can never be valid for the new CR.
+  if (crChanged) delete updated.milestoneId;
+  if ('milestoneId' in patch) {
+    if (validated.milestoneId !== undefined) updated.milestoneId = validated.milestoneId;
+    else delete updated.milestoneId;
   }
 
   // Only re-validate the CR relationship when the patch touches it: an unrelated edit of a
   // legacy row must not become uneditable because its CR is already gone.
   if ('crId' in patch || 'systemId' in patch) {
     await assertSystemInCrTargets(updated.crId, updated.systemId, db);
+  }
+  if ('crId' in patch || 'systemId' in patch || 'milestoneId' in patch) {
+    await assertMilestoneMatchesCr(updated.crId, updated.milestoneId, db);
   }
 
   const assignOptional = (key: keyof Pick<
@@ -297,8 +322,15 @@ export async function reparentTask(
   } else {
     delete updated.systemId;
   }
+  // D-02: only keep the milestone if it belongs to the destination CR.
+  if (existing.milestoneId !== undefined) {
+    const milestone = await db.crMilestones.get(existing.milestoneId);
+    if (milestone?.crId === targetCrId) updated.milestoneId = existing.milestoneId;
+    else delete updated.milestoneId;
+  }
 
   await assertSystemInCrTargets(updated.crId, updated.systemId, db);
+  await assertMilestoneMatchesCr(updated.crId, updated.milestoneId, db);
 
   await db.tasks.put(updated);
   return updated;

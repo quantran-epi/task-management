@@ -3,6 +3,7 @@ import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask, getTask, reparentTask } from '../../src/db/repositories/taskRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { createSystem } from '../../src/db/repositories/systemRepo';
+import { createCrMilestone } from '../../src/db/repositories/crMilestoneRepo';
 
 describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
   let testDb: TaskPlannerDatabase;
@@ -107,5 +108,23 @@ describe('Task Reparenting (WORK-04, D-09, D-10, T-02-02)', () => {
     await expect(
       reparentTask('non-existent-uuid', cr.id, undefined, testDb)
     ).rejects.toThrow('Task not found');
+  });
+
+  it('clears milestoneId when reparenting to a different CR, keeps it within the same CR', async () => {
+    const { cr: crA } = await seedCrWithTarget('Iota');
+    const { cr: crB } = await seedCrWithTarget('Kappa');
+    const milestoneA = await createCrMilestone({ crId: crA.id, name: 'Mốc A' }, testDb);
+    const task = await createTask(
+      { name: 'Task with milestone', crId: crA.id, milestoneId: milestoneA.id },
+      testDb
+    );
+
+    const sameCr = await reparentTask(task.id, crA.id, undefined, testDb);
+    expect(sameCr.milestoneId).toBe(milestoneA.id);
+
+    const moved = await reparentTask(task.id, crB.id, undefined, testDb);
+    expect(moved.milestoneId).toBeUndefined();
+    const stored = await getTask(task.id, testDb);
+    expect(stored).not.toHaveProperty('milestoneId');
   });
 });

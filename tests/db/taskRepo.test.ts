@@ -10,6 +10,7 @@ import {
 import { createSystem } from '../../src/db/repositories/systemRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { deleteChangeRequestWithCascade } from '../../src/db/repositories/cascadeRepo';
+import { createCrMilestone } from '../../src/db/repositories/crMilestoneRepo';
 import type { ChatThread, Note } from '../../src/types/models';
 
 /**
@@ -157,5 +158,49 @@ describe('Task Repository — CR axis (ENT-NORM-01)', () => {
     expect(noteAfter).not.toHaveProperty('entityId');
 
     expect(await db.chatThreads.get(thread.id)).toBeUndefined();
+  }, 30000);
+
+  it('enforces that a task milestone exists and belongs to the same CR', async () => {
+    const { cr } = await seedCrWithTargets();
+    const secondCr = await createChangeRequest(
+      { status: 'Open', name: 'CR 2', code: 'CR-MS-2', type: 'BUGFIX', targets: [] },
+      db
+    );
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Go live' }, db);
+    const foreignMilestone = await createCrMilestone({ crId: secondCr.id, name: 'Khác CR' }, db);
+
+    const task = await createTask({ name: 't', crId: cr.id, milestoneId: milestone.id }, db);
+    expect(task.milestoneId).toBe(milestone.id);
+
+    await expect(
+      createTask({ name: 'bad', crId: cr.id, milestoneId: foreignMilestone.id }, db)
+    ).rejects.toThrow('Mốc triển khai không thuộc CR đã chọn.');
+
+    await expect(
+      createTask(
+        { name: 'missing', crId: cr.id, milestoneId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+        db
+      )
+    ).rejects.toThrow('Mốc triển khai không tồn tại.');
+
+    await expect(
+      updateTask(task.id, { milestoneId: foreignMilestone.id }, db)
+    ).rejects.toThrow('Mốc triển khai không thuộc CR đã chọn.');
+  }, 30000);
+
+  it('clears milestoneId when the task moves to a different CR', async () => {
+    const { cr } = await seedCrWithTargets();
+    const secondCr = await createChangeRequest(
+      { status: 'Open', name: 'CR 2', code: 'CR-MS-3', type: 'BUGFIX', targets: [] },
+      db
+    );
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Go live' }, db);
+    const task = await createTask({ name: 't', crId: cr.id, milestoneId: milestone.id }, db);
+
+    const moved = await updateTask(task.id, { crId: secondCr.id }, db);
+    expect(moved.milestoneId).toBeUndefined();
+
+    const stored = await getTask(task.id, db);
+    expect(stored).not.toHaveProperty('milestoneId');
   }, 30000);
 });
