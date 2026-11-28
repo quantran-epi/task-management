@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskPlannerDatabase } from '../../db';
 import { computeSha256, createDocumentSet, normalizeMarkdownForHash } from '../../db/repositories/documentSetRepo';
 import type { Note, PublishAttemptCache } from '../../types/models';
@@ -261,6 +261,56 @@ describe('doc-set inspector tách bạch và thao tác nhanh (sketch 016A)', () 
     });
     expect((await db.notes.get(targetId))?.title).toBe('Tên mới');
   });
+
+  it('thêm tài liệu từ detail và đưa lên đổi thứ tự mà không đụng published state', async () => {
+    const set = await seedLayoutSet(db, 3);
+    const extraId = await db.notes.add({
+      id: '66666666-7777-4888-8999-000000000001',
+      title: 'Tài liệu thêm mới',
+      body: '# thêm',
+      type: 'document',
+      isPinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    await db.publishedDocuments.add({
+      setId: set.id,
+      documentId: set.documentIds[0]!,
+      lastKnownRemoteAt: '2026-01-02T00:00:00.000Z',
+      publishedContentHash: 'hash-cu',
+      lastPrimaryState: 'In sync',
+    });
+    const publishedBefore = await db.publishedDocuments.toArray();
+
+    await act(async () => {
+      render(<ThemeAppHolder><DocumentSetDetail setId={set.id} db={db} /></ThemeAppHolder>);
+    });
+    await screen.findByTestId('doc-set-detail');
+
+    fireEvent.click(screen.getByTestId('doc-set-add-documents'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByLabelText('Tài liệu thêm mới'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm' }));
+
+    await waitFor(async () => {
+      const updated = await db.documentSets.get(set.id);
+      expect(updated?.documentIds).toContain(extraId);
+    });
+    const afterAdd = (await db.documentSets.get(set.id))!;
+    expect(afterAdd.documentIds[afterAdd.documentIds.length - 1]).toBe(extraId);
+
+    const targetId = afterAdd.documentIds[afterAdd.documentIds.length - 1]!;
+    const revisionBefore = afterAdd.presentationRevision ?? 0;
+    fireEvent.click(await screen.findByTestId(`doc-row-menu-${targetId}`));
+    fireEvent.click(await screen.findByText('Đưa lên'));
+
+    await waitFor(async () => {
+      const updated = (await db.documentSets.get(set.id))!;
+      expect(updated.documentIds[updated.documentIds.length - 2]).toBe(targetId);
+      expect(updated.presentationRevision).toBe(revisionBefore + 1);
+    });
+    expect(await db.publishedDocuments.toArray()).toEqual(publishedBefore);
+  });
 });
 
 describe('doc-set layout ở center hẹp/rộng', () => {
@@ -354,50 +404,60 @@ describe('doc-set layout ở center hẹp/rộng', () => {
   });
 });
 
-describe('doc-set form membership/picker giữ DOM bounded', () => {
+describe('doc-set form chỉ giữ cấu hình bộ', () => {
   afterEach(cleanup);
 
-  it('giữ số row virtualized và toggle checkbox/picker không đụng state handler', async () => {
-    const notes: Note[] = Array.from({ length: 60 }, (_, index) => ({
-      id: `33333333-4444-4555-8666-${String(index + 1).padStart(12, '0')}`,
-      title: `Form doc ${index + 1}`,
-      body: 'hidden body',
-      type: 'document',
-      isPinned: false,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index + 1)).toISOString(),
-    }));
-    const memberIds = notes.map((note) => note.id);
-    const formSet = {
-      id: '44444444-5555-4666-8777-000000000001',
-      name: 'Bộ form lớn',
-      documentIds: memberIds,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      scope: { domain: 'General', environment: null, version: null },
-      aliases: [],
-      relations: [],
-      isBase: true,
-      presentationRevision: 0,
-      preset: 'Chung' as const,
-    };
+  const notes: Note[] = Array.from({ length: 60 }, (_, index) => ({
+    id: `33333333-4444-4555-8666-${String(index + 1).padStart(12, '0')}`,
+    title: `Form doc ${index + 1}`,
+    body: 'hidden body',
+    type: 'document',
+    isPinned: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index + 1)).toISOString(),
+  }));
+  const formSet = {
+    id: '44444444-5555-4666-8777-000000000001',
+    name: 'Bộ form lớn',
+    documentIds: notes.map((note) => note.id),
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    scope: { domain: 'General', environment: null, version: null },
+    aliases: [],
+    relations: [],
+    isBase: true,
+    presentationRevision: 0,
+    preset: 'Chung' as const,
+  };
 
+  it('khi edit không render danh sách/picker và không emit documentIds', async () => {
+    const onSave = vi.fn();
     await act(async () => {
-      render(<DocumentSetForm notes={notes} initialSet={formSet} onSave={() => {}} />);
+      render(<DocumentSetForm notes={notes} initialSet={formSet} onSave={onSave} />);
     });
 
-    const memberRows = document.querySelectorAll('[data-testid^="member-"]');
-    expect(memberRows.length).toBeGreaterThan(0);
-    expect(memberRows.length).toBeLessThanOrEqual(25);
-    expect((memberRows[0] as HTMLElement).className).toContain('doc-set-member-item');
+    expect(screen.queryByText('Tài liệu thành viên')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm tài liệu' })).not.toBeInTheDocument();
+    expect(document.querySelectorAll('[data-testid^="member-"]').length).toBe(0);
+    expect(screen.queryByLabelText('Danh sách tài liệu để chọn')).not.toBeInTheDocument();
+    expect(screen.getByText('Phạm vi bộ tài liệu')).toBeInTheDocument();
+    expect(screen.getByLabelText('Tên bộ tài liệu')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài liệu' }));
-    const picker = (await screen.findByLabelText('Danh sách tài liệu để chọn')) as HTMLElement;
-    expect(picker.querySelectorAll('.doc-set-pick-row').length).toBeLessThanOrEqual(25);
-    const checkbox = screen.getByLabelText('Form doc 1') as HTMLInputElement;
-    expect(checkbox.checked).toBe(true);
-    fireEvent.click(checkbox);
-    expect((screen.getByLabelText('Form doc 1') as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0]).not.toHaveProperty('documentIds');
+  });
+
+  it('khi tạo mới emit documentIds rỗng theo mặc định', async () => {
+    const onSave = vi.fn();
+    await act(async () => {
+      render(<DocumentSetForm notes={notes} onSave={onSave} />);
+    });
+
+    fireEvent.change(screen.getByLabelText('Tên bộ tài liệu'), { target: { value: 'Bộ mới' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0]?.[0].documentIds).toEqual([]);
   });
 
   it('CSS scoped giữ inspector tách bạch bằng token', () => {
