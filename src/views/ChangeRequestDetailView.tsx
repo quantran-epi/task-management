@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Dropdown, Empty, Input, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Dropdown, Empty, Input, Modal, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -78,6 +78,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [crReminderModalOpen, setCrReminderModalOpen] = useState(false);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
@@ -268,6 +269,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       message.success('Đã thêm liên kết');
       setLinkName('');
       setLinkUrl('');
+      setLinkModalOpen(false);
     } catch {
       message.error('Không thể thêm liên kết');
     }
@@ -325,6 +327,11 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       testId: 'cr-detail-block-documents',
       header: 'Links',
       count: stats.linkCount,
+      action: (
+        <Button data-testid="cr-detail-link-add" size="small" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)}>
+          Thêm link
+        </Button>
+      ),
       body: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           {stats.linkCount > 0 ? (
@@ -339,50 +346,31 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                   >
                     {link.name || link.url}
                   </Button>
-                  <Button
-                    size="small"
-                    title="Sửa liên kết"
-                    aria-label="Sửa liên kết"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditModalOpen(true)}
-                  />
-                  <Button
-                    size="small"
-                    danger
-                    title="Xóa liên kết"
-                    aria-label="Xóa liên kết"
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleRemoveLink(idx)}
-                  />
+                  <Tooltip title="Sửa liên kết">
+                    <Button
+                      type="text"
+                      size="small"
+                      aria-label="Sửa liên kết"
+                      icon={<EditOutlined />}
+                      onClick={() => setEditModalOpen(true)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Xóa liên kết">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      aria-label="Xóa liên kết"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveLink(idx)}
+                    />
+                  </Tooltip>
                 </div>
               ))}
             </Space>
           ) : (
             <span style={mutedStyle}>Chưa có</span>
           )}
-          <Space size={8} wrap style={{ display: 'flex', flexWrap: 'wrap' }}>
-            <Input
-              data-testid="cr-detail-link-name"
-              placeholder="Tên (tùy chọn)"
-              size="small"
-              style={{ width: 180, borderRadius: 'var(--radius-control)' }}
-              value={linkName}
-              maxLength={LINK_NAME_MAX_LENGTH}
-              onChange={(e) => setLinkName(e.target.value)}
-            />
-            <Input
-              data-testid="cr-detail-link-url"
-              placeholder="URL"
-              size="small"
-              style={{ width: 260, borderRadius: 'var(--radius-control)' }}
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              onPressEnter={() => void handleAddLink()}
-            />
-            <Button data-testid="cr-detail-link-add" size="small" onClick={() => void handleAddLink()}>
-              Thêm link
-            </Button>
-          </Space>
         </div>
       ),
     },
@@ -392,7 +380,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       header: 'Nhắc nhở',
       count: stats.reminderCount,
       action: (
-        <Button data-testid="cr-detail-reminder-add" type="link" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
+        <Button data-testid="cr-detail-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
           Thêm nhắc nhở
         </Button>
       ),
@@ -401,30 +389,32 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           {cr.reminders && cr.reminders.length > 0 ? (
             <Space direction="vertical" size={4}>
               {cr.reminders.map((r) => (
-                <div key={r.id} style={{ display: 'inline-flex' }}>
+                <Space key={r.id} size={4} align="center">
                   <span style={{ fontSize: 'var(--font-size-small)' }}>
                     {r.date}
                     {r.time ? ` ${r.time}` : ''}
                     {r.note ? ` — ${r.note}` : ''}
                   </span>
-                  <Button
-                    size="small"
-                    type="text"
-                    title="Sửa nhắc nhở"
-                    aria-label="Sửa nhắc nhở"
-                    icon={<EditOutlined />}
-                    onClick={() => setEditModalOpen(true)}
-                  />
-                  <Button
-                    size="small"
-                    type="text"
-                    danger
-                    title="Xóa nhắc nhở"
-                    aria-label="Xóa nhắc nhở"
-                    icon={<DeleteOutlined />}
-                    onClick={() => handleRemoveReminder(r.id)}
-                  />
-                </div>
+                  <Tooltip title="Sửa nhắc nhở">
+                    <Button
+                      type="text"
+                      size="small"
+                      aria-label="Sửa nhắc nhở"
+                      icon={<EditOutlined />}
+                      onClick={() => setEditModalOpen(true)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Xóa nhắc nhở">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      aria-label="Xóa nhắc nhở"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveReminder(r.id)}
+                    />
+                  </Tooltip>
+                </Space>
               ))}
             </Space>
           ) : cr.reminderDate ? (
@@ -462,6 +452,35 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           db={db}
         />
       )}
+      <Modal
+        title="Thêm liên kết"
+        open={linkModalOpen}
+        footer={
+          <Space>
+            <Button onClick={() => setLinkModalOpen(false)}>Hủy</Button>
+            <Button type="primary" onClick={() => void handleAddLink()}>Thêm link</Button>
+          </Space>
+        }
+        onCancel={() => setLinkModalOpen(false)}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Input
+            data-testid="cr-detail-link-name"
+            placeholder="Tên (tùy chọn)"
+            value={linkName}
+            maxLength={LINK_NAME_MAX_LENGTH}
+            onChange={(e) => setLinkName(e.target.value)}
+          />
+          <Input
+            data-testid="cr-detail-link-url"
+            placeholder="URL"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onPressEnter={() => void handleAddLink()}
+          />
+        </Space>
+      </Modal>
       {/* 3a. Header */}
       <div
         style={{
