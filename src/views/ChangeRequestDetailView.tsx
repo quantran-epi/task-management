@@ -25,6 +25,7 @@ import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
 import { searchIncludes } from '../utils/searchText';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
 import type { CrMilestone, CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
+import './cr-detail.css';
 
 export interface ChangeRequestDetailViewProps {
   changeRequestId: string;
@@ -854,10 +855,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         ))}
       </div>
 
-      <style>{`
-        .cr-detail-secondary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-12); align-items: start; }
-        @media (max-width: 900px) { .cr-detail-secondary-grid { grid-template-columns: minmax(0, 1fr); } }
-      `}</style>
       {/* Task table full width; secondary cards below in two columns */}
       <div data-testid="cr-detail-task-table" style={{ minWidth: 0, width: '100%' }}>
       {/* 3c. Flat task table */}
