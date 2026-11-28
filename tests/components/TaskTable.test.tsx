@@ -209,7 +209,7 @@ describe('TaskTable Component', () => {
     expect(screen.getByRole('button', { name: /Bỏ chọn/ })).toBeInTheDocument();
   });
 
-  it('TaskTable renders the leading columns in the order Task, CR, Subsystem, Status, Ước lượng, Hạn', () => {
+  it('TaskTable renders the dense leading columns in order after CR/Subsystem/Milestone merge', () => {
     render(
       <TaskTable
         tasks={sampleTasks}
@@ -227,19 +227,20 @@ describe('TaskTable Component', () => {
       .map((th) => th.textContent?.replace(/\s+/g, ' ').trim() ?? '')
       .filter((text) => text.length > 0);
 
-    const leading = headers.slice(0, 6);
-    expect(leading[0]).toContain('Tác vụ');
-    expect(leading[1]).toContain('CR');
-    expect(leading[2]).toContain('Subsystem');
-    expect(leading[3]).toContain('Trạng thái');
-    expect(leading[4]).toContain('Ước lượng');
-    expect(leading[5]).toContain('Hạn');
+    // Selection header has no text; the first labelled column carries name + CR + milestone.
+    const leading = headers.slice(0, 5);
+    expect(leading[0]).toMatch(/tác vụ/i);
+    expect(leading[0]).toContain('CR');
+    expect(leading[0]).toContain('Mốc');
+    expect(leading[1]).toContain('Trạng thái');
+    expect(leading[2]).toContain('Ước lượng');
+    expect(leading[3]).toContain('Hạn');
   }, 15000);
 
-  it('TaskTable renders Chung in the Subsystem cell when the task has no systemId', () => {
+  it('TaskTable renders Chung as a generic CR tag in the task cell when the CR is missing', () => {
     render(
       <TaskTable
-        tasks={sampleTasks}
+        tasks={[{ ...sampleTasks[0]!, id: 'task-orphan', name: 'Orphan task', crId: 'cr-missing' }]}
         changeRequests={sampleChangeRequests}
         systems={sampleSystems}
         selectedRowKeys={[]}
@@ -249,8 +250,8 @@ describe('TaskTable Component', () => {
       />
     );
 
-    expect(screen.getByText('PAYMENT_SVC')).toBeInTheDocument();
-    expect(screen.getByText('Chung')).toBeInTheDocument();
+    const genericTag = document.querySelector('.tm-tasklist__cr-tag--generic');
+    expect(genericTag?.textContent).toBe('Chung');
   }, 15000);
 
   it('TaskTable renders the CR code tag in the CR type colour with the CR name as tooltip', () => {
