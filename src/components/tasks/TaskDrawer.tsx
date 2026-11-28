@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch, useTaskMateModal } from '../ui';
+import { Drawer, Form, Input, Select, InputNumber, Button, Space, DatePicker, Slider, Tabs, Typography, Badge, Switch, Tooltip, useMessage, Textarea, FormItem, FormList, useForm, useWatch, useTaskMateModal, Spin } from '../ui';
 import { PlusOutlined, DeleteOutlined, SyncOutlined, FolderOpenOutlined, ExportOutlined, RobotOutlined } from '../ui/icon';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -208,6 +208,9 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         setSystems(sysList);
         setCurrentTask(taskData ?? null);
 
+        form.resetFields();
+        setPreviewDocId(null);
+        setGhostDevModalOpen(false);
         if (taskData) {
           form.setFieldsValue({
             name: taskData.name,
@@ -946,8 +949,6 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       width={560}
       open={open}
       onClose={handleClose}
-      destroyOnClose
-      loading={loading}
       extra={
         <Space>
           <Button
@@ -969,13 +970,15 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         </div>
       }
     >
-      <div
-        data-ai-context-type="task"
-        data-ai-context-id={currentTask?.id || taskId || ''}
-        style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
-      >
-        <Tabs defaultActiveKey="details" items={tabItems} />
-      </div>
+      <Spin spinning={loading} style={{ display: 'block', height: '100%' }}>
+        <div
+          data-ai-context-type="task"
+          data-ai-context-id={currentTask?.id || taskId || ''}
+          style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+        >
+          <Tabs defaultActiveKey="details" items={tabItems} />
+        </div>
+      </Spin>
 
       <QuickPreviewDrawer
         docId={previewDocId}
