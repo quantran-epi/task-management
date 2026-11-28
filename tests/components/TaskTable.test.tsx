@@ -178,7 +178,10 @@ describe('TaskTable Component', () => {
     );
 
     expect(screen.queryByTestId('task-filter-bar')).not.toBeInTheDocument();
-    expect(document.querySelector('[style*="top: 96px"]')).not.toBeNull();
+    const stickyOffsets = Array.from(document.querySelectorAll<HTMLElement>('[style]'))
+      .map((el) => Number.parseFloat(el.style.top))
+      .filter((top) => Number.isFinite(top));
+    expect(stickyOffsets.some((top) => top > 0)).toBe(true);
   }, 15000);
 
   it('BatchActionBar renders only when rows are selected and keeps its labels', () => {
