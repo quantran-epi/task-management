@@ -383,6 +383,9 @@
 }
 
 .tm-tasklist__meta .tm-tasklist__cr-tag.ant-tag {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
   height: 18px;
   margin: 0;
   padding: 0 5px;
@@ -391,6 +394,7 @@
   background: color-mix(in srgb, currentColor 10%, var(--bg-island));
   line-height: 16px;
   font-size: var(--font-size-xs);
+  vertical-align: top;
 }
 
 .tm-tasklist__cr-tag--generic.ant-tag {
