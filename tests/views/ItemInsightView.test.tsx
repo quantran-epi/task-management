@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import 'fake-indexeddb/auto';
 import { ItemInsightView } from '../../src/views/ItemInsightView';
 import { TaskPlannerDatabase } from '../../src/db/index';
@@ -284,44 +284,46 @@ describe('ItemInsightView', () => {
   it('adds a link with an empty name to a task with no existing links and labels it with the URL', async () => {
     const { task } = await seedInsight();
     openInsight('task', task.id);
+    fireEvent.click(await screen.findByTestId('item-insight-link-add'));
     await screen.findByTestId('item-insight-link-url');
     const url = 'https://example.com/task-spec';
 
     setLinkInput('item-insight-link-url', url);
-    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Thêm link' }));
 
     await waitFor(async () => {
       const stored = await testDb.tasks.get(task.id);
       expect(stored?.links).toEqual([{ name: '', url }]);
     });
     expect(screen.getByRole('button', { name: `link ${url}` })).toHaveAttribute('title', url);
-    expect(screen.getByTestId('item-insight-link-url')).toHaveValue('');
   }, 30000);
 
   it('adds a named link and shows the name on task insight', async () => {
     const { task } = await seedInsight();
     openInsight('task', task.id);
+    fireEvent.click(await screen.findByTestId('item-insight-link-add'));
     await screen.findByTestId('item-insight-link-url');
     const url = 'https://example.com/task-named';
 
     setLinkInput('item-insight-link-name', 'Spec');
     setLinkInput('item-insight-link-url', url);
-    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Thêm link' }));
 
     await waitFor(async () => {
       const stored = await testDb.tasks.get(task.id);
       expect(stored?.links).toEqual([{ name: 'Spec', url }]);
     });
-    expect(screen.getByRole('button', { name: 'link Spec' })).toHaveAttribute('title', url);
+    expect(within(screen.getByTestId('item-insight-links')).getByTitle(url)).toBeInTheDocument();
   }, 30000);
 
   it('rejects an unsafe URL without writing to task.links', async () => {
     const { task } = await seedInsight();
     openInsight('task', task.id);
+    fireEvent.click(await screen.findByTestId('item-insight-link-add'));
     await screen.findByTestId('item-insight-link-url');
 
     setLinkInput('item-insight-link-url', 'javascript:alert(1)');
-    fireEvent.click(screen.getByTestId('item-insight-link-add'));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Thêm link' }));
 
     await waitFor(() => {
       expect(screen.getByText('URL không hợp lệ')).toBeInTheDocument();

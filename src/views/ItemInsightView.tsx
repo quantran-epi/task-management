@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, Input, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
-import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined, DeploymentUnitOutlined } from '../components/ui/icon';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, Input, Modal, Popconfirm, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
+import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined, DeploymentUnitOutlined, DeleteOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import type { Note, System } from '../types/models';
@@ -16,6 +16,7 @@ import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { NoteDetailModal } from '../components/notes/NoteDetailModal';
 import { NoteEditor } from '../components/notes/NoteEditor';
 import { appendTaskLink, updateTask, createTask } from '../db/repositories/taskRepo';
+import { QuickReminderModal } from '../components/common/QuickReminderModal';
 import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
 import { getAllSystems } from '../db/repositories/systemRepo';
 import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
@@ -81,6 +82,9 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
+  const [quickReminderOpen, setQuickReminderOpen] = useState(false);
 
   // Live queries
   const allTasks = useLiveQuery(() => db.tasks.toArray(), [db]) ?? [];
@@ -242,7 +246,15 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
     }
   };
 
-  const handleAddLink = async () => {
+  const openLinkEditor = (index: number | null) => {
+    const link = index === null ? undefined : (currentTask?.links ?? [])[index];
+    setLinkName(link?.name ?? '');
+    setLinkUrl(link?.url ?? '');
+    setEditingLinkIndex(index);
+    setLinkModalOpen(true);
+  };
+
+  const handleSaveLink = async () => {
     if (!currentTask) return;
     const trimmed = linkUrl.trim();
     if (!trimmed || !isValidLinkUrl(trimmed)) {
@@ -253,13 +265,52 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       message.error('Tên liên kết tối đa 80 ký tự');
       return;
     }
+    const payload = { name: linkName.trim(), url: trimmed };
     try {
-      await appendTaskLink(currentTask.id, { name: linkName.trim(), url: trimmed }, db);
-      message.success('Đã thêm liên kết');
+      if (editingLinkIndex === null) {
+        await appendTaskLink(currentTask.id, payload, db);
+      } else {
+        await updateTask(
+          currentTask.id,
+          { links: (currentTask.links ?? []).map((link, i) => (i === editingLinkIndex ? payload : link)) },
+          db
+        );
+      }
+      message.success(editingLinkIndex === null ? 'Đã thêm liên kết' : 'Đã cập nhật liên kết');
       setLinkName('');
       setLinkUrl('');
+      setEditingLinkIndex(null);
+      setLinkModalOpen(false);
     } catch {
-      message.error('Không thể thêm liên kết');
+      message.error(editingLinkIndex === null ? 'Không thể thêm liên kết' : 'Không thể cập nhật liên kết');
+    }
+  };
+
+  const handleRemoveLink = async (index: number) => {
+    if (!currentTask) return;
+    try {
+      await updateTask(
+        currentTask.id,
+        { links: (currentTask.links ?? []).filter((_, i) => i !== index) },
+        db
+      );
+      message.success('Đã xóa liên kết');
+    } catch {
+      message.error('Không thể xóa liên kết');
+    }
+  };
+
+  const handleRemoveReminder = async (reminderId: string) => {
+    if (!currentTask) return;
+    try {
+      await updateTask(
+        currentTask.id,
+        { reminders: (currentTask.reminders ?? []).filter((r) => r.id !== reminderId) },
+        db
+      );
+      message.success('Đã xóa nhắc nhở');
+    } catch {
+      message.error('Không thể xóa nhắc nhở');
     }
   };
 
@@ -642,44 +693,106 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         {/* Named links */}
         {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
           <div style={{ marginTop: 12 }} data-testid="item-insight-links">
-            <Text type="secondary">Links: </Text>
-            <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
-              {(currentTask?.links ?? currentCr?.links ?? []).map((link, idx) => (
-                <Button
-                  key={`${idx}-${link.url}`}
-                  size="small"
-                  icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                  onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-                  title={link.url}
-                >
-                  {link.name || link.url}
-                </Button>
-              ))}
-            </Space>
-            {itemType === 'task' && currentTask && (
-              <Space size={8} wrap style={{ display: 'flex', marginTop: 8, maxWidth: '100%' }}>
-                <Input
-                  data-testid="item-insight-link-name"
-                  placeholder="Tên (tùy chọn)"
-                  size="small"
-                  style={{ width: 180, borderRadius: 'var(--radius-control)' }}
-                  value={linkName}
-                  maxLength={LINK_NAME_MAX_LENGTH}
-                  onChange={(e) => setLinkName(e.target.value)}
-                />
-                <Input
-                  data-testid="item-insight-link-url"
-                  placeholder="URL"
-                  size="small"
-                  style={{ width: 260, borderRadius: 'var(--radius-control)' }}
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onPressEnter={() => void handleAddLink()}
-                />
-                <Button data-testid="item-insight-link-add" size="small" onClick={() => void handleAddLink()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
+              <Text type="secondary">Links</Text>
+              {itemType === 'task' && currentTask && (
+                <Button data-testid="item-insight-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>
                   Thêm link
                 </Button>
+              )}
+            </div>
+            {itemType === 'task' && currentTask ? (
+              (currentTask.links?.length ?? 0) > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-xs)', color: 'var(--muted-fg)' }}>
+                    <span style={{ width: 160, flexShrink: 0 }}>Tên</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>Đường dẫn</span>
+                    <span style={{ width: 56, flexShrink: 0 }} />
+                  </div>
+                  {(currentTask.links ?? []).map((link, idx) => (
+                    <div key={`${idx}-${link.url}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px' }}>
+                      <Text ellipsis style={{ width: 160, flexShrink: 0, fontSize: 'var(--font-size-small)' }} title={link.name || link.url}>
+                        {link.name || '—'}
+                      </Text>
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ flex: 1, minWidth: 0, padding: 0, height: 'auto', justifyContent: 'flex-start', fontFamily: 'monospace' }}
+                        title={link.url}
+                        icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                        onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                      >
+                        <Text ellipsis style={{ fontSize: 'var(--font-size-small)' }}>{link.url}</Text>
+                      </Button>
+                      <Space size={0} style={{ width: 56, flexShrink: 0 }}>
+                        <Tooltip title="Sửa liên kết">
+                          <Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => openLinkEditor(idx)} />
+                        </Tooltip>
+                        <Popconfirm
+                          title="Xóa liên kết này?"
+                          okText="Xóa"
+                          cancelText="Hủy"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => void handleRemoveLink(idx)}
+                        >
+                          <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} />
+                        </Popconfirm>
+                      </Space>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Text type="secondary" style={{ marginTop: 8 }}>Chưa có liên kết</Text>
+              )
+            ) : (
+              <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
+                {(currentCr?.links ?? []).map((link, idx) => (
+                  <Button
+                    key={`${idx}-${link.url}`}
+                    size="small"
+                    icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                    onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                    title={link.url}
+                  >
+                    {link.name || link.url}
+                  </Button>
+                ))}
               </Space>
+            )}
+          </div>
+        )}
+
+        {itemType === 'task' && currentTask && (
+          <div style={{ marginTop: 12 }} data-testid="item-insight-reminders">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
+              <Text type="secondary">Nhắc nhở</Text>
+              <Button
+                data-testid="item-insight-reminder-add"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => setQuickReminderOpen(true)}
+              >
+                Thêm nhắc nhở
+              </Button>
+            </div>
+            {(currentTask.reminders?.length ?? 0) > 0 ? (
+              <Space direction="vertical" size={4} style={{ marginTop: 8 }}>
+                {(currentTask.reminders ?? []).map((r) => (
+                  <Space key={r.id} size={4} align="center">
+                    <Text style={{ fontSize: 'var(--font-size-small)' }}>
+                      {r.date}{r.time ? ` ${r.time}` : ''}{r.note ? ` — ${r.note}` : ''}
+                    </Text>
+                    <Tooltip title="Sửa nhắc nhở">
+                      <Button type="text" size="small" aria-label="Sửa nhắc nhở" icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)} />
+                    </Tooltip>
+                    <Tooltip title="Xóa nhắc nhở">
+                      <Button type="text" danger size="small" aria-label="Xóa nhắc nhở" icon={<DeleteOutlined />} onClick={() => void handleRemoveReminder(r.id)} />
+                    </Tooltip>
+                  </Space>
+                ))}
+              </Space>
+            ) : (
+              <Text type="secondary" style={{ marginTop: 8 }}>Chưa có nhắc nhở</Text>
             )}
           </div>
         )}
@@ -969,6 +1082,45 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
       </Card>
 
       {/* Modals & Drawers */}
+      <Modal
+        title={editingLinkIndex === null ? 'Thêm liên kết' : 'Sửa liên kết'}
+        open={linkModalOpen}
+        footer={
+          <Space>
+            <Button onClick={() => setLinkModalOpen(false)}>Hủy</Button>
+            <Button type="primary" onClick={() => void handleSaveLink()}>
+              {editingLinkIndex === null ? 'Thêm link' : 'Lưu'}
+            </Button>
+          </Space>
+        }
+        onCancel={() => setLinkModalOpen(false)}
+        destroyOnClose
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={12}>
+          <Input
+            data-testid="item-insight-link-name"
+            placeholder="Tên (tùy chọn)"
+            value={linkName}
+            maxLength={LINK_NAME_MAX_LENGTH}
+            onChange={(e) => setLinkName(e.target.value)}
+          />
+          <Input
+            data-testid="item-insight-link-url"
+            placeholder="URL"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onPressEnter={() => void handleSaveLink()}
+          />
+        </Space>
+      </Modal>
+      {quickReminderOpen && currentTask && (
+        <QuickReminderModal
+          open
+          onClose={() => setQuickReminderOpen(false)}
+          target={{ type: 'task', entity: currentTask }}
+          db={db}
+        />
+      )}
       {currentTask && (
         <TaskDrawer
           taskId={taskDrawerOpen ? currentTask.id : null}
