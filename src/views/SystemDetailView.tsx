@@ -19,6 +19,7 @@ import { escapeShellArg, getRemoteBranches, runGitCommand } from '../services/gi
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { useSystemActions } from '../workbench/hooks/useSystemActions';
 import { useSystemTypeLookup } from '../services/system/systemTypeSettings';
+import { gitHref, gitLinkLabel } from '../utils/gitLink';
 import { SystemModal } from '../components/systems/SystemModal';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import type { SshConfig } from '../types/ssh';
@@ -97,13 +98,6 @@ async function loadBranchDetails(
     });
   }
   return details;
-}
-
-/** Short display label for a git link; keeps SCP syntax intact. */
-function gitLinkLabel(url: string): string {
-  const value = url.replace(/\.git$/, '');
-  const match = /^(?:[a-z]+:\/\/)?[^/@]+@([^:/]+)[:/](.+)$/i.exec(value);
-  return match ? `${match[1]}/${match[2]}` : value;
 }
 
 const CONNECTION_STATUS: Record<'connected' | 'unconfigured' | 'error', { color: string; label: string }> = {
@@ -289,7 +283,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       label: 'Link Git Source',
       children: system.gitSourceUrl ? (
         <Typography.Link
-          href={system.gitSourceUrl}
+          href={gitHref(system.gitSourceUrl)}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -304,7 +298,7 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       label: 'Link Git GitOps',
       children: system.gitOpsUrl ? (
         <Typography.Link
-          href={system.gitOpsUrl}
+          href={gitHref(system.gitOpsUrl)}
           target="_blank"
           rel="noopener noreferrer"
         >

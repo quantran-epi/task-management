@@ -47,10 +47,14 @@ describe('isGitRepoUrl — allowlist cho link git của System', () => {
     'file:///srv/repo',
     '/srv/repo',
     'C:\\srv\\repo',
+    'https://user:pass@host/x',
+    'https://evil.com\\@github.com/x',
+    'ssh:///repo',
     'https://github.com/acme/my repo.git',
     'a'.repeat(501),
     '',
     '   ',
+    '\t\n',
   ])('từ chối %s', (url) => {
     expect(isGitRepoUrl(url)).toBe(false);
     expect(gitRepoUrlSchema.safeParse(url).success).toBe(false);

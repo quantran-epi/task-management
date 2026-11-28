@@ -64,15 +64,18 @@ describe('SystemModal form bindings', () => {
     })));
   });
 
-  it('rejects dangerous URLs inline without calling onSave', async () => {
-    const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<SystemModal open system={subsystem} onClose={vi.fn()} onSave={onSave} />);
-    const source = await screen.findByPlaceholderText(SOURCE_PLACEHOLDER);
-    fireEvent.change(source, { target: { value: 'javascript:alert(1)' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
-    await waitFor(() => expect(screen.getAllByText(/Link git phải là/).length).toBeGreaterThan(0));
-    expect(onSave).not.toHaveBeenCalled();
-  });
+  it.each(['javascript:alert(1)', 'https://user:pass@host/x', 'https://evil.com\\@github.com/x', 'ssh:///repo', '   '])(
+    'rejects invalid git URL %s inline without calling onSave',
+    async (badUrl) => {
+      const onSave = vi.fn().mockResolvedValue(undefined);
+      render(<SystemModal open system={subsystem} onClose={vi.fn()} onSave={onSave} />);
+      const source = await screen.findByPlaceholderText(SOURCE_PLACEHOLDER);
+      fireEvent.change(source, { target: { value: badUrl } });
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+      await waitFor(() => expect(screen.getAllByText(/Link git phải là/).length).toBeGreaterThan(0));
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
 
   it('sends undefined for cleared git links so the repo deletes them', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);

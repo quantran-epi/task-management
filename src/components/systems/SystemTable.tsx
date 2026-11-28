@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
 import { isLogicalParent } from '../../db/repositories/systemRepo';
+import { gitHref, gitLinkLabel } from '../../utils/gitLink';
 import {
   DEFAULT_SYSTEM_TYPE_OPTIONS,
   SYSTEM_TYPE_FALLBACK_COLOR,
@@ -14,12 +15,6 @@ import {
 
 const { Text } = Typography;
 const { Link } = Typography;
-
-function gitLinkLabel(url: string): string {
-  const value = url.replace(/\.git$/, '');
-  const match = /^(?:[a-z]+:\/\/)?[^/@]+@([^:/]+)[:/](.+)$/i.exec(value);
-  return match ? `${match[1]}/${match[2]}` : value;
-}
 
 export interface SystemTableRow extends System {
   key: string;
@@ -243,7 +238,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 Source:{' '}
                 <Link
-                  href={record.gitSourceUrl}
+                  href={gitHref(record.gitSourceUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   ellipsis
@@ -257,7 +252,7 @@ export const SystemTable: React.FC<SystemTableProps> = ({
               <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 GitOps:{' '}
                 <Link
-                  href={record.gitOpsUrl}
+                  href={gitHref(record.gitOpsUrl)}
                   target="_blank"
                   rel="noopener noreferrer"
                   ellipsis

@@ -140,14 +140,27 @@ export const namedLinkSchema = z.object({
 /** Single source of truth for the link URL rule in Ant Design form validators. */
 export const isValidLinkUrl = (value: unknown): boolean => linkSchema.safeParse(value).success;
 
+export const GIT_REPO_URL_MESSAGE =
+  'Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git';
+
 /** Git repo URL allowlist — separate from linkSchema, which also accepts local paths/UUIDs. */
 export function isGitRepoUrl(value: unknown): boolean {
   if (typeof value !== 'string') return false;
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 500 || /\s/.test(trimmed)) return false;
-  if (/^(https?|ssh|git):\/\//i.test(trimmed)) {
+  // Reject userinfo and backslashes: browsers parse them differently, so the displayed
+  // label can point to a different host than the actual link target (spoofing).
+  // ssh://git@host is the one conventional form kept; passwords never belong in a link.
+  if (/\\/.test(trimmed)) return false;
+  const scheme = /^(https?|ssh|git):\/\//i.exec(trimmed);
+  if (scheme) {
     try {
-      return Boolean(new URL(trimmed).hostname);
+      const parsed = new URL(trimmed);
+      if (!parsed.hostname || parsed.password) return false;
+      if (parsed.username && !(scheme[1]?.toLowerCase() === 'ssh' && parsed.username === 'git')) {
+        return false;
+      }
+      return true;
     } catch {
       return false;
     }
@@ -156,12 +169,9 @@ export function isGitRepoUrl(value: unknown): boolean {
 }
 
 export const isValidGitRepoUrl = isGitRepoUrl;
-export const gitRepoUrlSchema = z
-  .string()
-  .trim()
-  .refine(isGitRepoUrl, {
-    message: 'Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git',
-  });
+export const gitRepoUrlSchema = z.string().trim().refine(isGitRepoUrl, {
+  message: GIT_REPO_URL_MESSAGE,
+});
 
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
 // Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.

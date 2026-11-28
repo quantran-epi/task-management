@@ -14,7 +14,7 @@ import {
   useSystemTypeOptions,
 } from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
-import { isValidGitRepoUrl } from '../../validation/schemas';
+import { GIT_REPO_URL_MESSAGE, isValidGitRepoUrl } from '../../validation/schemas';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface SystemModalProps {
@@ -272,8 +272,10 @@ export const SystemModal: React.FC<SystemModalProps> = ({
             rules={[
               {
                 validator: async (_, value) => {
-                  if (!value || isValidGitRepoUrl(value)) return;
-                  throw new Error('Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git');
+                  if (!value) return;
+                  if (!value.trim() || !isValidGitRepoUrl(value)) {
+                    throw new Error(GIT_REPO_URL_MESSAGE);
+                  }
                 },
               },
             ]}
@@ -288,8 +290,10 @@ export const SystemModal: React.FC<SystemModalProps> = ({
             rules={[
               {
                 validator: async (_, value) => {
-                  if (!value || isValidGitRepoUrl(value)) return;
-                  throw new Error('Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git');
+                  if (!value) return;
+                  if (!value.trim() || !isValidGitRepoUrl(value)) {
+                    throw new Error(GIT_REPO_URL_MESSAGE);
+                  }
                 },
               },
             ]}
