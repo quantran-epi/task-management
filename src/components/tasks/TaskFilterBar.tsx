@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Input, Select, Segmented, Checkbox, Button, Badge, Row, Col, useAntdToken, DateRangePicker, Popover, Tooltip } from '../ui';
 import type { InputRef } from 'antd';
 import { SearchOutlined, FilterOutlined, ClearOutlined } from '../ui/icon';
@@ -60,6 +60,12 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
 }) => {
   const { token } = useAntdToken();
   const [advancedOpen, setAdvancedOpen] = useState<boolean>(false);
+
+  // Narrow triggers stay compact; popups size to the longest option so labels are readable.
+  const selectPopup = useMemo(
+    () => ({ popupMatchSelectWidth: false, popupClassName: 'tm-tasklist__filter-popup' }),
+    [],
+  );
 
   const activeAdvancedCount = countActiveAdvancedFilters(filters);
   const hasActiveFilters =
@@ -123,6 +129,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             allowClear
             showSearch
             optionFilterProp="label"
+            {...selectPopup}
             className="tm-tasklist__cr-select"
             placeholder="CR…"
             style={{ width: 'auto', minWidth: 70 }}
@@ -151,6 +158,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
             allowClear
             showSearch
             optionFilterProp="label"
+            {...selectPopup}
             className="tm-tasklist__system-select"
             placeholder="Sub…"
             style={{ width: 'auto', minWidth: 80 }}
@@ -164,6 +172,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
           <Select
             size="small"
             width="auto"
+            {...selectPopup}
             className="tm-tasklist__sort-select"
             value={globalSort ?? DEFAULT_TASK_SORT}
             onChange={(v) => onGlobalSortChange?.(v)}
@@ -195,6 +204,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                       <Select
                         size="small"
                         style={{ minWidth: 140 }}
+                        {...selectPopup}
                         value={filters.horizon}
                         onChange={(val) => onFilterChange({ horizon: val })}
                         options={[
@@ -212,6 +222,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                         mode="multiple"
                         allowClear
                         style={{ minWidth: 200 }}
+                        {...selectPopup}
                         placeholder="Trạng thái đang hoạt động"
                         value={filters.statuses}
                         onChange={(vals) => onFilterChange({ statuses: vals as TaskStatus[] })}
@@ -226,6 +237,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                         mode="multiple"
                         allowClear
                         style={{ minWidth: 140 }}
+                        {...selectPopup}
                         placeholder="Tất cả độ ưu tiên"
                         value={filters.priorities}
                         onChange={(vals) => onFilterChange({ priorities: vals as TaskPriority[] })}
@@ -336,6 +348,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                           style={{ width: '100%' }}
                           mode="multiple"
                           allowClear
+                          {...selectPopup}
                           placeholder="Tất cả loại việc"
                           value={filters.workTypes}
                           onChange={(vals) => onFilterChange({ workTypes: vals as WorkType[] })}
@@ -371,6 +384,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                           style={{ width: '100%' }}
                           mode="tags"
                           allowClear
+                          {...selectPopup}
                           placeholder="Lọc theo Ops Owner (Nhập hoặc chọn)"
                           value={filters.opsOwners}
                           onChange={(vals) => onFilterChange({ opsOwners: vals })}
@@ -387,6 +401,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                           style={{ width: '100%' }}
                           mode="tags"
                           allowClear
+                          {...selectPopup}
                           placeholder="Lọc theo BA (Nhập hoặc chọn)"
                           value={filters.businessAnalysts}
                           onChange={(vals) => onFilterChange({ businessAnalysts: vals })}
@@ -401,6 +416,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
                         <span className="tm-tasklist__filter-label">Trạng thái Jira:</span>
                         <Select
                           style={{ width: '100%' }}
+                          {...selectPopup}
                           value={filters.jiraFilter || 'all'}
                           onChange={(val) => onFilterChange({ jiraFilter: val as TaskFilterState['jiraFilter'] })}
                           options={[

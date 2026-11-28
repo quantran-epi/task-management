@@ -323,7 +323,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         <div className="tm-tasklist__deck-head">
           <div className="tm-tasklist__deck-identity">
             <h2 className="tm-tasklist__deck-title">Danh sách tác vụ</h2>
-            <span className="tm-tasklist__deck-sub">.command deck · quản lý, phân bổ, theo dõi</span>
           </div>
           <div className="tm-tasklist__deck-stats">
             <span className="tm-tasklist__deck-stat">Đang làm <b>{deckStats.open}</b></span>

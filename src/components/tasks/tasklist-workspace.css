@@ -87,6 +87,11 @@
 .tm-tasklist__filter-controls .tm-tasklist__system-select { width: 76px; }
 .tm-tasklist__filter-controls .ant-segmented-item-label { padding-inline: 5px; }
 
+/* Popups size to the longest option instead of the narrow trigger. */
+.tm-tasklist__filter-popup .ant-select-item-option-content {
+  white-space: nowrap;
+}
+
 .tm-tasklist__advanced-shadow {
   position: absolute;
   width: 1px;
@@ -205,12 +210,6 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--fg-strong);
-  white-space: nowrap;
-}
-
-.tm-tasklist__deck-sub {
-  font-size: var(--font-size-xs);
-  color: var(--fg-secondary);
   white-space: nowrap;
 }
 
