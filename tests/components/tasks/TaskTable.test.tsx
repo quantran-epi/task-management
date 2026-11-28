@@ -136,6 +136,57 @@ describe('TaskTable', () => {
     expect(screen.getByText('1-4 / 4 tác vụ')).toBeInTheDocument();
   });
 
+  it('renders the Mốc column after CR with milestone name or Chưa gán mốc', async () => {
+    await testDb.crMilestones.bulkAdd([
+      { id: 'ms-1', crId: 'cr-1', name: 'Đợt 1', createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-01T00:00:00Z' },
+      { id: 'ms-2', crId: 'cr-1', name: 'Đợt 2', createdAt: '2026-09-01T00:00:00Z', updatedAt: '2026-09-01T00:00:00Z' },
+    ]);
+    const tasks = [
+      { ...mockTasks[0]!, milestoneId: 'ms-1' },
+      mockTasks[1]!,
+    ];
+
+    render(
+      <TaskTable
+        tasks={tasks}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers.indexOf('CR')).toBeLessThan(headers.indexOf('Mốc'));
+    expect(headers.indexOf('Mốc')).toBeLessThan(headers.indexOf('Subsystem'));
+    expect(await screen.findByText('Đợt 1')).toBeInTheDocument();
+    expect(screen.getAllByText('Chưa gán mốc').length).toBeGreaterThan(0);
+    const milestoneCells = screen.getAllByText('Chưa gán mốc');
+    expect(milestoneCells.every((cell) => cell.textContent === 'Chưa gán mốc')).toBe(true);
+    expect(milestoneCells.some((cell) => cell.textContent?.includes('—'))).toBe(false);
+  });
+
+  it('keeps the Mốc column when stored column config omits it', () => {
+    localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(['name', 'cr', 'subsystem', 'status']));
+
+    render(
+      <TaskTable
+        tasks={mockTasks}
+        changeRequests={mockChangeRequests}
+        systems={mockSystems}
+        selectedRowKeys={[]}
+        onSelectRows={vi.fn()}
+        onOpenDrawer={vi.fn()}
+        db={testDb}
+      />
+    );
+
+    expect(screen.getByRole('columnheader', { name: 'Mốc' })).toBeInTheDocument();
+    expect(screen.getAllByText('Chưa gán mốc').length).toBeGreaterThan(0);
+  });
+
   it('renders compact note indicator when note exists in note feature', async () => {
     await testDb.notes.add({
       id: 'note-1',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea } from '../ui';
+import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea, Text } from '../ui';
 import type { TableColumnsType } from 'antd';
 import { EditOutlined, MoreOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined } from '../ui/icon';
 import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
@@ -94,6 +94,7 @@ export interface ColumnConfig {
 export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
   { key: 'name', label: 'Tác vụ', fixed: true, default: true },
   { key: 'cr', label: 'CR', fixed: true, default: true },
+  { key: 'milestone', label: 'Mốc', fixed: true, default: true },
   { key: 'subsystem', label: 'Subsystem', fixed: true, default: true },
   { key: 'status', label: 'Trạng thái', default: true },
   { key: 'priority', label: 'Độ ưu tiên', default: true },
@@ -108,7 +109,7 @@ export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
 ];
 
 /** Columns that are part of the fixed leading group (UI-SPEC §7) and cannot be hidden. */
-const ALWAYS_VISIBLE_COLUMNS = ['name', 'cr', 'subsystem'];
+const ALWAYS_VISIBLE_COLUMNS = ['name', 'cr', 'milestone', 'subsystem'];
 
 export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter(
   (c) => c.default
@@ -251,6 +252,12 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   const systemMap = React.useMemo(() => {
     return new Map(systems.map((s) => [s.id, s]));
   }, [systems]);
+
+  const milestoneMap = useLiveQuery(async () => {
+    if (!effectiveDb) return new Map<string, string>();
+    const all = await effectiveDb.crMilestones.toArray();
+    return new Map(all.map((m) => [m.id, m.name]));
+  }, [effectiveDb]) ?? new Map<string, string>();
 
   const handleCopyStandup = async () => {
     const summary = formatStandupSummary(tasks, {
@@ -508,6 +515,19 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             {cr.code}
           </Tag>
         );
+      },
+    },
+    {
+      title: 'Mốc',
+      dataIndex: 'milestoneId',
+      key: 'milestone',
+      width: 130,
+      render: (milestoneId: string | undefined) => {
+        const name = milestoneId ? milestoneMap.get(milestoneId) : undefined;
+        if (!name) {
+          return <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>Chưa gán mốc</span>;
+        }
+        return <Text ellipsis title={name} style={{ fontSize: 'var(--font-size-small)' }}>{name}</Text>;
       },
     },
     {
