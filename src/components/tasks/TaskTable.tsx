@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea, Text } from '../ui';
+import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea } from '../ui';
 import type { TableColumnsType } from 'antd';
 import { EditOutlined, MoreOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined } from '../ui/icon';
 import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
@@ -47,15 +47,8 @@ export interface TaskTableProps {
 /** CR type colours fixed by UI-SPEC §7 / D-32. */
 const CR_TYPE_COLORS: Record<ChangeRequest['type'], string> = {
   NEW_FEATURE: 'var(--accent)',
-  ENHANCEMENT: '#52c41a',
-  BUGFIX: '#faad14',
-};
-
-const PRIORITY_COLORS: Record<TaskPriority, string> = {
-  Urgent: '#ff4d4f',
-  High: '#fa8c16',
-  Medium: 'var(--accent)',
-  Low: 'var(--fg-secondary)',
+  ENHANCEMENT: 'var(--success)',
+  BUGFIX: 'var(--warning)',
 };
 
 const PRIORITY_LABELS: Record<TaskPriority, string> = {
@@ -92,10 +85,7 @@ export interface ColumnConfig {
 }
 
 export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
-  { key: 'name', label: 'Tác vụ', fixed: true, default: true },
-  { key: 'cr', label: 'CR', fixed: true, default: true },
-  { key: 'milestone', label: 'Mốc', fixed: true, default: true },
-  { key: 'subsystem', label: 'Subsystem', fixed: true, default: true },
+  { key: 'name', label: 'Tên tác vụ · CR · Mốc', fixed: true, default: true },
   { key: 'status', label: 'Trạng thái', default: true },
   { key: 'priority', label: 'Độ ưu tiên', default: true },
   { key: 'workType', label: 'Loại việc', default: true },
@@ -108,8 +98,8 @@ export const ALL_CUSTOMIZABLE_COLUMNS: ColumnConfig[] = [
   { key: 'actions', label: 'Thao tác', default: true },
 ];
 
-/** Columns that are part of the fixed leading group (UI-SPEC §7) and cannot be hidden. */
-const ALWAYS_VISIBLE_COLUMNS = ['name', 'cr', 'milestone', 'subsystem'];
+/** The leading task column is fixed (UI-SPEC §7) and cannot be hidden. */
+const ALWAYS_VISIBLE_COLUMNS = ['name'];
 
 export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter(
   (c) => c.default
@@ -332,27 +322,25 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
   const columns: TableColumnsType<Task> = [
     {
-      title: 'Tác vụ',
+      title: 'Tên tác vụ · CR · Mốc',
       dataIndex: 'name',
       key: 'name',
+      width: 280,
       sorter: (a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }),
       sortDirections: ['ascend', 'descend'],
       render: (_, record) => {
         const linkCount = record.links?.length ?? 0;
         const hasNotes = taskNotesSet.has(record.id);
+        const cr = crMap.get(record.crId);
+        const milestoneName = record.milestoneId ? milestoneMap.get(record.milestoneId) : undefined;
+        const system = record.systemId ? systemMap.get(record.systemId) : undefined;
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)' }}>
+          <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
               <span
                 onClick={() => onOpenDrawer(record.id)}
-                style={{
-                  fontWeight: 500,
-                  fontSize: 14,
-                  color: token.colorText,
-                  cursor: 'pointer',
-                }}
-                className="task-name-link"
+                className="tm-tasklist__task-name task-name-link"
               >
                 {record.name}
               </span>
@@ -482,77 +470,30 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 </Popover>
               )}
             </div>
+            <div className="tm-tasklist__meta">
+              {cr ? (
+                <Tag
+                  bordered={false}
+                  title={cr.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectCr?.(cr.id);
+                  }}
+                  style={{
+                    margin: 0,
+                    color: CR_TYPE_COLORS[cr.type],
+                    cursor: onSelectCr ? 'pointer' : 'default',
+                  }}
+                >
+                  {cr.code}
+                </Tag>
+              ) : (
+                <span>Chung</span>
+              )}
+              <span title={milestoneName}>{milestoneName || '—'}</span>
+              {system && <span title={system.name}>· {system.code}</span>}
+            </div>
           </div>
-        );
-      },
-    },
-    {
-      title: 'CR',
-      key: 'cr',
-      width: 150,
-      render: (_, record) => {
-        const cr = crMap.get(record.crId);
-        if (!cr) {
-          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextQuaternary }}>—</span>;
-        }
-        return (
-          <Tag
-            bordered={false}
-            title={cr.name}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectCr?.(cr.id);
-            }}
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-small)',
-              fontWeight: 600,
-              color: CR_TYPE_COLORS[cr.type],
-              backgroundColor: `color-mix(in srgb, ${CR_TYPE_COLORS[cr.type]} 9%, transparent)`,
-              cursor: onSelectCr ? 'pointer' : 'default',
-            }}
-          >
-            {cr.code}
-          </Tag>
-        );
-      },
-    },
-    {
-      title: 'Mốc',
-      dataIndex: 'milestoneId',
-      key: 'milestone',
-      width: 130,
-      render: (milestoneId: string | undefined) => {
-        const name = milestoneId ? milestoneMap.get(milestoneId) : undefined;
-        if (!name) {
-          return <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>Chưa gán mốc</span>;
-        }
-        return <Text ellipsis title={name} style={{ fontSize: 'var(--font-size-small)' }}>{name}</Text>;
-      },
-    },
-    {
-      title: 'Subsystem',
-      key: 'subsystem',
-      width: 150,
-      render: (_, record) => {
-        const system = record.systemId ? systemMap.get(record.systemId) : undefined;
-        if (!system) {
-          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextSecondary }}>Chung</span>;
-        }
-        return (
-          <Tag
-            bordered={false}
-            title={system.name}
-            style={{
-              margin: 0,
-              fontSize: 'var(--font-size-small)',
-              fontFamily: 'monospace',
-              color: '#13c2c2',
-              backgroundColor: 'rgba(19, 194, 194, 0.12)',
-            }}
-          >
-            {system.code}
-          </Tag>
         );
       },
     },
@@ -564,12 +505,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       sorter: (a, b) => (STATUS_WEIGHTS[a.status] || 0) - (STATUS_WEIGHTS[b.status] || 0),
       sortDirections: ['ascend', 'descend'],
       render: (status, record) => (
-        <InlineStatusTag
-          taskId={record.id}
-          status={status}
-          estimateMinutes={record.estimateMinutes}
-          db={db}
-        />
+        <span className="tm-tasklist__status">
+          <InlineStatusTag
+            taskId={record.id}
+            status={status}
+            estimateMinutes={record.estimateMinutes}
+            db={db}
+          />
+        </span>
       ),
     },
     {
@@ -593,9 +536,9 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-2)', minWidth: 100 }}>
-            <span style={{ fontSize: 13, color: token.colorText }}>
+            <span style={{ fontSize: 13, color: 'var(--fg-strong)' }}>
               <strong>{formatMinutes(spentMinutes)}</strong>
-              <span style={{ color: token.colorTextQuaternary }}> / {formatMinutes(estimate)}</span>
+              <span style={{ color: 'var(--fg-muted)' }}> / {formatMinutes(estimate)}</span>
             </span>
             {estimate > 0 && (
               <Progress
@@ -624,20 +567,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       sortDirections: ['ascend', 'descend'],
       render: (deadline?: string) => {
         if (!deadline) {
-          return <span style={{ fontSize: 'var(--font-size-small)', color: token.colorTextQuaternary }}>—</span>;
+          return <span style={{ fontSize: 'var(--font-size-small)', color: 'var(--fg-muted)' }}>—</span>;
         }
-        const isOverdue = deadline < today;
-        return (
-          <span
-            style={{
-              fontSize: 14,
-              color: isOverdue ? token.colorError : token.colorText,
-              fontWeight: isOverdue ? 600 : 400,
-            }}
-          >
-            {deadline}
-          </span>
-        );
+        const dueClass = deadline < today ? 'tm-tasklist__due--late' : deadline === today ? 'tm-tasklist__due--today' : '';
+        return <span className={`tm-tasklist__due ${dueClass}`}>{deadline}</span>;
       },
     },
     {
@@ -647,20 +580,21 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       width: 105,
       sorter: (a, b) => (PRIORITY_WEIGHTS[a.priority] || 0) - (PRIORITY_WEIGHTS[b.priority] || 0),
       sortDirections: ['ascend', 'descend'],
-      render: (priority: TaskPriority) => (
-        <Tag
-          bordered={false}
-          style={{
-            color: PRIORITY_COLORS[priority] || 'var(--fg-secondary)',
-            backgroundColor: `color-mix(in srgb, ${PRIORITY_COLORS[priority] || 'var(--fg-secondary)'} 9%, transparent)`,
-            fontWeight: 600,
-            margin: 0,
-            fontSize: 'var(--font-size-small)',
-          }}
-        >
-          {PRIORITY_LABELS[priority] || priority}
-        </Tag>
-      ),
+      render: (priority: TaskPriority) => {
+        const weight = PRIORITY_WEIGHTS[priority] || 0;
+        return (
+          <Tooltip title={`${PRIORITY_LABELS[priority] || priority} · ${weight}/5`}>
+            <span
+              className="tm-tasklist__priority"
+              aria-label={`Ưu tiên ${PRIORITY_LABELS[priority] || priority}/${weight}`}
+            >
+              {[1, 2, 3, 4, 5].map((dot) => (
+                <i key={dot} className={dot <= weight ? 'on' : undefined} />
+              ))}
+            </span>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Loại việc',
@@ -954,6 +888,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
       {/* AntD owns header stickiness; offset clears the pinned filter bar above. */}
       <Table
+        className="tm-tasklist__table"
+        scroll={{ x: 'max-content' }}
         sticky={{ offsetHeader: stickyHeaderOffset }}
         rowKey="id"
         columns={activeColumns}
@@ -1005,7 +941,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             />
           ),
         }}
-        size="middle"
+        size="small"
       />
 
       {contextMenu && (

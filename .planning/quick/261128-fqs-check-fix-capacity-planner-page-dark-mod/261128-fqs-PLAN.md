@@ -162,6 +162,20 @@ Quy ước bắt buộc: broad-read mỗi file 1 lần rồi Edit ngay, KHÔNG r
   </done>
 </task>
 
+<task type="auto">
+  <name>Task 6: Sketch 017 winner A — Dense Table full tasklist redesign</name>
+  <files>src/components/tasks/tasklist-workspace.css, src/views/TasksView.tsx, src/components/tasks/TaskTable.tsx, src/components/tasks/__tests__/TaskTableDense.test.tsx</files>
+  <action>
+    Triển khai variant A (Dense Table) đã được sếp duyệt: bảng dày, mỗi row là high-signal line gồm tên + CR/Mốc/Subsystem, status badge, priority dots, due date có màu; light+dark đều đẹp; KHÔNG group header, KHÔNG card layout. Bổ sung class scoped `.tm-tasklist__deck`, `.tm-tasklist__deck-head`, `.tm-tasklist__deck-stat`, `.tm-tasklist__table`, `.tm-tasklist__task-name`, `.tm-tasklist__meta`, `.tm-tasklist__status`, `.tm-tasklist__priority`, `.tm-tasklist__due`, `.tm-tasklist__due--late`, `.tm-tasklist__due--today`, `.tm-tasklist__avatar`, `.tm-tasklist__rowops` trong tasklist-workspace.css dùng CSS var token có sẵn, header cột không wrap, row ~44px. Trong TaskTable gộp CR/Mốc/Subsystem thành cột "Tên tác vụ · CR · Mốc" theo sketch A, cập nhật column config keys/test phù hợp, giữ nguyên data/schema, sorting, sticky header, keyboard nav, context menu, rowSelection, pagination, column customisation, standup copy, timer, progress, workType filters, opsOwner/BA inheritance, Jira/link/note/recurring indicators, ghost dev, mọi data-testid/id/aria-label/STORAGE_COLUMNS_KEY/ALL_CUSTOMIZABLE_COLUMNS/DEFAULT_VISIBLE_COLUMNS. Priority render 5 dots với aria-label="Ưu tiên <label>/5", giữ weights sort hiện tại (Urgent=4..Low=1). Due date overdue `var(--danger)`, today `var(--warning)`, còn lại `var(--fg-secondary)`, format YYYY-MM-DD. Giữ InlineStatusTag, bọc `.tm-tasklist__status`. Table `size="small"`, className `tm-tasklist__table`, thay inline `token.colorText`/`token.colorTextQuaternary` bằng CSS var. Trong TasksView bọc TaskTable trong section `.tm-tasklist__deck` với deck head gọn: title + stats "Đang làm / Quá hạn / Tổng" từ filteredTasks, giữ PageHeader và nút "Tự động phân bổ" nguyên aria-label/handler. Tạo test guard `src/components/tasks/__tests__/TaskTableDense.test.tsx` cho header gộp, class table, priority dots, due --late, keyboard Arrow/Enter, checkbox selection. Chạy scoped `npx vitest run src/views/__tests__/TasksViewWorkspace.test.tsx src/components/tasks/__tests__/TaskTableDense.test.tsx --bail=1` và `npx tsc --noEmit`. Verify Chrome riêng light/dark qua Playwright, screenshot /tmp/fqs-verify/tasklist-dense-{light,dark}.png. KHÔNG đụng file peer đã khóa. Commit riêng code+test+plan update, KHÔNG commit STATE.md.
+  </action>
+  <verify>
+    <automated>npx vitest run src/views/__tests__/TasksViewWorkspace.test.tsx src/components/tasks/__tests__/TaskTableDense.test.tsx --bail=1 && npx tsc --noEmit</automated>
+  </verify>
+  <done>
+    Tasklist là dense table variant A, header không wrap, row ~44px, priority dots/due màu đúng light+dark; mọi hành động/testid/sort/filter cũ nguyên vẹn; scoped test và tsc xanh; screenshot light/dark có đường dẫn báo cáo; commit chỉ chứa file mình.
+  </done>
+</task>
+
 </tasks>
 
 <verification>

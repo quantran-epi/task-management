@@ -94,3 +94,198 @@
   font-size: var(--font-size-small);
   white-space: nowrap;
 }
+
+/* Sketch 017 winner A — dense table deck. Tokens only; no light-only literals. */
+.tm-tasklist__deck {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-island);
+  overflow: hidden;
+}
+
+.tm-tasklist__deck-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-12);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+}
+
+.tm-tasklist__deck-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-strong);
+  white-space: nowrap;
+}
+
+.tm-tasklist__deck-stat {
+  font-size: var(--font-size-small);
+  color: var(--fg-secondary);
+  white-space: nowrap;
+}
+
+.tm-tasklist__deck-stat b {
+  color: var(--fg-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-tasklist__deck-stat--late b {
+  color: var(--danger);
+}
+
+.tm-tasklist__deck-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-12);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.tm-tasklist__table.ant-table-wrapper {
+  min-width: 0;
+}
+
+/* AntD sticky header is positioned in flow here: the deck owns the scroll container. */
+.tm-tasklist__table .ant-table-header,
+.tm-tasklist__table .ant-table-summary {
+  position: static !important;
+}
+
+.tm-tasklist__table .ant-table-container {
+  overflow: hidden;
+}
+
+.tm-tasklist__table .ant-table-body {
+  overflow: auto hidden !important;
+}
+
+.tm-tasklist__table .ant-table th {
+  white-space: nowrap;
+  color: var(--fg-secondary);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  background: var(--bg-elev);
+  border-bottom-color: var(--border-strong);
+}
+
+.tm-tasklist__table .ant-table-thead > tr > th::before {
+  background-color: var(--border-strong) !important;
+}
+
+.tm-tasklist__table .ant-table-tbody > tr > td {
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+
+.tm-tasklist__table .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: var(--bg-hover);
+}
+
+.tm-tasklist__table .keyboard-active-row > td {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tm-tasklist__task-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--fg-strong);
+  cursor: pointer;
+}
+
+.tm-tasklist__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-8);
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-xs);
+  color: var(--fg-muted);
+}
+
+.tm-tasklist__meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tm-tasklist__meta a,
+.tm-tasklist__meta button {
+  padding: 0;
+  font-size: inherit;
+}
+
+.tm-tasklist__status .ant-tag {
+  margin: 0;
+}
+
+.tm-tasklist__priority {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1;
+}
+
+.tm-tasklist__priority i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  flex: 0 0 auto;
+}
+
+.tm-tasklist__priority i.on {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.tm-tasklist__due {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--fg-secondary);
+}
+
+.tm-tasklist__due--late {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.tm-tasklist__due--today {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.tm-tasklist__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+}
+
+.tm-tasklist__rowops {
+  opacity: 0.55;
+}
+
+.tm-tasklist__table tr:hover .tm-tasklist__rowops,
+.tm-tasklist__rowops:focus-visible {
+  opacity: 1;
+}

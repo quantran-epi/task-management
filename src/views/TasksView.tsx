@@ -22,6 +22,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, ChangeRequest, System } from '../types/models';
 import { foldForSearch, searchIncludes } from '../utils/searchText';
+import { getTodayDateString } from '../utils/date';
 import '../components/tasks/tasklist-workspace.css';
 
 const { Text } = Typography;
@@ -288,6 +289,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
     filters.includeClosed ||
     activeFilterCount > 0;
 
+  const today = getTodayDateString();
+  const deckStats = useMemo(() => {
+    const open = filteredTasks.filter((t) => t.status === 'In Progress').length;
+    const late = filteredTasks.filter(
+      (t) => t.deadline && t.deadline < today && t.status !== 'Done' && t.status !== 'Cancelled'
+    ).length;
+    return { open, late, total: filteredTasks.length };
+  }, [filteredTasks, today]);
+
   return (
     <div className="tm-tasklist">
       {contextHolder}
@@ -329,21 +339,31 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         />
       </div>
 
-      {/* 3. Main Tasks Table */}
-      <TaskTable
-        tasks={filteredTasks}
-        changeRequests={changeRequests}
-        systems={systems}
-        selectedRowKeys={selectedRowKeys}
-        onSelectRows={setSelectedRowKeys}
-        onOpenDrawer={handleOpenDrawer}
-        onSelectCr={handleSelectCr}
-        isFiltered={isFiltered}
-        db={db}
-        globalSort={globalSort}
-        onGlobalSortChange={setGlobalSort}
-        filterBarRef={filterBarRef}
-      />
+      {/* 3. Dense table deck — sketch 017 winner A */}
+      <section className="tm-tasklist__deck" aria-label="Bảng danh sách tác vụ">
+        <div className="tm-tasklist__deck-head">
+          <h2 className="tm-tasklist__deck-title">Danh sách tác vụ</h2>
+          <div className="tm-tasklist__deck-stats">
+            <span className="tm-tasklist__deck-stat">Đang làm <b>{deckStats.open}</b></span>
+            <span className="tm-tasklist__deck-stat tm-tasklist__deck-stat--late">Quá hạn <b>{deckStats.late}</b></span>
+            <span className="tm-tasklist__deck-stat">Tổng <b>{deckStats.total}</b></span>
+          </div>
+        </div>
+        <TaskTable
+          tasks={filteredTasks}
+          changeRequests={changeRequests}
+          systems={systems}
+          selectedRowKeys={selectedRowKeys}
+          onSelectRows={setSelectedRowKeys}
+          onOpenDrawer={handleOpenDrawer}
+          onSelectCr={handleSelectCr}
+          isFiltered={isFiltered}
+          db={db}
+          globalSort={globalSort}
+          onGlobalSortChange={setGlobalSort}
+          filterBarRef={filterBarRef}
+        />
+      </section>
 
       {/* 4. Floating Batch Action Bar */}
       <BatchActionBar
