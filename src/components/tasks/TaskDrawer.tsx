@@ -19,6 +19,7 @@ import { WORK_TYPES } from '../../types/models';
 import { getTask, updateTask, reparentTask } from '../../db/repositories/taskRepo';
 import { getAllChangeRequests } from '../../db/repositories/changeRequestRepo';
 import { getAllSystems } from '../../db/repositories/systemRepo';
+import { listCrMilestones } from '../../db/repositories/crMilestoneRepo';
 import { createFocusRestorer } from '../../utils/focus';
 import { useRegisterActiveForm } from '../../context/FormGuardContext';
 import { useAIChat } from '../../context/AIChatContext';
@@ -49,6 +50,7 @@ export interface TaskDrawerProps {
 interface TaskDrawerFormValues {
   name: string;
   crId?: string;
+  milestoneId?: string | undefined;
   systemId?: string;
   status: TaskStatus;
   priority: TaskPriority;
@@ -126,6 +128,10 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [ghostDevModalOpen, setGhostDevModalOpen] = useState(false);
   const selectedCrId = useWatch('crId', form);
+  const milestones = useLiveQuery(
+    () => (selectedCrId ? listCrMilestones(selectedCrId, db) : Promise.resolve([])),
+    [selectedCrId, db]
+  ) ?? [];
   const watchHours = useWatch('hours', form);
   const watchMinutes = useWatch('minutes', form);
   const liveEstimateMinutes =
@@ -195,6 +201,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           getAllSystems(db),
           taskId ? getTask(taskId, db) : Promise.resolve(undefined),
         ]);
+        const taskMilestones = taskData?.crId ? await listCrMilestones(taskData.crId, db) : [];
 
         if (!mounted) return;
         setChangeRequests(crList);
@@ -205,6 +212,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           form.setFieldsValue({
             name: taskData.name,
             crId: taskData.crId || '',
+            milestoneId: taskMilestones.some((m) => m.id === taskData.milestoneId) ? taskData.milestoneId : '',
             systemId: taskData.systemId || '',
             status: taskData.status,
             priority: taskData.priority,
@@ -282,8 +290,16 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     }
   };
 
-  const handleCrChange = (nextCrId: string) => {
+  const handleCrChange = async (nextCrId: string) => {
     form.setFieldValue('crId', nextCrId);
+    // Clear a milestone that does not belong to the new CR (D-02/D-03).
+    const currentMilestoneId = form.getFieldValue('milestoneId');
+    if (currentMilestoneId) {
+      const nextMilestones = nextCrId ? await listCrMilestones(nextCrId, db) : [];
+      if (!nextMilestones.some((m) => m.id === currentMilestoneId)) {
+        form.setFieldValue('milestoneId', '');
+      }
+    }
     // Clear the subsystem when it is not a target of the new CR (D-46)
     const currentSystemId = form.getFieldValue('systemId');
     if (currentSystemId) {
@@ -322,6 +338,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
 
       const targetCrId = values.crId ? values.crId : undefined;
       const targetSystemId = values.systemId ? values.systemId : undefined;
+      const targetMilestoneId = values.milestoneId || undefined;
       if (!targetCrId) return;
 
       // Handle reparenting if the CR or subsystem changed
@@ -373,6 +390,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           notes: values.notes?.trim() ? values.notes : undefined,
           crId: targetCrId,
           systemId: targetSystemId,
+          ...(targetMilestoneId !== undefined ? { milestoneId: targetMilestoneId } : { milestoneId: undefined }),
           isRecurring: values.isRecurring ?? false,
           recurrenceFrequency: values.isRecurring ? values.recurrenceFrequency || 'daily' : undefined,
           recurrenceInterval: values.isRecurring ? values.recurrenceInterval || 1 : undefined,
@@ -492,6 +510,25 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
                 }))}
               />
             </FormItem>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--gap-12)' }}>
+            <Tooltip title={selectedCrId ? '' : 'Chọn CR trước'} placement="top">
+              <span style={{ display: 'block' }}>
+                <FormItem name="milestoneId" label="Mốc">
+                  <Select
+                    aria-label="Mốc"
+                    disabled={!selectedCrId}
+                    placeholder="Chưa gán mốc"
+                    notFoundContent="CR này chưa có mốc — thêm mốc trong chi tiết CR"
+                    options={[
+                      { value: '', label: 'Chưa gán mốc' },
+                      ...milestones.map((m) => ({ value: m.id, label: m.name })),
+                    ]}
+                  />
+                </FormItem>
+              </span>
+            </Tooltip>
 
             <Tooltip title={selectedCrId ? '' : 'Chọn CR trước'} placement="top">
               <span style={{ display: 'block' }}>
