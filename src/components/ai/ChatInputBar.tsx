@@ -1,13 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Mentions, Avatar, Button, Tooltip, Tag, Modal, useAntdToken, TextArea } from '../ui';
 import type { MentionsRef } from 'antd';
-import { SendOutlined, StopOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, ClearOutlined, CalendarOutlined, DashboardOutlined, WarningOutlined, QuestionCircleOutlined, PaperClipOutlined, FileTextOutlined, FullscreenOutlined, FolderOpenOutlined } from '../ui/icon';
+import { SendOutlined, StopOutlined, CheckSquareOutlined, BranchesOutlined, ApartmentOutlined, ClearOutlined, CalendarOutlined, DashboardOutlined, WarningOutlined, QuestionCircleOutlined, FileTextOutlined, FullscreenOutlined, FolderOpenOutlined } from '../ui/icon';
 import { StandaloneSshFileBrowser } from './StandaloneSshFileBrowser';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import type { Task, ChangeRequest, System, Note } from '../../types/models';
-import { isTauriApp } from '../../utils/timerPopout';
-import { readBrowserFileText } from '../../services/ai/browserFileReader';
 import { agentColorFor, agentTextColorFor } from './office/AgentAttributionRow';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
@@ -73,12 +71,6 @@ const COMMANDS = [
     icon: <QuestionCircleOutlined style={{ color: 'var(--info-fg)' }} />,
     title: '/help',
     description: 'Xem hướng dẫn sử dụng và danh sách công cụ AI',
-  },
-  {
-    name: 'file',
-    icon: <PaperClipOutlined style={{ color: 'var(--info-fg)' }} />,
-    title: '/file',
-    description: 'Đính kèm tập tin từ máy tính',
   },
   {
     name: 'doc',
@@ -221,63 +213,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     }
   };
 
-  const handlePickFile = async () => {
-    try {
-      if (isTauriApp()) {
-        const api = await import('@tauri-apps/api/core');
-        const selected = await api.invoke<string | null>('select_local_file');
-        if (selected) {
-          if (onAttachFile) {
-            onAttachFile(selected);
-          } else {
-            const fileName = selected.split(/[/\\]/).pop() || selected;
-            const ref = `[${fileName}](file:${selected}) `;
-            update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
-          }
-          setTimeout(() => {
-            mentionsRef.current?.focus();
-          }, 50);
-        }
-      } else {
-        // Browser path: attach metadata AND, only after the user explicitly confirms, read the
-        // file content client-side via FileReader (no Rust/Tauri read command — checkpoint cz2).
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.onchange = async (e: any) => {
-          const file = e.target?.files?.[0] as File | undefined;
-          if (!file) return;
-
-          if (onAttachFile) {
-            onAttachFile(file.name);
-          } else {
-            const ref = `[${file.name}](file:${file.name}) `;
-            update(effectiveValue ? `${effectiveValue.trimEnd()} ${ref}` : ref);
-          }
-
-          const confirmed =
-            typeof window === 'undefined' ||
-            typeof window.confirm !== 'function' ||
-            window.confirm(
-              `Đọc nội dung "${file.name}" để đưa vào ngữ cảnh AI? TaskMate chỉ đọc khi bạn xác nhận.`,
-            );
-          if (!confirmed) return;
-
-          try {
-            const result = await readBrowserFileText(file);
-            const block =
-              `<file_content name="${result.fileName}">\n${result.content}\n</file_content> `;
-            update((effectiveValue || '').trimEnd() ? `${(effectiveValue || '').trimEnd()}\n${block}` : block);
-          } catch (err: any) {
-            console.warn('[ChatInputBar] Browser file read failed:', err?.message || err);
-          }
-        };
-        input.click();
-      }
-    } catch (err) {
-      console.warn('[ChatInputBar] File selection error:', err);
-    }
-  };
-
   const handleSend = (targetEl?: HTMLTextAreaElement) => {
     if (disabled || isStreaming) return;
     const rawVal = effectiveValue || targetEl?.value || '';
@@ -293,11 +228,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
 
     if (trimmed === '/clear-all') {
       onClearAll?.();
-      return;
-    }
-
-    if (trimmed === '/file') {
-      handlePickFile();
       return;
     }
 
@@ -332,10 +262,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
       onClearAll?.();
       return;
     }
-    if (trimmed === '/file') {
-      handlePickFile();
-      return;
-    }
     onSubmit(trimmed);
   };
 
@@ -367,8 +293,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         onClear?.();
       } else if (rawText === '/clear-all') {
         onClearAll?.();
-      } else if (rawText === '/file') {
-        handlePickFile();
       } else {
         onSubmit(rawText);
       }
@@ -376,12 +300,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   };
 
   const handleSelect = (option: any) => {
-    if (option.key === 'cmd-file') {
-      update(effectiveValue.replace(/\/file\s*$/, '').trimEnd());
-      handlePickFile();
-      return;
-    }
-
     if (option.key === 'cmd-doc' || option.key === 'mention-doc-entry') {
       update(
         (() => {
@@ -907,17 +825,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
             style={{ height: 32, width: 32, padding: 0 }}
           />
         </Tooltip>
-        <Tooltip title="Tham chiếu tập tin cục bộ">
-          <Button
-            type="text"
-            icon={<PaperClipOutlined />}
-            onClick={handlePickFile}
-            disabled={disabled || isStreaming}
-            aria-label="Tham chiếu tập tin"
-            style={{ height: 32, width: 32, padding: 0 }}
-          />
-        </Tooltip>
-        {isStandaloneChat && onAttachFile && (
+        {(onAttachFile || onAttachFiles) && (
           <Tooltip title="Duyệt tệp SSH từ xa">
             <Button
               type="text"
@@ -1027,17 +935,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           }}
         />
       </Modal>
-      {isStandaloneChat && (
-        <StandaloneSshFileBrowser
-          open={isSshBrowserOpen}
-          onClose={() => setIsSshBrowserOpen(false)}
-          onAttach={(paths) => {
-            if (onAttachFiles) onAttachFiles(paths);
-            else for (const path of paths) onAttachFile?.(path);
-          }}
-          db={db}
-        />
-      )}
+      <StandaloneSshFileBrowser
+        open={isSshBrowserOpen}
+        onClose={() => setIsSshBrowserOpen(false)}
+        onAttach={(paths) => {
+          if (onAttachFiles) onAttachFiles(paths);
+          else for (const path of paths) onAttachFile?.(path);
+        }}
+        db={db}
+      />
     </div>
   );
 };
