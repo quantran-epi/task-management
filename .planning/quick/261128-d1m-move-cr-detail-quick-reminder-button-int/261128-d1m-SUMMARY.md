@@ -40,6 +40,7 @@ Sếp yêu cầu bố trí nút "Thêm nhắc nhở" đẹp hơn và hỏi tại
   - Hai nút thêm căn sát phải section qua `justify-content: space-between`; link hiển thị dạng chữ link (`Button type="link"` không viền).
   - Section Links chuyển sang bảng nhỏ: header "Tên / Đường dẫn", mỗi link một row gồm tên (ellipsis 160px) + URL monospace (ellipsis, `title` đầy đủ) + action icon sát phải. Click URL vẫn gọi `openDocumentLink` (http → web, local → explorer/Claude Code với Alt).
   - Nút sửa link mở modal riêng "Sửa liên kết" (chỉ name + URL), patch qua `updateChangeRequest({ links })` — không mở modal sửa CR/schema. Xoá link dùng Popconfirm thay vì modal confirm.
+- Các secondary block (Ghi chú, Links, Nhắc nhở, Jira Epic, ...) dùng AntD Card với `title`/`extra`, đồng nhất với task insight.
 - Không sửa repository, modal, schema hay dependency.
 
 ## Verification
@@ -48,6 +49,7 @@ Sếp yêu cầu bố trí nút "Thêm nhắc nhở" đẹp hơn và hỏi tại
 - `npx tsc --noEmit -p tsconfig.json` — sạch.
 - `npx vitest run src/views/__tests__/ChangeRequestDetailView.reminderAndSearch.test.tsx --bail=1` — 2/2 đậu.
 - `git diff --check` — sạch.
+- Card thống nhất (`58530db1`): Chrome verify CR detail có 3 section trong `.ant-card`, header/nút căn phải đúng.
 - Chrome (isolated, remote debugging): seed CR có 1 link + 1 reminder, mở detail, chụp screenshot — header cân đối, nút sát badge, icon sửa/xoá cạnh nội dung; click "Sửa liên kết" mở đúng modal "Sửa Change Request"; click "Xóa nhắc nhở" → confirm → DB reminders 1→0; empty state "Chưa có" vẫn cân đối.
 
 ## Deviations from Plan
@@ -65,4 +67,4 @@ Xoá link/reminder có `modal.confirm` trước khi ghi; patch đi qua `updateCh
 ## Self-Check: PASSED
 
 - File tồn tại: `src/views/ChangeRequestDetailView.tsx`
-- Commit tồn tại: `8ae5eb85`
+- Commits tồn tại: `8ae5eb85`, `58530db1`

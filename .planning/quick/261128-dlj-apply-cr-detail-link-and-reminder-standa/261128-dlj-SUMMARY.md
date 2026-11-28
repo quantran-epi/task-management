@@ -59,4 +59,4 @@ URL đi qua `isValidLinkUrl` trước khi lưu; `openDocumentLink` giữ nguyên
 
 ## Self-Check: PASSED
 
-- Commits: `7c327a05`, `6ff40a90`
+- Commits: `7c327a05`, `6ff40a90` (Card Links chuyển ra ngoài header Card)
