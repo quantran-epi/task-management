@@ -11,6 +11,11 @@
 | `5f362408` | `feat(261128-fqs): make splash one orchestrated blue-teal moment` |
 | `e474c098` | `fix(261128-fqs): remove bright row border in AI office explorer` |
 | `a83eba75` | `fix(261128-fqs): keep splash text legible in dark mode` |
+| `64450f6b` | `feat(261128-fqs): redesign task list as dense command deck (sketch 017 A, pass 1)` |
+| `2f6aa3cd` | `feat(261128-fqs): align tasklist with dense command deck sketch` |
+| `e07173f4` | `fix(261128-fqs): tighten tasklist title, countline and command bar` |
+| `f9cbce54` | `fix(261128-fqs): assert positive sticky header offset` |
+| `424578ae` | `test(261128-fqs): align TaskTable assertions with dense columns` |
 
 ## Chi tiết
 
@@ -36,6 +41,14 @@
 - Phát hiện qua Chrome: dark mode dùng token `--fg-strong`, `--fg-secondary`, `--fg-muted` làm chữ tối trên nền xanh đậm.
 - Đổi sang màu sáng cố định (`#f7fbff`, `#b8c7dc`, `#8fa3bd`) vì splash luôn nền tối. Commit riêng `a83eba75` sau xác nhận với coordinator; không phải peer session.
 
+### Task 6/7 — Tasklist full redesign, sketch 017 winner A
+- Sketch 017 chọn variant A — Dense Table (`A — Dense Table` trong `MANIFEST.md` và README sketch); không dùng group header B hay card C.
+- `TaskTable.tsx`: một dòng high-signal cho tên + CR/Mốc/Subsystem, CR tag có viền/tint, priority 5 chấm, due có màu theo hạn, row `⋯`, sort/column customisation chuyển lên command bar; giữ `data-testid`, keyboard nav, batch, standup modal, localStorage columns.
+- `TasksView.tsx`: deck head là nguồn title/subtitle duy nhất; PageHeader chỉ giữ extra action. Quick-add mở theo nút "Thêm" trong deck head.
+- `TaskFilterBar.tsx`: command bar 1 dòng (1280px: 39px cao, search 383px ≈ 43%); nâng cao gom status/priority/horizon/date/workType/opsOwner/BA/Jira vào popover; aria-label/testid giữ nguyên.
+- `tasklist-workspace.css`: token scoped, không hardcode light; light/dark đều kiểm tra Chrome.
+- Test đi theo redesign: `TaskTableDense.test.tsx`, `TasksViewWorkspace.test.tsx`; legacy `tests/components/TaskTable.test.tsx` cập nhật 3 assertion lỗi thời (sticky `96px` → `> 0`, thứ tự cột sau gộp, generic "Chung").
+
 ## Tests
 
 Chạy scoped, KHÔNG chạy full suite:
@@ -44,12 +57,14 @@ Chạy scoped, KHÔNG chạy full suite:
 npx vitest run \
   src/components/planner/__tests__/plannerDarkSurface.test.ts \
   src/views/__tests__/TasksViewWorkspace.test.tsx \
+  src/components/tasks/__tests__/TaskTableDense.test.tsx \
   src/components/__tests__/AppSplashScreen.test.tsx \
   src/workbench/toolwindows/__tests__/AiOfficeExplorerRow.test.ts \
+  tests/components/TaskTable.test.tsx \
   --bail=1
 ```
 
-Kết quả: 4 files passed, 18 tests passed. `npx tsc --noEmit` passed.
+Kết quả: 6 files passed, 37 tests passed. `npx tsc --noEmit` passed.
 
 Test guard mới:
 - `plannerDarkSurface.test.ts` — cấm literal light hardcode cũ, bắt buộc CSS token.
@@ -66,7 +81,7 @@ Screenshots: `/tmp/fqs-chrome-shots/{splash,tasks,planner,office}-{light,dark}.p
 
 Kết quả nhìn thực tế:
 - Splash light/dark: nền xanh đậm ổn định, chữ trắng rõ sau fix `a83eba75`, progress và step text đọc được; không infinite pulse.
-- Tasks light/dark: toolstrip dày, dính bảng, tương phản tốt; id/shortcut và filter vẫn hoạt động.
+- Tasks light/dark: command deck sát sketch 017 A, filter một dòng 39px ở 1280px, search ~43% chiều rộng, title/subtitle chỉ ở deck head, countline gọn, CR tag/priority/due rõ; id/shortcut, sort, sticky, keyboard nav và filter vẫn hoạt động. Ảnh: `/tmp/fqs-verify/e07173f4-{light,dark}.png` và `-advanced.png`.
 - Planner light/dark: lưới 7 cột giữ nguyên; day column/post-it placeholder/h header tương phản tốt, không nền trắng chói trong dark.
 - AI office explorer light/dark: sidebar sạch, không còn border chói trên nhóm (danh sách đang rỗi nên guard test phủ source).
 
