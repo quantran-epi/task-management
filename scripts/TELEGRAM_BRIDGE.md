@@ -84,6 +84,22 @@ Chỉ 1 lệnh npm cần chạy: `npm run telegram:control` (chạy bridge + wat
 
 `TELEGRAM_WATCHER_POLL_MS` đặt chu kỳ poll (mặc định 1000ms, chỉ nhận số nguyên dương). Log watcher chỉ có trạng thái và tên file inbox (`update_id`), không token/chat ID/nội dung lệnh.
 
+## Worker session bridge (plan/close/open)
+
+`scripts/worker-session.mjs` là tiện ích zero-dependency để điều phối quyết định thay worker headful trên macOS Terminal.app. Không gọi mạng, không đụng `src/`.
+
+```bash
+npm run worker:session:plan -- --session <name> --task "mô tả ngắn" --context-useful false --busy false
+npm run worker:session:close -- --session <name> --confirmed --workers-json '["<name>"]' [--apply]
+npm run worker:session:open -- --session <name> --cwd <dir> [--task "..."] [--apply]
+```
+
+- `plan` in JSON `{action, reason, session}`: `REPLACE` chỉ khi `context-useful=false` VÀ `busy=false`; mặc định an toàn là `true/true` → `KEEP`. Không gọi `osascript`.
+- `close` **bắt buộc** danh sách worker realtime do session điều phối lấy từ `ListAgents` ngay trước khi quyết định: `--workers <file.json>` hoặc `--workers-json '<json>'`. Chấp nhận mảng tên, mảng `{name}` hoặc `{workers: [...]}`. Không truyền → từ chối đóng; không hardcode whitelist. Luôn loại trừ session điều phối (`task-management-85`, hoặc `--coordinator <name>`). Cần `--confirmed`; mặc định dry-run, chỉ `--apply` mới gọi `osascript` đóng đúng tab Terminal.app chứa tên session, không quit app.
+- `open` mặc định dry-run; `--apply` chạy `osascript` qua argv array (`shell: false`) để mở tab/window chạy `claude --name <session>` trong `--cwd`. Không log secret.
+
+Test scoped: `node --test scripts/worker-session.test.mjs`. Không chạy trên Terminal thật khi test (execImpl injectable).
+
 ## Giới hạn đã biết
 
 - File control **không mã hoá**; chỉ đáng tin trên cùng máy của một user.
