@@ -2885,3 +2885,21 @@ describe('Telegram Headless Worker', () => {
     setTelegramInboundProcessorForTesting(null);
   });
 });
+
+describe('Telegram reply chunk sending (P1 no-retry)', () => {
+  it('gửi chunk sau dù chunk trước lỗi, không retry chunk lỗi', async () => {
+    const { sendTelegramReplyChunks } = await import('../../src/services/telegram/telegramHeadlessWorker');
+    const sendReply = vi.fn(async (_token: string, _chatId: string, text: string) => {
+      if (text === 'chunk-1') throw new Error('network down');
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await sendTelegramReplyChunks(['chunk-1', 'chunk-2', 'chunk-3'], sendReply, 'token', 'chat', 42);
+
+    expect(sendReply.mock.calls.map((call) => call[2])).toEqual(['chunk-1', 'chunk-2', 'chunk-3']);
+    expect(sendReply).toHaveBeenCalledWith('token', 'chat', 'chunk-1', 42);
+    expect(sendReply).toHaveBeenCalledWith('token', 'chat', 'chunk-2', undefined);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});

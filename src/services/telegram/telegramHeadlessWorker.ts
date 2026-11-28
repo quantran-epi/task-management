@@ -267,6 +267,29 @@ export function splitTelegramMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE
   return chunks;
 }
 
+/**
+ * Sends each reply chunk once. A failed chunk is logged and skipped; later
+ * chunks still go out. No retry — a network failure must not resend a partial
+ * reply or duplicate messages Telegram may have already accepted.
+ */
+export async function sendTelegramReplyChunks(
+  chunks: readonly string[],
+  sendReply: (token: string, chatId: string, text: string, replyTo?: number) => Promise<void>,
+  token: string,
+  chatId: string,
+  replyToMessageId?: number
+): Promise<void> {
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i];
+    if (!chunk) continue;
+    try {
+      await sendReply(token, chatId, chunk, i === 0 ? replyToMessageId : undefined);
+    } catch (err) {
+      console.warn(`[telegramWorker] Failed to send reply chunk ${i + 1}/${chunks.length}:`, err);
+    }
+  }
+}
+
 export interface GroundedContextResult {
   contextText: string;
   matchedSourceTitles: string[];
@@ -970,13 +993,7 @@ export async function processTelegramInboundMessage(
       });
 
       const htmlMsg = markdownToTelegramHtml(adjResult.replyMarkdown);
-      const chunks = splitTelegramMessage(htmlMsg);
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        if (chunk) {
-          await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
-        }
-      }
+      await sendTelegramReplyChunks(splitTelegramMessage(htmlMsg), sendReply, botToken, chat_id, message_id);
 
       await logTelegramSession(
         {
@@ -1529,13 +1546,7 @@ export async function processTelegramInboundMessage(
     });
 
     const htmlMsg = markdownToTelegramHtml(mutationResult.replyMarkdown);
-    const chunks = splitTelegramMessage(htmlMsg);
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      if (chunk) {
-        await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
-      }
-    }
+    await sendTelegramReplyChunks(splitTelegramMessage(htmlMsg), sendReply, botToken, chat_id, message_id);
 
     await logTelegramSession(
       {
@@ -1588,13 +1599,7 @@ export async function processTelegramInboundMessage(
       if (groundedResult.kind === 'grounded_answer') {
         const rawAnswer = formatGroundedAnswerForTelegram(groundedResult.grounding);
         const htmlAnswer = markdownToTelegramHtml(rawAnswer);
-        const chunks = splitTelegramMessage(htmlAnswer);
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          if (chunk) {
-            await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
-          }
-        }
+        await sendTelegramReplyChunks(splitTelegramMessage(htmlAnswer), sendReply, botToken, chat_id, message_id);
         await logTelegramSession(
           {
             chatId: chat_id,
@@ -1731,13 +1736,7 @@ export async function processTelegramInboundMessage(
 
   // Step 9: Convert to Telegram HTML and Split/Send replies
   const formattedHtml = markdownToTelegramHtml(processedResponse);
-  const chunks = splitTelegramMessage(formattedHtml);
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    if (chunk) {
-      await sendReply(botToken, chat_id, chunk, i === 0 ? message_id : undefined);
-    }
-  }
+  await sendTelegramReplyChunks(splitTelegramMessage(formattedHtml), sendReply, botToken, chat_id, message_id);
 
   // Step 10: Log Session
   await logTelegramSession(

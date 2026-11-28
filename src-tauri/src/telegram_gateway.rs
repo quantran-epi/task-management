@@ -329,6 +329,13 @@ fn strip_html_tags(text: &str) -> String {
         .replace("&amp;", "&")
 }
 
+/// Only a 400 means Telegram rejected the HTML parse_mode payload. Network,
+/// rate-limit, and server errors must surface as-is: retrying them as plain
+/// text would send a duplicate reply.
+fn should_use_plain_text_fallback(status: reqwest::StatusCode) -> bool {
+    status.as_u16() == 400
+}
+
 #[tauri::command]
 pub async fn send_telegram_reply(
     token: String,
@@ -363,8 +370,13 @@ pub async fn send_telegram_reply(
         .await
         .map_err(|e| format!("Network error sending reply: {}", e))?;
 
-    if !res.status().is_success() {
-        // Fallback: strip all html tags (including attributes) and send as plain text without parse_mode
+    if !should_use_plain_text_fallback(res.status()) {
+        let err_text = res.text().await.unwrap_or_default();
+        return Err(format!("Telegram Bot API error: {}", err_text));
+    }
+
+    // Telegram rejected HTML parsing (400). Retry once as plain text only.
+    {
         let stripped_text = strip_html_tags(&text);
 
         let body_plain = serde_json::json!({
@@ -431,7 +443,7 @@ pub async fn send_telegram_action(
 
 #[cfg(test)]
 mod tests {
-    use super::{strip_html_tags, TelegramInboundPayload};
+    use super::{should_use_plain_text_fallback, strip_html_tags, TelegramInboundPayload};
 
     #[test]
     fn inbound_event_emits_from_user_id_as_string() {
@@ -483,5 +495,21 @@ mod tests {
         // &amp;lt; is the literal text "&lt;", not "<". The &lt; -> "<" pass runs
         // before the &amp; -> "&" pass, so the entity is decoded exactly once.
         assert_eq!(strip_html_tags("&amp;lt;"), "&lt;");
+    }
+
+    #[test]
+    fn plain_text_fallback_only_on_bad_request() {
+        assert!(should_use_plain_text_fallback(
+            reqwest::StatusCode::BAD_REQUEST
+        ));
+        for status in [
+            reqwest::StatusCode::TOO_MANY_REQUESTS,
+            reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            reqwest::StatusCode::SERVICE_UNAVAILABLE,
+            reqwest::StatusCode::UNAUTHORIZED,
+            reqwest::StatusCode::OK,
+        ] {
+            assert!(!should_use_plain_text_fallback(status), "{status}");
+        }
     }
 }

@@ -177,6 +177,8 @@ export const TelegramMonitorView: React.FC = () => {
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       if (checked) {
+        // Polling is the source of truth: persist isEnabled only after the
+        // gateway actually started, so a failed start cannot leave a stale flag.
         await invoke('start_telegram_polling', { token: botToken.trim() });
         await saveTelegramSettings({ isEnabled: true, botToken: botToken.trim() });
         setIsRunning(true);
@@ -200,8 +202,24 @@ export const TelegramMonitorView: React.FC = () => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
+      const nextToken = botToken.trim();
+      const previousToken = settingsRecord?.botToken?.trim() || '';
+      const tokenChanged = nextToken !== previousToken;
+      // A changed token while polling is live must restart the gateway;
+      // otherwise it keeps polling the old bot until the app restarts.
+      if (tokenChanged && isRunning && isTauriApp()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('stop_telegram_polling');
+        try {
+          await invoke('start_telegram_polling', { token: nextToken });
+        } catch (err) {
+          await saveTelegramSettings({ isEnabled: false, botToken: nextToken });
+          setIsRunning(false);
+          throw err;
+        }
+      }
       await saveTelegramSettings({
-        botToken: botToken.trim(),
+        botToken: nextToken,
         autoStartOnLaunch: autoStart,
         defaultScope,
         maxHistoryTurns: defaultMaxHistoryTurns,
