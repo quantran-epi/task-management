@@ -5,7 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { System, SystemType } from '../../types/models';
 import type { SshConfig } from '../../types/ssh';
 import { isLogicalParent } from '../../db/repositories/systemRepo';
-import { gitHref, gitLinkLabel } from '../../utils/gitLink';
+import { gitHref, gitLinkLabel, shouldRenderGitLink } from '../../utils/gitLink';
 import {
   DEFAULT_SYSTEM_TYPE_OPTIONS,
   SYSTEM_TYPE_FALLBACK_COLOR,
@@ -237,29 +237,41 @@ export const SystemTable: React.FC<SystemTableProps> = ({
             {record.gitSourceUrl && (
               <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 Source:{' '}
-                <Link
-                  href={gitHref(record.gitSourceUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  ellipsis
-                  style={{ fontSize: 'var(--font-size-small)' }}
-                >
-                  {gitLinkLabel(record.gitSourceUrl)}
-                </Link>
+                {shouldRenderGitLink(record.gitSourceUrl) ? (
+                  <Link
+                    href={gitHref(record.gitSourceUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ellipsis
+                    style={{ fontSize: 'var(--font-size-small)' }}
+                  >
+                    {gitLinkLabel(record.gitSourceUrl)}
+                  </Link>
+                ) : (
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', wordBreak: 'break-all' }}>
+                    {record.gitSourceUrl}
+                  </Text>
+                )}
               </Text>
             )}
             {record.gitOpsUrl && (
               <Text style={{ fontSize: 'var(--font-size-small)' }}>
                 GitOps:{' '}
-                <Link
-                  href={gitHref(record.gitOpsUrl)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  ellipsis
-                  style={{ fontSize: 'var(--font-size-small)' }}
-                >
-                  {gitLinkLabel(record.gitOpsUrl)}
-                </Link>
+                {shouldRenderGitLink(record.gitOpsUrl) ? (
+                  <Link
+                    href={gitHref(record.gitOpsUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    ellipsis
+                    style={{ fontSize: 'var(--font-size-small)' }}
+                  >
+                    {gitLinkLabel(record.gitOpsUrl)}
+                  </Link>
+                ) : (
+                  <Text type="secondary" style={{ fontSize: 'var(--font-size-small)', wordBreak: 'break-all' }}>
+                    {record.gitOpsUrl}
+                  </Text>
+                )}
               </Text>
             )}
           </Space>

@@ -14,7 +14,6 @@ import {
   useSystemTypeOptions,
 } from '../../services/system/systemTypeSettings';
 import type { System, SystemType } from '../../types/models';
-import { GIT_REPO_URL_MESSAGE, isValidGitRepoUrl } from '../../validation/schemas';
 import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 export interface SystemModalProps {
@@ -103,8 +102,8 @@ export const SystemModal: React.FC<SystemModalProps> = ({
         code: values.code.trim().toUpperCase(),
         type: normalizedType as SystemType,
         description: values.description?.trim() || undefined,
-        gitSourceUrl: values.gitSourceUrl?.trim() || undefined,
-        gitOpsUrl: values.gitOpsUrl?.trim() || undefined,
+        gitSourceUrl: values.gitSourceUrl || undefined,
+        gitOpsUrl: values.gitOpsUrl || undefined,
       };
 
       if (normalizedType !== LOGICAL_GROUP_TYPE) {
@@ -269,16 +268,6 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           <FormItem
             name="gitSourceUrl"
             label="Link Git Source Code"
-            rules={[
-              {
-                validator: async (_, value) => {
-                  if (!value) return;
-                  if (!value.trim() || !isValidGitRepoUrl(value)) {
-                    throw new Error(GIT_REPO_URL_MESSAGE);
-                  }
-                },
-              },
-            ]}
             style={{ marginBottom: 10 }}
           >
             <Input placeholder="https://github.com/owner/repo.git" />
@@ -287,16 +276,6 @@ export const SystemModal: React.FC<SystemModalProps> = ({
           <FormItem
             name="gitOpsUrl"
             label="Link Git GitOps"
-            rules={[
-              {
-                validator: async (_, value) => {
-                  if (!value) return;
-                  if (!value.trim() || !isValidGitRepoUrl(value)) {
-                    throw new Error(GIT_REPO_URL_MESSAGE);
-                  }
-                },
-              },
-            ]}
             style={{ marginBottom: 0 }}
           >
             <Input placeholder="git@github.com:owner/repo.git" />

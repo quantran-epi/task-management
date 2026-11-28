@@ -19,7 +19,7 @@ import { escapeShellArg, getRemoteBranches, runGitCommand } from '../services/gi
 import { useLayoutStore } from '../workbench/store/layoutStore';
 import { useSystemActions } from '../workbench/hooks/useSystemActions';
 import { useSystemTypeLookup } from '../services/system/systemTypeSettings';
-import { gitHref, gitLinkLabel } from '../utils/gitLink';
+import { gitHref, gitLinkLabel, shouldRenderGitLink } from '../utils/gitLink';
 import { SystemModal } from '../components/systems/SystemModal';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
 import type { SshConfig } from '../types/ssh';
@@ -282,13 +282,17 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       key: 'gitSourceUrl',
       label: 'Link Git Source',
       children: system.gitSourceUrl ? (
-        <Typography.Link
-          href={gitHref(system.gitSourceUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {gitLinkLabel(system.gitSourceUrl)}
-        </Typography.Link>
+        shouldRenderGitLink(system.gitSourceUrl) ? (
+          <Typography.Link
+            href={gitHref(system.gitSourceUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {gitLinkLabel(system.gitSourceUrl)}
+          </Typography.Link>
+        ) : (
+          <Text style={{ wordBreak: 'break-all' }}>{system.gitSourceUrl}</Text>
+        )
       ) : (
         <Text type="secondary">—</Text>
       ),
@@ -297,13 +301,17 @@ export const SystemDetailView: React.FC<SystemDetailViewProps> = ({
       key: 'gitOpsUrl',
       label: 'Link Git GitOps',
       children: system.gitOpsUrl ? (
-        <Typography.Link
-          href={gitHref(system.gitOpsUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {gitLinkLabel(system.gitOpsUrl)}
-        </Typography.Link>
+        shouldRenderGitLink(system.gitOpsUrl) ? (
+          <Typography.Link
+            href={gitHref(system.gitOpsUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {gitLinkLabel(system.gitOpsUrl)}
+          </Typography.Link>
+        ) : (
+          <Text style={{ wordBreak: 'break-all' }}>{system.gitOpsUrl}</Text>
+        )
       ) : (
         <Text type="secondary">—</Text>
       ),

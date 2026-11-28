@@ -47,7 +47,7 @@ describe('SystemModal form bindings', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ type: 'SCHEMA' })));
   });
 
-  it('seeds both git links when editing and saves trimmed values', async () => {
+  it('seeds both git links when editing and saves values verbatim', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(<SystemModal open system={subsystem} onClose={vi.fn()} onSave={onSave} />);
     const source = await screen.findByPlaceholderText(SOURCE_PLACEHOLDER);
@@ -59,21 +59,23 @@ describe('SystemModal form bindings', () => {
     fireEvent.change(gitops, { target: { value: '  git@github.com:acme/web-gitops.git  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      gitSourceUrl: 'https://github.com/acme/web.git',
-      gitOpsUrl: 'git@github.com:acme/web-gitops.git',
+      gitSourceUrl: '  https://github.com/acme/web.git  ',
+      gitOpsUrl: '  git@github.com:acme/web-gitops.git  ',
     })));
   });
 
-  it.each(['javascript:alert(1)', 'https://user:pass@host/x', 'https://evil.com\\@github.com/x', 'ssh:///repo', '   '])(
-    'rejects invalid git URL %s inline without calling onSave',
+  it.each(['javascript:alert(1)', 'https://user:pass@host/x', 'https://evil.com\\@github.com/x', 'ssh:///repo', '   ', 'a'.repeat(501)])(
+    'saves arbitrary git URL verbatim without inline error: %s',
     async (badUrl) => {
       const onSave = vi.fn().mockResolvedValue(undefined);
       render(<SystemModal open system={subsystem} onClose={vi.fn()} onSave={onSave} />);
       const source = await screen.findByPlaceholderText(SOURCE_PLACEHOLDER);
       fireEvent.change(source, { target: { value: badUrl } });
       fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
-      await waitFor(() => expect(screen.getAllByText(/Link git phải là/).length).toBeGreaterThan(0));
-      expect(onSave).not.toHaveBeenCalled();
+      await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        gitSourceUrl: badUrl,
+      })));
+      expect(screen.queryByText(/Link git phải là/)).toBeNull();
     }
   );
 

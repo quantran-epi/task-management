@@ -20,11 +20,11 @@ const system = {
   updatedAt: '2026-11-28T10:00:00.000Z',
 } as any;
 
-function renderTable() {
+function renderTable(records: any[] = [system]) {
   return render(
     <ThemeAppHolder>
       <SystemTable
-        systems={[system]}
+        systems={records}
         onAddSubsystem={vi.fn()}
         onEditSystem={vi.fn()}
         onDeleteSystem={vi.fn()}
@@ -43,5 +43,21 @@ describe('SystemTable git links', () => {
     expect(gitops).toHaveAttribute('href', 'https://github.com/acme/web-gitops.git');
     expect(source).toHaveAttribute('target', '_blank');
     expect(source).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>',
+    'file:///srv/repo',
+    '/srv/repo',
+    'two words',
+    '  spaced  ',
+  ])('renders unsafe git value %j as plain text, never a link', (value) => {
+    renderTable([{ ...system, gitSourceUrl: value, gitOpsUrl: undefined }]);
+    expect(screen.queryByRole('link')).toBeNull();
+    const header = screen.getByText('Link Git');
+    const columnIndex = Array.from(header.parentElement?.children ?? []).indexOf(header);
+    const cell = screen.getByText('Web app').closest('tr')?.children[columnIndex];
+    expect(cell?.textContent).toBe(`Source: ${value}`);
   });
 });
