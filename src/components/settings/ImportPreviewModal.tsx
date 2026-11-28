@@ -28,6 +28,7 @@ interface TableComparisonRow {
 
 const TABLE_NAMES: Record<string, string> = {
   changeRequests: 'Yêu cầu thay đổi (Change Requests)',
+  crMilestones: 'Mốc triển khai (CR Milestones)',
   systems: 'Hệ thống (Systems)',
   tasks: 'Tác vụ (Tasks)',
   capacityRules: 'Quy tắc công suất (Capacity Rules)',
@@ -60,8 +61,9 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
   // Query current counts from local database
   const currentCounts = useLiveQuery(
     async () => {
-      const [crs, sys, t, cr, co, pa, ts, tw] = await Promise.all([
+      const [crs, cms, sys, t, cr, co, pa, ts, tw] = await Promise.all([
         db.changeRequests.count(),
+        db.crMilestones.count(),
         db.systems.count(),
         db.tasks.count(),
         db.capacityRules.count(),
@@ -72,6 +74,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
       ]);
       return {
         changeRequests: crs,
+        crMilestones: cms,
         systems: sys,
         tasks: t,
         capacityRules: cr,
@@ -84,6 +87,7 @@ export const ImportPreviewModal: React.FC<ImportPreviewModalProps> = ({
     [db],
     {
       changeRequests: 0,
+      crMilestones: 0,
       systems: 0,
       tasks: 0,
       capacityRules: 0,

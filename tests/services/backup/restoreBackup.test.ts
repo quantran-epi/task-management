@@ -255,6 +255,63 @@ describe('restoreBackupPayload & rollbackToSnapshot', () => {
     expect(validation.errors).toHaveLength(0);
   });
 
+  it('round-trips CR milestones through export then restore into a fresh DB', async () => {
+    const now = '2026-09-27T12:00:00.000Z';
+    const CR_ID = '11111111-1111-4111-8111-111111111111';
+    const milestone = {
+      id: '88888888-8888-4888-8888-888888888888',
+      crId: CR_ID,
+      name: 'Mốc triển khai',
+      targetDate: '2026-10-01',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await testDb.changeRequests.add(crRecord(CR_ID, 'Milestone CR'));
+    await testDb.crMilestones.add(milestone);
+    await testDb.tasks.add({
+      id: '99999999-9999-4999-8999-999999999999',
+      crId: CR_ID,
+      name: 'Task in milestone',
+      status: 'Open',
+      priority: 'Medium',
+      progress: 0,
+      estimateMinutes: 60,
+      milestoneId: milestone.id,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+
+    const exported = await exportBackupModule.exportBackupPayload(testDb);
+    expect(exported.tables.crMilestones).toEqual([milestone]);
+    expect(exported.counts.crMilestones).toBe(1);
+    expect(validateBackupPayload(exported).valid).toBe(true);
+
+    const targetDb = new TaskPlannerDatabase('TestRestoreMilestones_' + Math.random().toString(36).slice(2));
+    try {
+      await targetDb.open();
+      await targetDb.crMilestones.add({ ...milestone, id: '77777777-7777-4777-8777-777777777777' });
+      await restoreBackupPayload(exported, targetDb);
+      expect(await targetDb.crMilestones.toArray()).toEqual([milestone]);
+      expect((await targetDb.tasks.toArray())[0]?.milestoneId).toBe(milestone.id);
+      const snapshot = (await targetDb.settings.get('last_pre_import_snapshot'))?.value as SnapshotData;
+      expect(snapshot.tables.crMilestones).toHaveLength(1);
+    } finally {
+      await targetDb.delete();
+    }
+  });
+
+  it('clears local milestones when restoring a v14 payload without crMilestones', async () => {
+    await testDb.crMilestones.add({
+      id: '88888888-8888-4888-8888-888888888888',
+      crId: LOCAL_CR_ID,
+      name: 'Local milestone',
+      createdAt: '2026-09-27T12:00:00.000Z',
+      updatedAt: '2026-09-27T12:00:00.000Z',
+    });
+    await restoreBackupPayload({ ...sampleBackup, schemaVersion: 14 }, testDb);
+    expect(await testDb.crMilestones.count()).toBe(0);
+  });
+
   it('restores chat tabs unchanged and rolls snapshot state back byte-for-byte', async () => {
     const localThread: ChatThread = {
       id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',

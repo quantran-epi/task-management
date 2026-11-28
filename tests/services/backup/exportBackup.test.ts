@@ -58,6 +58,15 @@ describe('exportBackup service', () => {
         updatedAt: now,
       });
 
+      await testDb.crMilestones.add({
+        id: '88888888-8888-4888-8888-888888888888',
+        crId: '22222222-2222-4222-8222-222222222222',
+        name: 'Mốc triển khai',
+        targetDate: '2026-10-01',
+        createdAt: now,
+        updatedAt: now,
+      });
+
       await testDb.tasks.add({
         id: '33333333-3333-4333-8333-333333333333',
         crId: '22222222-2222-4222-8222-222222222222',
@@ -118,6 +127,8 @@ describe('exportBackup service', () => {
       // Domain tables
       expect(envelope.tables.systems).toHaveLength(1);
       expect(envelope.tables.changeRequests).toHaveLength(1);
+      expect(envelope.tables.crMilestones).toHaveLength(1);
+      expect(envelope.counts.crMilestones).toBe(1);
       expect(envelope.tables.tasks).toHaveLength(1);
       expect(envelope.tables.capacityRules).toHaveLength(1);
       expect(envelope.tables.capacityOverrides).toHaveLength(1);
@@ -152,6 +163,7 @@ describe('exportBackup service', () => {
         telegramWhitelist: 0,
         systems: 1,
         changeRequests: 1,
+        crMilestones: 1,
         aiEmployees: 0,
         aiLeads: 0,
         aiSkills: 0,
@@ -173,7 +185,7 @@ describe('exportBackup service', () => {
         (entry) => entry.id !== '77777777-7777-4777-8777-777777777777'
       );
       expect(latestLog).toBeDefined();
-      expect(latestLog?.recordCount).toBe(7);
+      expect(latestLog?.recordCount).toBe(8);
       expect(latestLog?.timestamp).toBe(envelope.exportedAt);
       expect(latestLog?.appVersion).toBe('0.1.0');
     });
@@ -203,6 +215,7 @@ describe('exportBackup service', () => {
         telegramWhitelist: 0,
         systems: 0,
         changeRequests: 0,
+        crMilestones: 0,
         aiEmployees: 0,
         aiLeads: 0,
         aiSkills: 0,

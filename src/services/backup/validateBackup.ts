@@ -391,6 +391,17 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   // Check notes refer to existing entity if specified
   const noteIds = new Set((notes || []).map((n) => n.id));
   const crIds = changeRequests ? new Set(changeRequests.map((cr) => cr.id)) : undefined;
+  // T-52-07: a milestone must belong to a CR that is actually in the payload.
+  crMilestones.forEach((milestone) => {
+    if (!crIds?.has(milestone.crId)) {
+      errors.push({
+        table: 'crMilestones',
+        recordId: milestone.id,
+        field: 'crId',
+        message: `CrMilestone references crId "${milestone.crId}" not found in changeRequests`,
+      });
+    }
+  });
   const systemIds = systems ? new Set(systems.map((s) => s.id)) : undefined;
   if (notes) {
     notes.forEach((n) => {

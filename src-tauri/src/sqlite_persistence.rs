@@ -31,6 +31,7 @@ const ALLOWED_TABLES: &[&str] = &[
     "chatTabs",
     "systems",
     "changeRequests",
+    "crMilestones",
 ];
 
 #[derive(Debug, Deserialize)]

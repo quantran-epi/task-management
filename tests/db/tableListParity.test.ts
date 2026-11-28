@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { SCHEMA_V23, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
+import { SCHEMA_V31, LATEST_SCHEMA_VERSION } from '../../src/db/schema';
 
 /**
  * Static parity guard (Phase 36, T-36-03, AIO-DATA-05).
@@ -38,9 +38,9 @@ function dexieTableNames(): string[] {
   return [...DB_SOURCE.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*)!: Table</gm)].map((match) => match[1]!);
 }
 
-function schemaV23Stores(): string[] {
-  // Resolved object, not the literal: SCHEMA_V23 spreads its predecessors.
-  return Object.keys(SCHEMA_V23);
+function schemaV31Stores(): string[] {
+  // Resolved object, not the literal: SCHEMA_V31 spreads its predecessors.
+  return Object.keys(SCHEMA_V31);
 }
 
 describe('TS ⊆ Rust SQLite table parity', () => {
@@ -53,6 +53,12 @@ describe('TS ⊆ Rust SQLite table parity', () => {
   it('carries aiSkillVersions on both sides', () => {
     expect(tsDomainTables()).toContain('aiSkillVersions');
     expect(rustAllowedTables()).toContain('aiSkillVersions');
+  });
+
+  it('carries crMilestones in all four table sources (Phase 52 D-08)', () => {
+    for (const list of [dexieTableNames(), schemaV31Stores(), tsDomainTables(), rustAllowedTables()]) {
+      expect(list).toContain('crMilestones');
+    }
   });
 
   it('carries the three previously drifted tables on both sides', () => {
@@ -78,7 +84,7 @@ describe('TS ⊆ Rust SQLite table parity', () => {
       'teamReadCursors',
     ];
     const dexie = dexieTableNames();
-    const stores = schemaV23Stores();
+    const stores = schemaV31Stores();
     const ts = tsDomainTables();
 
     for (const name of aiOffice) {
@@ -116,6 +122,6 @@ describe('TS ⊆ Rust SQLite table parity', () => {
     const match = /export const LATEST_SCHEMA_VERSION = (\d+);/.exec(SCHEMA_SOURCE);
     expect(match).not.toBeNull();
     expect(Number(match![1])).toBe(LATEST_SCHEMA_VERSION);
-    expect(SCHEMA_SOURCE).toContain('export const SCHEMA_V23 =');
+    expect(SCHEMA_SOURCE).toContain('export const SCHEMA_V31 =');
   });
 });
