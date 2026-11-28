@@ -436,7 +436,7 @@ export const WorkSessionInputSchema = z
     }
   );
 
-export const NOTE_ENTITY_TYPES = ['task', 'cr', 'system'] as const;
+export const NOTE_ENTITY_TYPES = ['task', 'cr', 'system', 'crMilestone'] as const;
 export const NOTE_TYPES = ['quick_note', 'document', 'folder', 'diagram'] as const;
 
 /** IN-02: the caps live here so a tool that mirrors them cannot drift from the schema. */

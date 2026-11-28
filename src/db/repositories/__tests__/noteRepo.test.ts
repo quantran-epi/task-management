@@ -7,13 +7,18 @@ import {
   restoreNote,
   batchCreateNotes,
   getNotesByFolder,
+  getNotesForEntity,
 } from '../noteRepo';
+import { createChangeRequest } from '../changeRequestRepo';
+import { createCrMilestone } from '../crMilestoneRepo';
+import { NOTE_ENTITY_TYPES, NoteInputSchema } from '../../../validation/schemas';
 
 describe('noteRepo - Folder Hierarchy, Restore, and Batch Creation', () => {
   let db: TaskPlannerDatabase;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = new TaskPlannerDatabase(`TestDB_${Math.random()}`);
+    await db.open();
   });
 
   afterEach(async () => {
@@ -112,5 +117,26 @@ describe('noteRepo - Folder Hierarchy, Restore, and Batch Creation', () => {
     const storedInDb = await db.notes.where('parentId').equals(folder.id).toArray();
     expect(storedInDb.length).toBe(3);
     expect(storedInDb.map((d) => d.title).sort()).toEqual(['Doc 1', 'Doc 2', 'Doc 3']);
+  });
+
+  it('round-trips a note attached to a CR milestone via entityType/entityId', async () => {
+    const cr = await createChangeRequest(
+      { name: 'CR', code: 'CR-NOTE-1', status: 'Open', type: 'ENHANCEMENT', targets: [] },
+      db
+    );
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Go live' }, db);
+
+    expect(NOTE_ENTITY_TYPES).toContain('crMilestone');
+    expect(NoteInputSchema.parse({ body: 'note', entityType: 'crMilestone', entityId: milestone.id }).entityType).toBe('crMilestone');
+
+    const note = await createNote(
+      { body: 'Ghi chú mốc', entityType: 'crMilestone', entityId: milestone.id },
+      db
+    );
+    expect(note.entityType).toBe('crMilestone');
+    expect(note.entityId).toBe(milestone.id);
+
+    const linked = await getNotesForEntity('crMilestone', milestone.id, db);
+    expect(linked.map((n) => n.id)).toEqual([note.id]);
   });
 });

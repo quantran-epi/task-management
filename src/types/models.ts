@@ -206,7 +206,7 @@ export interface ActiveTimer {
   segments?: TimerSegment[] | undefined; // Phase 13.1 D-01: discrete running segments
 }
 
-export type NoteEntityType = 'task' | 'cr' | 'system';
+export type NoteEntityType = 'task' | 'cr' | 'system' | 'crMilestone';
 export type NoteType = 'quick_note' | 'document' | 'folder' | 'diagram';
 
 export interface Note {
