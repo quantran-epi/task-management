@@ -690,20 +690,21 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           ) : null}
         </Row>
 
-        {/* Named links */}
-        {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
-          <div style={{ marginTop: 12 }} data-testid="item-insight-links">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
-              <Text type="secondary">Links</Text>
-              {itemType === 'task' && currentTask && (
-                <Button data-testid="item-insight-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>
-                  Thêm link
-                </Button>
-              )}
-            </div>
+      {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
+        <Card
+          title={<Space><LinkOutlined /><span>Links</span></Space>}
+          style={{ marginBottom: 16 }}
+          data-testid="item-insight-links-section"
+          extra={itemType === 'task' && currentTask ? (
+            <Button data-testid="item-insight-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>
+              Thêm link
+            </Button>
+          ) : undefined}
+        >
+          <div data-testid="item-insight-links">
             {itemType === 'task' && currentTask ? (
               (currentTask.links?.length ?? 0) > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', marginTop: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-xs)', color: 'var(--muted-fg)' }}>
                     <span style={{ width: 160, flexShrink: 0 }}>Tên</span>
                     <span style={{ flex: 1, minWidth: 0 }}>Đường dẫn</span>
@@ -760,21 +761,27 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
               </Space>
             )}
           </div>
-        )}
+        </Card>
+      )}
 
-        {itemType === 'task' && currentTask && (
-          <div style={{ marginTop: 12 }} data-testid="item-insight-reminders">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)' }}>
-              <Text type="secondary">Nhắc nhở</Text>
-              <Button
-                data-testid="item-insight-reminder-add"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => setQuickReminderOpen(true)}
-              >
-                Thêm nhắc nhở
-              </Button>
-            </div>
+      </Card>
+
+      {itemType === 'task' && currentTask && (
+        <Card
+          title={<Space><CalendarOutlined /><span>Nhắc nhở</span></Space>}
+          style={{ marginBottom: 16 }}
+          data-testid="item-insight-reminders"
+          extra={
+            <Button
+              data-testid="item-insight-reminder-add"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={() => setQuickReminderOpen(true)}
+            >
+              Thêm nhắc nhở
+            </Button>
+          }
+        >
             {(currentTask.reminders?.length ?? 0) > 0 ? (
               <Space direction="vertical" size={4} style={{ marginTop: 8 }}>
                 {(currentTask.reminders ?? []).map((r) => (
@@ -794,10 +801,8 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             ) : (
               <Text type="secondary" style={{ marginTop: 8 }}>Chưa có nhắc nhở</Text>
             )}
-          </div>
-        )}
-
-      </Card>
+        </Card>
+      )}
 
       {itemType === 'task' && (
         <Card
