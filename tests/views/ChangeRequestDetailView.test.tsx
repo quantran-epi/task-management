@@ -5,6 +5,7 @@ import { createSystem } from '../../src/db/repositories/systemRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
 import { createTask } from '../../src/db/repositories/taskRepo';
 import { createNote } from '../../src/db/repositories/noteRepo';
+import { createCrMilestone } from '../../src/db/repositories/crMilestoneRepo';
 import { ChangeRequestDetailView } from '../../src/views/ChangeRequestDetailView';
 import { ThemeAppHolder } from '../../src/components/ui';
 import { useLayoutStore } from '../../src/workbench/store/layoutStore';
@@ -102,13 +103,13 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(screen.getByText('Chọn subsystem')).toBeInTheDocument();
   }, 30000);
 
-  it('renders exactly the Task, Subsystem, Status, Ước lượng, Hạn and Thao tác columns in order', async () => {
+  it('renders exactly the Mốc, Task, Subsystem, Status, Ước lượng, Hạn and Thao tác columns in order', async () => {
     const { cr } = await seed({ taskSystemId: 'a' });
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
     await screen.findByText('Implement OAuth callback');
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers).toEqual(['Task', 'Subsystem', 'Status', 'Ước lượng', 'Hạn', 'Thao tác']);
+    expect(headers).toEqual(['Mốc', 'Task', 'Subsystem', 'Status', 'Ước lượng', 'Hạn', 'Thao tác']);
   }, 30000);
 
   it('deletes the task via the shared action menu without double-deleting the placeholder', async () => {
@@ -143,6 +144,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
       'cr-detail-block-reminders',
       'cr-detail-block-documents',
       'cr-detail-block-notes',
+      'cr-detail-milestones',
       'cr-detail-block-jira',
     ];
     const blocks = blockIds.map((id) => screen.getByTestId(id));
@@ -159,7 +161,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(secondary).toBeDefined();
     expect(primary!.contains(table)).toBe(true);
     expect(blocks.every((block) => secondary!.contains(block))).toBe(true);
-    expect(blocks.map((block) => Array.from(secondary!.children).findIndex((node) => node.contains(block)))).toEqual([0, 1, 2, 3]);
+    expect(blocks.map((block) => Array.from(secondary!.children).findIndex((node) => node.contains(block)))).toEqual([0, 1, 2, 3, 4]);
   }, 30000);
 
   it('offers only the CR targets plus Chung (không gắn) in the Subsystem cell', async () => {
@@ -478,6 +480,74 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     const input = (node.matches('input') ? node : node.querySelector('input')) as HTMLInputElement;
     fireEvent.change(input, { target: { value } });
   }
+
+  it('shows the empty milestone state and creates a milestone inline with notes mounted on selection', async () => {
+    const { cr } = await seed();
+    render(<ThemeAppHolder><ChangeRequestDetailView changeRequestId={cr.id} db={db} /></ThemeAppHolder>);
+
+    const section = await screen.findByTestId('cr-detail-milestones');
+    await waitFor(() => {
+      expect(screen.getByTestId('cr-detail-milestones-body').textContent).toContain('Chưa có mốc triển khai');
+    });
+    expect(section.textContent).toContain('Mốc triển khai');
+    expect(screen.getByTestId('cr-detail-milestones-body').textContent).toContain('Thêm mốc để nhóm tác vụ theo từng đợt triển khai.');
+
+    fireEvent.click(screen.getByTestId('cr-detail-milestone-add'));
+    await waitFor(() => {
+      expect(screen.getByTestId('cr-detail-milestone-name')).toBeInTheDocument();
+    });
+    const nameInput = screen.getByPlaceholderText('Tên mốc') as HTMLInputElement;
+    fireEvent.change(nameInput, { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(await screen.findByText('Nhập tên mốc')).toBeInTheDocument();
+
+    fireEvent.change(nameInput, { target: { value: 'Đợt 1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+
+    await waitFor(async () => {
+      const rows = await db.crMilestones.where('crId').equals(cr.id).toArray();
+      expect(rows.map((m) => m.name)).toContain('Đợt 1');
+    });
+    const milestone = (await db.crMilestones.where('crId').equals(cr.id).toArray())[0]!;
+    fireEvent.click(await screen.findByRole('button', { name: `Chọn mốc ${milestone.name}` }));
+    await waitFor(() => {
+      expect(screen.getByTestId('cr-detail-milestones-body').textContent).toContain('Chưa có ghi chú nào cho mục này');
+    });
+  }, 30000);
+
+  it('shows Chưa gán mốc for tasks without a milestone and groups them last', async () => {
+    const { cr } = await seed();
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Đợt A' }, db);
+    await createTask({ crId: cr.id, name: 'Task có mốc', status: 'Open', priority: 'Medium', estimateMinutes: 30, milestoneId: milestone.id }, db);
+    render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
+
+    await screen.findByText('Task có mốc');
+    const columnHeaders = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(columnHeaders.indexOf('Mốc')).toBeLessThan(columnHeaders.indexOf('Task'));
+    const cells = screen.getAllByText(/Chưa gán mốc \(1\)|Đợt A \(1\)/);
+    expect(cells.map((c) => c.textContent)).toEqual(['Đợt A (1)', 'Chưa gán mốc (1)']);
+  }, 30000);
+
+  it('deletes a milestone through Popconfirm and keeps its tasks', async () => {
+    const { cr } = await seed();
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Đợt cần xóa' }, db);
+    await createTask({ crId: cr.id, name: 'Task trong mốc', status: 'Open', priority: 'Medium', estimateMinutes: 30, milestoneId: milestone.id }, db);
+    render(<ThemeAppHolder><ChangeRequestDetailView changeRequestId={cr.id} db={db} /></ThemeAppHolder>);
+
+    await screen.findByText('Task trong mốc');
+    const deleteButtons = screen.getAllByRole('button', { name: 'Xóa mốc' });
+    fireEvent.click(deleteButtons[0]!);
+    expect(await screen.findByText(`Xóa mốc «${milestone.name}»?`)).toBeInTheDocument();
+    const confirmButtons = screen.getAllByRole('button', { name: 'Xóa' });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]!);
+
+    await waitFor(async () => {
+      expect(await db.crMilestones.get(milestone.id)).toBeUndefined();
+    });
+    expect((await db.tasks.toArray()).some((t) => t.milestoneId === milestone.id)).toBe(false);
+    expect((await db.tasks.toArray()).some((t) => t.name === 'Task trong mốc')).toBe(true);
+    await waitFor(() => expect(screen.queryByText('Đợt cần xóa')).not.toBeInTheDocument());
+  }, 30000);
 
   it('adds a link with an empty name straight into cr.links and labels it with the URL', async () => {
     const cr = await seedLinkView();

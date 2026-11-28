@@ -1,9 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Card, Dropdown, Empty, Input, Modal, Popconfirm, Progress, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Card, DatePicker, Dropdown, Empty, IconButton, Input, Modal, Popconfirm, Progress, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
+import dayjs, { type Dayjs } from 'dayjs';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import { getAllSystems } from '../db/repositories/systemRepo';
+import { createCrMilestone, deleteCrMilestoneWithCascade, listCrMilestones, updateCrMilestone } from '../db/repositories/crMilestoneRepo';
 import {
   appendChangeRequestLink,
   deleteChangeRequest,
@@ -22,7 +24,7 @@ import { formatMinutes } from '../utils/time';
 import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
 import { searchIncludes } from '../utils/searchText';
 import { openDocumentLink, isLocalPath } from '../utils/documentLinks';
-import type { CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
+import type { CrMilestone, CrStatus, CrType, System, Task, TaskStatus } from '../types/models';
 
 export interface ChangeRequestDetailViewProps {
   changeRequestId: string;
@@ -81,6 +83,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [crReminderModalOpen, setCrReminderModalOpen] = useState(false);
+  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string | null>(null);
+  // undefined = no editor, null = new milestone, CrMilestone = editing.
+  const [editingMilestone, setEditingMilestone] = useState<CrMilestone | null | undefined>(undefined);
+  const [milestoneName, setMilestoneName] = useState('');
+  const [milestoneDate, setMilestoneDate] = useState<Dayjs | null>(null);
+  const [milestoneError, setMilestoneError] = useState<string | null>(null);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
   const reloadTab = useLayoutStore((s) => s.reloadTab);
@@ -94,6 +102,30 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     [changeRequestId, db]
   ) ?? [];
   const systems = useLiveQuery(() => getAllSystems(db), [db]) ?? [];
+  const milestones = useLiveQuery(
+    () => (changeRequestId ? listCrMilestones(changeRequestId, db) : []),
+    [changeRequestId, db]
+  ) ?? [];
+  const milestoneNoteCounts =
+    useLiveQuery(
+      async () => {
+        if (!milestones.length) return new Map<string, number>();
+        const notes = await db.notes
+          .where('entityId')
+          .anyOf(milestones.map((m) => m.id))
+          .filter((n) => n.entityType === 'crMilestone' && !n.deletedAt)
+          .toArray();
+        const counts = new Map<string, number>();
+        for (const note of notes) {
+          if (!note.entityId) continue;
+          counts.set(note.entityId, (counts.get(note.entityId) ?? 0) + 1);
+        }
+        return counts;
+      },
+      [milestones, db]
+    ) ?? new Map<string, number>();
+  const milestoneMap = useMemo(() => new Map(milestones.map((m) => [m.id, m])), [milestones]);
+  const selectedMilestone = selectedMilestoneId ? milestoneMap.get(selectedMilestoneId) : undefined;
   const crNotesCount =
     useLiveQuery(
       async () => {
@@ -133,6 +165,73 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         (statusFilter === 'ALL' || t.status === statusFilter)
     );
   }, [tasks, taskSearch, statusFilter]);
+
+  const orderedTasks = useMemo(() => {
+    const rank = new Map(milestones.map((m, index) => [m.id, index]));
+    return [...filteredTasks].sort((a, b) => {
+      const aRank = a.milestoneId ? rank.get(a.milestoneId) ?? milestones.length : milestones.length;
+      const bRank = b.milestoneId ? rank.get(b.milestoneId) ?? milestones.length : milestones.length;
+      return aRank - bRank;
+    });
+  }, [filteredTasks, milestones]);
+
+  const milestoneGroupSizes = useMemo(() => {
+    const sizes = new Map<string, number>();
+    for (const task of orderedTasks) {
+      const key = task.milestoneId ?? '';
+      sizes.set(key, (sizes.get(key) ?? 0) + 1);
+    }
+    return sizes;
+  }, [orderedTasks]);
+
+  const openMilestoneEditor = (milestone?: CrMilestone) => {
+    setEditingMilestone(milestone ?? null);
+    setMilestoneName(milestone?.name ?? '');
+    setMilestoneDate(milestone?.targetDate ? dayjs(milestone.targetDate, 'YYYY-MM-DD') : null);
+    setMilestoneError(null);
+  };
+
+  const handleSaveMilestone = async () => {
+    const trimmed = milestoneName.trim();
+    if (!trimmed) {
+      setMilestoneError('Nhập tên mốc');
+      return;
+    }
+    try {
+      const targetDate = milestoneDate ? milestoneDate.format('YYYY-MM-DD') : undefined;
+      const saved =
+        editingMilestone && editingMilestone !== null
+          ? await updateCrMilestone(
+              editingMilestone.id,
+              { name: trimmed, ...(targetDate !== undefined ? { targetDate } : { targetDate: undefined }) },
+              db
+            )
+          : await createCrMilestone(
+              { crId: changeRequestId, name: trimmed, ...(targetDate !== undefined ? { targetDate } : {}) },
+              db
+            );
+      message.success(editingMilestone && editingMilestone !== null ? 'Đã cập nhật mốc' : 'Đã thêm mốc');
+      setSelectedMilestoneId(saved.id);
+      setEditingMilestone(undefined);
+      setMilestoneError(null);
+    } catch {
+      message.error({ content: 'Không thể lưu mốc.' });
+      setMilestoneError('Thử lại. Nếu lỗi tiếp tục, kiểm tra CR rồi thử lại.');
+    }
+  };
+
+  const handleDeleteMilestone = async (milestone: CrMilestone) => {
+    try {
+      await deleteCrMilestoneWithCascade(milestone.id, db);
+      if (selectedMilestoneId === milestone.id) setSelectedMilestoneId(null);
+      if (editingMilestone && editingMilestone !== null && editingMilestone.id === milestone.id) {
+        setEditingMilestone(undefined);
+      }
+      message.success('Đã xóa mốc');
+    } catch {
+      message.error({ content: 'Không thể xóa mốc.' });
+    }
+  };
 
   const openTaskDrawer = (taskId: string | null, isPlaceholder = false) => {
     placeholderTaskIdRef.current = isPlaceholder ? taskId : null;
@@ -429,6 +528,122 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       body: <EntityNotesSection entityType="cr" entityId={cr.id} db={db} />,
     },
     {
+      key: 'milestones',
+      testId: 'cr-detail-milestones',
+      header: 'Mốc triển khai',
+      count: milestones.length,
+      action: (
+        <Button data-testid="cr-detail-milestone-add" size="small" icon={<PlusOutlined />} onClick={() => openMilestoneEditor()}>
+          Thêm mốc
+        </Button>
+      ),
+      body: (
+        <div data-testid="cr-detail-milestones-body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
+          {milestones.length === 0 && editingMilestone === undefined ? (
+            <>
+              <Text strong style={{ fontSize: 'var(--font-size-small)' }}>Chưa có mốc triển khai</Text>
+              <span style={mutedStyle}>Thêm mốc để nhóm tác vụ theo từng đợt triển khai.</span>
+              <Button size="small" icon={<PlusOutlined />} onClick={() => openMilestoneEditor()}>Thêm mốc</Button>
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px', borderBottom: '1px solid var(--border)', ...mutedStyle, fontSize: 'var(--font-size-xs)' }}>
+                <span style={{ flex: 1, minWidth: 0 }}>Tên mốc</span>
+                <span style={{ width: 96, flexShrink: 0 }}>Ngày mục tiêu</span>
+                <span style={{ width: 56, flexShrink: 0 }}>Ghi chú</span>
+                <span style={{ width: 64, flexShrink: 0 }} />
+              </div>
+              {editingMilestone !== undefined && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-4)', padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)' }}>
+                    <Input
+                      autoFocus
+                      size="small"
+                      data-testid="cr-detail-milestone-name"
+                      placeholder="Tên mốc"
+                      value={milestoneName}
+                      onChange={(e) => { setMilestoneName(e.target.value); setMilestoneError(null); }}
+                      onPressEnter={() => void handleSaveMilestone()}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setEditingMilestone(undefined); }}
+                    />
+                    <DatePicker
+                      size="small"
+                      placeholder="Chọn ngày"
+                      value={milestoneDate}
+                      onChange={(date) => setMilestoneDate(date)}
+                    />
+                    <Button size="small" type="primary" onClick={() => void handleSaveMilestone()}>Lưu</Button>
+                    <Button size="small" onClick={() => setEditingMilestone(undefined)}>Hủy</Button>
+                  </div>
+                  {milestoneError && (
+                    <span role="alert" style={{ color: 'var(--danger)', fontSize: 'var(--font-size-xs)' }}>{milestoneError}</span>
+                  )}
+                </div>
+              )}
+              {milestones.map((milestone) => {
+                const isSelected = selectedMilestoneId === milestone.id;
+                return (
+                  <div
+                    key={milestone.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Chọn mốc ${milestone.name}`}
+                    onClick={() => setSelectedMilestoneId(milestone.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedMilestoneId(milestone.id);
+                      }
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px',
+                      background: isSelected ? 'var(--bg-selected)' : undefined,
+                      boxShadow: isSelected ? 'inset 2px 0 0 var(--accent)' : undefined,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Text ellipsis style={{ flex: 1, minWidth: 0, fontSize: 'var(--font-size-small)' }} title={milestone.name}>
+                      {milestone.name}
+                    </Text>
+                    <span style={{ width: 96, flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-small)' }}>
+                      {milestone.targetDate ?? '—'}
+                    </span>
+                    <span style={{ width: 56, flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-small)' }}>
+                      {milestoneNoteCounts.get(milestone.id) ?? 0}
+                    </span>
+                    <Space size={0} style={{ width: 64, flexShrink: 0 }}>
+                      <Tooltip title="Sửa mốc">
+                        <IconButton
+                          type="text"
+                          size="small"
+                          aria-label="Sửa mốc"
+                          icon={<EditOutlined />}
+                          onClick={(e) => { e.stopPropagation(); openMilestoneEditor(milestone); }}
+                        />
+                      </Tooltip>
+                      <Popconfirm
+                        title={`Xóa mốc «${milestone.name}»?`}
+                        description="Tác vụ trong mốc này sẽ chuyển về «Chưa gán mốc» và ghi chú đính kèm sẽ bị bỏ gắn. Tác vụ và ghi chú vẫn được giữ lại."
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                        onConfirm={() => void handleDeleteMilestone(milestone)}
+                      >
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <IconButton type="text" size="small" danger aria-label="Xóa mốc" icon={<DeleteOutlined />} />
+                        </span>
+                      </Popconfirm>
+                    </Space>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {selectedMilestone && <EntityNotesSection entityType="crMilestone" entityId={selectedMilestone.id} db={db} />}
+        </div>
+      ),
+    },
+    {
       key: 'jira',
       testId: 'cr-detail-block-jira',
       header: 'Jira Epic',
@@ -702,11 +917,32 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           </Empty>
         ) : (
           <Table
-            dataSource={filteredTasks}
+            dataSource={orderedTasks}
             rowKey="id"
             size="small"
             pagination={false}
             columns={[
+              {
+                title: 'Mốc',
+                dataIndex: 'milestoneId',
+                key: 'milestone',
+                width: 140,
+                render: (milestoneId: string | undefined, record: Task, index: number) => {
+                  const milestone = milestoneId ? milestoneMap.get(milestoneId) : undefined;
+                  const label = milestone?.name ?? 'Chưa gán mốc';
+                  const isFirstInGroup = index === 0 || orderedTasks[index - 1]?.milestoneId !== record.milestoneId;
+                  if (!isFirstInGroup) return { children: null, props: { rowSpan: 0 } };
+                  const count = milestoneGroupSizes.get(record.milestoneId ?? '') ?? 1;
+                  return {
+                    children: (
+                      <span style={{ fontSize: 'var(--font-size-small)', color: milestone ? 'var(--fg)' : 'var(--fg-muted)' }}>
+                        {milestone ? <Text ellipsis title={milestone.name}>{label} ({count})</Text> : `${label} (${count})`}
+                      </span>
+                    ),
+                    props: { rowSpan: count },
+                  };
+                },
+              },
               {
                 title: 'Task',
                 dataIndex: 'name',
