@@ -419,22 +419,25 @@ import { ... } from '../components/ui/icon';
 
 All other claims are `[VERIFIED: codebase]` from files read this session or `[CITED: official Dexie docs]`.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does D-05 require widening AI mutation enums, or only `query_notes` read enum?**
+1. **[RESOLVED — widen AI write enums] Does D-05 require widening AI mutation enums, or only `query_notes` read enum?**
    - What we know: D-05 says "AI note-query enums for read parity"; `query_notes` at `aiTools.ts:455-458` has `['task','cr','system','standalone']`, while create/update/diagram tools at 1281/1312/1337/1423 have `['task','cr','system']`.
    - What's unclear: "read parity" could mean only `query_notes` + entity-name map, or all note-touching tools.
-   - Recommendation: widen note write/diagram enums too (small, harmless, keeps AI able to attach a note to a milestone). Leave reminder/knowledge-link enums at 1681/1705/1725 per D-06. Planner should confirm with owner if strict scope desired.
+   - Recommendation: widen note write/diagram enums too (small, harmless, keeps AI able to attach a note to a milestone). Leave reminder/knowledge-link enums at 1681/1705/1725 per D-06.
+   - RESOLVED (planner): widen `query_notes` and note write/diagram enums to include `'crMilestone'`; reminder/knowledge-link enums stay unchanged. Adopted in 52-02 Task 2.
 
-2. **Should V31 add `milestoneId` to the `tasks` index?**
+2. **[RESOLVED — use `.filter()` for cascade] Should V31 add `milestoneId` to the `tasks` index?**
    - What we know: V31 spec from D-01 only defines `crMilestones: 'id, crId'`; cascade needs to find tasks by milestone.
    - What's unclear: D-01 silence on tasks index is intentional minimalism or oversight.
    - Recommendation: use `.filter()` on `db.tasks` inside the delete transaction (Pitfall 2 option b). No index rebuild, no schema surprise.
+   - RESOLVED (planner): use `.filter()`; V31 tasks index stays unchanged. Adopted in 52-01 Task 3.
 
-3. **Import preview count source for `crMilestones`**
+3. **[RESOLVED — show 0 via `?? 0`] Import preview count source for `crMilestones`**
    - What we know: `ImportPreviewModal.tsx:61-95` hardcodes 8 count queries; adding `db.crMilestones.count()` is straightforward.
    - What's unclear: whether v14 backups (count key absent) should show 0 or "—".
    - Recommendation: show 0 via existing `?? 0` fallback at line 113 — consistent with how other optional counts render.
+   - RESOLVED (planner): v14 payload missing the count renders 0 via `?? 0`. Adopted in 52-03 Task 2.
 
 ## Environment Availability
 

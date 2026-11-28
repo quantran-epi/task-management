@@ -1312,6 +1312,32 @@ Plans:
 
 - [x] 51-04-PLAN.md — Chặn mọi grounding TaskMate + task action, giữ knowledge/MCP/Graphiti/Oracle/SSH, cổng focused gate (D-08/10/13/01)
 
+### Phase 52: CR Milestones — tầng mốc triển khai giữa CR và Task (milestoneId optional trên task, không có systemId; gắn Notes entity thật); đảo quyết định Phase 31.2 đã khai tử milestone
+
+**Goal:** Một CR có nhiều mốc triển khai, task gắn optional vào từng mốc, note thật đính kèm mốc; dữ liệu và UI vẫn chạy offline trên Tauri, backup v14 vẫn restore được.
+**Requirements**: TBD (không có requirement ID ánh xạ; tiêu chí là D-01..D-11 trong 52-CONTEXT.md)
+**Depends on:** Phase 51
+**Plans:** 5 plans trong 4 waves
+
+Plans:
+
+**Wave 1** *(không phụ thuộc; schema/types/repo/cascade)*
+
+- [ ] 52-01-PLAN.md — CrMilestone + Dexie V31 + taskRepo invariant + cascade (D-01..D-04)
+
+**Wave 2** *(phụ thuộc 52-01; độc lập giữa hai plan)*
+
+- [ ] 52-02-PLAN.md — Note entity union `crMilestone` lan tới pickers/filters/AI enums (D-05/D-06)
+- [ ] 52-03-PLAN.md — Backup v14→v15, referential milestone, SQLite allowlist parity (D-07/D-08)
+
+**Wave 3** *(phụ thuộc 52-01 + 52-02)*
+
+- [ ] 52-04-PLAN.md — CR Detail section, cột Mốc, TaskDrawer Select, component tests (D-05/D-09/D-10)
+
+**Wave 4** *(phụ thuộc tất cả)*
+
+- [ ] 52-05-PLAN.md — Focused gate + tsc/lint/build + diff review + Chrome UAT light/dark (D-10/D-11)
+
 ---
 
 ## Milestone: v1.3 SDLC Closed-Loop Engine & Repository Autonomy
