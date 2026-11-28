@@ -132,7 +132,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await db.tasks.get(task.id)).toBeUndefined();
   }, 30000);
 
-  it('lays out the task table and secondary blocks in a 2.4fr/1fr command deck grid', async () => {
+  it('lays out a full-width task table above a two-column grid of secondary blocks', async () => {
     const { cr } = await seed();
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
@@ -140,6 +140,8 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(screen.getByTestId('cr-detail-stats')).toBeInTheDocument();
 
     const table = screen.getByRole('columnheader', { name: 'Task' }).closest('table') as HTMLTableElement;
+    const tableWrap = screen.getByTestId('cr-detail-task-table');
+    const grid = screen.getByTestId('cr-detail-secondary-grid');
     const blockIds = [
       'cr-detail-block-reminders',
       'cr-detail-block-documents',
@@ -149,19 +151,16 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     ];
     const blocks = blockIds.map((id) => screen.getByTestId(id));
 
-    let grid: HTMLElement | null = table;
-    while (grid && !(grid.style.gridTemplateColumns.includes('2.4fr') && blocks.every((block) => grid!.contains(block)))) {
-      grid = grid.parentElement;
-    }
-    expect(grid).not.toBeNull();
-    expect(grid!.style.gridTemplateColumns).toBe('minmax(0, 2.4fr) minmax(280px, 1fr)');
+    expect(tableWrap.contains(table)).toBe(true);
+    expect(tableWrap.style.width).toBe('100%');
+    expect(tableWrap.contains(grid)).toBe(false);
+    expect(tableWrap.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    const [primary, secondary] = Array.from(grid!.children) as HTMLElement[];
-    expect(primary).toBeDefined();
-    expect(secondary).toBeDefined();
-    expect(primary!.contains(table)).toBe(true);
-    expect(blocks.every((block) => secondary!.contains(block))).toBe(true);
-    expect(blocks.map((block) => Array.from(secondary!.children).findIndex((node) => node.contains(block)))).toEqual([0, 1, 2, 3, 4]);
+    expect(grid.className).toContain('cr-detail-secondary-grid');
+    expect(grid.querySelectorAll('style')).toHaveLength(0);
+    expect(grid.style.gridTemplateColumns).toBe('');
+    expect(grid.children).toHaveLength(5);
+    expect(blocks.map((block) => Array.from(grid.children).findIndex((node) => node.contains(block)))).toEqual([0, 1, 2, 3, 4]);
   }, 30000);
 
   it('offers only the CR targets plus Chung (không gắn) in the Subsystem cell', async () => {

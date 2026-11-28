@@ -854,9 +854,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         ))}
       </div>
 
-      {/* Primary task table left, secondary cards right */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.4fr) minmax(280px, 1fr)', gap: 'var(--gap-12)', alignItems: 'start' }}>
-      <div style={{ minWidth: 0 }}>
+      <style>{`
+        .cr-detail-secondary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-12); align-items: start; }
+        @media (max-width: 900px) { .cr-detail-secondary-grid { grid-template-columns: minmax(0, 1fr); } }
+      `}</style>
+      {/* Task table full width; secondary cards below in two columns */}
+      <div data-testid="cr-detail-task-table" style={{ minWidth: 0, width: '100%' }}>
       {/* 3c. Flat task table */}
       <div
         style={{
@@ -949,7 +952,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 key: 'name',
                 render: (name: string, record: Task) => (
                   <span
-                    style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 320, cursor: 'pointer' }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, cursor: 'pointer' }}
                     title={name}
                     onClick={() => openTaskDrawer(record.id)}
                   >
@@ -1043,7 +1046,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
 
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
+      <div data-testid="cr-detail-secondary-grid" className="cr-detail-secondary-grid">
         {/* Secondary blocks ordered by priority: reminders, links, notes, Jira */}
         {secondaryBlocks.map((block) => (
           <Card
@@ -1064,7 +1067,6 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
           </Card>
         ))}
-      </div>
       </div>
 
       <ChangeRequestModal
