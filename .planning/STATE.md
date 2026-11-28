@@ -49,6 +49,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-uoi: linked system secti
 Last activity: 2026-11-28 - Completed quick task 261128-cpo: CR detail có nút thêm nhắc nhở nhanh qua QuickReminderModal target CR và ô lọc task dùng SearchInput chuẩn.
 Last activity: 2026-11-28 - Completed quick task 261128-d1m: CR detail bố trí nút thêm nhắc nhở cạnh tiêu đề block; mỗi link/reminder có sửa (mở modal CR) và xoá (confirm + patch qua repository).
 Last activity: 2026-11-28 - Completed quick task 261128-dlj: task insight dùng bảng link tên+URL, thêm/sửa link qua modal riêng, xoá link Popconfirm và section nhắc nhở với QuickReminderModal.
+Last activity: 2026-11-28 - Completed quick task 261128-fvp: redesign Bộ tài liệu theo sketch 016A — inspector chỉ-đọc, form cấu hình trong modal 620px, row action đổi tên/sao chép/xoá khỏi bộ; Chrome light/dark + scoped tests verified.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -200,6 +201,7 @@ Progress: [██████████] 100%
 | 261128-eb6 | Command Deck layout cho CR detail và task insight: mission header, progress rail, grid 2.4fr/1fr, dark-mode token fix | 2026-11-28 | eef54006, 6001f719 | Verified (Chrome light/dark) | [261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai](./quick/261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai/) |
 | 261128-fqs | Dark-mode Capacity Planner/TaskLists/splash/AI office explorer + tasklist redesign baseline | 2026-11-28 | 80276409, c51ec8ad, 5f362408, e474c098, a83eba75, e064c4b0, 3e96cd1b | Verified | [261128-fqs-check-fix-capacity-planner-page-dark-mod](./quick/261128-fqs-check-fix-capacity-planner-page-dark-mod/) |
 | 261128-ffo | Dark mode mục lục doc editor và status bar báo trạng thật (Knowledge liveness + GitHub sync) | 2026-11-28 | 47867416, b547dc5d, 3d769261 | Verified (Chrome + scoped tests) | [261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-](./quick/261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-/) |
+| 261128-fvp | Redesign màn hình Bộ tài liệu theo sketch 016A: inspector chỉ-đọc, config modal 620px, row action sửa/xoá nhanh | 2026-11-28 | 736b4046, 39ce124c, b6ceacd5 | Verified (Chrome light/dark + scoped tests) | [261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i](./quick/261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i/) |
 
 ## Accumulated Context
 
