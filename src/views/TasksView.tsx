@@ -22,6 +22,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { TaskPlannerDatabase } from '../db';
 import type { Task, ChangeRequest, System } from '../types/models';
 import { foldForSearch, searchIncludes } from '../utils/searchText';
+import '../components/tasks/tasklist-workspace.css';
 
 const { Text } = Typography;
 
@@ -288,7 +289,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
     activeFilterCount > 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-16)' }}>
+    <div className="tm-tasklist">
       {contextHolder}
       {/* 1. Page Header */}
       <PageHeader
@@ -305,27 +306,28 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         }
       />
 
-      {/* 2. Fast Task Creation Bar */}
-      <QuickAddBar
-        changeRequests={changeRequests}
-        systems={systems}
-        activeCrId={filters.crId}
-        db={db}
-        inputRef={quickAddInputRef}
-      />
+      {/* 2–3. Command strip: fast creation + filter toolbar, flush with the table */}
+      <div className="tm-tasklist__toolstrip">
+        <QuickAddBar
+          changeRequests={changeRequests}
+          systems={systems}
+          activeCrId={filters.crId}
+          db={db}
+          inputRef={quickAddInputRef}
+        />
 
-      {/* 3. Filter & Horizon Toolbar */}
-      <TaskFilterBar
-        filters={filters}
-        onFilterChange={setFilters}
-        onResetFilters={resetFilters}
-        changeRequests={changeRequests}
-        systems={systems}
-        availableOpsOwners={availableOpsOwners}
-        availableBAs={availableBAs}
-        searchInputRef={searchInputRef}
-        containerRef={filterBarRef}
-      />
+        <TaskFilterBar
+          filters={filters}
+          onFilterChange={setFilters}
+          onResetFilters={resetFilters}
+          changeRequests={changeRequests}
+          systems={systems}
+          availableOpsOwners={availableOpsOwners}
+          availableBAs={availableBAs}
+          searchInputRef={searchInputRef}
+          containerRef={filterBarRef}
+        />
+      </div>
 
       {/* 3. Main Tasks Table */}
       <TaskTable

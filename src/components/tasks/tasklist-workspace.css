@@ -1,0 +1,96 @@
+/* Task list chrome: dense workspace tool around the table, theme-aware. */
+
+.tm-tasklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-8);
+  min-width: 0;
+}
+
+.tm-tasklist__toolstrip {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-island);
+  overflow: hidden;
+}
+
+.tm-tasklist__quickadd {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-8);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-island);
+}
+
+.tm-tasklist__quickadd-selects {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.tm-tasklist__quickadd-submit {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tm-tasklist__filter {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-8);
+  padding: 8px 10px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.tm-tasklist__filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-8);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tm-tasklist__filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-8);
+  align-items: center;
+  flex: 1;
+}
+
+.tm-tasklist__filter-advanced {
+  padding: 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--bg-island);
+}
+
+.tm-tasklist__batch {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-8);
+  z-index: 1000;
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-control);
+}
+
+.tm-tasklist__batch-count {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}

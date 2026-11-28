@@ -75,31 +75,11 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
     <div
       ref={containerRef}
       data-testid="task-filter-bar"
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--gap-12)',
-        padding: '12px 16px',
-        backgroundColor: token.colorBgElevated,
-        borderRadius: 'var(--radius-control)',
-        border: `1px solid ${token.colorBorderSecondary}`,
-        boxShadow: token.boxShadowTertiary,
-      }}
+      className="tm-tasklist__filter"
     >
       {/* Top row: Search, Scope, CR, Subsystem, Advanced Toggle, Reset */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 'var(--gap-12)',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--gap-12)', alignItems: 'center', flex: 1 }}>
+      <div className="tm-tasklist__filter-row">
+        <div className="tm-tasklist__filter-controls">
           <Input
             ref={searchInputRef}
             id="task-search-input"
@@ -253,14 +233,7 @@ export const TaskFilterBar: React.FC<TaskFilterBarProps> = ({
 
       {/* Row 3 (Collapsible): Advanced Filter Panel */}
       {advancedOpen && (
-        <div
-          style={{
-            padding: '14px 16px',
-            backgroundColor: token.colorBgContainer,
-            borderRadius: 'var(--radius-control)',
-            border: `1px dashed ${token.colorBorder}`,
-          }}
-        >
+        <div className="tm-tasklist__filter-advanced">
           <Row gutter={[16, 12]}>
             {/* Field 1: Execution Date Range */}
             <Col xs={24} sm={12} lg={6}>

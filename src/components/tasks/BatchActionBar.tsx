@@ -141,25 +141,9 @@ export const BatchActionBar: React.FC<BatchActionBarProps> = ({
     <>
       <div
         data-testid="batch-action-bar"
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          maxWidth: 'calc(100vw - 32px)',
-          backgroundColor: token.colorBgElevated,
-          boxShadow: token.boxShadowSecondary,
-          borderRadius: 'var(--radius-control)',
-          padding: '6px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 'var(--gap-8)',
-          zIndex: 1000,
-          border: `1px solid ${token.colorBorderSecondary}`,
-        }}
+        className="tm-tasklist__batch"
       >
-        <span style={{ fontWeight: 600, fontSize: 'var(--font-size-small)', color: token.colorText, whiteSpace: 'nowrap' }}>
+        <span className="tm-tasklist__batch-count">
           Đã chọn {selectedCount} tác vụ
         </span>
 

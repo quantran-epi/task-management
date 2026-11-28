@@ -106,7 +106,8 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   });
 
   return (
-    <SpaceCompact style={{ width: '100%' }}>
+    <SpaceCompact className="tm-tasklist__quickadd" style={{ width: '100%' }}>
+      <span className="tm-tasklist__quickadd-selects">
       <Select
         showSearch
         optionFilterProp="label"
@@ -137,6 +138,8 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         style={{ width: 155 }}
         aria-label="Loại công việc"
       />
+      </span>
+      <span className="tm-tasklist__quickadd-submit">
       <Input
         ref={inputRef}
         id="quick-add-input"
@@ -161,6 +164,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       >
         Thêm
       </Button>
+      </span>
     </SpaceCompact>
   );
 };
