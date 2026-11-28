@@ -1,7 +1,5 @@
-import { DeleteOutlined, DownOutlined, PlusOutlined, UpOutlined } from '../ui/icon';
-import { Button, Checkbox, Collapse, Form, Input, Modal, Radio, Select, Space, Tag, Tooltip, Typography, useAntdToken, FormItem, SearchInput, ListItem, RadioGroup } from '../ui';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
-import { VirtualizedList } from '../../workbench/virtual/VirtualizedList';
+import { Button, Checkbox, Collapse, Form, Input, Radio, Select, Space, Tag, Typography, useAntdToken, FormItem, RadioGroup } from '../ui';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   DocumentSet,
   DocumentSetPreset,
@@ -10,13 +8,12 @@ import type {
   DocumentSetScope,
   Note,
 } from '../../types/models';
-import { foldForSearch, searchIncludes } from '../../utils/searchText';
 
 const { Text } = Typography;
 
 export interface DocumentSetFormValue {
   name: string;
-  documentIds: string[];
+  documentIds?: string[] | undefined;
   preset?: DocumentSetPreset | undefined;
   scope?: DocumentSetScope | undefined;
   aliases?: readonly string[] | undefined;
@@ -66,55 +63,16 @@ const PRESET_OPTIONS: { label: string; value: DocumentSetPreset }[] = [
   { label: 'Tùy chỉnh', value: 'TuyChinh' },
 ];
 
-export interface DocumentSetFormHandle {
-  openPicker(): void;
-}
-
-export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetFormProps>(function DocumentSetForm({
+export function DocumentSetForm({
   notes,
   initialSet,
   availableSets = [],
   currentFolderId,
   onSave,
-}, ref) {
+}: DocumentSetFormProps) {
   const { token } = useAntdToken();
   const [name, setName] = useState(initialSet?.name ?? '');
-  const [mode, setMode] = useState<'empty' | 'folder' | 'manual'>(initialSet ? 'manual' : 'empty');
-  const [members, setMembers] = useState<string[]>(initialSet?.documentIds ?? []);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [draftSelection, setDraftSelection] = useState<string[]>(members);
-  const [searchDocQuery, setSearchDocQuery] = useState('');
-  const documents = useMemo(() => notes.filter((note) => !note.deletedAt && note.type !== 'folder'), [notes]);
-  const noteById = useMemo(() => new Map(documents.map((note) => [note.id, note])), [documents]);
-
-  const openPicker = () => {
-    setDraftSelection(members);
-    setSearchDocQuery('');
-    setPickerOpen(true);
-  };
-  useImperativeHandle(ref, () => ({ openPicker }), [members]);
-
-  const flatDocs = useMemo(() => {
-    const notesById = new Map(notes.map((note) => [note.id, note]));
-    const pathOf = (note: Note): string => {
-      const titles: string[] = [];
-      let parentId = note.parentId;
-      for (let depth = 0; parentId && depth < 20; depth += 1) {
-        const parent = notesById.get(parentId);
-        if (!parent) break;
-        titles.unshift(parent.title || 'Thư mục không tên');
-        parentId = parent.parentId;
-      }
-      return titles.join(' / ');
-    };
-    const query = foldForSearch(searchDocQuery);
-    return documents
-      .filter((note) => {
-        if (!query) return true;
-        return searchIncludes(note.title || '', query) || (note.tags ?? []).some((tag) => searchIncludes(tag, query));
-      })
-      .map((note) => ({ id: note.id, title: note.title || 'Tài liệu không tên', path: pathOf(note) }));
-  }, [documents, notes, searchDocQuery]);
+  const [mode, setMode] = useState<'empty' | 'folder'>('empty');
 
   // Scope facets (D-17, D-18)
   const [preset, setPreset] = useState<DocumentSetPreset>(initialSet?.preset ?? 'Chung');
@@ -140,8 +98,6 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
   useEffect(() => {
     if (!initialSet) return;
     setName(initialSet.name);
-    setMembers(initialSet.documentIds);
-    setMode('manual');
     setPreset(initialSet.preset ?? 'Chung');
     setDomain(initialSet.scope?.domain ?? 'General');
     setEnvironment(initialSet.scope?.environment ?? null);
@@ -180,26 +136,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
     }
   };
 
-  const chooseMode = (nextMode: 'empty' | 'folder' | 'manual') => {
-    setMode(nextMode);
-    if (nextMode === 'empty') setMembers([]);
-    if (nextMode === 'folder') setMembers(snapshotFolderMembers(notes, currentFolderId));
-    if (nextMode === 'manual') {
-      setDraftSelection(members);
-      setSearchDocQuery('');
-      setPickerOpen(true);
-    }
-  };
-
-  const move = (index: number, offset: number) => {
-    const target = index + offset;
-    if (target < 0 || target >= members.length) return;
-    setMembers((current) => {
-      const next = [...current];
-      [next[index], next[target]] = [next[target]!, next[index]!];
-      return next;
-    });
-  };
+  const chooseMode = (nextMode: 'empty' | 'folder') => setMode(nextMode);
 
   const handleAddAlias = () => {
     const trimmed = aliasInput.trim();
@@ -237,7 +174,11 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
 
     const payload: DocumentSetFormValue = {
       name: name.trim().slice(0, 120),
-      documentIds: members,
+      // Membership is a creation-only decision. On edit we must not emit documentIds,
+      // otherwise updateDocumentSet would overwrite the membership managed in Detail.
+      ...(!initialSet
+        ? { documentIds: mode === 'folder' ? snapshotFolderMembers(notes, currentFolderId) : [] }
+        : {}),
       preset,
       scope: {
         domain: domain.trim(),
@@ -445,11 +386,10 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
       {/* 5. Initialize from (only for creation) */}
       {!initialSet && (
         <FormItem label="Khởi tạo từ">
-          <RadioGroup value={mode} onChange={(event) => chooseMode(event.target.value)}>
+          <RadioGroup value={mode} onChange={(event) => chooseMode(event.target.value as 'empty' | 'folder')}>
             <Space className="doc-set-preset-grid" direction="vertical">
               <Radio value="empty">Bộ trống</Radio>
               <Radio value="folder">Từ thư mục hiện tại</Radio>
-              <Radio value="manual">Chọn tài liệu</Radio>
             </Space>
           </RadioGroup>
           {mode === 'folder' && (
@@ -460,124 +400,9 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
         </FormItem>
       )}
 
-      {/* 6. Document membership list */}
-      <div className="doc-set-form-group-title">Tài liệu thành viên</div>
-      <Space direction="vertical" style={{ width: '100%' }} size="middle">
-        <Button
-          aria-label="Thêm tài liệu"
-          icon={<PlusOutlined />}
-          onClick={openPicker}
-        >
-          Thêm tài liệu
-        </Button>
-        {members.length === 0 ? (
-          <Text type="secondary">Bộ tài liệu chưa có thành viên.</Text>
-        ) : (
-          <VirtualizedList
-            items={members}
-            height={320}
-            estimateSize={() => 38}
-            overscan={4}
-            role="group"
-            aria-label="Tài liệu trong bộ"
-            renderItem={(documentId, index) => {
-              const title = noteById.get(documentId)?.title || 'Tài liệu không tên';
-              return (
-                <ListItem
-                  className="doc-set-member-item"
-                  data-testid={`member-${documentId}`}
-                  actions={[
-                    <Tooltip title="Đưa lên" key="up">
-                      <Button
-                        aria-label="Đưa lên"
-                        icon={<UpOutlined />}
-                        disabled={index === 0}
-                        onClick={() => move(index, -1)}
-                      />
-                    </Tooltip>,
-                    <Tooltip title="Đưa xuống" key="down">
-                      <Button
-                        aria-label="Đưa xuống"
-                        icon={<DownOutlined />}
-                        disabled={index === members.length - 1}
-                        onClick={() => move(index, 1)}
-                      />
-                    </Tooltip>,
-                    <Tooltip title={`Gỡ ${title}`} key="remove">
-                      <Button
-                        aria-label={`Gỡ ${title}`}
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() => setMembers((current) => current.filter((id) => id !== documentId))}
-                      />
-                    </Tooltip>,
-                  ]}
-                >
-                  <Tooltip title={documentId}>
-                    <Text ellipsis>{title}</Text>
-                  </Tooltip>
-                </ListItem>
-              );
-            }}
-          />
-        )}
-        <Button disabled={!name.trim()} onClick={save}>
-          Lưu thay đổi
-        </Button>
-      </Space>
-
-      {/* 7. Modal document picker (flat searchable virtual list) */}
-      <Modal
-        title="Chọn tài liệu"
-        open={pickerOpen}
-        okText="Xong"
-        cancelText="Hủy"
-        width={600}
-        onCancel={() => setPickerOpen(false)}
-        onOk={() => {
-          const retained = members.filter((id) => draftSelection.includes(id));
-          const added = draftSelection.filter((id) => !retained.includes(id));
-          setMembers([...retained, ...added]);
-          setMode('manual');
-          setPickerOpen(false);
-        }}
-      >
-        <SearchInput
-          aria-label="Tìm tài liệu"
-          placeholder="Tìm theo tiêu đề, hashtag..."
-          style={{ marginBottom: token.marginSM }}
-          value={searchDocQuery}
-          onChange={(e) => setSearchDocQuery(e.target.value)}
-        />
-        {flatDocs.length === 0 ? (
-          <div style={{ textAlign: 'center', color: 'var(--fg-secondary)', padding: 24 }}>
-            Không tìm thấy tài liệu phù hợp
-          </div>
-        ) : (
-          <VirtualizedList
-            items={flatDocs}
-            height={320}
-            estimateSize={() => 36}
-            overscan={4}
-            role="group"
-            aria-label="Danh sách tài liệu để chọn"
-            renderItem={(doc) => (
-              <div className="doc-set-pick-row">
-                <Checkbox
-                  aria-label={doc.title}
-                  checked={draftSelection.includes(doc.id)}
-                  onChange={(event) => setDraftSelection((current) =>
-                    event.target.checked ? [...current, doc.id] : current.filter((id) => id !== doc.id)
-                  )}
-                >
-                  {doc.title}
-                </Checkbox>
-                <Text type="secondary" ellipsis style={{ minWidth: 0 }}>{doc.path}</Text>
-              </div>
-            )}
-          />
-        )}
-      </Modal>
+      <Button disabled={!name.trim()} onClick={save}>
+        Lưu thay đổi
+      </Button>
     </Form>
   );
-});
+}
