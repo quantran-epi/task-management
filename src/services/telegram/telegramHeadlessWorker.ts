@@ -601,8 +601,57 @@ export function formatGroundedNonAnswer(result: GroundedTurnResult): string | nu
 // In-memory set of recently processed update_ids to prevent duplicate execution from double listener/HMR
 const processedUpdateIds = new Set<number>();
 
+/** Hard ceiling for one Telegram turn, including the shared AI tool loop. */
+export const TELEGRAM_TURN_DEADLINE_MS = 300_000;
+
+// One in-flight turn per chat; different chats remain independent.
+const chatTurnTails = new Map<string, Promise<void>>();
+
 export function clearTelegramProcessedUpdateIdsForTesting(): void {
   processedUpdateIds.clear();
+  chatTurnTails.clear();
+}
+
+type InboundFns = {
+  sendReplyFn?: (token: string, chatId: string, text: string, replyTo?: number) => Promise<void>;
+  sendActionFn?: (token: string, chatId: string, action: string) => Promise<void>;
+  sendDirectFn?: (token: string, chatId: string, text: string) => Promise<void>;
+};
+
+type InboundProcessor = (
+  event: TelegramInboundEvent,
+  botToken: string,
+  db: TaskPlannerDatabase,
+  sendReplyFn?: InboundFns['sendReplyFn'],
+  sendActionFn?: InboundFns['sendActionFn'],
+  sendDirectFn?: InboundFns['sendDirectFn']
+) => Promise<void>;
+
+let inboundProcessor: InboundProcessor = (event, botToken, db, reply, action, direct) =>
+  processTelegramInboundMessage(event, botToken, db, reply, action, direct);
+
+/** Test seam for queue ordering; production always uses the real processor. */
+export function setTelegramInboundProcessorForTesting(processor: InboundProcessor | null): void {
+  inboundProcessor = processor ?? ((event, botToken, db, reply, action, direct) =>
+    processTelegramInboundMessage(event, botToken, db, reply, action, direct));
+}
+
+/** Serialize inbound turns per chat. Errors are swallowed here — the turn logs them itself. */
+export function enqueueTelegramInboundMessage(
+  event: TelegramInboundEvent,
+  botToken: string,
+  db: TaskPlannerDatabase = defaultDb,
+  fns: InboundFns = {}
+): void {
+  const chatId = event.chat_id;
+  const previous = chatTurnTails.get(chatId) ?? Promise.resolve();
+  const turn = previous
+    .catch(() => undefined)
+    .then(() => inboundProcessor(event, botToken, db, fns.sendReplyFn, fns.sendActionFn, fns.sendDirectFn));
+  chatTurnTails.set(chatId, turn);
+  void turn.finally(() => {
+    if (chatTurnTails.get(chatId) === turn) chatTurnTails.delete(chatId);
+  });
 }
 
 export async function notifyAdminsOnInboundMessage(
@@ -709,6 +758,13 @@ export async function processTelegramInboundMessage(
       }
     }
   }
+
+  const turnController = new AbortController();
+  const deadlineTimer = setTimeout(
+    () => turnController.abort(),
+    TELEGRAM_TURN_DEADLINE_MS
+  );
+  try {
 
   const defaultSendReply = async (token: string, cid: string, replyText: string, rId?: number) => {
     if (isTauriApp()) {
@@ -1599,6 +1655,7 @@ export async function processTelegramInboundMessage(
         model: effectiveModel,
         contextWindowTokens: aiConfig.contextWindowTokens,
         db,
+        signal: turnController.signal,
       },
       runAiOrchestratorLoop
     );
@@ -1611,7 +1668,9 @@ export async function processTelegramInboundMessage(
     }
   } catch (aiErr: any) {
     console.error('[telegramWorker] AI generation error:', aiErr);
-    rawAiResponse = `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;
+    rawAiResponse = aiErr?.name === 'AbortError' || turnController.signal.aborted
+      ? '⏱️ *(Đã hết thời gian xử lý. Vui lòng thử lại với yêu cầu ngắn hơn.)*'
+      : `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;
   }
 
   rawAiResponse = stripThinkingBlocks(rawAiResponse);
@@ -1651,6 +1710,9 @@ export async function processTelegramInboundMessage(
     },
     db
   );
+  } finally {
+    clearTimeout(deadlineTimer);
+  }
 }
 
 /**
@@ -1705,15 +1767,11 @@ export function useTelegramHeadlessWorker(db: TaskPlannerDatabase = defaultDb) {
             if (!currentSettings.isEnabled || !currentSettings.botToken) {
               return;
             }
-            try {
-              await processTelegramInboundMessage(
-                event.payload,
-                currentSettings.botToken,
-                db
-              );
-            } catch (err) {
-              console.error('[telegramWorker] Error handling inbound message:', err);
-            }
+            enqueueTelegramInboundMessage(
+              event.payload,
+              currentSettings.botToken,
+              db
+            );
           }
         );
         if (isDisposed) {

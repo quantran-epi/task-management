@@ -142,4 +142,11 @@ describe('Telegram chat turn adapter', () => {
     const result = await options.executeToolFn('generate_image', { prompt: 'cat', saveToDocId: 'note-1' }, db, undefined, undefined, 'c2');
     expect(result).toBeDefined();
   });
+
+  it('passes the caller abort signal to the AI loop', async () => {
+    mockLoopResult();
+    const controller = new AbortController();
+    await runTelegramChatTurn(params({ signal: controller.signal }), runLoop as any);
+    expect(loopOptions().signal).toBe(controller.signal);
+  });
 });

@@ -41,6 +41,7 @@ export interface TelegramChatTurnParams {
   model: string;
   contextWindowTokens?: number | undefined;
   db: TaskPlannerDatabase;
+  signal?: AbortSignal | undefined;
 }
 
 export interface TelegramChatTurnResult {
@@ -195,6 +196,7 @@ export async function runTelegramChatTurn(
     keepRecentToolOutputs: 20,
     maxOldToolChars: 100_000,
     compactAtRatio: 0.9,
+    ...(params.signal ? { signal: params.signal } : {}),
     ...(params.contextWindowTokens ? { contextWindowTokens: params.contextWindowTokens } : {}),
     onToolCall: (call) => {
       toolNames.set(call.id, normalizeToolName(call.name));

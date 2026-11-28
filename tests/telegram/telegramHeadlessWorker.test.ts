@@ -8,6 +8,8 @@ import {
   broadcastTelegramMessage,
   clearTelegramProcessedUpdateIdsForTesting,
   formatGroundedNonAnswer,
+  enqueueTelegramInboundMessage,
+  setTelegramInboundProcessorForTesting,
 } from '../../src/services/telegram/telegramHeadlessWorker';
 import { KNOWLEDGE_SERVER_EMPTY_NOTICE } from '../../src/services/ai/knowledgeOutcome';
 import type { GroundedTurnResult } from '../../src/services/ai/groundedTurn';
@@ -2836,5 +2838,50 @@ describe('Telegram Headless Worker', () => {
       expect(outbound.split(KNOWLEDGE_SERVER_EMPTY_NOTICE).length - 1).toBe(1);
       void emptyResult;
     });
+  });
+
+  it('serializes queued inbound turns for the same chat but runs different chats in parallel', async () => {
+    const started: string[] = [];
+    const gates = new Map<string, () => void>();
+    setTelegramInboundProcessorForTesting(async (event) => {
+      const chatId = event.chat_id;
+      started.push(`enter:${chatId}`);
+      await new Promise<void>((resolve) => gates.set(chatId, resolve));
+    });
+
+    const baseEvent = (update_id: number, chatId: string, fromName: string): TelegramInboundEvent => ({
+      update_id,
+      message_id: update_id + 100,
+      chat_id: chatId,
+      from_name: fromName,
+      text: '/help',
+      date: update_id,
+    });
+
+    enqueueTelegramInboundMessage(baseEvent(901, 'queue_user', 'Queue User'), 'test_token', testDb);
+    enqueueTelegramInboundMessage(baseEvent(902, 'queue_user', 'Queue User'), 'test_token', testDb);
+    enqueueTelegramInboundMessage(baseEvent(903, 'other_user', 'Other User'), 'test_token', testDb);
+
+    await vi.waitFor(() => {
+      expect(started).toContain('enter:queue_user');
+      expect(started).toContain('enter:other_user');
+    });
+    expect(started.filter((s) => s === 'enter:queue_user')).toHaveLength(1);
+
+    gates.get('queue_user')?.();
+    await vi.waitFor(() => {
+      expect(started.filter((s) => s === 'enter:queue_user')).toHaveLength(2);
+    });
+    gates.get('queue_user')?.();
+    gates.get('other_user')?.();
+    await vi.waitFor(() => {
+      expect([...started].sort()).toEqual([
+        'enter:other_user',
+        'enter:queue_user',
+        'enter:queue_user',
+      ]);
+    });
+
+    setTelegramInboundProcessorForTesting(null);
   });
 });
