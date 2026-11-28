@@ -7,6 +7,55 @@ import { type AutoSyncRetryState } from '../../hooks/useGitHubAutoSync';
 
 const { Text } = Typography;
 
+export type SyncStatusKind = 'off' | 'paused' | 'error' | 'dirty' | 'synced';
+
+export interface DerivedSyncStatus {
+  kind: SyncStatusKind;
+  label: string;
+  tooltip: string;
+}
+
+export interface DeriveSyncStatusInput {
+  hasToken: boolean;
+  enabled: boolean;
+  dirtySince?: string | undefined;
+  retryState?: AutoSyncRetryState | undefined;
+  lastError?: string | undefined;
+}
+
+/** Single source of sync truth — shared by the shell dot and the status bar. */
+export function deriveSyncStatus({
+  hasToken,
+  enabled,
+  dirtySince,
+  retryState,
+  lastError,
+}: DeriveSyncStatusInput): DerivedSyncStatus {
+  if (!hasToken || !enabled) {
+    return { kind: 'off', label: 'Tắt', tooltip: 'Đồng bộ GitHub: chưa bật hoặc chưa có token' };
+  }
+  if (retryState?.isPaused) {
+    const reasonText =
+      retryState.pauseReason === 'conflict'
+        ? 'Tạm dừng do xung đột dữ liệu trên GitHub'
+        : retryState.pauseReason === 'auth_error'
+          ? 'Lỗi xác thực GitHub PAT (401/403)'
+          : 'Tự động đồng bộ bị tạm dừng';
+    return { kind: 'paused', label: 'Tạm dừng', tooltip: `Đồng bộ GitHub: ${reasonText}` };
+  }
+  if (retryState?.nextRetryAt && retryState.consecutiveFailures > 0) {
+    return {
+      kind: 'error',
+      label: 'Lỗi',
+      tooltip: `Đồng bộ GitHub: Lỗi kết nối (thử lại sau). ${lastError || ''}`,
+    };
+  }
+  if (dirtySince) {
+    return { kind: 'dirty', label: 'Chưa đồng bộ', tooltip: 'Đồng bộ GitHub: Có thay đổi chưa đồng bộ' };
+  }
+  return { kind: 'synced', label: 'Đã đồng bộ', tooltip: 'Đồng bộ GitHub: Dữ liệu đã khớp an toàn' };
+}
+
 export interface GitHubSyncStatusDotProps {
   db?: TaskPlannerDatabase;
 }
@@ -30,11 +79,17 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
     };
   }, [db]);
 
-  if (!hasToken || !syncState?.enabled) {
+  const status = deriveSyncStatus({
+    hasToken,
+    enabled: syncState?.enabled ?? false,
+    dirtySince: syncState?.dirtySince,
+    retryState: syncState?.retryState,
+    lastError: syncState?.lastError,
+  });
+
+  if (status.kind === 'off') {
     return null;
   }
-
-  const { dirtySince, retryState, lastError } = syncState;
 
   const renderIndicator = (badge: React.ReactNode, tooltipText: string) => (
     <Tooltip title={tooltipText}>
@@ -55,39 +110,11 @@ export const GitHubSyncStatusDot: React.FC<GitHubSyncStatusDotProps> = ({ db = d
     </Tooltip>
   );
 
-  // 1. Error / Conflict state -> Red dot
-  if (retryState?.isPaused) {
-    const reasonText =
-      retryState.pauseReason === 'conflict'
-        ? 'Tạm dừng do xung đột dữ liệu trên GitHub'
-        : retryState.pauseReason === 'auth_error'
-          ? 'Lỗi xác thực GitHub PAT (401/403)'
-          : 'Tự động đồng bộ bị tạm dừng';
-    return renderIndicator(
-      <Badge status="danger" />,
-      `Đồng bộ GitHub: ${reasonText}`
-    );
-  }
-
-  // 2. Retry with consecutive errors -> Red / Warning dot
-  if (retryState?.nextRetryAt && retryState.consecutiveFailures > 0) {
-    return renderIndicator(
-      <Badge status="danger" />,
-      `Đồng bộ GitHub: Lỗi kết nối (thử lại sau). ${lastError || ''}`
-    );
-  }
-
-  // 3. Dirty pending changes -> Orange dot
-  if (dirtySince) {
-    return renderIndicator(
-      <Badge status="warning" />,
-      'Đồng bộ GitHub: Có thay đổi chưa đồng bộ'
-    );
-  }
-
-  // 4. All synced -> Green dot
-  return renderIndicator(
-    <Badge status="success" />,
-    'Đồng bộ GitHub: Dữ liệu đã khớp an toàn'
-  );
+  const badgeStatus =
+    status.kind === 'paused' || status.kind === 'error'
+      ? 'danger'
+      : status.kind === 'dirty'
+        ? 'warning'
+        : 'success';
+  return renderIndicator(<Badge status={badgeStatus} />, status.tooltip);
 };

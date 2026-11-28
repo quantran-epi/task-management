@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Tooltip, Typography } from '../components/ui';
 import { DatabaseOutlined, CloudSyncOutlined, ApiOutlined, CheckCircleFilled } from '../components/ui/icon';
 import { useTimer } from '../hooks/useTimer';
@@ -6,16 +7,143 @@ import { db } from '../db';
 import { ActiveTimerWidget } from '../components/timer/ActiveTimerWidget';
 import { ActiveAiTurnIndicator } from '../components/ai/ActiveAiTurnIndicator';
 import { useLayoutStore } from './store/layoutStore';
+import { useOptionalKnowledgeConfig } from '../services/knowledge/knowledgeConfig';
+import { useGitHubAuth } from '../context/GitHubAuthContext';
+import { deriveSyncStatus } from '../components/shell/GitHubSyncStatusDot';
+import type { AutoSyncRetryState } from '../hooks/useGitHubAutoSync';
 
-export interface StatusBarProps {
-  knowledgeStatus?: 'connected' | 'disconnected' | 'disabled';
-  syncStatus?: 'synced' | 'pending' | 'offline';
+export type KnowledgeProbeStatus = 'checking' | 'connected' | 'disconnected' | 'disabled';
+
+export interface KnowledgeProbeInput {
+  ready: boolean;
+  enabled: boolean;
+  baseUrl: string;
 }
 
-export function StatusBar({
-  knowledgeStatus = 'connected',
-  syncStatus = 'synced',
-}: StatusBarProps) {
+const KNOWLEDGE_LIVENESS_PATH = '/api/v1/health/liveness';
+const LIVENESS_TIMEOUT_MS = 3000;
+const RETRY_FAIL_MS = 15000;
+const RETRY_OK_MS = 60000;
+
+/** Probe liveness without auth/token; never blocks render (starts at checking). */
+export function useKnowledgeProbe({ ready, enabled, baseUrl }: KnowledgeProbeInput): KnowledgeProbeStatus {
+  const [status, setStatus] = useState<KnowledgeProbeStatus>('checking');
+
+  useEffect(() => {
+    if (!ready) {
+      setStatus('checking');
+      return;
+    }
+    if (!enabled || !baseUrl) {
+      setStatus('disabled');
+      return;
+    }
+
+    let active = true;
+    let retryId: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
+
+    const scheduleRetry = (delay: number) => {
+      retryId = setTimeout(() => {
+        if (active) {
+          setStatus('checking');
+          void probe();
+        }
+      }, delay);
+    };
+
+    const probe = async () => {
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), LIVENESS_TIMEOUT_MS);
+      try {
+        const response = await fetch(`${baseUrl}${KNOWLEDGE_LIVENESS_PATH}`, {
+          signal: controller.signal,
+        });
+        if (!active) return;
+        if (response.ok) {
+          setStatus('connected');
+          scheduleRetry(RETRY_OK_MS);
+        } else {
+          setStatus('disconnected');
+          scheduleRetry(RETRY_FAIL_MS);
+        }
+      } catch {
+        if (!active) return;
+        setStatus('disconnected');
+        scheduleRetry(RETRY_FAIL_MS);
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    void probe();
+    return () => {
+      active = false;
+      controller?.abort();
+      if (retryId) clearTimeout(retryId);
+    };
+  }, [ready, enabled, baseUrl]);
+
+  return status;
+}
+
+export interface StatusBarProps {
+  knowledgeStatus?: KnowledgeProbeStatus;
+}
+
+export function StatusBar({ knowledgeStatus: knowledgeStatusOverride }: StatusBarProps) {
+  const { ready, enabled, baseUrl } = useOptionalKnowledgeConfig();
+  const probedStatus = useKnowledgeProbe({ ready, enabled, baseUrl });
+  const knowledgeStatus = knowledgeStatusOverride ?? probedStatus;
+  const { hasToken } = useGitHubAuth();
+  const syncState = useLiveQuery(async () => {
+    const [enabledRec, dirtySinceRec, retryStateRec, lastErrorRec] = await Promise.all([
+      db.settings.get('github_auto_sync_enabled'),
+      db.settings.get('github_auto_sync_dirty_since'),
+      db.settings.get('github_auto_sync_state'),
+      db.settings.get('github_auto_sync_last_error'),
+    ]);
+    return {
+      enabled: enabledRec?.value === true,
+      dirtySince: (dirtySinceRec?.value as string) || undefined,
+      retryState: (retryStateRec?.value as AutoSyncRetryState) || undefined,
+      lastError: (lastErrorRec?.value as string) || undefined,
+    };
+  }, []);
+  const sync = deriveSyncStatus({
+    hasToken,
+    enabled: syncState?.enabled ?? false,
+    dirtySince: syncState?.dirtySince,
+    retryState: syncState?.retryState,
+    lastError: syncState?.lastError,
+  });
+
+  const knowledgeLabels: Record<KnowledgeProbeStatus, string> = {
+    disabled: 'chưa bật',
+    checking: 'đang kiểm tra',
+    connected: 'đã kết nối',
+    disconnected: 'mất kết nối',
+  };
+  const knowledgeColors: Record<KnowledgeProbeStatus, string> = {
+    disabled: 'var(--fg-muted)',
+    checking: 'var(--warning)',
+    connected: 'var(--success)',
+    disconnected: 'var(--danger)',
+  };
+  const knowledgeLabel = knowledgeLabels[knowledgeStatus];
+  const knowledgeColor = knowledgeColors[knowledgeStatus];
+  const knowledgeTooltip = knowledgeStatus === 'disabled' || !baseUrl
+    ? `Knowledge daemon: ${knowledgeLabel}`
+    : `Knowledge daemon: ${knowledgeLabel} (${baseUrl})`;
+
+  const syncColors: Record<typeof sync.kind, string> = {
+    off: 'var(--fg-muted)',
+    paused: 'var(--danger)',
+    error: 'var(--danger)',
+    dirty: 'var(--warning)',
+    synced: 'var(--success)',
+  };
+
   const activeTabId = useLayoutStore((s) => s.activeTabId);
   const openTabs = useLayoutStore((s) => s.openTabs);
   const activeTab = openTabs.find((t) => t.id === activeTabId);
@@ -105,21 +233,18 @@ export function StatusBar({
           </span>
         </Tooltip>
 
-        <Tooltip title={`Knowledge daemon: ${knowledgeStatus}`}>
+        <Tooltip title={knowledgeTooltip}>
           <span
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 'var(--gap-4)',
-              color:
-                knowledgeStatus === 'connected'
-                  ? 'var(--success, #338555)'
-                  : 'var(--fg-muted, #6c707e)',
+              color: knowledgeColor,
               cursor: 'default',
             }}
           >
             <ApiOutlined style={{ fontSize: 'var(--font-size-small)' }} />
-            <span>Knowledge</span>
+            <span>Knowledge{knowledgeLabel ? `: ${knowledgeLabel}` : ''}</span>
           </span>
         </Tooltip>
       </div>
@@ -131,25 +256,20 @@ export function StatusBar({
           <ActiveTimerWidget compact />
         </div>
 
-        <Tooltip title={`Encrypted backup sync: ${syncStatus}`}>
+        <Tooltip title={sync.tooltip}>
           <span
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 'var(--gap-4)',
-              color:
-                syncStatus === 'synced'
-                  ? 'var(--success, #338555)'
-                  : syncStatus === 'pending'
-                  ? 'var(--warning, #a56906)'
-                  : 'var(--fg-muted, #6c707e)',
+              color: syncColors[sync.kind],
               cursor: 'default',
               borderLeft: '1px solid var(--border-strong, #d1d3d9)',
               paddingLeft: 10,
             }}
           >
             <CloudSyncOutlined style={{ fontSize: 'var(--font-size-small)' }} />
-            <span style={{ textTransform: 'capitalize' }}>{syncStatus}</span>
+            <span>{sync.label}</span>
           </span>
         </Tooltip>
       </div>
