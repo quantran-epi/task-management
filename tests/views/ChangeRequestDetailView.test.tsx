@@ -131,7 +131,7 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
     expect(await db.tasks.get(task.id)).toBeUndefined();
   }, 30000);
 
-  it('renders the task table full width with three secondary blocks in one stacked column', async () => {
+  it('lays out the task table and secondary blocks in a 2.4fr/1fr command deck grid', async () => {
     const { cr } = await seed();
     render(<ChangeRequestDetailView changeRequestId={cr.id} db={db} />);
 
@@ -140,30 +140,26 @@ describe('ChangeRequestDetailView (ENT-NORM-04)', () => {
 
     const table = screen.getByRole('columnheader', { name: 'Task' }).closest('table') as HTMLTableElement;
     const blockIds = [
+      'cr-detail-block-reminders',
+      'cr-detail-block-documents',
       'cr-detail-block-notes',
       'cr-detail-block-jira',
-      'cr-detail-block-documents',
-      'cr-detail-block-reminders',
     ];
     const blocks = blockIds.map((id) => screen.getByTestId(id));
 
-    let stack: HTMLElement | null = table;
-    while (stack && !blocks.every((block) => stack!.contains(block))) {
-      stack = stack.parentElement;
+    let grid: HTMLElement | null = table;
+    while (grid && !(grid.style.gridTemplateColumns.includes('2.4fr') && blocks.every((block) => grid!.contains(block)))) {
+      grid = grid.parentElement;
     }
-    expect(stack).not.toBeNull();
-    expect(stack!.getAttribute('style') ?? '').toContain('flex-direction: column');
-    expect(stack!.querySelector('[style*="grid-template-columns"]')).toBeNull();
+    expect(grid).not.toBeNull();
+    expect(grid!.style.gridTemplateColumns).toBe('minmax(0, 2.4fr) minmax(280px, 1fr)');
 
-    const children = Array.from(stack!.children) as HTMLElement[];
-    const tableIndex = children.findIndex((node) => node.contains(table));
-    expect(tableIndex).toBeGreaterThanOrEqual(0);
-    expect(blocks.map((block) => children.findIndex((node) => node.contains(block)))).toEqual([
-      tableIndex + 1,
-      tableIndex + 2,
-      tableIndex + 3,
-      tableIndex + 4,
-    ]);
+    const [primary, secondary] = Array.from(grid!.children) as HTMLElement[];
+    expect(primary).toBeDefined();
+    expect(secondary).toBeDefined();
+    expect(primary!.contains(table)).toBe(true);
+    expect(blocks.every((block) => secondary!.contains(block))).toBe(true);
+    expect(blocks.map((block) => Array.from(secondary!.children).findIndex((node) => node.contains(block)))).toEqual([0, 1, 2, 3]);
   }, 30000);
 
   it('offers only the CR targets plus Chung (không gắn) in the Subsystem cell', async () => {

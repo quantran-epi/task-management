@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Checkbox, Alert, Tooltip, Breadcrumb, Empty, Input, Modal, Popconfirm, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
+import { Card, Row, Col, Statistic, Tag, Button, Space, Typography, Divider, List, Alert, Tooltip, Breadcrumb, Empty, Input, Modal, Popconfirm, Table, useMessage, EmptyImageSimple, ListItem, useTaskMateModal, Progress } from '../components/ui';
 import { ArrowLeftOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, EditOutlined, CalendarOutlined, ClockCircleOutlined, ExclamationCircleOutlined, LinkOutlined, FolderOpenOutlined, ProjectOutlined, PlusOutlined, FileTextOutlined, RobotOutlined, ApartmentOutlined, DeploymentUnitOutlined, DeleteOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -467,339 +467,172 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Space>
       </div>
 
-      {/* Unified header: identity + actions + metrics strip (task) */}
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
-              {itemType === 'task' && <Tag color="blue">Tác vụ</Tag>}
-              {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
-              {itemType === 'system' && <Tag color="cyan">Subsystem</Tag>}
-
-              {itemType === 'cr' && currentCr && (
-                <Tag color={CR_TYPE_COLORS[currentCr.type] ?? 'default'}>
-                  {currentCr.type === 'NEW_FEATURE'
-                    ? 'Tạo mới'
-                    : currentCr.type === 'ENHANCEMENT'
-                      ? 'Nâng cấp'
-                      : 'Sửa lỗi'}
-                </Tag>
-              )}
-
-              {itemType !== 'cr' && (
-                <Tag
-                  color={
-                    STATUS_TAG_COLORS[
-                      currentTask?.status || currentSystem?.type || 'Open'
-                    ] ?? 'default'
-                  }
-                >
-                  {STATUS_LABELS[
-                    currentTask?.status || currentSystem?.type || 'Open'
-                  ] ?? currentTask?.status ?? currentSystem?.type ?? 'Mở'}
-                </Tag>
-              )}
-
-              {itemType === 'cr' && currentCr && (
-                <Tag color={currentCr.status === 'Done' ? 'success' : 'processing'}>
-                  {currentCr.status}
-                </Tag>
-              )}
-
-              {currentTask && (
-                <Tag color={PRIORITY_TAG_COLORS[currentTask.priority] ?? 'default'}>
-                  Ưu tiên {currentTask.priority}
-                </Tag>
-              )}
-
-              {currentTask?.jiraKey && (
-                <Tooltip title="Mở trên Jira">
-                  <Tag
-                    color="cyan"
-                    icon={<LinkOutlined />}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      void openJiraExternalUrl(getJiraBrowseUrl(currentTask.jiraKey!, jiraDomain))
-                    }
-                  >
-                    {currentTask.jiraKey}
-                  </Tag>
-                </Tooltip>
-              )}
-
-              {currentCr?.jiraEpicKey && (
-                <Tooltip title="Mở Jira Epic">
-                  <Tag
-                    color="cyan"
-                    icon={<LinkOutlined />}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      void openJiraExternalUrl(getJiraBrowseUrl(currentCr.jiraEpicKey!, jiraDomain))
-                    }
-                  >
-                    {currentCr.jiraEpicKey}
-                  </Tag>
-                </Tooltip>
-              )}
-            </Space>
-
-            <Title level={3} style={{ margin: 0 }}>
-              {itemType === 'cr' && currentCr ? `${currentCr.code} · ${currentCr.name}` : currentTask?.name || currentSystem?.name}
-            </Title>
-
-            {(currentTask?.description || currentCr?.description || currentSystem?.description) && (
-              <Paragraph
-                type="secondary"
-                style={{ marginTop: 8, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap' }}
-              >
-                {currentTask?.description || currentCr?.description || currentSystem?.description}
-              </Paragraph>
-            )}
-
-            {currentTask?.notes && (
-              <Paragraph
-                type="secondary"
-                style={{ marginTop: 4, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}
-              >
-                <Text strong>Ghi chú: </Text>
-                {currentTask.notes}
-              </Paragraph>
-            )}
-
-            {itemType === 'cr' && currentCr && currentCr.targets.length > 0 && (
-              <Space size={4} wrap style={{ marginTop: 8 }}>
-                <Text type="secondary">Subsystem: </Text>
-                {currentCr.targets.map((target) => {
-                  const system = systemMap.get(target.systemId);
-                  return (
-                    <Tag
-                      key={target.systemId}
-                      bordered={false}
-                      style={{ margin: 0, fontFamily: 'monospace', color: 'var(--info-fg)' }}
-                      title={system?.name}
-                    >
-                      {system?.code ?? target.systemId.slice(0, 8)}
-                    </Tag>
-                  );
-                })}
+      {itemType === 'task' && currentTask && taskAnalysis ? (
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Space size={4} wrap style={{ marginBottom: 8, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+                <span>Tác vụ</span>
+                {parentCr && <><span>·</span><span>{parentCr.code}</span><span>{parentCr.name}</span></>}
               </Space>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
+                <Title level={3} style={{ margin: 0, overflowWrap: 'anywhere' }}>
+                  {currentTask.name}
+                </Title>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '2px 8px', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)', fontSize: 'var(--font-size-small)', whiteSpace: 'nowrap' }}>
+                  <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', display: 'inline-block', background: currentTask.status === 'Done' ? 'var(--success, #52c41a)' : currentTask.status === 'Cancelled' || taskAnalysis.metrics.isOverdue ? 'var(--danger, #c54e58)' : currentTask.status === 'In Progress' ? 'var(--accent)' : 'var(--warning, #faad14)' }} />
+                  {STATUS_LABELS[currentTask.status] ?? currentTask.status}
+                </span>
+              </div>
+              {(currentTask.description || currentTask.notes) && (
+                <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap' }}>
+                  {currentTask.description}
+                  {currentTask.description && currentTask.notes ? ' — ' : ''}
+                  {currentTask.notes}
+                </Paragraph>
+              )}
+            </div>
+            <Space wrap style={{ justifyContent: 'flex-end' }}>
+              <Button type={isCurrentTaskTiming ? 'default' : 'primary'} icon={isCurrentTaskTiming ? <PauseCircleOutlined /> : <PlayCircleOutlined />} onClick={handleToggleTimer}>
+                {isCurrentTaskTiming ? 'Tạm dừng' : 'Bắt đầu làm'}
+              </Button>
+              <Button icon={<CheckCircleOutlined />} onClick={handleToggleTaskStatus}>
+                {currentTask.status === 'Done' ? 'Mở lại' : 'Hoàn thành'}
+              </Button>
+              <Button icon={<CalendarOutlined />} onClick={() => onNavigate('planner')}>Phân bổ lịch</Button>
+              <Button icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)}>Chỉnh sửa</Button>
+              <Button type="default" icon={<RobotOutlined style={{ color: 'var(--accent)' }} />} onClick={handleAskAI} aria-label="Hỏi AI về mục này">Hỏi AI</Button>
+            </Space>
           </div>
 
-          {/* Action Toolbar */}
-          <Space wrap>
-            {itemType === 'task' && currentTask && (
-              <>
-                <Button
-                  type={isCurrentTaskTiming ? 'default' : 'primary'}
-                  icon={isCurrentTaskTiming ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
-                  onClick={handleToggleTimer}
-                >
-                  {isCurrentTaskTiming ? 'Tạm dừng' : 'Bắt đầu làm'}
-                </Button>
-                <Button icon={<CheckCircleOutlined />} onClick={handleToggleTaskStatus}>
-                  {currentTask.status === 'Done' ? 'Mở lại' : 'Hoàn thành'}
-                </Button>
-                <Button icon={<CalendarOutlined />} onClick={() => onNavigate('planner')}>
-                  Phân bổ lịch
-                </Button>
-                <Button icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)}>
-                  Chỉnh sửa
-                </Button>
-              </>
-            )}
-
-            {itemType === 'cr' && currentCr && (
-              <>
-                <Button
-                  type="primary"
-                  icon={<ProjectOutlined />}
-                  onClick={() => openCrDetail(currentCr.id)}
-                >
-                  Mở CR detail
-                </Button>
-                <Button icon={<PlusOutlined />} onClick={() => void handleCreateTaskInCr()}>
-                  Thêm tác vụ
-                </Button>
-              </>
-            )}
-
-            <Button
-              type="default"
-              icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
-              onClick={handleAskAI}
-              aria-label="Hỏi AI về mục này"
-            >
-              Hỏi AI
-            </Button>
-          </Space>
-        </div>
-
-        {/* Task focus strip: one compact line replaces four separate Statistic cards */}
-        {itemType === 'task' && taskAnalysis && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
-            marginTop: 16, padding: '10px 12px',
-            border: '1px solid var(--border, #e9eaee)', borderRadius: 'var(--radius-control, 6px)',
-            background: 'var(--bg-island-soft, #f7f8fa)',
-          }}>
+          {/* Mission rail: one compact line plus progress, from data already loaded */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginTop: 16, padding: '10px 12px', border: '1px solid var(--border, #e9eaee)', borderRadius: 'var(--radius-control, 6px)', background: 'var(--bg-island-soft, #f7f8fa)' }}>
             <div>
-              <Text strong style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 22, display: 'block', lineHeight: 1.1 }}>
-                {formatMinutes(taskAnalysis.metrics.estimateMinutes)}
-              </Text>
+              <Text strong style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 22, display: 'block', lineHeight: 1.1 }}>{formatMinutes(taskAnalysis.metrics.estimateMinutes)}</Text>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)' }}>Ước tính</Text>
             </div>
             <Divider type="vertical" style={{ height: 26, margin: 0 }} />
             <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Đã thực hiện</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{formatMinutes(taskAnalysis.metrics.actualSpentMinutes)}</Text></div>
-            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Đã phân bổ</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{formatMinutes(taskAnalysis.metrics.plannedMinutes)}</Text></div>
-            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Checklist</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{taskAnalysis.metrics.subtaskPercent}%</Text></div>
-            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Hạn chót</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{currentTask?.deadline || 'Không có'}</Text></div>
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Còn lại</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{formatMinutes(Math.max(0, taskAnalysis.metrics.estimateMinutes - taskAnalysis.metrics.actualSpentMinutes))}</Text></div>
+            <div><Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)', display: 'block' }}>Hạn chót</Text><Text strong style={{ fontFamily: 'var(--font-mono, monospace)' }}>{currentTask.deadline || 'Không có'}</Text></div>
             <div style={{ flexBasis: '100%' }}>
               <Progress percent={taskAnalysis.metrics.subtaskPercent} size="small" showInfo={false} />
+              <Text type="secondary" style={{ fontSize: 'var(--font-size-xs)' }}>{taskAnalysis.metrics.subtaskPercent}% checklist</Text>
             </div>
           </div>
-        )}
 
-        <Divider style={{ margin: '12px 0' }} />
-        <Row gutter={[16, 8]}>
-          <Col xs={24} sm={12} md={8}>
-            <Text type="secondary">Hạn chót: </Text>
-            <Text strong>
-              {currentTask?.deadline || currentCr?.deadline || 'Không có'}
-            </Text>
-          </Col>
-          {(currentTask?.opsOwners || currentCr?.opsOwners)?.length ? (
-            <Col xs={24} sm={12} md={8}>
-              <Text type="secondary">Ops Owners: </Text>
-              <Space size={4} wrap>
-                {(currentTask?.opsOwners || currentCr?.opsOwners)!.map((o) => (
-                  <Tag key={o} color="blue">{o}</Tag>
-                ))}
-              </Space>
-            </Col>
-          ) : null}
-          {(currentTask?.businessAnalysts || currentCr?.businessAnalysts)?.length ? (
-            <Col xs={24} sm={12} md={8}>
-              <Text type="secondary">BA: </Text>
-              <Space size={4} wrap>
-                {(currentTask?.businessAnalysts || currentCr?.businessAnalysts)!.map((b) => (
-                  <Tag key={b} color="geekblue">{b}</Tag>
-                ))}
-              </Space>
-            </Col>
-          ) : null}
-        </Row>
-      </Card>
-
-      {(itemType === 'task' || ((currentTask?.links || currentCr?.links)?.length ?? 0) > 0) && (
-        <Card
-          title={<Space><LinkOutlined /><span>Links</span></Space>}
-          style={{ marginBottom: 16 }}
-          data-testid="item-insight-links-section"
-          extra={itemType === 'task' && currentTask ? (
-            <Button data-testid="item-insight-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>
-              Thêm link
-            </Button>
-          ) : undefined}
-        >
-          <div data-testid="item-insight-links">
-            {itemType === 'task' && currentTask ? (
-              (currentTask.links?.length ?? 0) > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px', borderBottom: '1px solid var(--border)', fontSize: 'var(--font-size-xs)', color: 'var(--muted-fg)' }}>
-                    <span style={{ width: 160, flexShrink: 0 }}>Tên</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>Đường dẫn</span>
-                    <span style={{ width: 56, flexShrink: 0 }} />
-                  </div>
-                  {(currentTask.links ?? []).map((link, idx) => (
-                    <div key={`${idx}-${link.url}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px' }}>
-                      <Text ellipsis style={{ width: 160, flexShrink: 0, fontSize: 'var(--font-size-small)' }} title={link.name || link.url}>
-                        {link.name || '—'}
-                      </Text>
-                      <Button
-                        type="link"
-                        size="small"
-                        style={{ flex: 1, minWidth: 0, padding: 0, height: 'auto', justifyContent: 'flex-start', fontFamily: 'monospace' }}
-                        title={link.url}
-                        icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                        onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-                      >
-                        <Text ellipsis style={{ fontSize: 'var(--font-size-small)' }}>{link.url}</Text>
-                      </Button>
-                      <Space size={0} style={{ width: 56, flexShrink: 0 }}>
-                        <Tooltip title="Sửa liên kết">
-                          <Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => openLinkEditor(idx)} />
-                        </Tooltip>
-                        <Popconfirm
-                          title="Xóa liên kết này?"
-                          okText="Xóa"
-                          cancelText="Hủy"
-                          okButtonProps={{ danger: true }}
-                          onConfirm={() => void handleRemoveLink(idx)}
-                        >
-                          <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} />
-                        </Popconfirm>
-                      </Space>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Text type="secondary" style={{ marginTop: 8 }}>Chưa có liên kết</Text>
-              )
-            ) : (
-              <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
-                {(currentCr?.links ?? []).map((link, idx) => (
-                  <Button
-                    key={`${idx}-${link.url}`}
-                    size="small"
-                    icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
-                    onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
-                    title={link.url}
-                  >
-                    {link.name || link.url}
-                  </Button>
-                ))}
-              </Space>
+          <Divider style={{ margin: '12px 0' }} />
+          <Space wrap size={4}>
+            <Tag color={PRIORITY_TAG_COLORS[currentTask.priority] ?? 'default'}>Ưu tiên {currentTask.priority}</Tag>
+            {currentTask.jiraKey && (
+              <Tooltip title="Mở trên Jira">
+                <Tag color="cyan" icon={<LinkOutlined />} style={{ cursor: 'pointer' }} onClick={() => void openJiraExternalUrl(getJiraBrowseUrl(currentTask.jiraKey!, jiraDomain))}>{currentTask.jiraKey}</Tag>
+              </Tooltip>
             )}
+            {currentTask.opsOwners?.map((o) => <Tag key={o} color="blue">{o}</Tag>)}
+            {currentTask.businessAnalysts?.map((b) => <Tag key={b} color="geekblue">{b}</Tag>)}
+          </Space>
+
+        </Card>
+      ) : (
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--gap-12)' }}>
+            <div style={{ flex: 1, minWidth: 280 }}>
+              <Space align="center" size="small" style={{ marginBottom: 8 }} wrap>
+                {itemType === 'cr' && <Tag color="purple">Change Request</Tag>}
+                {itemType === 'system' && <Tag color="cyan">Subsystem</Tag>}
+                {itemType === 'cr' && currentCr && (
+                  <Tag color={CR_TYPE_COLORS[currentCr.type] ?? 'default'}>
+                    {currentCr.type === 'NEW_FEATURE' ? 'Tạo mới' : currentCr.type === 'ENHANCEMENT' ? 'Nâng cấp' : 'Sửa lỗi'}
+                  </Tag>
+                )}
+                {itemType === 'system' && (
+                  <Tag color={STATUS_TAG_COLORS[currentSystem?.type || 'Open'] ?? 'default'}>
+                    {STATUS_LABELS[currentSystem?.type || 'Open'] ?? currentSystem?.type ?? 'Mở'}
+                  </Tag>
+                )}
+                {itemType === 'cr' && currentCr && (
+                  <Tag color={currentCr.status === 'Done' ? 'success' : 'processing'}>{currentCr.status}</Tag>
+                )}
+                {currentCr?.jiraEpicKey && (
+                  <Tooltip title="Mở Jira Epic">
+                    <Tag color="cyan" icon={<LinkOutlined />} style={{ cursor: 'pointer' }} onClick={() => void openJiraExternalUrl(getJiraBrowseUrl(currentCr.jiraEpicKey!, jiraDomain))}>
+                      {currentCr.jiraEpicKey}
+                    </Tag>
+                  </Tooltip>
+                )}
+              </Space>
+              <Title level={3} style={{ margin: 0 }}>
+                {itemType === 'cr' && currentCr ? `${currentCr.code} · ${currentCr.name}` : currentSystem?.name}
+              </Title>
+              {(currentCr?.description || currentSystem?.description) && (
+                <Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0, maxWidth: 800, whiteSpace: 'pre-wrap' }}>
+                  {currentCr?.description || currentSystem?.description}
+                </Paragraph>
+              )}
+              {itemType === 'cr' && currentCr && currentCr.targets.length > 0 && (
+                <Space size={4} wrap style={{ marginTop: 8 }}>
+                  <Text type="secondary">Subsystem: </Text>
+                  {currentCr.targets.map((target) => {
+                    const system = systemMap.get(target.systemId);
+                    return (
+                      <Tag key={target.systemId} bordered={false} style={{ margin: 0, fontFamily: 'monospace', color: 'var(--info-fg)' }} title={system?.name}>
+                        {system?.code ?? target.systemId.slice(0, 8)}
+                      </Tag>
+                    );
+                  })}
+                </Space>
+              )}
+            </div>
+            <Space wrap>
+              {itemType === 'cr' && currentCr && (
+                <>
+                  <Button type="primary" icon={<ProjectOutlined />} onClick={() => openCrDetail(currentCr.id)}>Mở CR detail</Button>
+                  <Button icon={<PlusOutlined />} onClick={() => void handleCreateTaskInCr()}>Thêm tác vụ</Button>
+                </>
+              )}
+              <Button type="default" icon={<RobotOutlined style={{ color: 'var(--accent)' }} />} onClick={handleAskAI} aria-label="Hỏi AI về mục này">Hỏi AI</Button>
+            </Space>
           </div>
+          <Divider style={{ margin: '12px 0' }} />
+          <Row gutter={[16, 8]}>
+            <Col xs={24} sm={12} md={8}>
+              <Text type="secondary">Hạn chót: </Text>
+              <Text strong>{currentCr?.deadline || 'Không có'}</Text>
+            </Col>
+            {(currentCr?.opsOwners)?.length ? (
+              <Col xs={24} sm={12} md={8}>
+                <Text type="secondary">Ops Owners: </Text>
+                <Space size={4} wrap>{currentCr.opsOwners!.map((o) => <Tag key={o} color="blue">{o}</Tag>)}</Space>
+              </Col>
+            ) : null}
+            {(currentCr?.businessAnalysts)?.length ? (
+              <Col xs={24} sm={12} md={8}>
+                <Text type="secondary">BA: </Text>
+                <Space size={4} wrap>{currentCr.businessAnalysts!.map((b) => <Tag key={b} color="geekblue">{b}</Tag>)}</Space>
+              </Col>
+            ) : null}
+          </Row>
         </Card>
       )}
 
-      {itemType === 'task' && currentTask && (
-        <Card
-          title={<Space><CalendarOutlined /><span>Nhắc nhở</span></Space>}
-          style={{ marginBottom: 16 }}
-          data-testid="item-insight-reminders"
-          extra={
-            <Button
-              data-testid="item-insight-reminder-add"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => setQuickReminderOpen(true)}
-            >
-              Thêm nhắc nhở
-            </Button>
-          }
-        >
-            {(currentTask.reminders?.length ?? 0) > 0 ? (
-              <Space direction="vertical" size={4} style={{ marginTop: 8 }}>
-                {(currentTask.reminders ?? []).map((r) => (
-                  <Space key={r.id} size={4} align="center">
-                    <Text style={{ fontSize: 'var(--font-size-small)' }}>
-                      {r.date}{r.time ? ` ${r.time}` : ''}{r.note ? ` — ${r.note}` : ''}
-                    </Text>
-                    <Tooltip title="Sửa nhắc nhở">
-                      <Button type="text" size="small" aria-label="Sửa nhắc nhở" icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)} />
-                    </Tooltip>
-                    <Tooltip title="Xóa nhắc nhở">
-                      <Button type="text" danger size="small" aria-label="Xóa nhắc nhở" icon={<DeleteOutlined />} onClick={() => void handleRemoveReminder(r.id)} />
-                    </Tooltip>
-                  </Space>
-                ))}
-              </Space>
-            ) : (
-              <Text type="secondary" style={{ marginTop: 8 }}>Chưa có nhắc nhở</Text>
-            )}
+      {itemType !== 'task' && (currentCr?.links?.length ?? 0) > 0 && (
+        <Card title={<Space><LinkOutlined /><span>Links</span></Space>} style={{ marginBottom: 16 }} data-testid="item-insight-links-section">
+          <div data-testid="item-insight-links">
+            <Space size={8} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
+              {(currentCr?.links ?? []).map((link, idx) => (
+                <Button
+                  key={`${idx}-${link.url}`}
+                  size="small"
+                  icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                  onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                  title={link.url}
+                >
+                  {link.name || link.url}
+                </Button>
+              ))}
+            </Space>
+          </div>
         </Card>
       )}
 
@@ -870,67 +703,117 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         </Row>
       )}
 
-      {/* Pre-implementation Analysis & Recommendations Panel (task only) */}
-      {itemType === 'task' && taskAnalysis && (
-        <Card
-          title={
-            <Space>
-              <ExclamationCircleOutlined style={{ color: 'var(--accent)' }} />
-              <span>Gợi ý & Phân tích trước khi thực hiện</span>
-            </Space>
-          }
-          style={{ marginBottom: 16 }}
-        >
-          {taskAnalysis.recommendations.map(renderRecommendationAlert)}
-        </Card>
-      )}
-
-      {/* Checklist (task) + linked notes side by side — keeps the main column focused */}
-      {itemType === 'task' && (
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          {(currentTask?.checklist?.length ?? 0) > 0 && <Col xs={24} md={12}>
-            <Card title="Checklist / Tiêu chí nghiệm thu" style={{ height: '100%' }}>
-              <List
-                dataSource={currentTask?.checklist ?? []}
-                renderItem={(item, index) => (
-                  <ListItem key={item.id}>
-                    <Checkbox
-                      checked={item.done}
-                      onChange={() => void handleToggleChecklistItem(index)}
-                    >
-                      <span style={{ textDecoration: item.done ? 'line-through' : 'none' }}>
-                        {item.text}
-                      </span>
-                    </Checkbox>
-                  </ListItem>
-                )}
-              />
+      {/* Command Deck: primary analysis/checklist left, secondary cards right (task only) */}
+      {itemType === 'task' && currentTask && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.4fr) minmax(280px, 1fr)', gap: 'var(--gap-12)', alignItems: 'start', marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
+            {taskAnalysis && (
+              <Card title={<Space><ExclamationCircleOutlined style={{ color: 'var(--accent)' }} /><span>Gợi ý & Phân tích trước khi thực hiện</span></Space>}>
+                {taskAnalysis.recommendations.map(renderRecommendationAlert)}
+              </Card>
+            )}
+            {(currentTask.checklist?.length ?? 0) > 0 && (
+              <Card title="Checklist / Tiêu chí nghiệm thu">
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="id"
+                  dataSource={currentTask.checklist ?? []}
+                  columns={[
+                    {
+                      title: 'Hạng mục',
+                      dataIndex: 'text',
+                      key: 'text',
+                      render: (text: string, item: { done: boolean }) => (
+                        <Text ellipsis title={text} style={{ minWidth: 320, textDecoration: item.done ? 'line-through' : 'none' }}>{text}</Text>
+                      ),
+                    },
+                    {
+                      title: 'Trạng thái',
+                      dataIndex: 'done',
+                      key: 'done',
+                      width: 110,
+                      render: (done: boolean) => <Tag color={done ? 'success' : 'default'}>{done ? 'Xong' : 'Mở'}</Tag>,
+                    },
+                    {
+                      title: 'Thao tác',
+                      key: 'actions',
+                      width: 100,
+                      render: (_, __, index) => (
+                        <Button type="link" size="small" onClick={() => void handleToggleChecklistItem(index)}>
+                          {currentTask.checklist?.[index]?.done ? 'Mở lại' : 'Hoàn thành'}
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            )}
+            <Card title={<Space><ApartmentOutlined style={{ color: 'var(--success)' }} /><span>Biểu đồ liên quan ({relatedDiagrams.length})</span></Space>}>
+              <EntityDiagramsSection entityType={itemType} entityId={itemId} db={db} embedded={true} />
             </Card>
-          </Col>}
-          <Col xs={24} md={(currentTask?.checklist?.length ?? 0) > 0 ? 12 : 24}>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0, padding: 'var(--gap-8)', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', background: 'var(--bg-island-soft, var(--bg-island))' }}>
+            <Card
+              title={<Space><CalendarOutlined /><span>Nhắc nhở</span></Space>}
+              data-testid="item-insight-reminders"
+              extra={<Button data-testid="item-insight-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setQuickReminderOpen(true)}>Thêm nhắc nhở</Button>}
+            >
+              {(currentTask.reminders?.length ?? 0) > 0 ? (
+                <Space direction="vertical" size={4}>
+                  {(currentTask.reminders ?? []).map((r) => (
+                    <Space key={r.id} size={4} align="center">
+                      <Text style={{ fontSize: 'var(--font-size-small)' }}>{r.date}{r.time ? ` ${r.time}` : ''}{r.note ? ` — ${r.note}` : ''}</Text>
+                      <Tooltip title="Sửa nhắc nhở"><Button type="text" size="small" aria-label="Sửa nhắc nhở" icon={<EditOutlined />} onClick={() => setTaskDrawerOpen(true)} /></Tooltip>
+                      <Tooltip title="Xóa nhắc nhở"><Button type="text" danger size="small" aria-label="Xóa nhắc nhở" icon={<DeleteOutlined />} onClick={() => void handleRemoveReminder(r.id)} /></Tooltip>
+                    </Space>
+                  ))}
+                </Space>
+              ) : (
+                <Text type="secondary">Chưa có nhắc nhở</Text>
+              )}
+            </Card>
+
+            <Card
+              title={<Space><LinkOutlined /><span>Links</span></Space>}
+              data-testid="item-insight-links-section"
+              extra={<Button data-testid="item-insight-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>Thêm link</Button>}
+            >
+              <div data-testid="item-insight-links">
+                {(currentTask.links?.length ?? 0) > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
+                    {(currentTask.links ?? []).map((link, idx) => (
+                      <div key={`${idx}-${link.url}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px' }}>
+                        <Text ellipsis style={{ width: 120, flexShrink: 0, fontSize: 'var(--font-size-small)' }} title={link.name || link.url}>{link.name || '—'}</Text>
+                        <Button
+                          type="link"
+                          size="small"
+                          style={{ flex: 1, minWidth: 0, padding: 0, height: 'auto', justifyContent: 'flex-start', fontFamily: 'monospace' }}
+                          title={link.url}
+                          icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
+                          onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
+                        >
+                          <Text ellipsis style={{ fontSize: 'var(--font-size-small)' }}>{link.url}</Text>
+                        </Button>
+                        <Space size={0}>
+                          <Tooltip title="Sửa liên kết"><Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => openLinkEditor(idx)} /></Tooltip>
+                          <Popconfirm title="Xóa liên kết này?" okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }} onConfirm={() => void handleRemoveLink(idx)}>
+                            <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} />
+                          </Popconfirm>
+                        </Space>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Text type="secondary">Chưa có liên kết</Text>
+                )}
+              </div>
+            </Card>
+
             <Card
               title={<Space><FileTextOutlined /><span>Ghi chú liên quan ({relatedNotes.length})</span></Space>}
-              extra={
-                <Button
-                  size="small"
-                  icon={<PlusOutlined />}
-                  onClick={() => {
-                    setEditingNote({
-                      id: '',
-                      title: '',
-                      body: '',
-                      entityType: itemType,
-                      entityId: itemId,
-                      isPinned: false,
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                    });
-                  }}
-                >
-                  Thêm ghi chú
-                </Button>
-              }
-              style={{ height: '100%' }}
+              extra={<Button size="small" icon={<PlusOutlined />} onClick={() => setEditingNote({ id: '', title: '', body: '', entityType: itemType, entityId: itemId, isPinned: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() })}>Thêm ghi chú</Button>}
             >
               {relatedNotes.length === 0 ? (
                 <Empty description="Chưa có ghi chú nào" image={EmptyImageSimple} />
@@ -938,24 +821,15 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
                 <List
                   dataSource={relatedNotes}
                   renderItem={(note) => (
-                    <ListItem
-                      key={note.id}
-                      actions={[
-                        <Button key="view" type="link" onClick={() => setInspectingNote(note)}>Xem</Button>,
-                        <Button key="edit" type="link" onClick={() => setEditingNote(note)}>Sửa</Button>,
-                      ]}
-                    >
-                      <ListItem.Meta
-                        title={note.title || 'Ghi chú không tiêu đề'}
-                        description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`}
-                      />
+                    <ListItem key={note.id} actions={[<Button key="view" type="link" onClick={() => setInspectingNote(note)}>Xem</Button>, <Button key="edit" type="link" onClick={() => setEditingNote(note)}>Sửa</Button>]}>
+                      <ListItem.Meta title={note.title || 'Ghi chú không tiêu đề'} description={`Cập nhật: ${new Date(note.updatedAt).toLocaleDateString('vi-VN')}`} />
                     </ListItem>
                   )}
                 />
               )}
             </Card>
-          </Col>
-        </Row>
+          </div>
+        </div>
       )}
 
       {/* Child Tasks (CR & System views) */}
@@ -1072,18 +946,15 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
         )}
       </Card>}
 
-      {/* Linked Diagrams Section */}
-      <Card
-        title={
-          <Space>
-            <ApartmentOutlined style={{ color: 'var(--success)' }} />
-            <span>Biểu đồ liên quan ({relatedDiagrams.length})</span>
-          </Space>
-        }
-        style={{ marginBottom: 16 }}
-      >
-        <EntityDiagramsSection entityType={itemType} entityId={itemId} db={db} embedded={true} />
-      </Card>
+      {/* Linked Diagrams Section — task version sits in the left column above */}
+      {itemType !== 'task' && (
+        <Card
+          title={<Space><ApartmentOutlined style={{ color: 'var(--success)' }} /><span>Biểu đồ liên quan ({relatedDiagrams.length})</span></Space>}
+          style={{ marginBottom: 16 }}
+        >
+          <EntityDiagramsSection entityType={itemType} entityId={itemId} db={db} embedded={true} />
+        </Card>
+      )}
 
       {/* Modals & Drawers */}
       <Modal

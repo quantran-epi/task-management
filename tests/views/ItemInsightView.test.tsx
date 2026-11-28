@@ -96,6 +96,53 @@ describe('ItemInsightView', () => {
     expect(screen.getByRole('button', { name: /phân bổ lịch/i })).toBeInTheDocument();
   }, 30000);
 
+  it('lays out a task in the command deck grid with checklist left and secondary cards right', async () => {
+    const system = await createSystem(SYSTEM_INPUT, testDb);
+    const cr = await createChangeRequest(
+      { code: 'CR-2026-002', name: 'Thanh toán QR', type: 'NEW_FEATURE', status: 'In Progress', targets: [{ systemId: system.id }] },
+      testDb
+    );
+    const task = await createTask(
+      {
+        crId: cr.id,
+        systemId: system.id,
+        name: 'Triển khai tính năng AI Sizing',
+        status: 'Open',
+        priority: 'High',
+        estimateMinutes: 300,
+        checklist: [{ id: 'c1', text: 'Thiết kế prompt', done: false }],
+        links: [{ name: 'Spec', url: 'https://example.com/spec' }],
+        reminders: [{ id: '11111111-1111-4111-8111-111111111111', date: '2026-12-01' }],
+      },
+      testDb
+    );
+
+    render(<ItemInsightView itemType="task" itemId={task.id} onNavigate={mockNavigate} db={testDb} />);
+    await screen.findByText('Thiết kế prompt');
+
+    const checklist = screen.getByRole('columnheader', { name: 'Hạng mục' }).closest('table') as HTMLTableElement;
+    const secondaryIds = ['item-insight-reminders', 'item-insight-links-section'];
+    const secondary = secondaryIds.map((id) => screen.getByTestId(id));
+    const notesCard = screen.getByText('Ghi chú liên quan (0)').closest('.ant-card') as HTMLElement;
+    secondary.push(notesCard);
+
+    let grid: HTMLElement | null = checklist;
+    while (grid && !(grid.style.gridTemplateColumns.includes('2.4fr') && secondary.every((node) => grid!.contains(node)))) {
+      grid = grid.parentElement;
+    }
+    expect(grid).not.toBeNull();
+    expect(grid!.style.gridTemplateColumns).toBe('minmax(0, 2.4fr) minmax(280px, 1fr)');
+    const [primary, right] = Array.from(grid!.children) as HTMLElement[];
+    expect(primary).toBeDefined();
+    expect(right).toBeDefined();
+    expect(primary!.contains(checklist)).toBe(true);
+    expect(secondary.every((node) => right!.contains(node))).toBe(true);
+
+    expect(screen.getByText('Ưu tiên High')).toBeInTheDocument();
+    expect(screen.getAllByText('PAYMENT_SVC')).toHaveLength(1);
+    expect(screen.getByTestId('item-insight-linked-system')).toHaveTextContent('PAYMENT_SVC — Payment Service');
+  }, 30000);
+
   it('shows linked system in its own section, opens canonical detail from tag and breadcrumb, with both fallbacks', async () => {
     const system = await createSystem(SYSTEM_INPUT, testDb);
     const cr = await createChangeRequest(

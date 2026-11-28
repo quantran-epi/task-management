@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Card, Dropdown, Empty, Input, Modal, Popconfirm, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Card, Dropdown, Empty, Input, Modal, Popconfirm, Progress, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -311,23 +311,57 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
 
   const secondaryBlocks = [
     {
-      key: 'notes',
-      testId: 'cr-detail-block-notes',
-      header: 'Ghi chú',
-      count: crNotesCount,
-      body: <EntityNotesSection entityType="cr" entityId={cr.id} db={db} />,
-    },
-    {
-      key: 'jira',
-      testId: 'cr-detail-block-jira',
-      header: 'Jira Epic',
-      count: cr.jiraEpicKey ? 1 : 0,
-      body: cr.jiraEpicKey ? (
-        <Tag color="blue" style={{ fontFamily: 'monospace' }}>
-          {cr.jiraEpicKey}
-        </Tag>
-      ) : (
-        <span style={mutedStyle}>Chưa có</span>
+      key: 'reminders',
+      testId: 'cr-detail-block-reminders',
+      header: 'Nhắc nhở',
+      count: stats.reminderCount,
+      action: (
+        <Button data-testid="cr-detail-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
+          Thêm nhắc nhở
+        </Button>
+      ),
+      body: (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--gap-8)' }}>
+          {cr.reminders && cr.reminders.length > 0 ? (
+            <Space direction="vertical" size={4}>
+              {cr.reminders.map((r) => (
+                <Space key={r.id} size={4} align="center">
+                  <span style={{ fontSize: 'var(--font-size-small)' }}>
+                    {r.date}
+                    {r.time ? ` ${r.time}` : ''}
+                    {r.note ? ` — ${r.note}` : ''}
+                  </span>
+                  <Tooltip title="Sửa nhắc nhở">
+                    <Button
+                      type="text"
+                      size="small"
+                      aria-label="Sửa nhắc nhở"
+                      icon={<EditOutlined />}
+                      onClick={() => setEditModalOpen(true)}
+                    />
+                  </Tooltip>
+                  <Tooltip title="Xóa nhắc nhở">
+                    <Button
+                      type="text"
+                      danger
+                      size="small"
+                      aria-label="Xóa nhắc nhở"
+                      icon={<DeleteOutlined />}
+                      onClick={() => handleRemoveReminder(r.id)}
+                    />
+                  </Tooltip>
+                </Space>
+              ))}
+            </Space>
+          ) : cr.reminderDate ? (
+            <span style={{ fontSize: 'var(--font-size-small)' }}>
+              {cr.reminderDate}
+              {cr.reminderNote ? ` — ${cr.reminderNote}` : ''}
+            </span>
+          ) : (
+            <span style={mutedStyle}>Chưa có</span>
+          )}
+        </div>
       ),
     },
     {
@@ -388,57 +422,23 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       ),
     },
     {
-      key: 'reminders',
-      testId: 'cr-detail-block-reminders',
-      header: 'Nhắc nhở',
-      count: stats.reminderCount,
-      action: (
-        <Button data-testid="cr-detail-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
-          Thêm nhắc nhở
-        </Button>
-      ),
-      body: (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--gap-8)' }}>
-          {cr.reminders && cr.reminders.length > 0 ? (
-            <Space direction="vertical" size={4}>
-              {cr.reminders.map((r) => (
-                <Space key={r.id} size={4} align="center">
-                  <span style={{ fontSize: 'var(--font-size-small)' }}>
-                    {r.date}
-                    {r.time ? ` ${r.time}` : ''}
-                    {r.note ? ` — ${r.note}` : ''}
-                  </span>
-                  <Tooltip title="Sửa nhắc nhở">
-                    <Button
-                      type="text"
-                      size="small"
-                      aria-label="Sửa nhắc nhở"
-                      icon={<EditOutlined />}
-                      onClick={() => setEditModalOpen(true)}
-                    />
-                  </Tooltip>
-                  <Tooltip title="Xóa nhắc nhở">
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      aria-label="Xóa nhắc nhở"
-                      icon={<DeleteOutlined />}
-                      onClick={() => handleRemoveReminder(r.id)}
-                    />
-                  </Tooltip>
-                </Space>
-              ))}
-            </Space>
-          ) : cr.reminderDate ? (
-            <span style={{ fontSize: 'var(--font-size-small)' }}>
-              {cr.reminderDate}
-              {cr.reminderNote ? ` — ${cr.reminderNote}` : ''}
-            </span>
-          ) : (
-            <span style={mutedStyle}>Chưa có</span>
-          )}
-        </div>
+      key: 'notes',
+      testId: 'cr-detail-block-notes',
+      header: 'Ghi chú',
+      count: crNotesCount,
+      body: <EntityNotesSection entityType="cr" entityId={cr.id} db={db} />,
+    },
+    {
+      key: 'jira',
+      testId: 'cr-detail-block-jira',
+      header: 'Jira Epic',
+      count: cr.jiraEpicKey ? 1 : 0,
+      body: cr.jiraEpicKey ? (
+        <Tag color="blue" style={{ fontFamily: 'monospace' }}>
+          {cr.jiraEpicKey}
+        </Tag>
+      ) : (
+        <span style={mutedStyle}>Chưa có</span>
       ),
     },
   ];
@@ -494,7 +494,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
           />
         </Space>
       </Modal>
-      {/* 3a. Header */}
+      {/* Mission header: identity + status signal + actions */}
       <div
         style={{
           display: 'flex',
@@ -521,9 +521,36 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             <Tag color={typeMeta.color} icon={typeMeta.icon} style={{ margin: 0 }}>
               {typeMeta.label}
             </Tag>
-            <Tag color={statusMeta.color} style={{ margin: 0 }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-control)',
+                border: '1px solid var(--border)',
+                fontSize: 'var(--font-size-small)',
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  background:
+                    cr.status === 'Done'
+                      ? 'var(--success, #52c41a)'
+                      : cr.status === 'Cancelled' || isOverdue(cr.deadline)
+                        ? 'var(--danger, #c54e58)'
+                        : cr.status === 'In Progress'
+                          ? 'var(--accent)'
+                          : 'var(--warning, #faad14)',
+                }}
+              />
               {statusMeta.label}
-            </Tag>
+            </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', flexWrap: 'wrap' }}>
@@ -566,6 +593,19 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         </Space>
       </div>
 
+      {/* Progress rail computed from already-loaded tasks */}
+      <div style={{ padding: '8px 16px', background: 'var(--bg-island)', borderRadius: 'var(--radius-control)', border: '1px solid var(--border)' }}>
+        <Progress
+          percent={stats.taskCount === 0 ? 0 : Math.round((stats.doneCount / stats.taskCount) * 100)}
+          size="small"
+          showInfo={false}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--gap-12)', flexWrap: 'wrap', ...mutedStyle }}>
+          <span>{stats.doneCount}/{stats.taskCount} tác vụ xong</span>
+          <span>{tasks.filter((t) => isOverdue(t.deadline) && t.status !== 'Done').length} quá hạn · {stats.estimateLabel}</span>
+        </div>
+      </div>
+
       {/* Stats from already-loaded data — no new query */}
       <div
         data-testid="cr-detail-stats"
@@ -599,8 +639,9 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         ))}
       </div>
 
-      {/* Task table full width, secondary cards stacked below */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
+      {/* Primary task table left, secondary cards right */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2.4fr) minmax(280px, 1fr)', gap: 'var(--gap-12)', alignItems: 'start' }}>
+      <div style={{ minWidth: 0 }}>
       {/* 3c. Flat task table */}
       <div
         style={{
@@ -672,24 +713,31 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 key: 'name',
                 render: (name: string, record: Task) => (
                   <span
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', cursor: 'pointer' }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 320, cursor: 'pointer' }}
+                    title={name}
                     onClick={() => openTaskDrawer(record.id)}
                   >
-                    <span
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        display: 'inline-block',
-                        background:
-                          record.status === 'Done'
-                            ? '#52c41a'
-                            : record.status === 'In Progress'
-                              ? 'var(--accent)'
-                              : 'var(--border-strong)',
-                      }}
-                    />
-                    {name}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-6)', overflow: 'hidden' }}>
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          flexShrink: 0,
+                          display: 'inline-block',
+                          background:
+                            record.status === 'Done'
+                              ? '#52c41a'
+                              : record.status === 'In Progress'
+                                ? 'var(--accent)'
+                                : 'var(--border-strong)',
+                        }}
+                      />
+                      <Text ellipsis style={{ fontSize: 'var(--font-size-small)' }}>{name}</Text>
+                    </span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)' }}>
+                      {`${cr.code} · ${systemMap.get(record.systemId ?? '')?.code ?? 'Chung'}`}
+                    </span>
                   </span>
                 ),
               },
@@ -757,26 +805,30 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         )}
       </div>
 
-      {/* 3d. Secondary blocks always visible */}
-      {secondaryBlocks.map((block) => (
-        <Card
-          key={block.key}
-          title={
-            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
-              {block.header}
-              {block.count > 0 && (
-                <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
-                  {block.count}
-                </Tag>
-              )}
-            </span>
-          }
-          extra={block.action}
-          style={{ marginBottom: 16, minWidth: 0 }}
-        >
-          <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
-        </Card>
-      ))}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0 }}>
+        {/* Secondary blocks ordered by priority: reminders, links, notes, Jira */}
+        {secondaryBlocks.map((block) => (
+          <Card
+            key={block.key}
+            title={
+              <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
+                {block.header}
+                {block.count > 0 && (
+                  <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
+                    {block.count}
+                  </Tag>
+                )}
+              </span>
+            }
+            extra={block.action}
+            style={{ minWidth: 0 }}
+          >
+            <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
+          </Card>
+        ))}
+      </div>
       </div>
 
       <ChangeRequestModal
