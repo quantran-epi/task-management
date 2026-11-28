@@ -100,6 +100,19 @@ npm run worker:session:open -- --session <name> --cwd <dir> [--task "..."] [--ap
 
 Test scoped: `node --test scripts/worker-session.test.mjs`. Không chạy trên Terminal thật khi test (execImpl injectable).
 
+## Health check
+
+`scripts/telegram-health.mjs` quan sát process bằng `ps`, không gọi mạng, không spawn/restart bridge hay watcher. Zero dependency (Node 24+). `TELEGRAM_BRIDGE_DIR` được dùng như bridge, mặc định `~/.taskmate/telegram-bridge`.
+
+```bash
+npm run telegram:health            # check 1 lần, in JSON {bridge, watcher, healthy}
+npm run telegram:health -- watch   # tùy chọn: check mỗi 60s, SIGINT/SIGTERM dừng graceful
+```
+
+- Nhận diện command line chứa `telegram-bridge.mjs` và `telegram-watcher.mjs watch`; bỏ chính process health để không tự đếm.
+- Khi unhealthy, ghi atomic `<dir>/health-alert.json` = `{status, checkedAt}`. **Không** chứa token, chat ID hay secret. Khi healthy, xoá file alert nếu có.
+- `checkHealth({ psImpl, dir })` và watcher nhận `sleep` injectable; test scoped: `node --test scripts/telegram-health.test.mjs`. Không chạy terminal thật khi test.
+
 ## Giới hạn đã biết
 
 - File control **không mã hoá**; chỉ đáng tin trên cùng máy của một user.

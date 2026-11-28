@@ -19,6 +19,7 @@
     "telegram:control": "node scripts/telegram-control.mjs",
     "telegram:inbox-once": "node scripts/telegram-watcher.mjs inbox-once",
     "telegram:archive": "node scripts/telegram-watcher.mjs archive",
+    "telegram:health": "node scripts/telegram-health.mjs",
     "worker:session:plan": "node scripts/worker-session.mjs plan",
     "worker:session:close": "node scripts/worker-session.mjs close",
     "worker:session:open": "node scripts/worker-session.mjs open",
