@@ -47,6 +47,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-u5w: full session-tagged
 Last activity: 2026-11-27 - Completed quick task 261127-ts3: inline quick create link trên CR detail và task insight; review fixes (name limit + atomic append) applied and Chrome verified.
 Last activity: 2026-11-27 - Completed quick task 261127-uoi: linked system section riêng trên task insight; click-through mở tab system_detail canonical; review + Chrome light/dark verified.
 Last activity: 2026-11-28 - Completed quick task 261128-cpo: CR detail có nút thêm nhắc nhở nhanh qua QuickReminderModal target CR và ô lọc task dùng SearchInput chuẩn.
+Last activity: 2026-11-28 - Completed quick task 261128-d1m: CR detail bố trí nút thêm nhắc nhở cạnh tiêu đề block; mỗi link/reminder có sửa (mở modal CR) và xoá (confirm + patch qua repository).
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -193,6 +194,7 @@ Progress: [██████████] 100%
 | 261127-vya | Fix SSH Remote Explorer: untracked sâu/folder đã track, viewer working-copy-first khi ref==HEAD (giữ WR-01), search + reveal gồm staged/untracked | 2026-11-27 | pending | Verified | [261127-vya-fix-ssh-remote-explorer-gaps-untracked-s](./quick/261127-vya-fix-ssh-remote-explorer-gaps-untracked-s/) |
 | 261128-09x | Trung lập harness AI: prompt không ép tool, payload chọn theo intent, lỗi stream tools báo rõ, debug đếm tool theo tên | 2026-11-28 | c1a0bc77, 9e914784, 0f58b370, 433e9d2b | Reviewed + verified | [261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-](./quick/261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-/) |
 | 261128-cpo | CR detail: nút thêm nhắc nhở nhanh qua QuickReminderModal target CR, ô lọc task dùng SearchInput chuẩn | 2026-11-28 | 9a84ca54, bf737582 | Reviewed + verified (Chrome light/dark) | [261128-cpo-fix-cr-detail-reminder-quick-create-butt](./quick/261128-cpo-fix-cr-detail-reminder-quick-create-butt/) |
+| 261128-d1m | CR detail: nút thêm nhắc nhở cạnh tiêu đề, sửa/xoá inline cho link và reminder | 2026-11-28 | 8ae5eb85 | Verified (Chrome) | [261128-d1m-move-cr-detail-quick-reminder-button-int](./quick/261128-d1m-move-cr-detail-quick-reminder-button-int/) |
 
 ## Accumulated Context
 
