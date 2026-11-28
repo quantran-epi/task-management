@@ -15,6 +15,7 @@
     "knowledge:build": "npm --prefix knowledge-server run build",
     "test:jira-proxy": "node --test proxy/jira-proxy.test.mjs",
     "jira:proxy": "node proxy/jira-proxy.mjs",
+    "telegram:bridge": "node scripts/telegram-bridge.mjs",
     "preview": "vite preview",
     "benchmark": "tsx scripts/run-benchmark.ts",
     "graph:benchmark": "tsx scripts/run-graph-benchmark.ts",
