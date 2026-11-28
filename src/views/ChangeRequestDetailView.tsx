@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Dropdown, Empty, Input, InputSearch, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Dropdown, Empty, Input, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -17,6 +17,7 @@ import { useLayoutStore } from '../workbench/store/layoutStore';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { EntityNotesSection } from '../components/notes/EntityNotesSection';
 import { ChangeRequestModal } from '../components/changeRequests/ChangeRequestModal';
+import { QuickReminderModal } from '../components/common/QuickReminderModal';
 import { formatMinutes } from '../utils/time';
 import { isValidLinkUrl, LINK_NAME_MAX_LENGTH } from '../validation/schemas';
 import { searchIncludes } from '../utils/searchText';
@@ -77,6 +78,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [crReminderModalOpen, setCrReminderModalOpen] = useState(false);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
   const reloadTab = useLayoutStore((s) => s.reloadTab);
@@ -331,25 +333,31 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       testId: 'cr-detail-block-reminders',
       header: 'Nhắc nhở',
       count: stats.reminderCount,
-      body:
-        cr.reminders && cr.reminders.length > 0 ? (
-          <Space direction="vertical" size={2}>
-            {cr.reminders.map((r) => (
-              <span key={r.id} style={{ fontSize: 'var(--font-size-small)' }}>
-                {r.date}
-                {r.time ? ` ${r.time}` : ''}
-                {r.note ? ` — ${r.note}` : ''}
-              </span>
-            ))}
-          </Space>
-        ) : cr.reminderDate ? (
-          <span style={{ fontSize: 'var(--font-size-small)' }}>
-            {cr.reminderDate}
-            {cr.reminderNote ? ` — ${cr.reminderNote}` : ''}
-          </span>
-        ) : (
-          <span style={mutedStyle}>Chưa có</span>
-        ),
+      body: (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--gap-8)' }}>
+          <Button data-testid="cr-detail-reminder-add" size="small" icon={<PlusOutlined />} onClick={() => setCrReminderModalOpen(true)}>
+            Thêm nhắc nhở
+          </Button>
+          {cr.reminders && cr.reminders.length > 0 ? (
+            <Space direction="vertical" size={2}>
+              {cr.reminders.map((r) => (
+                <span key={r.id} style={{ fontSize: 'var(--font-size-small)' }}>
+                  {r.date}
+                  {r.time ? ` ${r.time}` : ''}
+                  {r.note ? ` — ${r.note}` : ''}
+                </span>
+              ))}
+            </Space>
+          ) : cr.reminderDate ? (
+            <span style={{ fontSize: 'var(--font-size-small)' }}>
+              {cr.reminderDate}
+              {cr.reminderNote ? ` — ${cr.reminderNote}` : ''}
+            </span>
+          ) : (
+            <span style={mutedStyle}>Chưa có</span>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -367,6 +375,14 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       {contextHolder}
       {taskMenuContextHolder}
       {reminderModal}
+      {crReminderModalOpen && (
+        <QuickReminderModal
+          open
+          onClose={() => setCrReminderModalOpen(false)}
+          target={{ type: 'cr', entity: cr }}
+          db={db}
+        />
+      )}
       {/* 3a. Header */}
       <div
         style={{
@@ -492,7 +508,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
 
         {tasks.length > 0 && (
           <Space style={{ marginBottom: 8, width: '100%' }} wrap>
-            <InputSearch
+            <SearchInput
               data-testid="cr-detail-task-search"
               placeholder="Tìm tác vụ"
               allowClear
