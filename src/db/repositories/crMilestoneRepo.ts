@@ -5,6 +5,7 @@ import {
   CrMilestoneInputSchema,
   type CrMilestoneInput,
 } from '../../validation/schemas';
+import { deleteCrMilestoneWithCascade } from './cascadeRepo';
 
 export type CreateCrMilestoneInput = CrMilestoneInput & { crId: string };
 
@@ -64,3 +65,5 @@ export async function getCrMilestone(
 ): Promise<CrMilestone | undefined> {
   return db.crMilestones.get(id);
 }
+
+export { deleteCrMilestoneWithCascade };

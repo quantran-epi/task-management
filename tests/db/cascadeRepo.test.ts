@@ -2,8 +2,27 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createTask, getTask } from '../../src/db/repositories/taskRepo';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
-import { deleteTaskWithAllocations, deleteChangeRequestWithCascade } from '../../src/db/repositories/cascadeRepo';
+import {
+  deleteTaskWithAllocations,
+  deleteChangeRequestWithCascade,
+  deleteCrMilestoneWithCascade,
+} from '../../src/db/repositories/cascadeRepo';
+import { createCrMilestone } from '../../src/db/repositories/crMilestoneRepo';
 import { generateId } from '../../src/utils/uuid';
+import type { Note, NoteEntityType } from '../../src/types/models';
+
+/** Plan 03 widens NoteEntityType with 'crMilestone'; cast keeps this plan's tests compiling. */
+function milestoneNote(id: string, milestoneId: string): Note {
+  return {
+    id,
+    body: 'note on milestone',
+    entityType: 'crMilestone' as NoteEntityType,
+    entityId: milestoneId,
+    isPinned: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-03)', () => {
   let testDb: TaskPlannerDatabase;
@@ -62,6 +81,54 @@ describe('Atomic Cascade Deletion Transactions (D-13, D-14, D-16, WORK-05, T-02-
       expect(await testDb.changeRequests.get(survivorCr.id)).toBeDefined();
       expect(await getTask(survivor.id, testDb)).toBeDefined();
       expect(await testDb.plannedAllocations.where('taskId').equals(survivor.id).count()).toBe(1);
+    });
+  });
+
+  describe('deleteCrMilestoneWithCascade', () => {
+    it('clears task and note references but keeps the rows and the other milestone', async () => {
+      const cr = await seedCr();
+      const first = await createCrMilestone({ crId: cr.id, name: 'Go live 1' }, testDb);
+      const second = await createCrMilestone({ crId: cr.id, name: 'Go live 2' }, testDb);
+      const firstTask = await createTask(
+        { name: 'Task 1', crId: cr.id, milestoneId: first.id },
+        testDb
+      );
+      const secondTask = await createTask(
+        { name: 'Task 2', crId: cr.id, milestoneId: second.id },
+        testDb
+      );
+      const note = milestoneNote(generateId(), first.id);
+      await testDb.notes.add(note);
+
+      await deleteCrMilestoneWithCascade(first.id, testDb);
+
+      expect(await testDb.crMilestones.get(first.id)).toBeUndefined();
+      expect(await testDb.crMilestones.get(second.id)).toBeDefined();
+      const survivedTask = await getTask(firstTask.id, testDb);
+      expect(survivedTask).toBeDefined();
+      expect(survivedTask).not.toHaveProperty('milestoneId');
+      expect((await getTask(secondTask.id, testDb))?.milestoneId).toBe(second.id);
+      const survivedNote = await testDb.notes.get(note.id);
+      expect(survivedNote).toBeDefined();
+      expect(survivedNote).not.toHaveProperty('entityType');
+      expect(survivedNote).not.toHaveProperty('entityId');
+    });
+  });
+
+  describe('deleteChangeRequestWithCascade (milestones)', () => {
+    it('deletes CR milestones and detaches their notes', async () => {
+      const cr = await seedCr();
+      const milestone = await createCrMilestone({ crId: cr.id, name: 'Go live' }, testDb);
+      const note = milestoneNote(generateId(), milestone.id);
+      await testDb.notes.add(note);
+
+      await deleteChangeRequestWithCascade(cr.id, testDb);
+
+      expect(await testDb.crMilestones.where('crId').equals(cr.id).count()).toBe(0);
+      const survivedNote = await testDb.notes.get(note.id);
+      expect(survivedNote).toBeDefined();
+      expect(survivedNote).not.toHaveProperty('entityType');
+      expect(survivedNote).not.toHaveProperty('entityId');
     });
   });
 

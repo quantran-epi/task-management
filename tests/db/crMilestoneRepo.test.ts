@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import { createChangeRequest } from '../../src/db/repositories/changeRequestRepo';
+import { createTask, getTask } from '../../src/db/repositories/taskRepo';
 import {
   createCrMilestone,
+  deleteCrMilestoneWithCascade,
   getCrMilestone,
   listCrMilestones,
   updateCrMilestone,
 } from '../../src/db/repositories/crMilestoneRepo';
+import type { Note, NoteEntityType } from '../../src/types/models';
 
 describe('CrMilestone Repository (Phase 52 D-01)', () => {
   let db: TaskPlannerDatabase;
@@ -67,5 +70,29 @@ describe('CrMilestone Repository (Phase 52 D-01)', () => {
     const cleared = await updateCrMilestone(milestone.id, { name: 'New', targetDate: undefined }, db);
     expect(cleared).not.toHaveProperty('targetDate');
     expect(cleared.updatedAt >= milestone.updatedAt).toBe(true);
+  });
+
+  it('exports a cascade delete that unlinks tasks and notes without deleting them', async () => {
+    const cr = await seedCr();
+    const milestone = await createCrMilestone({ crId: cr.id, name: 'Go live' }, db);
+    const task = await createTask({ name: 'Task', crId: cr.id, milestoneId: milestone.id }, db);
+    const note: Note = {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      body: 'note',
+      entityType: 'crMilestone' as NoteEntityType,
+      entityId: milestone.id,
+      isPinned: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await db.notes.add(note);
+
+    await deleteCrMilestoneWithCascade(milestone.id, db);
+
+    expect(await getCrMilestone(milestone.id, db)).toBeUndefined();
+    expect(await getTask(task.id, db)).toBeDefined();
+    expect(await getTask(task.id, db)).not.toHaveProperty('milestoneId');
+    expect(await db.notes.get(note.id)).toBeDefined();
+    expect(await db.notes.get(note.id)).not.toHaveProperty('entityType');
   });
 });

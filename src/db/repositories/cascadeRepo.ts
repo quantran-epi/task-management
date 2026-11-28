@@ -15,6 +15,7 @@ export async function deleteChangeRequestWithCascade(
     'rw',
     [
       db.changeRequests,
+      db.crMilestones,
       db.tasks,
       db.plannedAllocations,
       db.workSessions,
@@ -28,12 +29,16 @@ export async function deleteChangeRequestWithCascade(
     async () => {
       const childTasks = await db.tasks.where('crId').equals(crId).toArray();
       const childTaskIds = childTasks.map((t) => t.id);
+      const milestoneIds = (
+        await db.crMilestones.where('crId').equals(crId).toArray()
+      ).map((m) => m.id);
       const now = new Date().toISOString();
 
-      // Detach notes linked to the CR or to its deleted tasks (D-25: notes become standalone)
+      // Detach notes linked to the CR, its deleted tasks or milestones (D-25/D-04:
+      // notes become standalone, never dangling after backup validation).
       await db.notes
         .where('entityId')
-        .anyOf([crId, ...childTaskIds])
+        .anyOf([crId, ...childTaskIds, ...milestoneIds])
         .modify((note: Note) => {
           delete note.entityType;
           delete note.entityId;
@@ -75,9 +80,43 @@ export async function deleteChangeRequestWithCascade(
         await db.tasks.bulkDelete(childTaskIds);
       }
 
+      if (milestoneIds.length > 0) await db.crMilestones.bulkDelete(milestoneIds);
+
       await db.changeRequests.delete(crId);
     }
   );
+}
+
+/**
+ * Phase 52 (D-04): xoá một mốc triển khai trong MỘT transaction. Task và note chỉ bị
+ * gỡ reference, không bị xoá row. Dùng filter vì tasks V31 không index milestoneId.
+ */
+export async function deleteCrMilestoneWithCascade(
+  milestoneId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<void> {
+  await db.transaction('rw', [db.crMilestones, db.tasks, db.notes], async () => {
+    const now = new Date().toISOString();
+    await db.tasks
+      .filter((task) => task.milestoneId === milestoneId)
+      .modify((task) => {
+        delete task.milestoneId;
+        task.updatedAt = now;
+      });
+
+    await db.notes
+      .where('entityId')
+      .equals(milestoneId)
+      // Plan 03 widens NoteEntityType with 'crMilestone'; until then compare as string.
+      .filter((note: Note) => (note.entityType as string | undefined) === 'crMilestone')
+      .modify((note: Note) => {
+        delete note.entityType;
+        delete note.entityId;
+        note.updatedAt = now;
+      });
+
+    await db.crMilestones.delete(milestoneId);
+  });
 }
 
 /**
