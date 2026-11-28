@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Dropdown, Empty, Input, Modal, Popconfirm, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Card, Dropdown, Empty, Input, Modal, Popconfirm, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -759,18 +759,10 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
 
       {/* 3d. Secondary blocks always visible */}
       {secondaryBlocks.map((block) => (
-        <div
+        <Card
           key={block.key}
-          style={{
-            background: 'var(--bg-island)',
-            borderRadius: 'var(--radius-control)',
-            border: '1px solid var(--border)',
-            padding: 'var(--gap-12)',
-            minWidth: 0,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--gap-8)', marginBottom: 'var(--gap-8)' }}>
-            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)', fontWeight: 600 }}>
+          title={
+            <span data-testid={block.testId} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--gap-6)' }}>
               {block.header}
               {block.count > 0 && (
                 <Tag color="blue" style={{ margin: 0, fontSize: 'var(--font-size-xs)', lineHeight: '16px' }}>
@@ -778,10 +770,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                 </Tag>
               )}
             </span>
-            {block.action}
-          </div>
+          }
+          extra={block.action}
+          style={{ marginBottom: 16, minWidth: 0 }}
+        >
           <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{block.body}</div>
-        </div>
+        </Card>
       ))}
       </div>
 
