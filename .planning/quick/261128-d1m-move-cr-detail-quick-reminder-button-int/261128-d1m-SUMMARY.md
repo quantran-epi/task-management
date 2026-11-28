@@ -38,11 +38,12 @@ Sếp yêu cầu bố trí nút "Thêm nhắc nhở" đẹp hơn và hỏi tại
   - Theo chuẩn TaskMate (đối chiểu code): header action = default small `Button` + `PlusOutlined` như nút "Thêm tác vụ" cùng trang; row action = `Button type="text" size="small"`, xoá thêm `danger`, bọc `Tooltip`.
   - Nút "Thêm link" lên header, bấm mở Modal nhỏ (tên + URL), save xong tự đóng; validate fail giữ modal mở.
   - Hai nút thêm căn sát phải section qua `justify-content: space-between`; link hiển thị dạng chữ link (`Button type="link"` không viền).
+  - Section Links chuyển sang bảng nhỏ: header "Tên / Đường dẫn", mỗi link một row gồm tên (ellipsis 160px) + URL monospace (ellipsis, `title` đầy đủ) + action icon sát phải.
 - Không sửa repository, modal, schema hay dependency.
 
 ## Verification
 
-- Bổ sung design chuẩn (`f8780806`, `18720c19`): tsc/test sạch; Chrome verify — nút Thêm link/Thêm nhắc nhở căn phải, click Thêm link mở modal, nhập URL → lưu → modal tự đóng + link mới vào DB; link hiển thị dạng chữ link.
+- Bổ sung design chuẩn (`f8780806`, `18720c19`, commit bảng link): tsc/test sạch; Chrome verify — nút Thêm link/Thêm nhắc nhở căn phải, click Thêm link mở modal, nhập URL → lưu → modal tự đóng + link mới vào DB; bảng link hiện tên + URL cắt bớt có `title` đầy đủ.
 - `npx tsc --noEmit -p tsconfig.json` — sạch.
 - `npx vitest run src/views/__tests__/ChangeRequestDetailView.reminderAndSearch.test.tsx --bail=1` — 2/2 đậu.
 - `git diff --check` — sạch.
