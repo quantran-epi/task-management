@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { Button, Modal, Select, Typography, useMessage, useTaskMateModal } from '../components/ui';
 import type { InputRef } from 'antd';
-import { ThunderboltOutlined } from '../components/ui/icon';
+import { PlusOutlined, ThunderboltOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb } from '../db';
 import { getAllChangeRequests } from '../db/repositories/changeRequestRepo';
@@ -11,7 +11,7 @@ import { deleteTaskWithAllocations } from '../db/repositories/cascadeRepo';
 import { useTimer } from '../hooks/useTimer';
 import { QuickAddBar } from '../components/tasks/QuickAddBar';
 import { TaskFilterBar } from '../components/tasks/TaskFilterBar';
-import { TaskTable } from '../components/tasks/TaskTable';
+import { readVisibleColumns, TaskTable } from '../components/tasks/TaskTable';
 import { BatchActionBar } from '../components/tasks/BatchActionBar';
 import { TaskDrawer } from '../components/tasks/TaskDrawer';
 import { FeasibilityModal } from '../components/planner/FeasibilityModal';
@@ -35,6 +35,8 @@ export interface TasksViewProps {
 
 export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrId, quickAddRequest }) => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(readVisibleColumns);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const message = useMessage();
   const { modal, contextHolder } = useTaskMateModal();
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -304,7 +306,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
       {/* 1. Page Header */}
       <PageHeader
         title="Danh sách tác vụ"
-        subtitle="Quản lý công việc, phân bổ thời gian và theo dõi tiến độ"
+        subtitle=".command deck · quản lý, phân bổ, theo dõi"
         extra={
           <Button
             icon={<ThunderboltOutlined />}
@@ -316,39 +318,57 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
         }
       />
 
-      {/* 2–3. Command strip: fast creation + filter toolbar, flush with the table */}
-      <div className="tm-tasklist__toolstrip">
-        <QuickAddBar
-          changeRequests={changeRequests}
-          systems={systems}
-          activeCrId={filters.crId}
-          db={db}
-          inputRef={quickAddInputRef}
-        />
-
-        <TaskFilterBar
-          filters={filters}
-          onFilterChange={setFilters}
-          onResetFilters={resetFilters}
-          changeRequests={changeRequests}
-          systems={systems}
-          availableOpsOwners={availableOpsOwners}
-          availableBAs={availableBAs}
-          searchInputRef={searchInputRef}
-          containerRef={filterBarRef}
-        />
-      </div>
-
-      {/* 3. Dense table deck — sketch 017 winner A */}
+      {/* 2–3. Dense table deck — sketch 017 winner A */}
       <section className="tm-tasklist__deck" aria-label="Bảng danh sách tác vụ">
         <div className="tm-tasklist__deck-head">
-          <h2 className="tm-tasklist__deck-title">Danh sách tác vụ</h2>
+          <div className="tm-tasklist__deck-identity">
+            <h2 className="tm-tasklist__deck-title">Danh sách tác vụ</h2>
+            <span className="tm-tasklist__deck-sub">.command deck · quản lý, phân bổ, theo dõi</span>
+          </div>
           <div className="tm-tasklist__deck-stats">
             <span className="tm-tasklist__deck-stat">Đang làm <b>{deckStats.open}</b></span>
             <span className="tm-tasklist__deck-stat tm-tasklist__deck-stat--late">Quá hạn <b>{deckStats.late}</b></span>
             <span className="tm-tasklist__deck-stat">Tổng <b>{deckStats.total}</b></span>
           </div>
+          <Button
+            className="tm-tasklist__deck-add"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setQuickAddOpen(true)}
+            aria-label="Thêm nhanh tác vụ"
+          >
+            Thêm
+          </Button>
         </div>
+
+        <div className="tm-tasklist__toolstrip">
+          <QuickAddBar
+            changeRequests={changeRequests}
+            systems={systems}
+            activeCrId={filters.crId}
+            db={db}
+            inputRef={quickAddInputRef}
+            visible={quickAddOpen}
+            onClose={() => setQuickAddOpen(false)}
+          />
+
+          <TaskFilterBar
+            filters={filters}
+            onFilterChange={setFilters}
+            onResetFilters={resetFilters}
+            changeRequests={changeRequests}
+            systems={systems}
+            availableOpsOwners={availableOpsOwners}
+            availableBAs={availableBAs}
+            searchInputRef={searchInputRef}
+            containerRef={filterBarRef}
+            visibleColumns={visibleColumns}
+            onVisibleColumnsChange={setVisibleColumns}
+            globalSort={globalSort}
+            onGlobalSortChange={setGlobalSort}
+          />
+        </div>
+
         <TaskTable
           tasks={filteredTasks}
           changeRequests={changeRequests}
@@ -359,8 +379,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ db = defaultDb, initialCrI
           onSelectCr={handleSelectCr}
           isFiltered={isFiltered}
           db={db}
-          globalSort={globalSort}
-          onGlobalSortChange={setGlobalSort}
+          visibleColumns={visibleColumns}
           filterBarRef={filterBarRef}
         />
       </section>

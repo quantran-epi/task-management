@@ -41,6 +41,7 @@ vi.mock('../../components/tasks/TaskFilterBar', () => ({
   TaskFilterBar: () => <div data-testid="task-filter-bar" className="tm-tasklist__filter" />,
 }));
 vi.mock('../../components/tasks/TaskTable', () => ({
+  readVisibleColumns: () => ['name'],
   TaskTable: ({ tasks }: { tasks: unknown[] }) => (
     <div data-testid="task-table" data-task-count={tasks.length} />
   ),

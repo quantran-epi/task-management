@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Input, Button, Select, useMessage, SpaceCompact } from '../ui';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Input, Button, Select, useMessage } from '../ui';
 import type { InputRef } from 'antd';
 import { parseQuickAddInput } from '../../utils/time';
 import { createTask } from '../../db/repositories/taskRepo';
@@ -16,6 +16,8 @@ export interface QuickAddBarProps {
   onTaskCreated?: (task: Task) => void;
   db?: TaskPlannerDatabase;
   inputRef?: React.Ref<InputRef>;
+  visible?: boolean;
+  onClose?: () => void;
 }
 
 export const QuickAddBar: React.FC<QuickAddBarProps> = ({
@@ -25,6 +27,8 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   onTaskCreated,
   db,
   inputRef,
+  visible = true,
+  onClose,
 }) => {
   const message = useMessage();
   const [text, setText] = useState('');
@@ -32,6 +36,13 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   const [crId, setCrId] = useState<string | undefined>(activeCrId ?? undefined);
   const [systemId, setSystemId] = useState<string | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
+  const localInputRef = useRef<InputRef>(null);
+
+  React.useImperativeHandle(inputRef, () => localInputRef.current!, []);
+
+  useEffect(() => {
+    if (visible) localInputRef.current?.focus();
+  }, [visible]);
 
   // Follow the active filter when it changes (D-46)
   useEffect(() => {
@@ -78,6 +89,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       setWorkType('code');
       message.success({ content: 'Task created', duration: 1.5 });
       onTaskCreated?.(created);
+      onClose?.();
     } catch {
       message.error({ content: 'Không thể tạo tác vụ', duration: 2 });
     } finally {
@@ -106,9 +118,10 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
   });
 
   return (
-    <SpaceCompact className="tm-tasklist__quickadd" style={{ width: '100%' }}>
+    <div className={`tm-tasklist__quickadd${visible ? ' tm-tasklist__quickadd--open' : ''}`}>
       <span className="tm-tasklist__quickadd-selects">
       <Select
+        size="small"
         showSearch
         optionFilterProp="label"
         value={crId}
@@ -122,6 +135,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         aria-label="Change Request (CR)"
       />
       <Select
+        size="small"
         allowClear
         value={systemId}
         onChange={(val) => setSystemId(val || undefined)}
@@ -132,6 +146,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
         aria-label="Subsystem"
       />
       <Select
+        size="small"
         value={workType}
         onChange={(val) => setWorkType(val)}
         options={workTypeOptions}
@@ -141,7 +156,7 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       </span>
       <span className="tm-tasklist__quickadd-submit">
       <Input
-        ref={inputRef}
+        ref={localInputRef}
         id="quick-add-input"
         data-shortcut-id="quick-add-input"
         placeholder={
@@ -164,7 +179,12 @@ export const QuickAddBar: React.FC<QuickAddBarProps> = ({
       >
         Thêm
       </Button>
+      {onClose && (
+        <Button type="text" onClick={onClose} aria-label="Đóng thêm nhanh">
+          Đóng
+        </Button>
+      )}
       </span>
-    </SpaceCompact>
+    </div>
   );
 };

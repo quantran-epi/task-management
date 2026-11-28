@@ -176,6 +176,20 @@ Quy ước bắt buộc: broad-read mỗi file 1 lần rồi Edit ngay, KHÔNG r
   </done>
 </task>
 
+<task type="auto">
+  <name>Task 7: Điều chỉnh implementation sát hơn sketch 017 variant A — deck head, command bar 1 dòng, countline, rowops</name>
+  <files>.planning/quick/261128-fqs-check-fix-capacity-planner-page-dark-mod/261128-fqs-PLAN.md, src/views/TasksView.tsx, src/components/tasks/tasklist-workspace.css, src/components/tasks/QuickAddBar.tsx, src/components/tasks/TaskFilterBar.tsx, src/components/tasks/BatchActionBar.tsx, src/components/tasks/TaskTable.tsx, src/components/tasks/__tests__/TaskTableDense.test.tsx</files>
+  <action>
+    Chỉnh implementation Task 6 theo đúng sketch A: deck head gồm title + subtitle ".command deck · quản lý, phân bổ, theo dõi" + stats + nút "+ Thêm" đặt trong deck; PageHeader giữ nguyên aria-label/handler, có thể đổi subtitle. Command bar gộp thành 1-2 dòng tối đa: search + segmented "Tất cả / CR / Độc lập" + select CR/Subsystem/Sort + "⚙ Tuỳ biến cột"; giữ quick-add, status/priority/date filters bằng Popover "Bộ lọc nâng cao" — KHÔNG xoá, giữ id `quick-add-input`, `data-shortcut-id`, `data-testid="task-filter-bar"`, aria-label, handler, refs. TaskTable: đưa sort control vào countline/command bar phía trên, bỏ toolbar trùng lặp; CR tag bordered + tint riêng; mốc/subsystem rõ ràng; thêm avatar tròn 22px + nút "⋯" rowops opacity thấp hiện khi hover (owner từ opsOwner/BA, fallback initials từ tên); giữ "Sao chép Standup" ở deck head. CSS dùng token, light/dark đẹp, row 44-54px, header nowrap. Cập nhật TaskTableDense.test.tsx nếu cần; giữ TasksViewWorkspace.test.tsx xanh. Chạy scoped tests + tsc. Verify Chrome riêng light/dark (context riêng, không đóng tab peer), screenshot overwrite /tmp/fqs-verify/tasklist-dense-{light,dark}.png, kiểm tra computed style command bar height, CR tag tint, priority dot, batch bar. Commit riêng `git add -- <exact paths>`, kiểm tra `git diff --cached --name-only`, message ending Co-Authored-By: Claude Code <noreply@anthropic.com>. KHÔNG commit .planning/STATE.md hay file peer.
+  </action>
+  <verify>
+    <automated>npx vitest run src/views/__tests__/TasksViewWorkspace.test.tsx src/components/tasks/__tests__/TaskTableDense.test.tsx --bail=1 && npx tsc --noEmit</automated>
+  </verify>
+  <done>
+    Tasklist trông sát sketch A: deck head chứa stats + "+ Thêm", command bar 1-2 dòng, countline có hint, CR tag tint/bordered, mốc/subsystem rõ, avatar + rowops, sort không trùng lặp; logic/testid/shortcut/handler giữ nguyên; screenshots light/dark được overwrite; commit riêng chỉ chứa file được phép.
+  </done>
+</task>
+
 </tasks>
 
 <verification>

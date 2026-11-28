@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Select, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea } from '../ui';
+import { Table, Tag, Space, Button, Popover, Tooltip, Modal, Dropdown, Progress, Checkbox, useAntdToken, useMessage, Textarea } from '../ui';
 import type { TableColumnsType } from 'antd';
 import { EditOutlined, MoreOutlined, LinkOutlined, CopyOutlined, PlayCircleOutlined, PauseCircleOutlined, CheckCircleOutlined, SettingOutlined, FileTextOutlined, SyncOutlined, FolderOpenOutlined } from '../ui/icon';
 import type { Task, ChangeRequest, System, TaskPriority, WorkType } from '../../types/models';
+import { formatStandupSummary } from '../../utils/standup';
 import { InlineStatusTag } from './InlineStatusTag';
 import { InlineProgress } from './InlineProgress';
 import { EmptyState } from '../common/EmptyState';
@@ -12,18 +13,12 @@ import { WorkTypeBadge, WORK_TYPE_CONFIG } from './WorkTypeBadge';
 import { TagListDisplay } from '../common/TagListDisplay';
 import { resolveInheritedTags } from '../../domain/inheritance';
 import { WORK_TYPES } from '../../types/models';
-import { formatStandupSummary } from '../../utils/standup';
 import { db as defaultDb, type TaskPlannerDatabase } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getJiraBrowseUrl } from '../../services/jira/jiraApi';
 import { openDocumentLink, isLocalPath } from '../../utils/documentLinks';
 import { useTimer } from '../../hooks/useTimer';
 import { evaluateTaskSpentAlert } from '../../utils/timerAlerts';
-import {
-  TASK_SORT_OPTIONS,
-  DEFAULT_TASK_SORT,
-  type TaskSortKey,
-} from '../../utils/filter';
 import { RunGhostDevModal } from '../agents/RunGhostDevModal';
 import { useTaskMenuItems } from '../../hooks/useTaskMenuItems';
 
@@ -39,9 +34,8 @@ export interface TaskTableProps {
   db?: TaskPlannerDatabase;
   loading?: boolean;
   jiraDomain?: string;
-  globalSort?: TaskSortKey;
-  onGlobalSortChange?: (key: TaskSortKey) => void;
   filterBarRef?: React.RefObject<HTMLDivElement | null>;
+  visibleColumns?: string[];
 }
 
 /** CR type colours fixed by UI-SPEC §7 / D-32. */
@@ -105,6 +99,108 @@ export const DEFAULT_VISIBLE_COLUMNS: string[] = ALL_CUSTOMIZABLE_COLUMNS.filter
   (c) => c.default
 ).map((c) => c.key);
 
+export const readVisibleColumns = (): string[] => {
+  try {
+    if (typeof window === 'undefined') return DEFAULT_VISIBLE_COLUMNS;
+    const raw = localStorage.getItem(STORAGE_COLUMNS_KEY);
+    if (!raw) return DEFAULT_VISIBLE_COLUMNS;
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return Array.from(
+        new Set([...ALWAYS_VISIBLE_COLUMNS, ...parsed.filter((k): k is string => typeof k === 'string')])
+      );
+    }
+  } catch (err) {
+    console.warn('Failed to read task table column preferences:', err);
+  }
+  return DEFAULT_VISIBLE_COLUMNS;
+};
+
+export interface TaskColumnCustomizationProps {
+  visibleColumns: string[];
+  onChange: (keys: string[]) => void;
+}
+
+/** Column picker rendered in the command bar; toggles persist through the owner. */
+export const TaskColumnCustomization: React.FC<TaskColumnCustomizationProps> = ({
+  visibleColumns,
+  onChange,
+}) => {
+  const { token } = useAntdToken();
+  const toggle = (key: string, checked: boolean) => {
+    if (ALWAYS_VISIBLE_COLUMNS.includes(key)) return;
+    let next: string[];
+    if (checked) {
+      next = Array.from(new Set([...visibleColumns, key]));
+    } else {
+      next = visibleColumns.filter((k) => k !== key);
+      for (const fixed of ALWAYS_VISIBLE_COLUMNS) {
+        if (!next.includes(fixed)) next.unshift(fixed);
+      }
+    }
+    onChange(next);
+    try {
+      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(next));
+    } catch (err) {
+      console.warn('Failed to save task table column preferences:', err);
+    }
+  };
+
+  const reset = () => {
+    onChange(DEFAULT_VISIBLE_COLUMNS);
+    try {
+      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
+    } catch (err) {
+      console.warn('Failed to reset task table column preferences:', err);
+    }
+  };
+
+  return (
+    <Popover
+      content={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 200, padding: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 6 }}>
+            <strong style={{ fontSize: 13 }}>Cột hiển thị</strong>
+            <Button type="link" size="small" onClick={reset} style={{ padding: 0 }}>
+              Mặc định
+            </Button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--island-gap)', maxHeight: 280, overflowY: 'auto' }}>
+            {ALL_CUSTOMIZABLE_COLUMNS.map((col) => {
+              const isFixed = Boolean(col.fixed);
+              const isChecked = isFixed || visibleColumns.includes(col.key);
+              return (
+                <Checkbox
+                  key={col.key}
+                  checked={isChecked}
+                  disabled={isFixed}
+                  onChange={(e) => toggle(col.key, e.target.checked)}
+                >
+                  <span style={{ fontSize: 13 }}>{col.label}</span>
+                  {isFixed && (
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextQuaternary, marginLeft: 4 }}>
+                      (Cố định)
+                    </span>
+                  )}
+                </Checkbox>
+              );
+            })}
+          </div>
+        </div>
+      }
+      title={null}
+      trigger="click"
+      placement="bottomRight"
+    >
+      <Tooltip title="Cột hiển thị">
+        <Button size="small" icon={<SettingOutlined />} aria-label="Cột hiển thị">
+          Tuỳ biến cột
+        </Button>
+      </Tooltip>
+    </Popover>
+  );
+};
+
 export const TaskTable: React.FC<TaskTableProps> = ({
   tasks,
   changeRequests,
@@ -117,26 +213,25 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   db,
   loading = false,
   jiraDomain,
-  globalSort,
-  onGlobalSortChange,
   filterBarRef,
+  visibleColumns: controlledVisibleColumns,
 }) => {
 
   const message = useMessage();
   const { token } = useAntdToken();
   const today = getTodayDateString();
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
-  const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState<boolean>(false);
-  const [standupFallbackText, setStandupFallbackText] = useState<string>('');
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [standupFallbackModalOpen, setStandupFallbackModalOpen] = useState(false);
+  const [standupFallbackText, setStandupFallbackText] = useState('');
+  const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [ghostDevTask, setGhostDevTask] = useState<Task | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const fallbackTextareaRef = useRef<HTMLTextAreaElement>(null);
   // The filter bar pins at top:0; pin the table header just below it instead of behind it.
   // 96px is the bar's measured two-row height — fallback when ResizeObserver is absent.
-  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(96);
+  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(60);
   useEffect(() => {
-    const bar = filterBarRef?.current;
+    const bar = filterBarRef?.current ?? document.querySelector('.tm-tasklist__deck-head');
     if (!bar || typeof ResizeObserver === 'undefined') return;
     const measure = () => setStickyHeaderOffset(Math.max(1, Math.ceil(bar.getBoundingClientRect().height)));
     measure();
@@ -146,51 +241,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   }, [filterBarRef]);
 
   // Synchronous localStorage initialization to prevent FOUC per D-16, T-12.2-07
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
-    try {
-      if (typeof window === 'undefined') return DEFAULT_VISIBLE_COLUMNS;
-      const raw = localStorage.getItem(STORAGE_COLUMNS_KEY);
-      if (!raw) return DEFAULT_VISIBLE_COLUMNS;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        // Enforce the fixed leading columns are always included
-        return Array.from(
-          new Set([...ALWAYS_VISIBLE_COLUMNS, ...parsed.filter((k) => typeof k === 'string')])
-        );
-      }
-      return DEFAULT_VISIBLE_COLUMNS;
-    } catch {
-      return DEFAULT_VISIBLE_COLUMNS;
-    }
-  });
-
-  const handleColumnToggle = (columnKey: string, checked: boolean) => {
-    if (ALWAYS_VISIBLE_COLUMNS.includes(columnKey)) return; // Fixed mandatory columns
-    let next: string[];
-    if (checked) {
-      next = Array.from(new Set([...visibleColumns, columnKey]));
-    } else {
-      next = visibleColumns.filter((k) => k !== columnKey);
-      for (const key of ALWAYS_VISIBLE_COLUMNS) {
-        if (!next.includes(key)) next.unshift(key);
-      }
-    }
-    setVisibleColumns(next);
-    try {
-      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(next));
-    } catch (err) {
-      console.warn('Failed to save task table column preferences:', err);
-    }
-  };
-
-  const handleResetColumns = () => {
-    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
-    try {
-      localStorage.setItem(STORAGE_COLUMNS_KEY, JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
-    } catch (err) {
-      console.warn('Failed to reset task table column preferences:', err);
-    }
-  };
+  const [localVisibleColumns] = useState<string[]>(readVisibleColumns);
+  const visibleColumns = controlledVisibleColumns ?? localVisibleColumns;
 
   const effectiveDb = db || defaultDb;
   const { getTaskMenuItems, reminderModal, modal, contextHolder } = useTaskMenuItems({ db, onOpenDrawer });
@@ -250,25 +302,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   }, [effectiveDb]) ?? new Map<string, string>();
 
   const handleCopyStandup = async () => {
-    const summary = formatStandupSummary(tasks, {
-      crMap,
-      systemMap,
-      todayStr: today,
-    });
-
+    const summary = formatStandupSummary(tasks, { crMap, systemMap, todayStr: today });
     try {
-      if (!navigator.clipboard || !navigator.clipboard.writeText) {
-        throw new Error('Clipboard API not available');
-      }
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API not available');
       await navigator.clipboard.writeText(summary);
       message.success('Đã sao chép báo cáo Standup vào clipboard');
     } catch {
-      // Graceful fallback for non-secure context or permission denied
       setStandupFallbackText(summary);
       setStandupFallbackModalOpen(true);
-      setTimeout(() => {
-        fallbackTextareaRef.current?.select();
-      }, 100);
+      setTimeout(() => fallbackTextareaRef.current?.select(), 100);
     }
   };
 
@@ -336,8 +378,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
         const system = record.systemId ? systemMap.get(record.systemId) : undefined;
 
         return (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', flexWrap: 'wrap' }}>
+          <div className="tm-tasklist__task-cell">
+            <div className="tm-tasklist__task-head">
               <span
                 onClick={() => onOpenDrawer(record.id)}
                 className="tm-tasklist__task-name task-name-link"
@@ -473,7 +515,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <div className="tm-tasklist__meta">
               {cr ? (
                 <Tag
-                  bordered={false}
+                  className="tm-tasklist__cr-tag"
                   title={cr.name}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -488,10 +530,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   {cr.code}
                 </Tag>
               ) : (
-                <span>Chung</span>
+                <Tag className="tm-tasklist__cr-tag tm-tasklist__cr-tag--generic">Chung</Tag>
               )}
-              <span title={milestoneName}>{milestoneName || '—'}</span>
-              {system && <span title={system.name}>· {system.code}</span>}
+              <span className="tm-tasklist__meta-milestone" title={milestoneName || 'Chưa gắn mốc'}>
+                {milestoneName || 'Chưa gắn mốc'}
+              </span>
+              {system && (
+                <span className="tm-tasklist__meta-system" title={system.name}>
+                  {system.code}
+                </span>
+              )}
             </div>
           </div>
         );
@@ -766,6 +814,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
           </Tooltip>
           <Dropdown menu={{ items: getTaskMenuItems(record) }} trigger={['click']}>
             <Button
+              className="tm-tasklist__rowops"
               type="text"
               size="small"
               icon={<MoreOutlined />}
@@ -789,38 +838,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     }
   }, [tasks.length, pagination.current, pagination.pageSize]);
 
-  const columnCustomizationContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)', minWidth: 200, padding: 4 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${token.colorBorderSecondary}`, paddingBottom: 6 }}>
-        <strong style={{ fontSize: 13 }}>Cột hiển thị</strong>
-        <Button type="link" size="small" onClick={handleResetColumns} style={{ padding: 0 }}>
-          Mặc định
-        </Button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--island-gap)', maxHeight: 280, overflowY: 'auto' }}>
-        {ALL_CUSTOMIZABLE_COLUMNS.map((col) => {
-          const isFixed = Boolean(col.fixed);
-          const isChecked = isFixed || visibleColumns.includes(col.key);
-          return (
-            <Checkbox
-              key={col.key}
-              checked={isChecked}
-              disabled={isFixed}
-              onChange={(e) => handleColumnToggle(col.key, e.target.checked)}
-            >
-              <span style={{ fontSize: 13 }}>{col.label}</span>
-              {isFixed && (
-                <span style={{ fontSize: 'var(--font-size-xs)', color: token.colorTextQuaternary, marginLeft: 4 }}>
-                  (Cố định)
-                </span>
-              )}
-            </Checkbox>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   return (
     <>
       {contextHolder}
@@ -831,59 +848,27 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       onKeyDown={handleKeyDown}
       style={{ outline: 'none', display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}
     >
-      {/* Table Toolbar Header — stays in flow: the filter bar above owns the sticky layer. */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '4px 0',
-        }}
-      >
-        <div style={{ fontSize: 13, color: token.colorTextSecondary }}>
+      {/* Countline: one compact row, no duplicate toolbar. */}
+      <div className="tm-tasklist__countline">
+        <div className="tm-tasklist__countline-count">
           {selectedRowKeys.length > 0 ? (
             <span>Đã chọn <strong>{selectedRowKeys.length}</strong> / {tasks.length} tác vụ</span>
           ) : (
             <span>Hiển thị <strong>{tasks.length}</strong> tác vụ</span>
           )}
         </div>
-        <Space size="middle">
-          {/* Global sort applies to the pre-sorted dataSource; per-column sorter clicks override for that render. */}
-          <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
-            Sắp xếp theo
-          </span>
-          <Select
-            size="middle"
-            style={{ width: 200 }}
-            value={globalSort ?? DEFAULT_TASK_SORT}
-            onChange={(v) => onGlobalSortChange?.(v)}
-            options={[...TASK_SORT_OPTIONS]}
-            aria-label="Sắp xếp danh sách tác vụ"
-          />
-          <Popover
-            content={columnCustomizationContent}
-            title={null}
-            trigger="click"
-            placement="bottomRight"
-          >
-            <Tooltip title="Cột hiển thị">
-              <Button
-                icon={<SettingOutlined />}
-                aria-label="Cột hiển thị"
-              >
-                Tùy biến cột
-              </Button>
-            </Tooltip>
-          </Popover>
+        <div className="tm-tasklist__countline-actions">
           <Button
             type="primary"
+            size="small"
             icon={<CopyOutlined />}
             onClick={handleCopyStandup}
             aria-label="Sao chép Standup"
           >
             Sao chép Standup
           </Button>
-        </Space>
+          <span className="tm-tasklist__countline-hint">Sticky header · keyboard nav · testid giữ nguyên</span>
+        </div>
       </div>
 
       {/* AntD owns header stickiness; offset clears the pinned filter bar above. */}
@@ -970,7 +955,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
       {reminderModal}
 
-      {/* Fallback modal for clipboard copy in non-secure or restricted contexts */}
       <Modal
         title="Sao chép báo cáo Standup"
         open={standupFallbackModalOpen}
