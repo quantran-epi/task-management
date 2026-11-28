@@ -54,6 +54,7 @@ Last activity: 2026-11-28 - Completed quick task 261128-i9x: bỏ attach file lo
 Last activity: 2026-11-28 - Completed quick task 261128-hxf: bỏ validation 2 link git System (lưu nguyên mọi string), render an toàn theo predicate; review fixes label spoof/trim/SSH git user, 102 scoped tests + Chrome light/dark.
 Last activity: 2026-11-28 - Completed quick task 261128-itv: tách rail/toolbar/docs list/inspector/modal/button bộ tài liệu bằng token CSS; 3 chỗ đã virtualize giữ nguyên; 53 scoped tests, tsc, ESLint, Chrome light/dark 1280/768/375 verified.
 Last activity: 2026-11-28 - Completed quick task 261128-ism: task detail Notes wrap title dài 120 ký tự, header không bị nút "Thêm ghi chú" che; 11 scoped tests + Chrome light/dark 1280/768/375 verified.
+Last activity: 2026-11-28 - Completed quick task 261128-kl5: căn giữa nội dung badge CR trong ô tên tác vụ task list.
 Last activity: 2026-11-28 - Completed quick task 261128-k1q: bỏ subtitle thừa và mở rộng dropdown filter task list.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
@@ -212,6 +213,7 @@ Progress: [██████████] 100%
 | 261128-hxf | Bỏ validation 2 link git System, lưu nguyên mọi string; render an toàn qua predicate, review fixes label spoof/trim/SSH git user | 2026-11-28 | 0acb75c8, d46c5bdd, af1c18c5 | Reviewed + verified (Chrome light/dark + 102 scoped tests) | [261128-hxf-b-validation-2-link-git-system-user-i-n-](./quick/261128-hxf-b-validation-2-link-git-system-user-i-n-/) |
 | 261128-itv | Tách UI bộ tài liệu (rail/toolbar/list/inspector/modal/button); rà virtualize docs list, giữ 3 chỗ VirtualizedList | 2026-11-28 | 755f8ec8, 7ddfbb8b, ed339023 | Verified (Chrome light/dark 1280/768/375 + 53 scoped tests) | [261128-itv-s-a-ui-b-t-i-li-u-t-ch-d-nh-layout-docs-](./quick/261128-itv-s-a-ui-b-t-i-li-u-t-ch-d-nh-layout-docs-/) |
 | 261128-k1q | Bỏ subtitle thừa trên task list và mở rộng dropdown combobox filter để hiện đủ option | 2026-11-28 | 7c03777750ef70a55629f7553989789e812a4169 | Verified (Chrome light/dark + scoped tests) | [261128-k1q-fix-task-list-header-v-dropdown-filter](./quick/261128-k1q-fix-task-list-header-v-dropdown-filter/) |
+| 261128-kl5 | Căn giữa nội dung badge CR trong ô tên tác vụ task list | 2026-11-28 | 5cac8953 | Verified (Chrome 1280/768/375 light/dark + scoped test) | [261128-kl5-c-n-ch-nh-badge-cr-trong-t-n-t-c-v-task-](./quick/261128-kl5-c-n-ch-nh-badge-cr-trong-t-n-t-c-v-task-/) |
 | 261128-ism | Task detail Notes: title dài 120 ký tự wrap trọn, header không bị nút "Thêm ghi chú" che | 2026-11-28 | 95ffef2a | Verified (Chrome light/dark 1280/768/375 + 11 scoped tests) | [261128-ism-s-a-task-detail-notes-ti-u-d-i-b-n-t-th-](./quick/261128-ism-s-a-task-detail-notes-ti-u-d-i-b-n-t-th-/) |
 
 ## Accumulated Context
