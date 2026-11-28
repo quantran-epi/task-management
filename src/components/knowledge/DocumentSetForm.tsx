@@ -484,6 +484,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
               const title = noteById.get(documentId)?.title || 'Tài liệu không tên';
               return (
                 <ListItem
+                  className="doc-set-member-item"
                   data-testid={`member-${documentId}`}
                   actions={[
                     <Tooltip title="Đưa lên" key="up">
@@ -561,7 +562,7 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
             role="group"
             aria-label="Danh sách tài liệu để chọn"
             renderItem={(doc) => (
-              <Space size="small">
+              <div className="doc-set-pick-row">
                 <Checkbox
                   aria-label={doc.title}
                   checked={draftSelection.includes(doc.id)}
@@ -571,8 +572,8 @@ export const DocumentSetForm = forwardRef<DocumentSetFormHandle, DocumentSetForm
                 >
                   {doc.title}
                 </Checkbox>
-                <Text type="secondary">{doc.path}</Text>
-              </Space>
+                <Text type="secondary" ellipsis style={{ minWidth: 0 }}>{doc.path}</Text>
+              </div>
             )}
           />
         )}

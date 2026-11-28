@@ -597,7 +597,63 @@ html, body, #root {
   color: var(--accent);
 }
 
+/* Membership rows: actions stay clear of the title, even in the 620px modal. */
+.doc-set-member-item {
+  align-items: center;
+  gap: var(--gap-8);
+  min-width: 0;
+  padding: var(--gap-4) var(--gap-8);
+}
+
+.doc-set-member-item .ant-list-item-action {
+  gap: var(--gap-4);
+  margin-inline-start: var(--gap-8);
+}
+
+.doc-set-member-item .ant-list-item-action > li {
+  padding-inline: var(--gap-2);
+}
+
+/* Flat picker: checkbox fixed, title/path ellipsis instead of pushing buttons. */
+.doc-set-pick-row {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-8);
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 var(--gap-8);
+}
+
+.doc-set-pick-row .ant-checkbox-wrapper {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.doc-set-pick-row .ant-checkbox {
+  flex-shrink: 0;
+}
+
+.doc-set-pick-row .ant-checkbox-wrapper > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-set-pick-row .ant-typography {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-set-form-compact .ant-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* Form lives in its own 620px modal; group titles become real sections there. */
+.doc-set-config-modal .ant-modal-body {
+  padding: var(--gap-16) var(--gap-24);
+}
+
 .doc-set-config-modal .doc-set-form-group-title {
   margin-top: var(--gap-16);
   padding-bottom: var(--gap-8);
