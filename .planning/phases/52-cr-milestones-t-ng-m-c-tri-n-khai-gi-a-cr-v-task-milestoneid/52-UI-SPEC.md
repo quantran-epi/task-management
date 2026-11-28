@@ -1,10 +1,11 @@
 ---
 phase: 52
 slug: cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-11-28
+reviewed_at: 2026-11-28
 ---
 
 # Phase 52 — UI Design Contract
