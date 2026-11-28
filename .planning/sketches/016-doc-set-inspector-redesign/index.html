@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Doc Set Inspector Sketch</title>
+  <link rel="stylesheet" href="../themes/default.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 56px 16px 60px; font-family: var(--font-sans); background: var(--color-bg); color: var(--color-text); font-size: var(--text-base); }
+    button, input, select { font-family: inherit; }
+    #variant-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 9998; background: var(--color-surface); border-bottom: 1px solid var(--color-border); padding: 8px 16px; display: flex; gap: 8px; align-items: center; }
+    .variant-tab { border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text-muted); border-radius: var(--radius-sm); height: 28px; padding: 0 12px; cursor: pointer; font-size: var(--text-sm); }
+    .variant-tab.active { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+    .variant { display: none; }
+    .variant.active { display: block; }
+    .workbench { height: 660px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); display: grid; grid-template-columns: 248px minmax(420px, 1fr) 300px; overflow: hidden; box-shadow: var(--shadow-sm); }
+    .rail, .center, .inspector { min-width: 0; display: flex; flex-direction: column; }
+    .rail { border-right: 1px solid var(--color-border); background: var(--color-surface-soft); }
+    .center { background: var(--color-surface); }
+    .inspector { border-left: 1px solid var(--color-border); background: var(--color-surface-soft); }
+    .pane-head { height: 48px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border); flex-shrink: 0; }
+    .pane-title { font-size: var(--text-lg); font-weight: 600; }
+    .subtle { color: var(--color-text-muted); }
+    .xs { font-size: var(--text-xs); }
+    .sm { font-size: var(--text-sm); }
+    .btn { height: 28px; border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text); border-radius: var(--radius-sm); padding: 0 10px; cursor: pointer; font-size: var(--text-sm); display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .btn-primary { background: var(--color-primary); border-color: var(--color-primary); color: white; }
+    .btn-primary:hover { background: var(--color-primary-hover); color: white; }
+    .btn-text { border-color: transparent; background: transparent; color: var(--color-primary); }
+    .search { height: 28px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface); padding: 0 10px; font-size: var(--text-sm); color: var(--color-text); outline: none; }
+    .search:focus, .field:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft); }
+    .rail-list { overflow: auto; padding: 8px; flex: 1; }
+    .set-row { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 4px; }
+    .set-row:hover { background: var(--color-primary-soft); }
+    .set-row.active { background: var(--color-primary-soft); border-left: 3px solid var(--color-primary); padding-left: 7px; }
+    .set-name { font-weight: 600; }
+    .meta { color: var(--color-text-muted); font-size: var(--text-xs); margin-top: 2px; }
+    .toolbar { padding: 8px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--color-border); flex-wrap: wrap; flex-shrink: 0; }
+    .count { margin-left: auto; color: var(--color-text-muted); font-size: var(--text-xs); }
+    .doc-list { flex: 1; overflow: auto; }
+    .doc-row { position: relative; display: grid; grid-template-columns: minmax(160px,1fr) 110px 92px 76px 32px; gap: 10px; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--color-border); cursor: pointer; font-size: var(--text-sm); }
+    .doc-row:hover { background: var(--color-surface-soft); }
+    .doc-row.active { background: var(--color-primary-soft); box-shadow: inset 3px 0 0 var(--color-primary); }
+    .row-action { width: 24px; height: 24px; border: 1px solid var(--color-border-strong); background: var(--color-surface); color: var(--color-text-muted); border-radius: var(--radius-sm); cursor: pointer; font-size: var(--text-sm); line-height: 1; }
+    .row-action:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .row-menu { display: none; position: absolute; right: 8px; top: 34px; z-index: 30; min-width: 148px; padding: 4px; background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-md); }
+    .row-menu.open { display: block; }
+    .row-menu button { display: block; width: 100%; text-align: left; height: 28px; border: 0; background: transparent; color: var(--color-text); border-radius: var(--radius-sm); padding: 0 10px; cursor: pointer; font-size: var(--text-sm); }
+    .row-menu button:hover { background: var(--color-primary-soft); color: var(--color-primary); }
+    .row-menu button.danger { color: var(--color-danger); }
+    .row-menu button.danger:hover { background: var(--color-danger-soft, var(--color-danger)); color: var(--color-surface); }
+    .path { color: var(--color-text-muted); font-family: var(--font-mono); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tag { display: inline-block; padding: 1px 7px; border-radius: var(--radius-full); font-size: var(--text-xs); background: var(--color-primary-soft); color: var(--color-primary); }
+    .tag.muted { background: var(--color-bg); color: var(--color-text-muted); }
+    .inspector-body { padding: 14px; overflow: auto; flex: 1; }
+    .doc-title { font-size: var(--text-lg); font-weight: 650; margin-bottom: 4px; }
+    .kv { display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 6px 10px; margin-top: 14px; font-size: var(--text-sm); }
+    .kv dt { color: var(--color-text-muted); }
+    .kv dd { margin: 0; overflow-wrap: anywhere; }
+    .divider { height: 1px; background: var(--color-border); margin: 14px 0; }
+    .status-line { display: flex; gap: 8px; align-items: center; color: var(--color-text-muted); font-size: var(--text-xs); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
+    .field { height: 28px; width: 100%; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); padding: 0 8px; background: var(--color-surface); color: var(--color-text); font-size: var(--text-sm); }
+    .field-label { display: block; font-size: var(--text-sm); margin: 12px 0 4px; font-weight: 600; }
+    .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .radio { display: flex; align-items: center; gap: 6px; height: 28px; font-size: var(--text-sm); cursor: pointer; }
+    .radio input { accent-color: var(--color-primary); }
+    .collapse-head { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 6px 10px; display: flex; justify-content: space-between; cursor: pointer; margin-top: 12px; font-size: var(--text-sm); font-weight: 600; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(17,19,24,.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+    .modal-backdrop.open { display: flex; }
+    .modal { width: min(620px, 92%); max-height: 92%; overflow: auto; background: var(--color-surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--color-border); }
+    .modal-body { padding: 16px 18px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--color-border); }
+    .form-section { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 12px; }
+    .form-section h4 { margin: 0 0 8px; font-size: var(--text-sm); }
+    .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: #111318; color: white; padding: 8px 16px; border-radius: var(--radius-md); font-size: var(--text-sm); opacity: 0; transition: opacity .2s, transform .2s; z-index: 9999; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #sketch-tools { position: fixed; bottom: 12px; right: 12px; z-index: 9999; font-family: system-ui; font-size: 12px; background: rgba(0,0,0,0.7); color: white; padding: 8px 12px; border-radius: 8px; opacity: .4; transition: opacity .2s; display: flex; gap: 8px; align-items: center; }
+    #sketch-tools:hover { opacity: 1; }
+    #sketch-tools select, #sketch-tools button { height: 24px; font-size: 11px; }
+    .banner { max-width: 1300px; margin: 0 auto 12px; }
+    .banner h1 { font-size: var(--text-2xl); margin: 0 0 4px; }
+    .note { color: var(--color-text-muted); font-size: var(--text-sm); }
+  </style>
+</head>
+<body>
+  <div id="variant-nav">
+    <button class="variant-tab active" onclick="showVariant('a', this)">A: Inspector tách bạch ★</button>
+    <button class="variant-tab" onclick="showVariant('b', this)">B: Inspector tabbed</button>
+    <button class="variant-tab" onclick="showVariant('c', this)">C: Detail list+drawer</button>
+  </div>
+
+  <div class="banner">
+    <h1>Bộ tài liệu — redesign right section</h1>
+    <div class="note">Rail trái và danh sách giữ nguyên. Bấm "Cấu hình" trong inspector phải → modal riêng. Bấm tên tài liệu → inspector đổi nội dung. Nút ⋯ trên mỗi row → sửa/xoá nhanh.</div>
+  </div>
+
+  <!-- Variant A -->
+  <div id="variant-a" class="variant active">
+    <div class="workbench">
+      <aside class="rail">
+        <div class="pane-head"><span class="pane-title">Bộ tài liệu</span><button class="btn btn-primary" onclick="toast('Tạo bộ tài liệu mới')">+ Tạo</button></div>
+        <div class="rail-list">
+          <div class="set-row active"><div class="set-name">Core Banking / Payment</div><div class="meta">42 docs · base · đã xuất bản</div></div>
+          <div class="set-row"><div class="set-name">Theo môi trường — Prod</div><div class="meta">18 docs · environment</div></div>
+          <div class="set-row"><div class="set-name">API Gateway v2</div><div class="meta">27 docs · version</div></div>
+          <div class="set-row"><div class="set-name">Chính sách bảo mật</div><div class="meta">9 docs · supplement</div></div>
+        </div>
+      </aside>
+      <section class="center">
+        <div class="pane-head"><div><span class="pane-title">Core Banking / Payment</span> <span class="tag">base</span></div><span class="subtle xs">42 tài liệu</span></div>
+        <div class="toolbar">
+          <input class="search" style="width:220px" placeholder="Tìm tên hoặc đường dẫn" aria-label="Tìm tài liệu trong bộ">
+          <select class="field" style="width:130px"><option>Mọi trạng thái</option><option>Đã xuất bản</option><option>Chờ xuất bản</option></select>
+          <select class="field" style="width:120px"><option>Mới nhất</option><option>Tên</option></select>
+          <button class="btn" onclick="toast('Mở bộ lọc tài liệu')">Lọc</button>
+          <span class="count">42 / 42</span>
+        </div>
+        <div class="doc-list">
+          <div class="doc-row active" onclick="selectDoc(this, 'Hướng dẫn thanh toán', 'docs/payment/huong-dan.md', '12 KB · 28/11/2026')"><span><strong>Hướng dẫn thanh toán</strong><div class="path">docs/payment/huong-dan.md</div></span><span class="xs">12 KB</span><span class="xs">28/11/2026</span><span><span class="tag">Đã xuất bản</span></span><button class="row-action" title="Thao tác tài liệu" aria-label="Thao tác: Hướng dẫn thanh toán" onclick="event.stopPropagation(); toggleRowMenu(this)">⋯</button><div class="row-menu"><button onclick="event.stopPropagation(); quickEdit(this, 'Hướng dẫn thanh toán')">Sửa nhanh</button><button onclick="event.stopPropagation(); quickRename(this, 'Hướng dẫn thanh toán')">Đổi tên</button><button onclick="event.stopPropagation(); quickCopyPath('docs/payment/huong-dan.md')">Sao chép đường dẫn</button><button class="danger" onclick="event.stopPropagation(); quickRemove(this, 'Hướng dẫn thanh toán')">Xoá khỏi bộ</button></div></div>
+          <div class="doc-row" onclick="selectDoc(this, 'Luồng hoàn tiền', 'docs/payment/hoan-tien.md', '8 KB · 27/11/2026')"><span><strong>Luồng hoàn tiền</strong><div class="path">docs/payment/hoan-tien.md</div></span><span class="xs">8 KB</span><span class="xs">27/11/2026</span><span><span class="tag">Đã xuất bản</span></span><button class="row-action" title="Thao tác tài liệu" aria-label="Thao tác: Luồng hoàn tiền" onclick="event.stopPropagation(); toggleRowMenu(this)">⋯</button><div class="row-menu"><button onclick="event.stopPropagation(); quickEdit(this, 'Luồng hoàn tiền')">Sửa nhanh</button><button onclick="event.stopPropagation(); quickRename(this, 'Luồng hoàn tiền')">Đổi tên</button><button onclick="event.stopPropagation(); quickCopyPath('docs/payment/hoan-tien.md')">Sao chép đường dẫn</button><button class="danger" onclick="event.stopPropagation(); quickRemove(this, 'Luồng hoàn tiền')">Xoá khỏi bộ</button></div></div>
+          <div class="doc-row" onclick="selectDoc(this, 'API payment intents', 'docs/api/payment-intents.md', '24 KB · 26/11/2026')"><span><strong>API payment intents</strong><div class="path">docs/api/payment-intents.md</div></span><span class="xs">24 KB</span><span class="xs">26/11/2026</span><span><span class="tag muted">Chờ xuất bản</span></span><button class="row-action" title="Thao tác tài liệu" aria-label="Thao tác: API payment intents" onclick="event.stopPropagation(); toggleRowMenu(this)">⋯</button><div class="row-menu"><button onclick="event.stopPropagation(); quickEdit(this, 'API payment intents')">Sửa nhanh</button><button onclick="event.stopPropagation(); quickRename(this, 'API payment intents')">Đổi tên</button><button onclick="event.stopPropagation(); quickCopyPath('docs/api/payment-intents.md')">Sao chép đường dẫn</button><button class="danger" onclick="event.stopPropagation(); quickRemove(this, 'API payment intents')">Xoá khỏi bộ</button></div></div>
+        </div>
+      </section>
+      <aside class="inspector">
+        <div class="pane-head"><span class="pane-title">Chi tiết tài liệu</span><button class="btn" onclick="openModal('modal-a')">Cấu hình</button></div>
+        <div class="inspector-body">
+          <div class="doc-title" id="insp-title">Hướng dẫn thanh toán</div>
+          <div class="path" id="insp-path">docs/payment/huong-dan.md</div>
+          <dl class="kv">
+            <dt>Kích thước</dt><dd id="insp-size">12 KB</dd>
+            <dt>Cập nhật</dt><dd>28/11/2026 09:41</dd>
+            <dt>Trạng thái</dt><dd><span class="tag">Đã xuất bản</span></dd>
+            <dt>Bộ chứa</dt><dd>Core Banking / Payment</dd>
+            <dt>ID</dt><dd class="path">doc-8e4f21a9</dd>
+          </dl>
+          <div class="divider"></div>
+          <div class="status-line"><span class="dot"></span><span>Dữ liệu local · đồng bộ lúc 09:45</span></div>
+          <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap">
+            <button class="btn" onclick="toast('Đã mở tài liệu trong editor')">Mở tài liệu</button>
+            <button class="btn" onclick="toast('Đã sao chép ID')">Sao chép ID</button>
+            <button class="btn" onclick="toast('Sửa nhanh: đổi tên, path, trạng thái')">Sửa nhanh</button>
+            <button class="btn" onclick="confirmRemove()">Xoá khỏi bộ</button>
+          </div>
+          <div class="divider"></div>
+          <div class="subtle sm">Chọn một tài liệu ở giữa để xem chi tiết tại đây.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="modal-backdrop" id="modal-a" onclick="if(event.target===this) closeModal('modal-a')">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Cấu hình bộ tài liệu">
+        <div class="modal-head"><strong style="font-size:var(--text-lg)">Cấu hình bộ tài liệu</strong><button class="btn" onclick="closeModal('modal-a')">Đóng</button></div>
+        <div class="modal-body">
+          <div class="form-section"><h4>Phạm vi</h4><div class="preset-grid">
+            <label class="radio"><input type="radio" name="preset-a" checked> Chung</label>
+            <label class="radio"><input type="radio" name="preset-a"> Theo môi trường</label>
+            <label class="radio"><input type="radio" name="preset-a"> Theo module</label>
+            <label class="radio"><input type="radio" name="preset-a"> Theo phiên bản</label>
+            <label class="radio"><input type="radio" name="preset-a"> Bổ sung</label>
+            <label class="radio"><input type="radio" name="preset-a"> Tùy chỉnh</label>
+          </div></div>
+          <div class="form-section"><h4>Thông tin</h4><label class="field-label" for="name-a">Tên bộ tài liệu</label><input id="name-a" class="field" value="Core Banking / Payment"><label class="field-label">Mô tả</label><input class="field" placeholder="Mô tả ngắn"></div>
+          <div class="collapse-head" onclick="toggleCollapse(this)"><span>Thiết lập nâng cao</span><span>▾</span></div>
+        </div>
+        <div class="modal-foot"><button class="btn" onclick="closeModal('modal-a')">Hủy</button><button class="btn btn-primary" onclick="closeModal('modal-a'); toast('Đã lưu cấu hình')">Lưu thay đổi</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Variant B -->
+  <div id="variant-b" class="variant">
+    <div class="workbench">
+      <aside class="rail">
+        <div class="pane-head"><span class="pane-title">Bộ tài liệu</span><button class="btn btn-primary">+ Tạo</button></div>
+        <div class="rail-list">
+          <div class="set-row active"><div class="set-name">Core Banking / Payment</div><div class="meta">42 docs · base</div></div>
+          <div class="set-row"><div class="set-name">Theo môi trường — Prod</div><div class="meta">18 docs</div></div>
+        </div>
+      </aside>
+      <section class="center">
+        <div class="pane-head"><span class="pane-title">Core Banking / Payment</span><span class="subtle xs">42 tài liệu</span></div>
+        <div class="toolbar"><input class="search" style="width:240px" placeholder="Tìm tài liệu"><select class="field" style="width:130px"><option>Mọi trạng thái</option></select><span class="count">42 / 42</span></div>
+        <div class="doc-list">
+          <div class="doc-row active"><span><strong>Hướng dẫn thanh toán</strong><div class="path">docs/payment/huong-dan.md</div></span><span class="xs">12 KB</span><span class="xs">28/11/2026</span><span><span class="tag">Đã xuất bản</span></span></div>
+          <div class="doc-row"><span><strong>Luồng hoàn tiền</strong><div class="path">docs/payment/hoan-tien.md</div></span><span class="xs">8 KB</span><span class="xs">27/11/2026</span><span><span class="tag">Đã xuất bản</span></span></div>
+        </div>
+      </section>
+      <aside class="inspector">
+        <div class="pane-head"><span class="pane-title">Core Banking / Payment</span><button class="btn" onclick="openModal('modal-b')">Cấu hình</button></div>
+        <div style="padding:10px 12px 0; flex-shrink:0">
+          <div style="display:flex; gap:4px; border-bottom:1px solid var(--color-border)">
+            <button class="btn btn-text active" onclick="switchInspectorTab(this,'bt')" style="border-bottom:2px solid var(--color-primary); border-radius:0">Tài liệu</button>
+            <button class="btn btn-text" onclick="switchInspectorTab(this,'bs')" style="border-radius:0">Bộ</button>
+          </div>
+        </div>
+        <div class="inspector-body" id="bt">
+          <div class="doc-title">Hướng dẫn thanh toán</div><div class="path">docs/payment/huong-dan.md</div>
+          <dl class="kv"><dt>Kích thước</dt><dd>12 KB</dd><dt>Cập nhật</dt><dd>28/11/2026</dd><dt>Trạng thái</dt><dd><span class="tag">Đã xuất bản</span></dd><dt>ID</dt><dd class="path">doc-8e4f21a9</dd></dl>
+        </div>
+        <div class="inspector-body" id="bs" style="display:none">
+          <dl class="kv"><dt>Loại</dt><dd>Base knowledge</dd><dt>Tài liệu</dt><dd>42</dd><dt>Xuất bản</dt><dd>Đã xuất bản · 28/11/2026</dd><dt>Bí danh</dt><dd>payment, thanh-toan</dd></dl>
+          <div class="divider"></div><button class="btn" onclick="openModal('modal-b')">Sửa cấu hình bộ</button>
+        </div>
+      </aside>
+    </div>
+    <div class="modal-backdrop" id="modal-b" onclick="if(event.target===this) closeModal('modal-b')">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Cấu hình bộ tài liệu">
+        <div class="modal-head"><strong style="font-size:var(--text-lg)">Cấu hình bộ tài liệu</strong><button class="btn" onclick="closeModal('modal-b')">Đóng</button></div>
+        <div class="modal-body"><div class="form-section"><h4>Phạm vi</h4><div class="preset-grid"><label class="radio"><input type="radio" name="preset-b" checked> Chung</label><label class="radio"><input type="radio" name="preset-b"> Theo môi trường</label><label class="radio"><input type="radio" name="preset-b"> Theo module</label><label class="radio"><input type="radio" name="preset-b"> Theo phiên bản</label><label class="radio"><input type="radio" name="preset-b"> Bổ sung</label><label class="radio"><input type="radio" name="preset-b"> Tùy chỉnh</label></div></div><div class="form-section"><h4>Thông tin</h4><label class="field-label">Tên bộ tài liệu</label><input class="field" value="Core Banking / Payment"></div></div>
+        <div class="modal-foot"><button class="btn" onclick="closeModal('modal-b')">Hủy</button><button class="btn btn-primary" onclick="closeModal('modal-b'); toast('Đã lưu cấu hình')">Lưu thay đổi</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Variant C -->
+  <div id="variant-c" class="variant">
+    <div class="workbench" style="grid-template-columns:248px minmax(420px,1fr) 72px">
+      <aside class="rail">
+        <div class="pane-head"><span class="pane-title">Bộ tài liệu</span><button class="btn btn-primary">+ Tạo</button></div>
+        <div class="rail-list">
+          <div class="set-row active"><div class="set-name">Core Banking / Payment</div><div class="meta">42 docs · base</div></div>
+          <div class="set-row"><div class="set-name">Theo môi trường — Prod</div><div class="meta">18 docs</div></div>
+        </div>
+      </aside>
+      <section class="center">
+        <div class="pane-head"><span class="pane-title">Core Banking / Payment</span><button class="btn" onclick="openModal('modal-c')">Cấu hình bộ</button></div>
+        <div class="toolbar"><input class="search" style="width:240px" placeholder="Tìm tài liệu"><select class="field" style="width:130px"><option>Mọi trạng thái</option></select><span class="count">42 / 42</span></div>
+        <div class="doc-list">
+          <div class="doc-row active" onclick="openDrawer()"><span><strong>Hướng dẫn thanh toán</strong><div class="path">docs/payment/huong-dan.md</div></span><span class="xs">12 KB</span><span class="xs">28/11/2026</span><span><span class="tag">Đã xuất bản</span></span></div>
+          <div class="doc-row" onclick="openDrawer()"><span><strong>Luồng hoàn tiền</strong><div class="path">docs/payment/hoan-tien.md</div></span><span class="xs">8 KB</span><span class="xs">27/11/2026</span><span><span class="tag">Đã xuất bản</span></span></div>
+        </div>
+      </section>
+      <aside class="inspector" style="align-items:center; padding-top:14px; gap:10px">
+        <button class="btn" onclick="openDrawer()" title="Chi tiết tài liệu">◧</button>
+        <button class="btn" onclick="openModal('modal-c')" title="Cấu hình bộ">⚙</button>
+      </aside>
+      <div id="drawer-c" style="position:absolute; top:56px; right:0; bottom:0; width:320px; background:var(--color-surface); border-left:1px solid var(--color-border); box-shadow:var(--shadow-md); transform:translateX(100%); transition:transform .2s; z-index:20; padding:14px">
+        <div style="display:flex; justify-content:space-between"><strong>Chi tiết tài liệu</strong><button class="btn" onclick="closeDrawer()">Đóng</button></div>
+        <div class="doc-title" style="margin-top:14px">Hướng dẫn thanh toán</div><div class="path">docs/payment/huong-dan.md</div>
+        <dl class="kv"><dt>Kích thước</dt><dd>12 KB</dd><dt>Cập nhật</dt><dd>28/11/2026</dd><dt>Trạng thái</dt><dd><span class="tag">Đã xuất bản</span></dd></dl>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="modal-c" onclick="if(event.target===this) closeModal('modal-c')">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Cấu hình bộ tài liệu">
+        <div class="modal-head"><strong style="font-size:var(--text-lg)">Cấu hình bộ tài liệu</strong><button class="btn" onclick="closeModal('modal-c')">Đóng</button></div>
+        <div class="modal-body"><div class="form-section"><h4>Phạm vi</h4><div class="preset-grid"><label class="radio"><input type="radio" name="preset-c" checked> Chung</label><label class="radio"><input type="radio" name="preset-c"> Theo môi trường</label><label class="radio"><input type="radio" name="preset-c"> Theo module</label><label class="radio"><input type="radio" name="preset-c"> Theo phiên bản</label><label class="radio"><input type="radio" name="preset-c"> Bổ sung</label><label class="radio"><input type="radio" name="preset-c"> Tùy chỉnh</label></div></div><div class="form-section"><h4>Thông tin</h4><label class="field-label">Tên bộ tài liệu</label><input class="field" value="Core Banking / Payment"></div></div>
+        <div class="modal-foot"><button class="btn" onclick="closeModal('modal-c')">Hủy</button><button class="btn btn-primary" onclick="closeModal('modal-c'); toast('Đã lưu cấu hình')">Lưu thay đổi</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div id="sketch-tools">
+    <select onchange="document.querySelector('link[href*=themes]').href='../themes/'+this.value+'.css'"><option value="default">Default</option></select>
+    <button onclick="setWidth(375)">375</button><button onclick="setWidth(768)">768</button><button onclick="setWidth(1280)">1280</button>
+  </div>
+  <script>
+    function showVariant(id, tab) {
+      document.querySelectorAll('.variant').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.variant-tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('variant-' + id).classList.add('active');
+      tab.classList.add('active');
+    }
+    function toast(msg) {
+      const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
+      clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1800);
+    }
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    function selectDoc(row, title, path, meta) {
+      document.querySelectorAll('.doc-row').forEach(r => r.classList.remove('active')); row.classList.add('active');
+      document.getElementById('insp-title').textContent = title;
+      document.getElementById('insp-path').textContent = path;
+      document.getElementById('insp-size').textContent = meta.split(' · ')[0];
+    }
+    function toggleCollapse(el) { const v = el.querySelector('span:last-child'); v.textContent = v.textContent === '▾' ? '▴' : '▾'; }
+    function toggleRowMenu(btn) {
+      const menu = btn.parentElement.querySelector('.row-menu');
+      const wasOpen = menu.classList.contains('open');
+      document.querySelectorAll('.row-menu').forEach(m => m.classList.remove('open'));
+      if (!wasOpen) menu.classList.add('open');
+    }
+    function quickEdit(menu, name) { menu.parentElement.querySelector('.row-menu').classList.remove('open'); toast('Sửa nhanh ' + name + ': tên, path, trạng thái'); }
+    function quickRename(menu, name) { menu.parentElement.querySelector('.row-menu').classList.remove('open'); const next = prompt('Đổi tên tài liệu', name); if (next) toast('Đổi tên thành ' + next); }
+    function quickCopyPath(path) { document.querySelectorAll('.row-menu').forEach(m => m.classList.remove('open')); toast('Đã sao chép ' + path); }
+    function quickRemove(menu, name) {
+      menu.parentElement.querySelector('.row-menu').classList.remove('open');
+      if (confirm('Xoá "' + name + '" khỏi bộ tài liệu? Tài liệu gốc vẫn giữ lại.')) toast('Đã xoá ' + name + ' khỏi bộ');
+    }
+    function confirmRemove() { if (confirm('Xoá tài liệu này khỏi bộ tài liệu? Tài liệu gốc vẫn giữ lại.')) toast('Đã xoá khỏi bộ'); }
+    function switchInspectorTab(btn, id) {
+      btn.parentElement.querySelectorAll('button').forEach(b => { b.classList.remove('active'); b.style.borderBottom = ''; });
+      btn.classList.add('active'); btn.style.borderBottom = '2px solid var(--color-primary)';
+      document.getElementById('bt').style.display = id === 'bt' ? 'block' : 'none';
+      document.getElementById('bs').style.display = id === 'bs' ? 'block' : 'none';
+    }
+    function openDrawer() { document.getElementById('drawer-c').style.transform = 'translateX(0)'; }
+    function closeDrawer() { document.getElementById('drawer-c').style.transform = 'translateX(100%)'; }
+    function setWidth(w) { document.querySelectorAll('.workbench').forEach(el => el.style.maxWidth = w + 'px'); }
+  </script>
+</body>
+</html>
