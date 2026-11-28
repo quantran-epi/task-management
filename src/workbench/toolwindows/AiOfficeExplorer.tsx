@@ -273,7 +273,6 @@ export const AiOfficeExplorer: React.FC<AiOfficeExplorerProps> = ({ db = default
                   fontSize: 'var(--font-size-small)',
                   marginBottom: 3,
                   transition: 'background 0.15s ease',
-                  border: '1px solid var(--border-subtle, #f0f2f5)',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'var(--bg-selected, #f0f2f5)';
