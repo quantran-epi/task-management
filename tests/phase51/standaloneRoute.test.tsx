@@ -41,7 +41,7 @@ describe('phase 51 standalone chat route', () => {
     expect(source).toContain("import.meta.env.VITE_CHAT_STANDALONE === '1'");
     expect(source).toMatch(/standaloneChat\s*=\s*STANDALONE_CHAT/);
     expect(source).toMatch(/<AIPopoutView\s+standaloneChat=\{standaloneChat\}\s*\/>/);
-    expect(source).toContain('<KnowledgeConfigProvider db={popoutDb}>');
+    expect(source).toContain('<KnowledgeConfigProvider db={standaloneChat ? chatWindowDb : defaultDb}>');
     expect(source).toMatch(/standaloneChat\s*\?\s*chatWindowDb\s*:\s*defaultDb/);
 
     window.location.hash = '#ai-popout';
