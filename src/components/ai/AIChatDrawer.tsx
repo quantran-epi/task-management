@@ -176,25 +176,23 @@ export const AI_AUTO_APPROVE_MUTATIONS_KEY = 'planner:ai_auto_approve_mutations'
 export const AI_TAB_ANALYSIS_MODES_KEY = 'planner:ai_tab_analysis_modes';
 
 /**
- * Checkpoint 261118-cz2 decision `browser-filereader`: TaskMate never reads local file
- * CONTENT itself (no Rust/Tauri read command). The OS dialog / attachment UI only records the
- * file name/path. To use the content, the user must explicitly pick the file again through the
- * browser file input in the composer, which reads it client-side via FileReader under a hard size
- * cap and sanitizes it before it enters the prompt. Pinned as a constant so tests can assert the
- * prompt contract without rendering the whole drawer.
+ * Paths attached through the SSH file browser are the only file references available to the AI.
+ * File content enters the prompt only through the SSH FS tools, which sanitize it before wrapping
+ * it in a delimited prompt section. Pinned as a constant so tests can assert the prompt contract
+ * without rendering the whole drawer.
  */
 export const REFERENCED_FILES_HINT =
-  'TaskMate does not read local file content itself. Only the file name/path above is known to the AI. ' +
-  'To use a file’s content, the user must explicitly choose the same file again through the browser file input in the composer; ' +
-  'TaskMate then reads it client-side and sanitizes it before adding it to this chat. ' +
-  'Do not claim to have read, or ask for, local file content that was not provided in the conversation. ' +
-  'For remote paths, use the SSH FS tools.';
+  'TaskMate does not read file content itself. Only the exact SSH remote paths above are known to the AI. ' +
+  'To use a file’s content, call the SSH FS tools ssh_attached_file_info, ssh_attached_file_search and ssh_attached_file_read with the exact path from the block above. ' +
+  'Their returned content is sanitized before it enters this chat. ' +
+  'Do not claim to have read, or ask for, file content that the tools did not provide. ' +
+  'SSH FS tools are the only file reading path.';
 
 /** Pure formatter for the single `<referenced_files>` block shared by both prompt branches. */
 export function buildReferencedFilesPrompt(paths: readonly string[]): string {
   if (paths.length === 0) return '';
   const filesList = paths.map((filePath) => `- \`${filePath}\``).join('\n');
-  return `<referenced_files>\n[User Attached & Referenced Local Files]:\nThe following local files are attached to this chat session (name/path only):\n${filesList}\n${REFERENCED_FILES_HINT}\n</referenced_files>`;
+  return `<referenced_files>\n[Attached Files (SSH remote paths)]:\nThe following SSH remote paths are attached to this chat session:\n${filesList}\n${REFERENCED_FILES_HINT}\n</referenced_files>`;
 }
 
 /** Pure standalone system prompt; an empty block leaves the legacy prompt byte-identical. */
@@ -245,7 +243,7 @@ Rules:
 1. A mutation (task, change request, timer, note, capacity, document link, MCP-backed data) is allowed when the user asks for it; it is always shown to the user for approval before it is applied — never claim a change was made before the approval card is accepted.
 2. Use the available retrieval tools (such as \`retrieve_knowledge\`) when evidence is needed. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
 3. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-4. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+4. Attached files provide SSH remote paths only. To use their content, call the SSH FS tools with the exact attached path; never assume content the tools did not return.
 5. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 6. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`;
 
@@ -255,7 +253,7 @@ This turn prioritizes retrieval, reasoning, comparison, and artifact generation 
 Rules:
 1. Use the available retrieval tools (such as \`retrieve_knowledge\`) when evidence is needed. Keep each query short and focused (<= 200 characters): an entity name, an identifier, or a narrow topic phrase. Split broad questions into multiple focused queries instead of one long query.
 2. If a retrieval returns only entity names with no excerpts, retry using the entity name itself as the query.
-3. Attached files provide a name/path only. TaskMate never reads local file content itself; use only content the user explicitly supplied via the browser file input (or an SSH FS tool for a remote path), never assume local content.
+3. Attached files provide SSH remote paths only. To use their content, call the SSH FS tools with the exact attached path; never assume content the tools did not return.
 4. Ground every factual claim in retrieved excerpts or user-supplied file content. Clearly mark your own reasoning, assumptions, and proposals as such.
 5. End the answer with a short "Nguồn" (Sources) list naming the documents/files you used.`;
 

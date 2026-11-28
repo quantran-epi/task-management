@@ -32,6 +32,11 @@ describe('buildReferencedFilesPrompt (quick 261127-mrx)', () => {
     expect(result).toContain(REFERENCED_FILES_HINT);
     expect(result).not.toContain('/srv/repo/not-selected.md');
   });
+
+  it('keeps the block free of local-browser language', () => {
+    const result = buildReferencedFilesPrompt(['/srv/repo/a.sql']);
+    expect(result).not.toMatch(/browser file input|FileReader/i);
+  });
 });
 
 describe('buildStandaloneSystemPrompt (quick 261127-mrx)', () => {

@@ -23,7 +23,7 @@ export interface ChatInputBarProps {
   onAttachFile?: ((filePath: string) => void) | undefined;
   onAttachFiles?: ((filePaths: string[]) => void) | undefined;
   onRemoveFile?: ((filePath: string) => void) | undefined;
-  /** Only standalone chat gets the SSH browser; dock/team leave this false. */
+  /** Retained for caller compatibility; no longer gates attach — SSH browser is on every AI chat surface. */
   isStandaloneChat?: boolean | undefined;
   externalValue?: string | undefined;
   onExternalValueConsumed?: (() => void) | undefined;
@@ -107,7 +107,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onAttachFile,
   onAttachFiles,
   onRemoveFile,
-  isStandaloneChat = false,
   externalValue,
   onExternalValueConsumed,
   value,
