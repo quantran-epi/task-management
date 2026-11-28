@@ -9,7 +9,7 @@ import {
   SystemInputSchema,
   SystemUpdateSchema,
 } from '../../src/validation/schemas';
-import { shouldRenderGitLink } from '../../src/utils/gitLink';
+import { gitHref, gitLinkLabel, shouldRenderGitLink } from '../../src/utils/gitLink';
 
 const NOW = '2026-11-28T10:00:00.000Z';
 const SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
@@ -97,6 +97,7 @@ describe('shouldRenderGitLink — predicate HIỂN THỊ, không phải validato
     'https://github.com/a/b.git',
     'http://git.internal/acme/svc',
     'ssh://host/acme/svc.git',
+    'ssh://git@host/acme/svc.git',
     'git://host/acme/svc.git',
     'git@host:owner/repo.git',
   ])('render link cho %s', (url) => {
@@ -104,6 +105,11 @@ describe('shouldRenderGitLink — predicate HIỂN THỊ, không phải validato
   });
 
   it.each([
+    'https://evil.com#@github.com/x',
+    'https://evil.com?@github.com/x',
+    'ssh://baduser@host/acme/svc.git',
+    'ssh://git@host\\@evil.com/acme/svc.git',
+    'ssh://git:pass@host/acme/svc.git',
     'javascript:alert(1)',
     'data:text/html,<script>alert(1)</script>',
     'file:///srv/repo',
@@ -119,6 +125,13 @@ describe('shouldRenderGitLink — predicate HIỂN THỊ, không phải validato
     '\t\n',
   ])('render text cho %j', (url) => {
     expect(shouldRenderGitLink(url)).toBe(false);
+  });
+
+  it('gitHref/gitLinkLabel trim locally — href và label không hỏng khi value có whitespace', () => {
+    expect(gitHref(' git@host:a/b ')).toBe('https://host/a/b');
+    expect(gitLinkLabel(' git@host:a/b ')).toBe('host/a/b');
+    expect(gitHref(' https://github.com/a/b.git ')).toBe('https://github.com/a/b.git');
+    expect(gitLinkLabel(' https://github.com/a/b.git ')).toBe('https://github.com/a/b');
   });
 });
 

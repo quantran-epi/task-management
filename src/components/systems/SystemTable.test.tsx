@@ -41,6 +41,11 @@ describe('SystemTable git links', () => {
 
     expect(source).toHaveAttribute('href', sourceUrl);
     expect(gitops).toHaveAttribute('href', 'https://github.com/acme/web-gitops.git');
+    // href host phải khớp host trong label — không để label spoof trỏ đi host khác.
+    const labelHost = (label: string) =>
+      new URL(/^[a-z]+:\/\//i.test(label) ? label.trim() : `https://${label.trim()}`).host;
+    expect(new URL(source.getAttribute('href')!).host).toBe(labelHost(source.textContent!));
+    expect(new URL(gitops.getAttribute('href')!).host).toBe(labelHost(gitops.textContent!));
     expect(source).toHaveAttribute('target', '_blank');
     expect(source).toHaveAttribute('rel', 'noopener noreferrer');
   });
