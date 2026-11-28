@@ -13,6 +13,7 @@ import { AIChatProvider } from './context/AIChatContext';
 import { FormGuardProvider } from './context/FormGuardContext';
 import { GitHubAuthProvider } from './context/GitHubAuthContext';
 import { AppSplashScreen } from './components/AppSplashScreen';
+import { ChatStandaloneSplash } from './components/ChatStandaloneSplash';
 import { useHashRoute } from './hooks/useHashRoute';
 import { useGhostDevSessions } from './hooks/useGhostDevSessions';
 import { useGhostDevNotifications } from './hooks/useGhostDevNotifications';
@@ -49,6 +50,28 @@ const TaskMateRuntime: React.FC = () => {
   useGitHubAutoSync({ db: defaultDb });
   useTelegramHeadlessWorker(defaultDb);
   return null;
+};
+
+/** Shared provider tree for #/ai-popout; splash is chat-build-only. */
+const StandaloneAiPopoutShell: React.FC<{ standaloneChat: boolean | undefined }> = ({
+  standaloneChat,
+}) => {
+  const [showSplash, setShowSplash] = useState(standaloneChat === true);
+
+  return (
+    <AntdThemeAdapter>
+      <ThemeAppHolder>
+        {showSplash && (
+          <ChatStandaloneSplash onReady={() => setShowSplash(false)} />
+        )}
+        <KnowledgeConfigProvider db={standaloneChat ? chatWindowDb : defaultDb}>
+          <AIChatProvider>
+            <AIPopoutView standaloneChat={standaloneChat} />
+          </AIChatProvider>
+        </KnowledgeConfigProvider>
+      </ThemeAppHolder>
+    </AntdThemeAdapter>
+  );
 };
 
 export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STANDALONE_CHAT }) => {
@@ -113,18 +136,7 @@ export const AppIntelliJ: React.FC<AppIntelliJProps> = ({ standaloneChat = STAND
   }
 
   if (route === 'ai-popout') {
-    const popoutDb = standaloneChat ? chatWindowDb : defaultDb;
-    return (
-      <AntdThemeAdapter>
-        <ThemeAppHolder>
-          <KnowledgeConfigProvider db={popoutDb}>
-            <AIChatProvider>
-              <AIPopoutView standaloneChat={standaloneChat} />
-            </AIChatProvider>
-          </KnowledgeConfigProvider>
-        </ThemeAppHolder>
-      </AntdThemeAdapter>
-    );
+    return <StandaloneAiPopoutShell standaloneChat={standaloneChat} />;
   }
 
   if (route === 'coding-zone-popout') {
