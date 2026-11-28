@@ -127,6 +127,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   const [loading, setLoading] = useState(false);
   const [previewDocId, setPreviewDocId] = useState<string | null>(null);
   const [ghostDevModalOpen, setGhostDevModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
   const selectedCrId = useWatch('crId', form);
   const milestones = useLiveQuery(
     () => (selectedCrId ? listCrMilestones(selectedCrId, db) : Promise.resolve([])),
@@ -209,6 +210,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
         setCurrentTask(taskData ?? null);
 
         form.resetFields();
+        setActiveTab('details');
         setPreviewDocId(null);
         setGhostDevModalOpen(false);
         if (taskData) {
@@ -955,6 +957,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
             type="text"
             icon={<RobotOutlined style={{ color: 'var(--accent)' }} />}
             onClick={handleAskAI}
+            disabled={loading}
             aria-label="Hỏi AI về tác vụ này"
           >
             Hỏi AI
@@ -964,7 +967,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--gap-8)' }}>
           <Button onClick={handleClose}>Hủy</Button>
-          <Button type="primary" onClick={() => void handleSave()} loading={saving}>
+          <Button type="primary" onClick={() => void handleSave()} loading={saving} disabled={loading}>
             Lưu tác vụ
           </Button>
         </div>
@@ -972,11 +975,12 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
     >
       <Spin spinning={loading} style={{ display: 'block', height: '100%' }}>
         <div
+          key={taskId ?? '__new__'}
           data-ai-context-type="task"
           data-ai-context-id={currentTask?.id || taskId || ''}
           style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
         >
-          <Tabs defaultActiveKey="details" items={tabItems} />
+          <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
         </div>
       </Spin>
 
