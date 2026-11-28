@@ -1,17 +1,18 @@
 import { CheckCircleOutlined, CloseCircleOutlined, CloudOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, EyeOutlined, LoadingOutlined, MoreOutlined, PlayCircleOutlined, ReloadOutlined, WarningOutlined } from '../components/ui/icon';
-import { Alert, Button, Card, Descriptions, Dropdown, Empty, Input, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, useTaskMateModal, DescriptionsItem, SearchInput } from '../components/ui';
+import { Alert, Button, Card, Checkbox, Descriptions, Dropdown, Empty, Input, Modal, Progress, Select, Skeleton, Space, Statistic, Table, Tag, Tooltip, Typography, useAntdToken, useMessage, useTaskMateModal, DescriptionsItem, SearchInput } from '../components/ui';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
 import {
   computeNoteHashesCached,
   updateDocumentSet,
+  updatePresentationOrder,
 } from '../db/repositories/documentSetRepo';
 import { updateNote } from '../db/repositories/noteRepo';
 import { useLayoutStore } from './store/layoutStore';
 import { AttemptHistoryList } from '../components/knowledge/AttemptHistoryList';
 import { DocumentSetDeleteDialog } from '../components/knowledge/DocumentSetDeleteDialog';
-import { DocumentSetForm, type DocumentSetFormHandle } from '../components/knowledge/DocumentSetForm';
+import { DocumentSetForm } from '../components/knowledge/DocumentSetForm';
 import { GraphEvidenceDrawer } from '../components/knowledge/GraphEvidenceDrawer';
 import { PublishPreviewModal } from '../components/knowledge/PublishPreviewModal';
 import { formatOversizedAtomicBlockError } from '../components/knowledge/PublishProgressPanel';
@@ -90,6 +91,8 @@ interface DocumentRow {
   key: string;
   id: string;
   no: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
   title: string;
   path: string;
   sizeBytes: number;
@@ -113,6 +116,8 @@ interface DocumentRowActions {
   onRename: (row: DocumentRow) => void;
   onCopyPath: (row: DocumentRow) => void;
   onRemove: (row: DocumentRow) => void;
+  onMoveUp: (row: DocumentRow) => void;
+  onMoveDown: (row: DocumentRow) => void;
 }
 
 const DocumentRowView = memo(function DocumentRowView({
@@ -129,13 +134,17 @@ const DocumentRowView = memo(function DocumentRowView({
   const ui = STATE_UI[row.status];
   const menuItems = useMemo(() => [
     { key: 'edit', label: 'Sửa nhanh' },
+    { key: 'up', label: 'Đưa lên', disabled: !row.canMoveUp },
+    { key: 'down', label: 'Đưa xuống', disabled: !row.canMoveDown },
     { key: 'rename', label: 'Đổi tên' },
     { key: 'copy', label: 'Sao chép đường dẫn' },
     { key: 'remove', label: 'Xoá khỏi bộ', danger: true },
-  ], []);
+  ], [row.canMoveUp, row.canMoveDown]);
   const onMenuClick = useCallback(({ key, domEvent }: { key: string; domEvent: React.SyntheticEvent<HTMLElement> }) => {
     domEvent.stopPropagation();
     if (key === 'edit') actions.onQuickEdit(row);
+    else if (key === 'up') actions.onMoveUp(row);
+    else if (key === 'down') actions.onMoveDown(row);
     else if (key === 'rename') actions.onRename(row);
     else if (key === 'copy') actions.onCopyPath(row);
     else if (key === 'remove') actions.onRemove(row);
@@ -616,12 +625,13 @@ export function DocumentSetDetail({
   const [sortKey, setSortKey] = useState<'updated' | 'name'>('updated');
   const [selectedDocId, setSelectedDocId] = useState<string | undefined>(undefined);
   const [configOpen, setConfigOpen] = useState(false);
-  const [pendingPicker, setPendingPicker] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSelection, setPickerSelection] = useState<string[]>([]);
+  const [pickerQuery, setPickerQuery] = useState('');
   const [renameTarget, setRenameTarget] = useState<DocumentRow | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const { modal: confirmModal, contextHolder: confirmContextHolder } = useTaskMateModal();
   const openTab = useLayoutStore((state) => state.openTab);
-  const formRef = useRef<DocumentSetFormHandle>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [detailWidth, setDetailWidth] = useState(0);
 
@@ -685,19 +695,60 @@ export function DocumentSetDetail({
     });
   }, [confirmModal, db, message, set?.documentIds, setId]);
 
+  const handleMove = useCallback((row: DocumentRow, offset: -1 | 1) => {
+    const currentIds = set?.documentIds ?? [];
+    const index = currentIds.indexOf(row.id);
+    const target = index + offset;
+    if (index < 0 || target < 0 || target >= currentIds.length) return;
+    const next = [...currentIds];
+    [next[index], next[target]] = [next[target]!, next[index]!];
+    void updatePresentationOrder(setId, next, db).catch((err) => {
+      message.error(err instanceof Error ? err.message : 'Không thể sắp xếp tài liệu');
+    });
+  }, [db, message, set?.documentIds, setId]);
+
+  const pickerDocs = useMemo(() => {
+    const existing = new Set(set?.documentIds ?? []);
+    const query = foldForSearch(pickerQuery);
+    return formNotes
+      .filter((note) => !existing.has(note.id))
+      .filter((note) => !query || searchIncludes(note.title || '', query) || (note.tags ?? []).some((tag) => searchIncludes(tag, query)));
+  }, [formNotes, pickerQuery, set?.documentIds]);
+
+  const openPicker = useCallback(() => {
+    setPickerSelection([]);
+    setPickerQuery('');
+    setPickerOpen(true);
+  }, []);
+
+  const handleAddDocuments = useCallback(() => {
+    const existing = set?.documentIds ?? [];
+    const added = pickerDocs.filter((note) => pickerSelection.includes(note.id)).map((note) => note.id);
+    const nextIds = [...existing, ...added.filter((id) => !existing.includes(id))];
+    if (nextIds.length === existing.length) {
+      setPickerOpen(false);
+      return;
+    }
+    void updateDocumentSet(setId, { documentIds: nextIds }, db)
+      .then(() => {
+        setPickerOpen(false);
+        setPickerSelection([]);
+        setPickerQuery('');
+        message.success('Đã thêm tài liệu vào bộ');
+      })
+      .catch((err) => {
+        message.error(err instanceof Error ? err.message : 'Không thể thêm tài liệu vào bộ');
+      });
+  }, [db, message, pickerDocs, pickerSelection, set?.documentIds, setId]);
+
   const rowActions = useMemo<DocumentRowActions>(() => ({
     onQuickEdit: handleQuickEdit,
     onRename: openRename,
     onCopyPath: handleCopyPath,
     onRemove: handleRemoveFromSet,
-  }), [handleQuickEdit, openRename, handleCopyPath, handleRemoveFromSet]);
-
-  useEffect(() => {
-    if (configOpen && pendingPicker) {
-      formRef.current?.openPicker();
-      setPendingPicker(false);
-    }
-  }, [configOpen, pendingPicker]);
+    onMoveUp: (row) => handleMove(row, -1),
+    onMoveDown: (row) => handleMove(row, 1),
+  }), [handleQuickEdit, openRename, handleCopyPath, handleRemoveFromSet, handleMove]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -724,7 +775,9 @@ export function DocumentSetDetail({
     if (!set) return [];
     const notesById = new Map(allNotes.map((note) => [note.id, note]));
     const encoder = new TextEncoder();
+    const orderedIds = set.documentIds;
     return documents.map((note, index) => {
+      const orderIndex = orderedIds.indexOf(note.id);
       const pathTitles: string[] = [];
       let parentId = note.parentId;
       for (let depth = 0; parentId && depth < 20; depth += 1) {
@@ -745,6 +798,8 @@ export function DocumentSetDetail({
         key: note.id,
         id: note.id,
         no: index + 1,
+        canMoveUp: orderIndex > 0,
+        canMoveDown: orderIndex >= 0 && orderIndex < orderedIds.length - 1,
         title: note.title || 'Không tiêu đề',
         path: pathTitles.join(' / '),
         sizeBytes: encoder.encode(note.body).length,
@@ -905,6 +960,14 @@ export function DocumentSetDetail({
               options={[{ value: 'updated', label: 'Mới nhất' }, { value: 'name', label: 'Tên' }]}
             />
             <Text type="secondary" style={{ fontSize: 12 }} data-testid="doc-set-filter-count">{filteredRows.length} / {rows.length}</Text>
+            <Button
+              size="small"
+              data-testid="doc-set-add-documents"
+              aria-label="Thêm tài liệu"
+              onClick={openPicker}
+            >
+              Thêm tài liệu
+            </Button>
           </div>
           {detailWidth < 560 && selectedDoc ? (
             <div style={{ padding: '6px 12px', borderBottom: '1px solid var(--ant-color-border, #f0f0f0)', overflow: 'hidden' }}>
@@ -914,7 +977,7 @@ export function DocumentSetDetail({
           ) : null}
           {rows.length === 0 ? (
             <Empty description="Chưa có tài liệu nào trong bộ này">
-              <Button type="primary" onClick={() => { setConfigOpen(true); setPendingPicker(true); }}>Thêm tài liệu</Button>
+              <Button type="primary" onClick={openPicker}>Thêm tài liệu</Button>
             </Empty>
           ) : (
             <VirtualizedList
@@ -952,6 +1015,8 @@ export function DocumentSetDetail({
                   <div className="doc-set-inspector__actions">
                     <Button size="small" icon={<EyeOutlined />} onClick={() => handleQuickEdit(selectedDoc)}>Mở tài liệu</Button>
                     <Button size="small" icon={<EditOutlined />} onClick={() => openRename(selectedDoc)}>Đổi tên</Button>
+                    <Button size="small" disabled={!selectedDoc.canMoveUp} onClick={() => handleMove(selectedDoc, -1)}>Đưa lên</Button>
+                    <Button size="small" disabled={!selectedDoc.canMoveDown} onClick={() => handleMove(selectedDoc, 1)}>Đưa xuống</Button>
                     <Button size="small" icon={<DeleteOutlined />} onClick={() => handleRemoveFromSet(selectedDoc)}>Xoá khỏi bộ</Button>
                   </div>
                 </>
@@ -1156,12 +1221,68 @@ export function DocumentSetDetail({
         footer={null}
       >
         <DocumentSetForm
-          ref={formRef}
           notes={formNotes}
           initialSet={set}
           availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
           onSave={(value) => void handleSaveDocumentSet(value)}
         />
+      </Modal>
+
+      <Modal
+        title="Chọn tài liệu"
+        open={pickerOpen}
+        okText="Thêm"
+        cancelText="Hủy"
+        width={600}
+        onCancel={() => setPickerOpen(false)}
+        onOk={() => void handleAddDocuments()}
+      >
+        <SearchInput
+          aria-label="Tìm tài liệu để thêm"
+          placeholder="Tìm theo tiêu đề, hashtag..."
+          style={{ marginBottom: token.marginSM }}
+          value={pickerQuery}
+          onChange={(e) => setPickerQuery(e.target.value)}
+        />
+        {pickerDocs.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--fg-secondary)', padding: 24 }}>
+            Không tìm thấy tài liệu phù hợp
+          </div>
+        ) : (
+          <VirtualizedList
+            items={pickerDocs}
+            height={320}
+            estimateSize={() => 36}
+            overscan={4}
+            role="group"
+            aria-label="Danh sách tài liệu để chọn"
+            renderItem={(note) => {
+              const notesById = new Map(allNotes.map((item) => [item.id, item]));
+              const pathTitles: string[] = [];
+              let parentId = note.parentId;
+              for (let depth = 0; parentId && depth < 20; depth += 1) {
+                const parent = notesById.get(parentId);
+                if (!parent) break;
+                pathTitles.unshift(parent.title || 'Thư mục không tên');
+                parentId = parent.parentId;
+              }
+              return (
+                <div className="doc-set-pick-row">
+                  <Checkbox
+                    aria-label={note.title || 'Tài liệu không tên'}
+                    checked={pickerSelection.includes(note.id)}
+                    onChange={(e) => setPickerSelection((current) =>
+                      e.target.checked ? [...current, note.id] : current.filter((id) => id !== note.id)
+                    )}
+                  >
+                    {note.title || 'Tài liệu không tên'}
+                  </Checkbox>
+                  <Text type="secondary" ellipsis style={{ minWidth: 0 }}>{pathTitles.join(' / ')}</Text>
+                </div>
+              );
+            }}
+          />
+        )}
       </Modal>
 
       <Modal
