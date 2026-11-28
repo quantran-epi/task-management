@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TaskMateLogo } from './TaskMateLogo';
+import './app-splash.css';
 
 export interface AppSplashScreenProps {
   onReady?: () => void;
@@ -37,9 +38,10 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
       setProgress(100);
     }, minDuration * 0.9);
 
+    let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     const finishTimer = setTimeout(() => {
       setFading(true);
-      setTimeout(() => {
+      fadeTimer = setTimeout(() => {
         onReady?.();
       }, 350);
     }, minDuration);
@@ -49,157 +51,38 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
       clearTimeout(timer2);
       clearTimeout(timer3);
       clearTimeout(finishTimer);
+      clearTimeout(fadeTimer);
     };
   }, [minDuration, onReady]);
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        background: 'linear-gradient(145deg, #0a0d14 0%, #101420 50%, #0a0d14 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        userSelect: 'none',
-        opacity: fading ? 0 : 1,
-        transform: fading ? 'scale(1.02)' : 'scale(1)',
-        transition: 'opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        color: '#ffffff',
-      }}
-    >
-      {/* Background ambient radial glow */}
-      <div
-        style={{
-          position: 'absolute',
-          width: 520,
-          height: 520,
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(91, 79, 232, 0.25) 0%, rgba(34, 211, 238, 0.14) 45%, rgba(168, 85, 247, 0.08) 70%, transparent 85%)',
-          filter: 'blur(45px)',
-          pointerEvents: 'none',
-        }}
-      />
+    <div className={fading ? 'tm-splash tm-splash--fading' : 'tm-splash'}>
+      <div className="tm-splash__ambient" />
 
-      {/* Main Brand Card */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {/* Animated App Logo with Neon Shadow */}
-        <div
-          style={{
-            marginBottom: 24,
-            filter: 'drop-shadow(0 12px 32px rgba(91, 79, 232, 0.45))',
-            animation: 'pulse 2.5s infinite ease-in-out',
-          }}
-        >
+      <div className="tm-splash__brand">
+        <div className="tm-splash__mark">
           <TaskMateLogo size={76} />
         </div>
 
-        {/* Title & Slogan */}
-        <div
-          style={{
-            fontSize: 26,
-            fontWeight: 800,
-            letterSpacing: '0.04em',
-            background: 'linear-gradient(135deg, #ffffff 40%, #c7d2fe 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            marginBottom: 4,
-          }}
-        >
-          TaskMate
-        </div>
+        <div className="tm-splash__title">TaskMate</div>
+        <div className="tm-splash__eyebrow">IntelliJ Islands Workbench</div>
 
-        <div
-          style={{
-            fontSize: 12.5,
-            fontWeight: 500,
-            color: '#94a3b8',
-            letterSpacing: '0.05em',
-            textTransform: 'uppercase',
-            marginBottom: 32,
-          }}
-        >
-          IntelliJ Islands Workbench
-        </div>
-
-        {/* Progress Bar Container */}
-        <div
-          style={{
-            width: 280,
-            height: 4,
-            borderRadius: 2,
-            background: 'rgba(255, 255, 255, 0.1)',
-            overflow: 'hidden',
-            position: 'relative',
-            marginBottom: 16,
-          }}
-        >
+        <div className="tm-splash__progress">
           <div
-            style={{
-              height: '100%',
-              width: `${progress}%`,
-              borderRadius: 2,
-              background: 'linear-gradient(90deg, #38bdf8 0%, #818cf8 50%, #ec4899 100%)',
-              boxShadow: '0 0 12px rgba(56, 189, 248, 0.6)',
-              transition: 'width 0.25s ease-out',
-            }}
+            className="tm-splash__progress-fill"
+            style={{ width: `${progress}%` }}
           />
         </div>
 
-        {/* Boot Step Indicator Text */}
-        <div
-          style={{
-            fontSize: 12,
-            color: '#64748b',
-            height: 18,
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#38bdf8',
-              boxShadow: '0 0 8px #38bdf8',
-            }}
-          />
+        <div className="tm-splash__step">
+          <span className="tm-splash__step-dot" />
           <span>{BOOT_STEPS[currentStepIndex]}</span>
         </div>
       </div>
 
-      {/* Footer Version Notice */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 24,
-          fontSize: 11,
-          color: '#475569',
-          letterSpacing: '0.02em',
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 2,
-        }}
-      >
+      <div className="tm-splash__footer">
         <div>Private & Offline-First &bull; Personal Workload Planner</div>
-        <div style={{ color: '#64748b', fontSize: 10 }}>Developed by Quan Tran Duc</div>
+        <div className="tm-splash__footer-author">Developed by Quan Tran Duc</div>
       </div>
     </div>
   );
