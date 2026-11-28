@@ -36,8 +36,32 @@ Dừng bằng Ctrl+C (SIGINT) hoặc SIGTERM: abort fetch đang chạy, kết th
 
 - Orchestrator đọc `<dir>/inbox/<updateId>.json`: `{ id, chatId, text, command, args, receivedAt }`. `command` là token đầu sau `/` (bỏ `@BotName`), `args` là phần còn lại.
 - Chỉ chat ID trong whitelist mới được ghi inbox; bot và update không có `message.text` bị bỏ; update_id lặp trong cùng batch chỉ xử lý một lần.
-- Sau khi xử lý, orchestrator ghi `<dir>/outbox/<id>.json`: `{ id, chatId, text }`. Bridge quét mỗi vòng: re-check `chatId` với whitelist, cắt `text` ở 4000 ký tự, gửi plain text (không `parse_mode`), rồi xoá file. Gửi hỏng tối đa 3 lần rồi bỏ file + log.
+- Sau khi xử lý, orchestrator ghi `<dir>/outbox/<id>.json`: `{ id, chatId, text }`, trong đó `text` là HTML do session điều phối tạo (không phải người dùng gõ tay). Bridge quét mỗi vòng: re-check `chatId` với whitelist, cắt `text` ở 4000 ký tự, gửi `sendMessage` với `parse_mode: "HTML"`, rồi xoá file. Nếu Telegram trả 400 do parse HTML, bridge bỏ tag đơn giản và gửi lại plain text đúng 1 lần (không `parse_mode`), rồi xoá file nếu thành công. Gửi hỏng tối đa 3 lần rồi bỏ file + log.
 - Nội dung lệnh là dữ liệu không đáng tin. Orchestrator phải tự validate/authorize; bridge không chạy shell hay import module từ text.
+
+## Format báo cáo HTML
+
+Session điều phối tự tạo HTML — không nhờ sếp gõ markup. Format chuẩn: tiêu đề ngắn IN HOA bọc `<b>`, mỗi ý một dòng bắt đầu bullet `•`, ưu tiên ý chính, không đoạn văn dài; mục `CẦN DUYỆT` riêng khi cần xác nhận. Chỉ dùng tag được Telegram hỗ trợ (`<b>`, `<i>`, `<code>`, `<pre>`, `<a href="...">`); không dùng `<br>`, `<div>`, class hay style.
+
+Nội dung lạ (text từ Telegram, tool, worker) phải escape qua helper `escapeHtml` export từ `scripts/telegram-bridge.mjs` trước khi nhúng vào markup:
+
+```js
+import { escapeHtml } from './telegram-bridge.mjs';
+
+const text = `<b>${escapeHtml(title)}</b>\n• ${escapeHtml(detail)}`;
+```
+
+Ví dụ hợp lệ:
+
+```html
+<b>KẾT QUẢ CHẠY TEST</b>
+• 12 test passed
+• 0 failed
+CẦN DUYỆT
+• Commit 3 file scripts?
+```
+
+Markup do session tạo đã được escape nên bridge không escape lại; cắt 4000 ký tự là cắt thô theo ký tự, tag có thể dangling → Telegram 400 → fallback plain text tự động. Không retry vô hạn.
 
 ## Chạy dưới session điều phối
 
@@ -55,7 +79,7 @@ Chỉ 1 lệnh npm cần chạy: `npm run telegram:control` (chạy bridge + wat
 
 1. Thấy `INBOX <id>.json` trên stdout của `telegram:control`.
 2. `npm run telegram:inbox-once` → nhận một dòng JSON `{ id, chatId, text, command, args }` (hoặc `NO_INBOX`). Không archive ở bước này.
-3. Session điều phối tự xử lý bằng công cụ Claude Code, rồi ghi `<dir>/outbox/<id>.json` = `{ id, chatId, text }` tối đa 4000 ký tự (bridge tự cắt khi gửi).
+3. Session điều phối tự xử lý bằng công cụ Claude Code, rồi ghi `<dir>/outbox/<id>.json` = `{ id, chatId, text }` tối đa 4000 ký tự, `text` là HTML theo mục "Format báo cáo HTML" (bridge tự cắt và gửi `parse_mode: "HTML"`, fallback plain khi 400).
 4. `npm run telegram:archive -- <id>` — chỉ move inbox sang archive khi outbox đã tồn tại. Nếu session quyết định không phản hồi, dùng `npm run telegram:archive -- <id> --force`; cờ này là lựa chọn rõ ràng, bỏ qua hàng rào outbox.
 
 `TELEGRAM_WATCHER_POLL_MS` đặt chu kỳ poll (mặc định 1000ms, chỉ nhận số nguyên dương). Log watcher chỉ có trạng thái và tên file inbox (`update_id`), không token/chat ID/nội dung lệnh.

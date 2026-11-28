@@ -17,6 +17,28 @@ const MAX_TEXT = 4000;
 const MAX_OUTBOX_FAILURES = 3;
 const BACKOFF_MIN = 2000;
 const BACKOFF_MAX = 30000;
+const HTML_ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const PLAIN_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
+
+export function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ENTITIES[ch]);
+}
+
+function codePoint(value) {
+  return Number.isSafeInteger(value) && value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : null;
+}
+
+function htmlToPlain(value) {
+  return value
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#[0-9]+|#x[0-9a-f]+|[a-z]+);/gi, (match, name) => {
+      const key = name.toLowerCase();
+      if (Object.hasOwn(PLAIN_ENTITIES, key)) return PLAIN_ENTITIES[key];
+      if (key.startsWith('#x')) return codePoint(Number.parseInt(key.slice(2), 16)) ?? match;
+      if (key.startsWith('#')) return codePoint(Number(key.slice(1))) ?? match;
+      return match;
+    });
+}
 
 function positiveIds(values) {
   if (!Array.isArray(values)) return [];
@@ -237,19 +259,32 @@ export function createTelegramBridge({
         await unlink(path).catch(() => {});
         continue;
       }
-      const body = JSON.stringify({ chat_id: chatId, text: payload.text.slice(0, MAX_TEXT) });
+      const htmlText = payload.text.slice(0, MAX_TEXT);
+      const attempts = [{ chat_id: chatId, text: htmlText, parse_mode: 'HTML' }];
       try {
-        const response = await fetchImpl(apiUrl('sendMessage'), {
+        let response = await fetchImpl(apiUrl('sendMessage'), {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body,
+          body: JSON.stringify(attempts[0]),
           signal: controller.signal,
         });
+        if (response.status === 400) {
+          log('sendMessage từ chối HTML (400), thử lại plain text.');
+          const plainText = htmlToPlain(htmlText).slice(0, MAX_TEXT);
+          const fallback = { chat_id: chatId, text: plainText };
+          attempts.push(fallback);
+          response = await fetchImpl(apiUrl('sendMessage'), {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(fallback),
+            signal: controller.signal,
+          });
+        }
         if (response.ok) {
           await unlink(path).catch(() => {});
           outboxFailures.delete(name);
         } else {
-          log(`sendMessage lỗi HTTP ${response.status}.`);
+          log(`sendMessage lỗi HTTP ${response.status} sau ${attempts.length} lần thử.`);
           await noteOutboxFailure(name, path);
         }
       } catch {

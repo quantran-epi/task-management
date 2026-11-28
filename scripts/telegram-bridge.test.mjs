@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { createTelegramBridge, resolveConfig } from './telegram-bridge.mjs';
+import { createTelegramBridge, escapeHtml, resolveConfig } from './telegram-bridge.mjs';
 
 const TOKEN = 'test-token';
 const ALLOWED = 11;
@@ -295,35 +295,82 @@ test('stop() abort fetch đang treo và resolve run()', async (t) => {
   assert.match(logs.join('\n'), /Đã dừng bridge\./);
 });
 
-test('outbox gửi đúng chat whitelist, cắt 4000 ký tự rồi xoá file', async (t) => {
-  const dir = await makeTempDir(t);
+async function runOutboxTest(dir, htmlText, responses, logs = []) {
   await mkdir(join(dir, 'outbox'), { recursive: true });
   const outboxFile = join(dir, 'outbox', 'report-1.json');
-  await writeFile(outboxFile, JSON.stringify({ id: 'report-1', chatId: ALLOWED, text: 'x'.repeat(4100), parse_mode: 'Markdown' }));
-
+  await writeFile(outboxFile, JSON.stringify({ id: 'report-1', chatId: ALLOWED, text: htmlText }));
   const calls = [];
-  const responses = [
-    jsonResponse({ result: [] }),
-    jsonResponse({ result: [] }),
-    jsonResponse({ ok: true }),
-    jsonResponse({ ok: false }, 409),
-  ];
   const bridge = createTelegramBridge({
     fetchImpl: scriptedFetch(responses, calls),
     config: await makeConfig(dir),
     dir,
     sleep: async () => true,
-    log: () => {},
+    log: (line) => logs.push(line),
   });
-
   await bridge.run();
+  return { calls: calls.filter((call) => call.init.method === 'POST'), outboxFile };
+}
 
-  const send = calls.find((call) => call.init.method === 'POST');
-  assert.ok(send);
-  assert.match(send.url, /\/sendMessage$/);
-  assert.equal(send.init.headers['content-type'], 'application/json');
-  assert.deepEqual(JSON.parse(send.init.body), { chat_id: ALLOWED, text: 'x'.repeat(4000) });
-  assert.equal((await readdir(join(dir, 'outbox'))).length, 0);
+test('escapeHtml thoát đúng ký tự đặc biệt cho nội dung lạ', () => {
+  assert.equal(escapeHtml(`<b>A &amp; "B" 'C'</b>`), '&lt;b&gt;A &amp;amp; &quot;B&quot; &#39;C&#39;&lt;/b&gt;');
+  assert.equal(escapeHtml(undefined), '');
+});
+
+test('outbox gửi HTML parse_mode, cắt 4000 ký tự rồi xoá file', async (t) => {
+  const dir = await makeTempDir(t);
+  const { calls, outboxFile } = await runOutboxTest(dir, `<b>TIÊU ĐỀ</b>\n• ${'x'.repeat(4100)}`, [
+    jsonResponse({ result: [] }),
+    jsonResponse({ result: [] }),
+    jsonResponse({ ok: true }),
+    jsonResponse({ ok: false }, 409),
+  ]);
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/sendMessage$/);
+  assert.equal(calls[0].init.headers['content-type'], 'application/json');
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    chat_id: ALLOWED,
+    text: `<b>TIÊU ĐỀ</b>\n• ${'x'.repeat(4100)}`.slice(0, 4000),
+    parse_mode: 'HTML',
+  });
+  assert.equal(await readFile(outboxFile, 'utf8').then(() => true, () => false), false);
+});
+
+test('outbox 400 do parse → fallback plain text đúng 1 lần rồi xoá file', async (t) => {
+  const dir = await makeTempDir(t);
+  const logs = [];
+  const { calls, outboxFile } = await runOutboxTest(
+    dir,
+    '<b>TIÊU ĐỀ</b>\n• A &amp; B',
+    [jsonResponse({ result: [] }), jsonResponse({ result: [] }), jsonResponse({ ok: false }, 400), jsonResponse({ ok: true }), jsonResponse({ ok: false }, 409)],
+    logs,
+  );
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    chat_id: ALLOWED,
+    text: '<b>TIÊU ĐỀ</b>\n• A &amp; B',
+    parse_mode: 'HTML',
+  });
+  assert.deepEqual(JSON.parse(calls[1].init.body), { chat_id: ALLOWED, text: 'TIÊU ĐỀ\n• A & B' });
+  assert.match(logs.join('\n'), /400.*plain/);
+  assert.equal(await readFile(outboxFile, 'utf8').then(() => true, () => false), false);
+});
+
+test('outbox 400 ở cả hai lần thử → dừng, không retry vô hạn', async (t) => {
+  const dir = await makeTempDir(t);
+  const logs = [];
+  const { calls, outboxFile } = await runOutboxTest(
+    dir,
+    '<b>LỖI</b>',
+    [jsonResponse({ result: [] }), jsonResponse({ result: [] }), jsonResponse({ ok: false }, 400), jsonResponse({ ok: false }, 400), jsonResponse({ ok: false }, 409)],
+    logs,
+  );
+
+  assert.equal(calls.length, 2);
+  assert.equal(JSON.parse(calls[1].init.body).parse_mode, undefined);
+  assert.equal(await readFile(outboxFile, 'utf8').then(() => true, () => false), true);
+  assert.match(logs.join('\n'), /400 sau 2 lần thử/);
 });
 
 test('outbox chat lạ bị bỏ, không gửi sendMessage', async (t) => {
@@ -352,17 +399,23 @@ test('outbox chat lạ bị bỏ, không gửi sendMessage', async (t) => {
   assert.equal((await readdir(join(dir, 'outbox'))).includes('foreign.json'), true);
 });
 
-test('log không chứa token hay response body', async (t) => {
+test('log không chứa token, chat ID hay response body', async (t) => {
   const dir = await makeTempDir(t);
+  await mkdir(join(dir, 'outbox'), { recursive: true });
+  await writeFile(join(dir, 'outbox', 'secret.json'), JSON.stringify({ id: 'secret', chatId: 771234, text: '<b>BAO CÁO</b>' }));
+  const CHAT_ID = '771234';
   const logs = [];
   const calls = [];
   const responses = [
+    jsonResponse({ result: [] }),
     jsonResponse({ result: [{ update_id: 1, secret_body: TOKEN }] }),
-    jsonResponse({ ok: false, detail: TOKEN }, 409),
+    jsonResponse({ ok: false, detail: CHAT_ID }, 400),
+    jsonResponse({ ok: false, detail: TOKEN }, 400),
+    jsonResponse({ ok: false }, 409),
   ];
   const bridge = createTelegramBridge({
     fetchImpl: scriptedFetch(responses, calls),
-    config: await makeConfig(dir),
+    config: await makeConfig(dir, `${ALLOWED},${CHAT_ID}`),
     dir,
     sleep: async () => true,
     log: (line) => logs.push(line),
@@ -371,6 +424,8 @@ test('log không chứa token hay response body', async (t) => {
   await bridge.run();
   const joined = logs.join('\n');
   assert.equal(joined.includes(TOKEN), false);
+  assert.equal(joined.includes(CHAT_ID), false);
   assert.equal(joined.includes('secret_body'), false);
+  assert.equal(joined.includes('detail'), false);
   assert.equal(joined.includes('409'), true);
 });
