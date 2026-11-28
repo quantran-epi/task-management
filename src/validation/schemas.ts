@@ -140,38 +140,8 @@ export const namedLinkSchema = z.object({
 /** Single source of truth for the link URL rule in Ant Design form validators. */
 export const isValidLinkUrl = (value: unknown): boolean => linkSchema.safeParse(value).success;
 
-export const GIT_REPO_URL_MESSAGE =
-  'Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git';
-
-/** Git repo URL allowlist — separate from linkSchema, which also accepts local paths/UUIDs. */
-export function isGitRepoUrl(value: unknown): boolean {
-  if (typeof value !== 'string') return false;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 500 || /\s/.test(trimmed)) return false;
-  // Reject userinfo and backslashes: browsers parse them differently, so the displayed
-  // label can point to a different host than the actual link target (spoofing).
-  // ssh://git@host is the one conventional form kept; passwords never belong in a link.
-  if (/\\/.test(trimmed)) return false;
-  const scheme = /^(https?|ssh|git):\/\//i.exec(trimmed);
-  if (scheme) {
-    try {
-      const parsed = new URL(trimmed);
-      if (!parsed.hostname || parsed.password) return false;
-      if (parsed.username && !(scheme[1]?.toLowerCase() === 'ssh' && parsed.username === 'git')) {
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~/-]+$/.test(trimmed);
-}
-
-export const isValidGitRepoUrl = isGitRepoUrl;
-export const gitRepoUrlSchema = z.string().trim().refine(isGitRepoUrl, {
-  message: GIT_REPO_URL_MESSAGE,
-});
+/** Git link values are free-form strings — safety is decided at render time, not here. */
+export const gitLinkStringSchema = z.string();
 
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
 // Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.
@@ -251,8 +221,8 @@ export const SystemInputSchema = z
     description: z.string().optional(),
     sshConfigId: uuidSchema.optional(),
     remoteRepoPath: remoteRepoPathSchema.optional(),
-    gitSourceUrl: gitRepoUrlSchema.optional(),
-    gitOpsUrl: gitRepoUrlSchema.optional(),
+    gitSourceUrl: gitLinkStringSchema.optional(),
+    gitOpsUrl: gitLinkStringSchema.optional(),
     defaultBaseBranch: z.string().optional(),
   })
   .superRefine(refineSystemShape);
@@ -266,8 +236,8 @@ export const SystemUpdateSchema = z
     description: z.string().optional(),
     sshConfigId: uuidSchema.optional().nullable(),
     remoteRepoPath: remoteRepoPathSchema.optional().nullable(),
-    gitSourceUrl: gitRepoUrlSchema.optional(),
-    gitOpsUrl: gitRepoUrlSchema.optional(),
+    gitSourceUrl: gitLinkStringSchema.optional(),
+    gitOpsUrl: gitLinkStringSchema.optional(),
     defaultBaseBranch: z.string().optional().nullable(),
   })
   .superRefine(refineSystemShape);

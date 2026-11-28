@@ -116,13 +116,17 @@ describe('validateBackupPayload', () => {
       expect(result.errors).toEqual([]);
     });
 
-    it('rejects a dangerous git link on a system row before restore', () => {
-      const result = validateBackupPayload(withSystemLinks('javascript:alert(1)'));
-      expect(result.valid).toBe(false);
-      expect(
-        result.errors.some((e) => e.table === 'systems' && e.field === 'gitSourceUrl')
-      ).toBe(true);
-      expect(result.envelope).toBeUndefined();
+    it.each([
+      'javascript:alert(1)',
+      'data:text/html,<script>',
+      'file:///srv/repo',
+      '   ',
+      'a'.repeat(501),
+    ])('accepts any string on a system row: %j', (value) => {
+      const result = validateBackupPayload(withSystemLinks(value));
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.envelope?.tables.systems?.[0]?.gitSourceUrl).toBe(value);
     });
 
     it('still accepts a legacy system row with no git link fields', () => {

@@ -5,15 +5,27 @@ import { TaskPlannerDatabase } from '../../src/db';
 import { createSystem, getSystem, updateSystem } from '../../src/db/repositories/systemRepo';
 import { BackupSystemRecordSchema } from '../../src/validation/backupSchemas';
 import {
-  gitRepoUrlSchema,
-  isGitRepoUrl,
-  isValidGitRepoUrl,
+  gitLinkStringSchema,
   SystemInputSchema,
   SystemUpdateSchema,
 } from '../../src/validation/schemas';
+import { shouldRenderGitLink } from '../../src/utils/gitLink';
 
 const NOW = '2026-11-28T10:00:00.000Z';
 const SYSTEM_ID = '11111111-1111-4111-8111-111111111111';
+const ANY_STRINGS = [
+  'javascript:alert(1)',
+  'data:text/html,<script>alert(1)</script>',
+  'file:///srv/repo',
+  '/srv/repo',
+  'C:\\srv\\repo',
+  'https://user:pass@host/x',
+  'https://evil.com\\@github.com/x',
+  'a'.repeat(501),
+  '   ',
+  '\t\n',
+  '',
+];
 
 function systemRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -28,68 +40,28 @@ function systemRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('isGitRepoUrl — allowlist cho link git của System', () => {
-  it.each([
-    'https://github.com/acme/svc.git',
-    'http://git.internal/acme/svc',
-    'ssh://git@host/acme/svc.git',
-    'git://host/acme/svc.git',
-    'git@github.com:acme/svc.git',
-  ])('chấp nhận %s', (url) => {
-    expect(isGitRepoUrl(url)).toBe(true);
-    expect(isValidGitRepoUrl(url)).toBe(true);
-    expect(gitRepoUrlSchema.safeParse(url).success).toBe(true);
+describe('gitLinkStringSchema + System schemas — lưu nguyên mọi chuỗi', () => {
+  it.each(ANY_STRINGS)('chấp nhận nguyên chuỗi %j', (value) => {
+    expect(gitLinkStringSchema.safeParse(value).success).toBe(true);
+    expect(gitLinkStringSchema.parse(value)).toBe(value);
   });
 
-  it.each([
-    'javascript:alert(1)',
-    'data:text/html,<script>alert(1)</script>',
-    'file:///srv/repo',
-    '/srv/repo',
-    'C:\\srv\\repo',
-    'https://user:pass@host/x',
-    'https://evil.com\\@github.com/x',
-    'ssh:///repo',
-    'https://github.com/acme/my repo.git',
-    'a'.repeat(501),
-    '',
-    '   ',
-    '\t\n',
-  ])('từ chối %s', (url) => {
-    expect(isGitRepoUrl(url)).toBe(false);
-    expect(gitRepoUrlSchema.safeParse(url).success).toBe(false);
-  });
-
-  it('từ chối giá trị không phải chuỗi', () => {
-    expect(isGitRepoUrl(null)).toBe(false);
-    expect(isGitRepoUrl(42)).toBe(false);
-  });
-});
-
-describe('System git link schemas', () => {
-  it('chấp nhận 2 link optional và giữ nguyên field cũ', () => {
+  it('giữ nguyên khoảng trắng ở input/update schema', () => {
     const parsed = SystemInputSchema.parse({
       name: 'Core Service',
       code: 'CORE_SVC',
       type: 'SERVICE',
       remoteRepoPath: '/srv/repo',
-      gitSourceUrl: '  https://github.com/acme/svc.git  ',
-      gitOpsUrl: 'git@github.com:acme/gitops.git',
+      gitSourceUrl: '  abc  ',
+      gitOpsUrl: '  git@github.com:acme/gitops.git  ',
     });
-    expect(parsed.gitSourceUrl).toBe('https://github.com/acme/svc.git');
-    expect(parsed.gitOpsUrl).toBe('git@github.com:acme/gitops.git');
+    expect(parsed.gitSourceUrl).toBe('  abc  ');
+    expect(parsed.gitOpsUrl).toBe('  git@github.com:acme/gitops.git  ');
     expect(parsed.remoteRepoPath).toBe('/srv/repo');
-  });
 
-  it('từ chối link độc hại ở cả input/update schema', () => {
-    expect(
-      SystemInputSchema.safeParse({
-        name: 'Core Service',
-        code: 'CORE_SVC',
-        gitSourceUrl: 'javascript:alert(1)',
-      }).success
-    ).toBe(false);
-    expect(SystemUpdateSchema.safeParse({ gitOpsUrl: 'file:///srv/repo' }).success).toBe(false);
+    const updated = SystemUpdateSchema.parse({ gitSourceUrl: '  weird value  ', gitOpsUrl: '' });
+    expect(updated.gitSourceUrl).toBe('  weird value  ');
+    expect(updated.gitOpsUrl).toBe('');
   });
 
   it('LOGICAL_GROUP vẫn nhận link nhưng vẫn bị chặn SSH/repo', () => {
@@ -97,8 +69,8 @@ describe('System git link schemas', () => {
       name: 'Group',
       code: 'GROUP',
       type: 'LOGICAL_GROUP',
-      gitSourceUrl: 'https://github.com/acme/svc.git',
-      gitOpsUrl: 'https://github.com/acme/gitops.git',
+      gitSourceUrl: 'javascript:alert(1)',
+      gitOpsUrl: '  abc  ',
     });
     expect(withLinks.success).toBe(true);
 
@@ -112,25 +84,45 @@ describe('System git link schemas', () => {
     expect(withRepo.success).toBe(false);
   });
 
-  it('BackupSystemRecordSchema chấp nhận link cũ thiếu và hợp lệ, từ chối link độc hại', () => {
+  it('BackupSystemRecordSchema chấp nhận mọi string và payload cũ thiếu field', () => {
     expect(BackupSystemRecordSchema.safeParse(systemRow()).success).toBe(true);
-    expect(
-      BackupSystemRecordSchema.safeParse(
-        systemRow({
-          gitSourceUrl: 'https://github.com/acme/svc.git',
-          gitOpsUrl: 'git@github.com:acme/gitops.git',
-        })
-      ).success
-    ).toBe(true);
-    expect(
-      BackupSystemRecordSchema.safeParse(
-        systemRow({ gitSourceUrl: 'javascript:alert(1)' })
-      ).success
-    ).toBe(false);
+    for (const value of ANY_STRINGS) {
+      expect(BackupSystemRecordSchema.safeParse(systemRow({ gitSourceUrl: value, gitOpsUrl: value })).success).toBe(true);
+    }
   });
 });
 
-describe('systemRepo — persistence cho 2 link git', () => {
+describe('shouldRenderGitLink — predicate HIỂN THỊ, không phải validator input', () => {
+  it.each([
+    'https://github.com/a/b.git',
+    'http://git.internal/acme/svc',
+    'ssh://host/acme/svc.git',
+    'git://host/acme/svc.git',
+    'git@host:owner/repo.git',
+  ])('render link cho %s', (url) => {
+    expect(shouldRenderGitLink(url)).toBe(true);
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'file:///srv/repo',
+    '/srv/repo',
+    'C:\\srv\\repo',
+    'https://user:pass@host/x',
+    'https://evil.com\\@github.com/x',
+    'https://github.com/acme/my repo.git',
+    'ssh:///repo',
+    'a'.repeat(501).slice(0, 20) + ' x ' + 'b'.repeat(20),
+    '',
+    '   ',
+    '\t\n',
+  ])('render text cho %j', (url) => {
+    expect(shouldRenderGitLink(url)).toBe(false);
+  });
+});
+
+describe('systemRepo — persistence giữ nguyên chuỗi lạ', () => {
   let db: TaskPlannerDatabase;
 
   beforeEach(async () => {
@@ -142,31 +134,31 @@ describe('systemRepo — persistence cho 2 link git', () => {
     await db.delete();
   });
 
-  it('createSystem lưu cả 2 link, update đổi từng link và xoá được bằng key present', async () => {
+  it('create/update lưu nguyên chuỗi lạ; xoá bằng chuỗi rỗng', async () => {
     const created = await createSystem(
       {
         name: 'Core Service',
         code: 'CORE_SVC',
         parentId: null,
         type: 'SERVICE',
-        gitSourceUrl: 'https://github.com/acme/svc.git',
-        gitOpsUrl: 'git@github.com:acme/gitops.git',
+        gitSourceUrl: '  weird value  ',
+        gitOpsUrl: 'javascript:alert(1)',
       },
       db
     );
-    expect(created.gitSourceUrl).toBe('https://github.com/acme/svc.git');
-    expect(created.gitOpsUrl).toBe('git@github.com:acme/gitops.git');
+    expect(created.gitSourceUrl).toBe('  weird value  ');
+    expect(created.gitOpsUrl).toBe('javascript:alert(1)');
 
     const changed = await updateSystem(
       created.id,
-      { gitSourceUrl: 'https://github.com/acme/new-svc.git', gitOpsUrl: undefined },
+      { gitSourceUrl: '  weird value  ', gitOpsUrl: '' },
       db
     );
-    expect(changed.gitSourceUrl).toBe('https://github.com/acme/new-svc.git');
+    expect(changed.gitSourceUrl).toBe('  weird value  ');
     expect(changed.gitOpsUrl).toBeUndefined();
 
     const stored = await getSystem(created.id, db);
-    expect(stored?.gitSourceUrl).toBe('https://github.com/acme/new-svc.git');
+    expect(stored?.gitSourceUrl).toBe('  weird value  ');
     expect(stored?.gitOpsUrl).toBeUndefined();
   });
 
@@ -195,13 +187,13 @@ describe('systemRepo — persistence cho 2 link git', () => {
         code: 'PARENT',
         parentId: null,
         type: 'LOGICAL_GROUP',
-        gitSourceUrl: 'https://github.com/acme/svc.git',
-        gitOpsUrl: 'https://github.com/acme/gitops.git',
+        gitSourceUrl: 'javascript:alert(1)',
+        gitOpsUrl: '  abc  ',
       },
       db
     );
-    expect(parent.gitSourceUrl).toBe('https://github.com/acme/svc.git');
-    expect(parent.gitOpsUrl).toBe('https://github.com/acme/gitops.git');
+    expect(parent.gitSourceUrl).toBe('javascript:alert(1)');
+    expect(parent.gitOpsUrl).toBe('  abc  ');
 
     await expect(
       createSystem(

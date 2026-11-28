@@ -19,7 +19,7 @@ import {
   reminderNoteSchema,
   remindersArraySchema,
   timerSegmentSchema,
-  gitRepoUrlSchema,
+  gitLinkStringSchema,
 } from './schemas';
 
 const calendarDateSchema = z
@@ -571,8 +571,8 @@ export const BackupSystemRecordSchema = z.object({
   description: z.string().optional(),
   sshConfigId: uuidSchema.optional(),
   remoteRepoPath: z.string().optional(),
-  gitSourceUrl: gitRepoUrlSchema.optional(),
-  gitOpsUrl: gitRepoUrlSchema.optional(),
+  gitSourceUrl: gitLinkStringSchema.optional(),
+  gitOpsUrl: gitLinkStringSchema.optional(),
   defaultBaseBranch: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
