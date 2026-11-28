@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Design System & UI Consistency
-status: executing
-stopped_at: Phase 52 UI-SPEC approved
-last_updated: "2026-11-28T03:12:19.658Z"
-last_activity: "2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat."
+status: completed
+stopped_at: Phase 52 complete — verification passed 11/11
+last_updated: "2026-11-28T04:50:00.000Z"
+last_activity: 2026-11-28 -- Phase 52 complete: 5/5 plans executed, verification passed 11/11; quick tasks eb6 and fqs complete
 progress:
   total_phases: 2
   completed_phases: 2
@@ -21,14 +21,16 @@ current_phase_name: taskmate-chat-standalone
 See: .planning/PROJECT.md (updated 2026-11-21)
 
 **Core value:** Một bộ design system TaskMate duy nhất, IntelliJ-only, light+dark, mọi control AntD đều wrap và có thể thay đổi tại một điểm.
-**Current focus:** Phase 51 — TaskMate Chat standalone
+**Current focus:** Phase 52 — cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid
 
 ## Current Position
 
-Phase: 51 (TaskMate Chat standalone) — COMPLETE
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat.
+Phase: 52 (cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid) — COMPLETE
+Plan: 5 of 5 — complete
+Status: Verification passed (11/11 must-haves, `52-VERIFICATION.md`)
+Last activity: 2026-11-28 -- Phase 52 complete: 5/5 plans, 11/11 must-haves verified; residual 8 baseline-identical test failures documented
+Last activity: 2026-11-28 -- Quick task 261128-eb6 complete: Command Deck CR detail + task insight layout (eef54006, 6001f719)
+Last activity: 2026-11-28 -- Quick task 261128-fqs complete: dark-mode planner/tasklist/splash polish (80276409, c51ec8ad, 5f362408, e474c098, a83eba75)
 Last activity: 2026-11-26 - Completed quick task 261126-vuy: standalone AI chat dark/light theme switch.
 Last activity: 2026-11-27 - Completed quick task 261127-c3r: named quick links on CR detail and Task detail pages.
 Last activity: 2026-11-27 - Completed quick task 261127-dsx: SQLcl persistent-session completion changed from PROMPT sentinel to SQL SELECT JSON marker with stdout stripping.
@@ -75,9 +77,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-28T02:49:47.838Z
-Stopped at: Phase 52 UI-SPEC approved
-Resume file: .planning/phases/52-cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid/52-UI-SPEC.md
+Last session: 2026-11-28T04:50:00.000Z
+Stopped at: Phase 52 complete — verification passed; next phase not yet planned
+Resume file: .planning/phases/52-cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid/52-VERIFICATION.md
 
 Progress: [██████████] 100%
 
@@ -195,6 +197,8 @@ Progress: [██████████] 100%
 | 261128-cpo | CR detail: nút thêm nhắc nhở nhanh qua QuickReminderModal target CR, ô lọc task dùng SearchInput chuẩn | 2026-11-28 | 9a84ca54, bf737582 | Reviewed + verified (Chrome light/dark) | [261128-cpo-fix-cr-detail-reminder-quick-create-butt](./quick/261128-cpo-fix-cr-detail-reminder-quick-create-butt/) |
 | 261128-d1m | CR detail: hành động chuẩn TaskMate — sections dùng Card, nút thêm căn phải, bảng link, modal riêng, Popconfirm | 2026-11-28 | 8ae5eb85, f8780806, 18720c19, d99a6fd1, 791ce77c, 58530db1 | Verified (Chrome) | [261128-d1m-move-cr-detail-quick-reminder-button-int](./quick/261128-d1m-move-cr-detail-quick-reminder-button-int/) |
 | 261128-dlj | Task insight: 2 Card riêng Links/Nhắc nhở, bảng link tên+URL, modal riêng, Popconfirm, QuickReminderModal | 2026-11-28 | 7c327a05, 6ff40a90 | Verified (Chrome) | [261128-dlj-apply-cr-detail-link-and-reminder-standa](./quick/261128-dlj-apply-cr-detail-link-and-reminder-standa/) |
+| 261128-eb6 | Command Deck layout cho CR detail và task insight: mission header, progress rail, grid 2.4fr/1fr, dark-mode token fix | 2026-11-28 | eef54006, 6001f719 | Verified (Chrome light/dark) | [261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai](./quick/261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai/) |
+| 261128-fqs | Dark-mode Capacity Planner/TaskLists/splash/AI office explorer + tasklist redesign baseline | 2026-11-28 | 80276409, c51ec8ad, 5f362408, e474c098, a83eba75, e064c4b0, 3e96cd1b | Verified | [261128-fqs-check-fix-capacity-planner-page-dark-mod](./quick/261128-fqs-check-fix-capacity-planner-page-dark-mod/) |
 
 ## Accumulated Context
 
