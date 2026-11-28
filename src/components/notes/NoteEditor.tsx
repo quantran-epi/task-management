@@ -39,6 +39,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   const [changeRequests, setChangeRequests] = useState<Array<{ id: string; name: string }>>([]);
   const [tasks, setTasks] = useState<Array<{ id: string; name: string }>>([]);
   const [systems, setSystems] = useState<Array<{ id: string; name: string }>>([]);
+  const [milestones, setMilestones] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +48,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     db.changeRequests.toArray().then((list) => setChangeRequests(list.map((cr) => ({ id: cr.id, name: cr.code || cr.name }))));
     db.tasks.toArray().then((list) => setTasks(list.map((t) => ({ id: t.id, name: t.name }))));
     db.systems.toArray().then((list) => setSystems(list.map((s) => ({ id: s.id, name: s.name }))));
+    db.crMilestones.toArray().then((list) => setMilestones(list.map((m) => ({ id: m.id, name: m.name }))));
 
     if (note) {
       form.setFieldsValue({
@@ -87,6 +89,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         return changeRequests.map((cr) => ({ label: cr.name, value: cr.id }));
       case 'system':
         return systems.map((s) => ({ label: s.name, value: s.id }));
+      case 'crMilestone':
+        return milestones.map((m) => ({ label: m.name, value: m.id }));
       default:
         return [];
     }
@@ -205,6 +209,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
                 { label: 'Tác vụ (Task)', value: 'task' },
                 { label: 'Change Request (CR)', value: 'cr' },
                 { label: 'Hệ thống (System)', value: 'system' },
+                { label: 'Mốc triển khai (CR Milestone)', value: 'crMilestone' },
               ]}
               onChange={() => form.setFieldValue('entityId', undefined)}
             />

@@ -206,15 +206,17 @@ export const NotesPopoutView: React.FC<NotesPopoutViewProps> = ({ db = defaultDb
   const entityNames = useLiveQuery(
     async () => {
       const map = new Map<string, string>();
-      const [tasks, changeRequests, systems] = await Promise.all([
+      const [tasks, changeRequests, systems, milestones] = await Promise.all([
         db.tasks.toArray(),
         db.changeRequests.toArray(),
         db.systems.toArray(),
+        db.crMilestones.toArray(),
       ]);
 
       tasks.forEach((t) => map.set(`task:${t.id}`, t.name));
       changeRequests.forEach((c) => map.set(`cr:${c.id}`, c.name));
       systems.forEach((s) => map.set(`system:${s.id}`, s.name));
+      milestones.forEach((m) => map.set(`crMilestone:${m.id}`, m.name));
       return map;
     },
     [db]

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeAppHolder } from '../../components/ui';
 import { QuickNotesPanel } from '../../components/notes/QuickNotesPanel';
 import { TaskPlannerDatabase } from '../../db';
+import { createCrMilestone } from '../../db/repositories/crMilestoneRepo';
 import { generateId } from '../../utils/uuid';
 import { WorkbenchLayout } from '../WorkbenchLayout';
 import { useLayoutStore } from '../store/layoutStore';
@@ -19,12 +20,14 @@ describe('QuickNotesPanel', () => {
   let crId: string;
   let taskId: string;
   let systemId: string;
+  let milestoneId: string;
 
   beforeEach(async () => {
     db = new TaskPlannerDatabase(`TestDB_QuickNotes_${Math.random()}`);
     crId = generateId();
     taskId = generateId();
     systemId = generateId();
+    milestoneId = generateId();
     const now = new Date().toISOString();
     await db.changeRequests.add({
       id: crId,
@@ -56,6 +59,11 @@ describe('QuickNotesPanel', () => {
       createdAt: now,
       updatedAt: now,
     });
+    const milestone = await createCrMilestone(
+      { crId, name: 'Mốc triển khai Alpha', targetDate: '2026-12-01' },
+      db
+    );
+    milestoneId = milestone.id;
   });
 
   afterEach(async () => {
@@ -376,6 +384,32 @@ describe('QuickNotesPanel', () => {
     expect(await screen.findByTitle('Hệ thống Core')).toBeDefined();
     expect(screen.queryByTitle('CR-001')).toBeNull();
     expect(screen.queryByTitle('Task kiểm thử')).toBeNull();
+  });
+
+  it('chọn Mốc rồi chọn milestone seed thì ô entity hiện đúng tên mốc', async () => {
+    render(<ThemeAppHolder><QuickNotesPanel db={db} /></ThemeAppHolder>);
+
+    expect(screen.getByText('Mốc')).toBeDefined();
+    fireEvent.click(screen.getByText('Mốc'));
+    const select = screen.getByTestId('quick-notes-entity-select');
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select);
+    fireEvent.click(await screen.findByTitle('Mốc triển khai Alpha'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('quick-notes-entity-select').textContent).toContain('Mốc triển khai Alpha');
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Ghi chú nhanh...'), {
+      target: { value: 'Ghi chú mốc triển khai' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu/ }));
+
+    await waitFor(async () => {
+      const notes = await db.notes.toArray();
+      expect(notes).toHaveLength(1);
+      expect(notes[0]?.entityType).toBe('crMilestone');
+      expect(notes[0]?.entityId).toBe(milestoneId);
+    });
   });
 
   it('đổi loại xóa lựa chọn cũ và note lưu sau đó không giữ type/id cũ', async () => {

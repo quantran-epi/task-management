@@ -58,6 +58,9 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
           } else if (note.entityType === 'system') {
             const system = await db.systems.get(note.entityId!);
             name = system?.name ?? null;
+          } else if (note.entityType === 'crMilestone') {
+            const milestone = await db.crMilestones.get(note.entityId!);
+            name = milestone?.name ?? null;
           }
           if (active) setEntityName(name);
         } catch {
@@ -83,7 +86,9 @@ export const NoteDetailModal: React.FC<NoteDetailModalProps> = ({
           ? 'Change Request'
           : note.entityType === 'system'
             ? 'Hệ thống'
-            : note.entityType;
+            : note.entityType === 'crMilestone'
+              ? 'Mốc triển khai'
+              : note.entityType;
     const target = entityName || note.entityId;
     return target ? `${typeLabel}: ${target}` : typeLabel;
   };

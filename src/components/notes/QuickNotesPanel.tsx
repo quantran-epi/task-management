@@ -35,15 +35,17 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
   const [listEntityFilter, setListEntityFilter] = useState<string | undefined>(undefined);
 
   const entityNames = useLiveQuery(async (): Promise<Map<string, EntityName>> => {
-    const [crs, tasks, systems] = await Promise.all([
+    const [crs, tasks, systems, milestones] = await Promise.all([
       db.changeRequests.toArray(),
       db.tasks.toArray(),
       db.systems.toArray(),
+      db.crMilestones.toArray(),
     ]);
     const names = new Map<string, EntityName>();
     crs.forEach((cr) => names.set(cr.id, { label: cr.code || cr.name, type: 'cr' }));
     tasks.forEach((task) => names.set(task.id, { label: task.name, type: 'task' }));
     systems.forEach((system) => names.set(system.id, { label: system.name, type: 'system' }));
+    milestones.forEach((ms) => names.set(ms.id, { label: ms.name, type: 'crMilestone' }));
     return names;
   }, [db], new Map<string, EntityName>());
 
@@ -99,6 +101,7 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
           { label: 'CR', value: 'cr' },
           { label: 'Task', value: 'task' },
           { label: 'Hệ thống', value: 'system' },
+          { label: 'Mốc', value: 'crMilestone' },
         ]}
       />
 
@@ -115,7 +118,9 @@ export const QuickNotesPanel: React.FC<QuickNotesPanelProps> = ({ db = defaultDb
               ? 'Tìm tác vụ...'
               : entityType === 'system'
                 ? 'Tìm hệ thống...'
-                : 'Chọn loại thực thể trước'
+                : entityType === 'crMilestone'
+                  ? 'Tìm mốc triển khai...'
+                  : 'Chọn loại thực thể trước'
         }
         options={entityOptions}
         onChange={(value) => setEntityId(value)}

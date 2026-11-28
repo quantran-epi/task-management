@@ -444,7 +444,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
     function: {
       name: 'query_notes',
       description:
-        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, filter by entityType (task, cr, system, or standalone), filter by created/updated dates, or sort results.',
+        'Search or list notes and scratchpads. Can search text in title or body, filter by isPinned, filter by entityType (task, cr, system, crMilestone, or standalone), filter by created/updated dates, or sort results.',
       parameters: {
         type: 'object',
         properties: {
@@ -454,7 +454,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           entityType: {
             type: 'string',
-            enum: ['task', 'cr', 'system', 'standalone'],
+            enum: ['task', 'cr', 'system', 'crMilestone', 'standalone'],
             description: 'Filter by entity type (use "standalone" for notes not linked to any entity).',
           },
           entityId: {
@@ -533,7 +533,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           },
           entityType: {
             type: 'string',
-            enum: ['task', 'cr', 'system'],
+            enum: ['task', 'cr', 'system', 'crMilestone'],
             description: 'Optional linked entity type filter.',
           },
           entityId: {
@@ -595,7 +595,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
         properties: {
           type: {
             type: 'string',
-            enum: ['task', 'cr', 'system'],
+            enum: ['task', 'cr', 'system', 'crMilestone'],
             description: 'Entity type to analyze.',
           },
           id: {
@@ -1280,7 +1280,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'cr', 'system'],
+            enum: ['task', 'cr', 'system', 'crMilestone'],
             description: 'Optional entity type to link note to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link note to.' },
@@ -1311,7 +1311,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           slug: { type: 'string', description: 'Updated URL/human readable slug.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'cr', 'system'],
+            enum: ['task', 'cr', 'system', 'crMilestone'],
             description: 'Optional entity type to link or re-bind note to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link or re-bind note to.' },
@@ -1336,7 +1336,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
           parentId: { type: 'string', description: 'Optional parent diagram folder UUID.' },
           entityType: {
             type: 'string',
-            enum: ['task', 'cr', 'system'],
+            enum: ['task', 'cr', 'system', 'crMilestone'],
             description: 'Optional entity type to link the diagram to.',
           },
           entityId: { type: 'string', description: 'UUID of entity to link the diagram to.' },
@@ -1422,7 +1422,7 @@ export const AI_DATABASE_TOOLS: AiToolDefinition[] = [
                 tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags array.' },
                 entityType: {
                   type: 'string',
-                  enum: ['task', 'cr', 'system'],
+                  enum: ['task', 'cr', 'system', 'crMilestone'],
                   description: 'Optional entity type to bind to.',
                 },
                 entityId: { type: 'string', description: 'Optional entity UUID to bind to.' },
@@ -3329,10 +3329,12 @@ export async function executeAiTool(
         const allTasks = db.tasks ? await db.tasks.toArray() : [];
         const allChangeRequests = db.changeRequests ? await db.changeRequests.toArray() : [];
         const allSystems = db.systems ? await db.systems.toArray() : [];
+        const allMilestones = db.crMilestones ? await db.crMilestones.toArray() : [];
 
         const taskMap = new Map(allTasks.map((t) => [t.id, t.name]));
         const crMap = new Map(allChangeRequests.map((c) => [c.id, c.name]));
         const systemMap = new Map(allSystems.map((s) => [s.id, s.name]));
+        const milestoneMap = new Map(allMilestones.map((m) => [m.id, m.name]));
 
         if (args.type) {
           notes = notes.filter((n) => (n.type || 'quick_note') === args.type);
@@ -3421,6 +3423,7 @@ export async function executeAiTool(
           if (n.entityType === 'task' && n.entityId) entityName = taskMap.get(n.entityId) ?? null;
           else if (n.entityType === 'cr' && n.entityId) entityName = crMap.get(n.entityId) ?? null;
           else if (n.entityType === 'system' && n.entityId) entityName = systemMap.get(n.entityId) ?? null;
+          else if (n.entityType === 'crMilestone' && n.entityId) entityName = milestoneMap.get(n.entityId) ?? null;
 
           return {
             id: n.id,
@@ -3608,6 +3611,29 @@ export async function executeAiTool(
               ).length,
               totalEstimateMinutes: systemTasks.reduce((sum, t) => sum + (t.estimateMinutes || 0), 0),
               changeRequests: crs.map((c) => ({ id: c.id, code: c.code, name: c.name, status: c.status })),
+            },
+          });
+        } else if (type === 'crMilestone') {
+          const milestone = db.crMilestones ? await db.crMilestones.get(id) : null;
+          if (!milestone) return JSON.stringify({ error: `CrMilestone not found: ${id}` });
+          const milestoneTasks = db.tasks
+            ? (await db.tasks.toArray()).filter((t) => t.milestoneId === id)
+            : [];
+          const notes = db.notes
+            ? await db.notes.where('entityId').equals(id).filter((n) => n.entityType === 'crMilestone').toArray()
+            : [];
+          return JSON.stringify({
+            type: 'crMilestone',
+            id: milestone.id,
+            name: milestone.name,
+            analysis: {
+              crId: milestone.crId,
+              targetDate: milestone.targetDate ?? null,
+              taskCount: milestoneTasks.length,
+              openTaskCount: milestoneTasks.filter(
+                (t) => t.status !== 'Done' && t.status !== 'Cancelled'
+              ).length,
+              noteCount: notes.length,
             },
           });
         }
