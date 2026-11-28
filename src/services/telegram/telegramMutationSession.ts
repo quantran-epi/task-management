@@ -19,6 +19,8 @@ import type { ChatCompletionMessage, ToolCall } from '../ai/types';
 import { getTodayDateString } from '../../utils/date';
 import dayjs from 'dayjs';
 
+export const MUTATION_TTL_MS = 10 * 60 * 1000;
+
 export interface PendingMutation {
   chatId: string;
   toolName: string;
@@ -28,30 +30,137 @@ export interface PendingMutation {
   chatHistory: Array<{ role: 'user' | 'assistant'; content: string }>;
   isMcp?: boolean | undefined;
   serverName?: string | undefined;
+  identity?: string | undefined;
 }
 
-const pendingMutations = new Map<string, PendingMutation>();
+export interface PendingMutationOptions {
+  identity?: string | undefined;
+  key?: string | undefined;
+  expectedKey?: string | undefined;
+}
 
-export function getPendingMutation(chatId: string): PendingMutation | undefined {
-  const item = pendingMutations.get(chatId);
-  if (!item) return undefined;
-  // Auto-expire after 10 minutes
-  if (Date.now() - item.createdAt > 10 * 60 * 1000) {
-    pendingMutations.delete(chatId);
-    return undefined;
+interface PendingMutationEntry {
+  mutation: PendingMutation;
+  expiresAt: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const pendingMutations = new Map<string, PendingMutationEntry>();
+
+function stableStringify(value: any): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null';
   }
-  return item;
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  const object = value as Record<string, any>;
+  return `{${Object.keys(object)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`)
+    .join(',')}}`;
 }
 
-export function setPendingMutation(mutation: PendingMutation): void {
-  pendingMutations.set(mutation.chatId, mutation);
+function hashString(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= BigInt(value.charCodeAt(index));
+    hash = (hash * prime) & mask;
+  }
+  return hash.toString(16).padStart(16, '0');
 }
 
-export function clearPendingMutation(chatId: string): void {
-  pendingMutations.delete(chatId);
+export function pendingMutationKey(mutation: PendingMutation): string {
+  return `${mutation.chatId}\u0000${normalizeToolName(mutation.toolName)}\u0000${hashString(
+    stableStringify(mutation.args)
+  )}`;
+}
+
+function activeEntriesForChat(chatId: string): Array<[string, PendingMutationEntry]> {
+  const now = Date.now();
+  const active: Array<[string, PendingMutationEntry]> = [];
+  for (const [key, entry] of pendingMutations) {
+    if (entry.mutation.chatId !== chatId) continue;
+    if (entry.expiresAt <= now) {
+      clearTimeout(entry.timer);
+      pendingMutations.delete(key);
+      continue;
+    }
+    active.push([key, entry]);
+  }
+  return active;
+}
+
+function matchesOptions(entry: PendingMutationEntry, opts: PendingMutationOptions): boolean {
+  const { identity, key } = opts;
+  if (identity && entry.mutation.identity && identity !== entry.mutation.identity) return false;
+  if (key && key !== pendingMutationKey(entry.mutation)) return false;
+  return true;
+}
+
+export function getPendingMutation(
+  chatId: string,
+  opts: PendingMutationOptions = {}
+): PendingMutation | undefined {
+  const matches = activeEntriesForChat(chatId).filter(([, entry]) => matchesOptions(entry, opts));
+  // More than one candidate with the supplied filters is ambiguous: never pick one silently.
+  if (matches.length !== 1) return undefined;
+  return matches[0]![1].mutation;
+}
+
+export function setPendingMutation(
+  mutation: PendingMutation,
+  opts: PendingMutationOptions = {}
+): boolean {
+  const expiresAt = mutation.createdAt + MUTATION_TTL_MS;
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+  if (opts.identity && mutation.identity && opts.identity !== mutation.identity) return false;
+
+  const active = activeEntriesForChat(mutation.chatId);
+  if (active.length > 0) {
+    if (active.length !== 1) return false;
+    const [existingKey, existing] = active[0]!;
+    if (opts.expectedKey !== existingKey) return false;
+    if (opts.identity && existing.mutation.identity && opts.identity !== existing.mutation.identity) {
+      return false;
+    }
+    clearTimeout(existing.timer);
+    pendingMutations.delete(existingKey);
+  }
+
+  const key = pendingMutationKey(mutation);
+  let entry!: PendingMutationEntry;
+  const timer = setTimeout(() => {
+    if (pendingMutations.get(key) === entry) {
+      pendingMutations.delete(key);
+    }
+  }, Math.max(0, expiresAt - Date.now()));
+  if (typeof timer === 'object' && 'unref' in timer) {
+    (timer as { unref?: () => void }).unref?.();
+  }
+  entry = { mutation, expiresAt, timer };
+  pendingMutations.set(key, entry);
+  return true;
+}
+
+export function clearPendingMutation(
+  chatId: string,
+  opts: PendingMutationOptions = {}
+): boolean {
+  const matches = activeEntriesForChat(chatId).filter(([, entry]) => matchesOptions(entry, opts));
+  if (matches.length !== 1) return false;
+  const [key, entry] = matches[0]!;
+  clearTimeout(entry.timer);
+  pendingMutations.delete(key);
+  return true;
 }
 
 export function clearAllPendingMutationsForTesting(): void {
+  for (const entry of pendingMutations.values()) {
+    clearTimeout(entry.timer);
+  }
   pendingMutations.clear();
 }
 
@@ -95,20 +204,6 @@ export function isCancellationMessage(text: string): boolean {
   const cancelWords = new Set([
     'hủy',
     'huy',
-    'cancel',
-    'bỏ qua',
-    'bo qua',
-    'không',
-    'khong',
-    'no',
-    'n',
-    'stop',
-    'dừng',
-    'dung',
-    'thôi',
-    'thoi',
-    'đừng',
-    'dung lam',
     'hủy thao tác',
     'huy thao tac',
     'hủy bỏ',
@@ -198,6 +293,7 @@ export interface AdminMutationTurnParams {
   apiKey: string;
   db?: TaskPlannerDatabase;
   existingPending?: PendingMutation;
+  identity?: string | undefined;
   contextText?: string;
   streamChatEventsFn?: typeof streamChatEvents;
 }
@@ -207,6 +303,9 @@ export interface AdminMutationTurnResult {
   replyMarkdown: string;
   tokenCount?: number;
 }
+
+const PENDING_CONFLICT_REPLY =
+  'Đang có thao tác khác đang chờ xác nhận; gõ OK để thực hiện hoặc Hủy để hủy trước';
 
 /**
  * Executes an AI turn with full mutation and query tools enabled for Admin.
@@ -223,6 +322,7 @@ export async function executeAdminMutationTurn(
     apiKey,
     db = defaultDb,
     existingPending,
+    identity,
     contextText,
     streamChatEventsFn = streamChatEvents,
   } = params;
@@ -346,16 +446,26 @@ export async function executeAdminMutationTurn(
         serverName = serverPrefixMatch[1];
       }
 
-      setPendingMutation({
-        chatId,
-        toolName: mcpCall.function.name,
-        args,
-        summary: `Thực thi công cụ MCP: ${mcpCall.function.name}`,
-        createdAt: Date.now(),
-        chatHistory: [...chatHistory, { role: 'user', content: userMessage }],
-        isMcp: true,
-        serverName,
-      });
+      const stored = setPendingMutation(
+        {
+          chatId,
+          toolName: mcpCall.function.name,
+          args,
+          summary: `Thực thi công cụ MCP: ${mcpCall.function.name}`,
+          createdAt: Date.now(),
+          chatHistory: [...chatHistory, { role: 'user', content: userMessage }],
+          isMcp: true,
+          serverName,
+          identity,
+        },
+        {
+          identity,
+          expectedKey: existingPending ? pendingMutationKey(existingPending) : undefined,
+        }
+      );
+      if (!stored) {
+        return { kind: 'conversational', replyMarkdown: PENDING_CONFLICT_REPLY, tokenCount };
+      }
 
       const previewMd = formatMcpMutationPreviewMessage(
         mcpCall.function.name,
@@ -379,14 +489,24 @@ export async function executeAdminMutationTurn(
       } catch {}
 
       const summary = await describeToolMutationWithContext(mutationCall.function.name, args, db);
-      setPendingMutation({
-        chatId,
-        toolName: mutationCall.function.name,
-        args,
-        summary,
-        createdAt: Date.now(),
-        chatHistory: [...chatHistory, { role: 'user', content: userMessage }],
-      });
+      const stored = setPendingMutation(
+        {
+          chatId,
+          toolName: mutationCall.function.name,
+          args,
+          summary,
+          createdAt: Date.now(),
+          chatHistory: [...chatHistory, { role: 'user', content: userMessage }],
+          identity,
+        },
+        {
+          identity,
+          expectedKey: existingPending ? pendingMutationKey(existingPending) : undefined,
+        }
+      );
+      if (!stored) {
+        return { kind: 'conversational', replyMarkdown: PENDING_CONFLICT_REPLY, tokenCount };
+      }
 
       const previewMd = formatMutationPreviewMessage(
         mutationCall.function.name,

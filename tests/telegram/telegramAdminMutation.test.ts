@@ -1,4 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  executeAdminMutationTurn,
+  MUTATION_TTL_MS,
+  pendingMutationKey,
+  clearPendingMutation,
+  setPendingMutation as setPendingSessionMutation,
+} from '../../src/services/telegram/telegramMutationSession';
 import { TaskPlannerDatabase } from '../../src/db/index';
 import {
   processTelegramInboundMessage,
@@ -89,9 +96,181 @@ describe('Telegram Admin Mutation Flow', () => {
     expect(isCancellationMessage('Hủy')).toBe(true);
     expect(isCancellationMessage('cancel')).toBe(true);
     expect(isCancellationMessage('bỏ qua')).toBe(true);
-    expect(isCancellationMessage('không')).toBe(true);
-    expect(isCancellationMessage('thôi')).toBe(true);
+    expect(isCancellationMessage('Hủy thao tác')).toBe(true);
+    expect(isCancellationMessage('không')).toBe(false);
+    expect(isCancellationMessage('thôi')).toBe(false);
+    expect(isCancellationMessage('no')).toBe(false);
+    expect(isCancellationMessage('n')).toBe(false);
+    expect(isCancellationMessage('stop')).toBe(false);
+    expect(isCancellationMessage('dừng')).toBe(false);
     expect(isCancellationMessage('xác nhận')).toBe(false);
+  });
+
+  it('expires pending by active timer without a get call', () => {
+    vi.useFakeTimers();
+    try {
+      expect(
+        setPendingSessionMutation({
+          chatId: 'ttl_chat',
+          toolName: 'create_task',
+          args: { name: 'Hết hạn' },
+          summary: 'Tạo tác vụ',
+          createdAt: Date.now(),
+          chatHistory: [],
+        })
+      ).toBe(true);
+      expect(vi.getTimerCount()).toBe(1);
+      vi.advanceTimersByTime(MUTATION_TTL_MS + 1);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(getPendingMutation('ttl_chat')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a stable composite key across arg key order and separates tool/chat', () => {
+    const base = {
+      chatId: 'key_chat',
+      toolName: 'create_task',
+      args: { name: 'A', estimateMinutes: 30 },
+      summary: 'A',
+      createdAt: Date.now(),
+      chatHistory: [],
+    };
+    expect(pendingMutationKey(base)).toBe(
+      pendingMutationKey({ ...base, args: { estimateMinutes: 30, name: 'A' } })
+    );
+    expect(pendingMutationKey(base)).not.toBe(pendingMutationKey({ ...base, toolName: 'update_task' }));
+    expect(pendingMutationKey(base)).not.toBe(pendingMutationKey({ ...base, chatId: 'other_chat' }));
+    expect(pendingMutationKey(base)).not.toBe(
+      pendingMutationKey({ ...base, args: { name: 'A', estimateMinutes: 31 } })
+    );
+  });
+
+  it('refuses overwrite without a matching expectedKey', () => {
+    const first = {
+      chatId: 'overwrite_chat',
+      toolName: 'create_task',
+      args: { name: 'Draft 1' },
+      summary: 'Draft 1',
+      createdAt: Date.now(),
+      chatHistory: [],
+    };
+    expect(setPendingSessionMutation(first)).toBe(true);
+
+    expect(
+      setPendingSessionMutation({ ...first, toolName: 'update_task', args: { name: 'Draft 2' } })
+    ).toBe(false);
+    expect(
+      setPendingSessionMutation({ ...first, args: { name: 'Draft 2' }, createdAt: Date.now() })
+    ).toBe(false);
+
+    const current = getPendingMutation('overwrite_chat');
+    expect(current?.args.name).toBe('Draft 1');
+    expect(current?.toolName).toBe('create_task');
+  });
+
+  it('replaces the draft only with the matching expectedKey', () => {
+    const first = {
+      chatId: 'replace_chat',
+      toolName: 'create_task',
+      args: { name: 'Draft 1' },
+      summary: 'Draft 1',
+      createdAt: Date.now(),
+      chatHistory: [],
+      identity: 'user_a',
+    };
+    expect(setPendingSessionMutation(first)).toBe(true);
+    const key = pendingMutationKey(first);
+    expect(
+      setPendingSessionMutation(
+        { ...first, args: { name: 'Draft 2' }, createdAt: Date.now() },
+        { identity: 'user_a', expectedKey: key }
+      )
+    ).toBe(true);
+    expect(getPendingMutation('replace_chat')?.args.name).toBe('Draft 2');
+    expect(getPendingMutation('replace_chat')?.identity).toBe('user_a');
+  });
+
+  it('refuses a draft whose identity differs from the supplied identity', () => {
+    const first = {
+      chatId: 'identity_chat',
+      toolName: 'create_task',
+      args: { name: 'Draft A' },
+      summary: 'Draft A',
+      createdAt: Date.now(),
+      chatHistory: [],
+      identity: 'user_a',
+    };
+    expect(setPendingSessionMutation(first)).toBe(true);
+    expect(
+      setPendingSessionMutation(
+        { ...first, identity: 'user_b', args: { name: 'Draft B' }, createdAt: Date.now() },
+        { identity: 'user_b', expectedKey: pendingMutationKey(first) }
+      )
+    ).toBe(false);
+    expect(getPendingMutation('identity_chat')?.args.name).toBe('Draft A');
+  });
+
+  it('get and clear fail closed on wrong identity or key', () => {
+    const first = {
+      chatId: 'binding_chat',
+      toolName: 'create_task',
+      args: { name: 'Draft A' },
+      summary: 'Draft A',
+      createdAt: Date.now(),
+      chatHistory: [],
+      identity: 'user_a',
+    };
+    expect(setPendingSessionMutation(first)).toBe(true);
+
+    expect(getPendingMutation('binding_chat', { identity: 'user_b' })).toBeUndefined();
+    expect(getPendingMutation('binding_chat', { key: 'wrong-key' })).toBeUndefined();
+    expect(clearPendingMutation('binding_chat', { identity: 'user_b' })).toBe(false);
+    expect(clearPendingMutation('binding_chat', { key: 'wrong-key' })).toBe(false);
+    expect(getPendingMutation('binding_chat', { identity: 'user_a' })?.args.name).toBe('Draft A');
+
+    expect(
+      clearPendingMutation('binding_chat', {
+        identity: 'user_a',
+        key: pendingMutationKey(first),
+      })
+    ).toBe(true);
+    expect(getPendingMutation('binding_chat')).toBeUndefined();
+  });
+
+  it('returns a conversational rejection instead of a fake preview when pending is owned by another identity', async () => {
+    const first = {
+      chatId: 'reject_chat',
+      toolName: 'create_task',
+      args: { name: 'Draft A' },
+      summary: 'Draft A',
+      createdAt: Date.now(),
+      chatHistory: [],
+      identity: 'user_a',
+    };
+    expect(setPendingSessionMutation(first)).toBe(true);
+
+    const currentPending = getPendingMutation('reject_chat');
+    if (!currentPending) throw new Error('Expected seeded pending mutation');
+
+    const result = await executeAdminMutationTurn({
+      chatId: 'reject_chat',
+      userMessage: 'Đổi tên thành Draft B',
+      chatHistory: [],
+      aiConfig: { endpoint: '', defaultModel: '' },
+      apiKey: '',
+      db: testDb,
+      existingPending: currentPending,
+      identity: 'user_b',
+      streamChatEventsFn: mockStreamChatEvents as any,
+    });
+
+    expect(result.kind).toBe('conversational');
+    expect(result.replyMarkdown).toContain('Đang có thao tác khác đang chờ xác nhận');
+    expect(result.replyMarkdown).not.toContain('Xác nhận thao tác TaskMate');
+    expect(result.replyMarkdown).not.toContain('Draft A');
+    expect(getPendingMutation('reject_chat')?.args.name).toBe('Draft A');
   });
 
   it('rejects mutation intent when user is not an Admin', async () => {
@@ -209,6 +388,18 @@ describe('Telegram Admin Mutation Flow', () => {
 
   it('admin confirms mutation with OK: executes tool, saves to IndexedDB, and clears pending state', async () => {
     await setNineRouterApiKey('test-key', testDb);
+    const crId = '11111111-1111-4111-8111-111111111111';
+    await testDb.changeRequests.add({
+      id: crId,
+      code: 'CR-CORE-01',
+      name: 'Core Banking Modernization',
+      description: 'Upgrade core banking microservices',
+      status: 'In Progress',
+      type: 'ENHANCEMENT',
+      targets: [],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-15T00:00:00.000Z',
+    });
     await upsertWhitelistUser(
       {
         chatId: 'admin_chat_1',
@@ -227,6 +418,7 @@ describe('Telegram Admin Mutation Flow', () => {
         name: 'Tác vụ đã xác nhận',
         priority: 'Urgent',
         estimateMinutes: 90,
+        crId,
       },
       summary: 'Tạo tác vụ mới: "Tác vụ đã xác nhận" [Ưu tiên: Urgent]',
       createdAt: Date.now(),
