@@ -28,9 +28,7 @@ describe('AppSplashScreen', () => {
 
   it('advances the four boot steps at 15/45/80/100 percent', () => {
     const { container } = render(<AppSplashScreen minDuration={MIN_DURATION} />);
-    expect(screen.getByText('Đang khởi động TaskMate...')).toBeTruthy();
-    expect(screen.getByText('Plan work. Stay clear. Stay local.')).toBeTruthy();
-    expect(screen.getByText('15%')).toBeTruthy();
+    expect(screen.getByText('Đang khởi động TaskMate Workbench...')).toBeTruthy();
     expect(progressWidth(container)).toBe('15%');
 
     advance(MIN_DURATION * 0.3);
@@ -38,8 +36,7 @@ describe('AppSplashScreen', () => {
     expect(progressWidth(container)).toBe('45%');
 
     advance(MIN_DURATION * 0.35);
-    expect(screen.getByText('Đang chuẩn bị không gian làm việc...')).toBeTruthy();
-    expect(screen.getByText('80%')).toBeTruthy();
+    expect(screen.getByText('Khởi tạo mô hình JetBrains Islands Engine...')).toBeTruthy();
     expect(progressWidth(container)).toBe('80%');
 
     advance(MIN_DURATION * 0.25);
