@@ -49,6 +49,8 @@ Instruction mẫu để feed session điều phối (tiếng Việt):
 
 Chỉ 1 lệnh npm cần chạy: `npm run telegram:control` (chạy bridge + watcher nền). Session điều phối phải bật Monitor `node scripts/telegram-watcher.mjs watch` ngay sau đó để tự động nhận `INBOX <id>.json`; monitor là phần bắt buộc, không phải tùy chọn. Ctrl+C (SIGINT) hoặc SIGTERM dừng cả bridge lẫn watcher, không orphan child. Nếu worker/session điều phối chưa mở thì không ai tiêu thụ inbox — tín hiệu vẫn in ra nhưng lệnh không được xử lý.
 
+**Quy tắc phản hồi Telegram (bắt buộc):** Mỗi lệnh hoặc câu hỏi từ sếp qua Telegram phải được trả lời ĐẦY ĐỦ qua Telegram. Chỗ cần sếp duyệt thì gửi đủ thông tin lên Telegram, nhận xác nhận rồi mới tiếp tục. Mọi nội dung quan trọng session điều phối nói trên terminal Claude Code phải được gửi lại thành bản NGẮN GỌN NHƯNG ĐỦ Ý qua Telegram — không khác ý, không bỏ quyết định hay câu hỏi cần duyệt.
+
 ## Luồng xử lý 1 lệnh
 
 1. Thấy `INBOX <id>.json` trên stdout của `telegram:control`.
