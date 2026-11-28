@@ -52,6 +52,7 @@ Last activity: 2026-11-28 - Completed quick task 261128-dlj: task insight dùng 
 Last activity: 2026-11-28 - Completed quick task 261128-fvp: redesign Bộ tài liệu theo sketch 016A — inspector chỉ-đọc, form cấu hình trong modal 620px, row action đổi tên/sao chép/xoá khỏi bộ; Chrome light/dark + scoped tests verified.
 Last activity: 2026-11-28 - Completed quick task 261128-gna: System có 2 link git (source code + gitops), validate URL chặn credential/backslash, SCP link mở đúng HTTPS; review fixes + Chrome light/dark + 75 scoped tests passed.
 Last activity: 2026-11-28 - Completed quick task 261128-i9x: bỏ attach file local (PaperClip/FileReader/confirm) trong AI chat; nút duyệt SSH hiện cả drawer + standalone; 66 scoped tests, tsc, ESLint, Chrome light/dark verified.
+Last activity: 2026-11-28 - Completed quick task 261128-hxf: bỏ validation 2 link git System (lưu nguyên mọi string), render an toàn theo predicate; review fixes label spoof/trim/SSH git user, 102 scoped tests + Chrome light/dark.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -206,6 +207,7 @@ Progress: [██████████] 100%
 | 261128-fvp | Redesign màn hình Bộ tài liệu theo sketch 016A: inspector chỉ-đọc, config modal 620px, row action sửa/xoá nhanh | 2026-11-28 | 736b4046, 39ce124c, b6ceacd5 | Verified (Chrome light/dark + scoped tests) | [261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i](./quick/261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i/) |
 | 261128-gna | System gắn 2 link git riêng biệt (source code + gitops), validate chung, form/detail/table + backup | 2026-11-28 | 8a546b7a, 5ddd01da, dd6a07f5 | Reviewed + verified (Chrome light/dark + scoped tests) | [261128-gna-m-r-ng-schema-system-g-n-1-link-git](./quick/261128-gna-m-r-ng-schema-system-g-n-1-link-git/) |
 | 261128-i9x | Bỏ attach file local trong AI chat; SSH attach dùng chung cho drawer + standalone | 2026-11-28 | 8f16826d, 426f15c6 | Verified (Chrome light/dark + scoped tests) | [261128-i9x-b-attach-file-local-d-ng-ssh-attach-cho-](./quick/261128-i9x-b-attach-file-local-d-ng-ssh-attach-cho-/) |
+| 261128-hxf | Bỏ validation 2 link git System, lưu nguyên mọi string; render an toàn qua predicate, review fixes label spoof/trim/SSH git user | 2026-11-28 | 0acb75c8, d46c5bdd, af1c18c5 | Reviewed + verified (Chrome light/dark + 102 scoped tests) | [261128-hxf-b-validation-2-link-git-system-user-i-n-](./quick/261128-hxf-b-validation-2-link-git-system-user-i-n-/) |
 
 ## Accumulated Context
 
