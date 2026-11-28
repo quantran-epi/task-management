@@ -506,7 +506,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
           </div>
 
           {/* Mission rail: one compact line plus progress, from data already loaded */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginTop: 16, padding: '10px 12px', border: '1px solid var(--border, #e9eaee)', borderRadius: 'var(--radius-control, 6px)', background: 'var(--bg-island-soft, #f7f8fa)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap', marginTop: 16, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', background: 'var(--surface)' }}>
             <div>
               <Text strong style={{ fontFamily: 'var(--font-mono, monospace)', fontSize: 22, display: 'block', lineHeight: 1.1 }}>{formatMinutes(taskAnalysis.metrics.estimateMinutes)}</Text>
               <Text type="secondary" style={{ fontSize: 'var(--font-size-small, 12px)' }}>Ước tính</Text>
@@ -754,7 +754,7 @@ export const ItemInsightView: React.FC<ItemInsightViewProps> = ({
             </Card>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0, padding: 'var(--gap-8)', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', background: 'var(--bg-island-soft, var(--bg-island))' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-12)', minWidth: 0, padding: 'var(--gap-8)', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)', background: 'var(--surface)' }}>
             <Card
               title={<Space><CalendarOutlined /><span>Nhắc nhở</span></Space>}
               data-testid="item-insight-reminders"
