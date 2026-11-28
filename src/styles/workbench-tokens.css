@@ -494,3 +494,97 @@ html, body, #root {
   font-weight: 600;
   color: var(--fg-secondary);
 }
+
+/* Sketch 016 winner A: read-only doc inspector, no form controls in the aside. */
+.doc-set-inspector {
+  width: 260px;
+  min-width: 260px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.doc-set-inspector__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-8);
+  padding: var(--gap-12);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.doc-set-inspector__body {
+  padding: var(--gap-12);
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  font-size: var(--font-size-small);
+}
+
+.doc-set-inspector__title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.doc-set-inspector__path {
+  margin-top: var(--gap-4);
+  color: var(--fg-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.doc-set-inspector__kv {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--gap-8) var(--gap-10);
+  margin: var(--gap-16) 0 0;
+  font-size: var(--font-size-small);
+}
+
+.doc-set-inspector__kv dt { color: var(--fg-secondary); }
+.doc-set-inspector__kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+.doc-set-inspector__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-8);
+  margin-top: var(--gap-16);
+  padding-top: var(--gap-12);
+  border-top: 1px solid var(--border);
+}
+
+.doc-row-action {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  color: var(--fg-secondary);
+}
+
+.doc-row-action:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+/* Form lives in its own 620px modal; group titles become real sections there. */
+.doc-set-config-modal .doc-set-form-group-title {
+  margin-top: var(--gap-16);
+  padding-bottom: var(--gap-8);
+  color: var(--fg-strong, var(--fg));
+  font-size: var(--font-size-base);
+}
+
+.doc-set-config-modal .doc-set-form-group-title:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}

@@ -429,6 +429,7 @@ export function DocumentSetDetail({
   const handleSaveDocumentSet = async (value: import('../components/knowledge/DocumentSetForm').DocumentSetFormValue) => {
     try {
       await updateDocumentSet(setId, value, db);
+      setConfigOpen(false);
       message.success('Đã cập nhật bộ tài liệu');
     } catch (err) {
       console.error('Failed to save document set:', err);
@@ -824,42 +825,29 @@ export function DocumentSetDetail({
           )}
         </div>
         {detailWidth >= 560 ? (
-          <aside style={{ width: 260, minWidth: 260, boxSizing: 'border-box', flexShrink: 0, borderLeft: '1px solid var(--ant-color-border, #f0f0f0)', padding: 12, overflow: 'auto' }}>
-            <div style={{ display: configOpen ? 'none' : 'block' }}>
-              <Space direction="vertical" size="small" style={{ width: '100%' }}>
-                <Button size="small" icon={<EditOutlined />} onClick={() => setConfigOpen(true)}>Mở form cấu hình</Button>
-                {selectedDoc ? (
-                  <>
-                    <Text strong>{selectedDoc.title}</Text>
-                    <Text type="secondary">{selectedDoc.path || '—'}</Text>
-                    <Text type="secondary">{formatBytes(selectedDoc.sizeBytes)}</Text>
-                    <Text type="secondary">{selectedDoc.updatedAt}</Text>
-                    <Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag>
-                    <Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text>
-                  </>
-                ) : (
-                  <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
-                )}
-              </Space>
+          <aside className="doc-set-inspector" aria-label="Chi tiết tài liệu">
+            <div className="doc-set-inspector__head">
+              <Text strong>Chi tiết tài liệu</Text>
+              <Button size="small" icon={<EditOutlined />} aria-label="Mở cấu hình bộ tài liệu" onClick={() => setConfigOpen(true)}>Cấu hình</Button>
             </div>
-            <div style={{ display: configOpen ? 'block' : 'none' }}>
-              <DocumentSetForm
-                ref={formRef}
-                notes={formNotes}
-                initialSet={set}
-                availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
-                onSave={(value) => void handleSaveDocumentSet(value)}
-              />
+            <div className="doc-set-inspector__body">
+              {selectedDoc ? (
+                <>
+                  <div className="doc-set-inspector__title">{selectedDoc.title}</div>
+                  <div className="doc-set-inspector__path">{selectedDoc.path || '—'}</div>
+                  <dl className="doc-set-inspector__kv">
+                    <dt>Kích thước</dt><dd>{formatBytes(selectedDoc.sizeBytes)}</dd>
+                    <dt>Cập nhật</dt><dd>{selectedDoc.updatedAt.slice(0, 10)}</dd>
+                    <dt>Trạng thái</dt><dd><Tag color={STATE_UI[selectedDoc.status].color}>{STATUS_SHORT[selectedDoc.status]}</Tag></dd>
+                    <dt>Bộ chứa</dt><dd>{set.name}</dd>
+                    <dt>ID</dt><dd><Text copyable={{ text: selectedDoc.id }} style={{ fontSize: 11, wordBreak: 'break-all' }}>{selectedDoc.id}</Text></dd>
+                  </dl>
+                </>
+              ) : (
+                <Text type="secondary">Chọn một tài liệu để xem chi tiết.</Text>
+              )}
             </div>
           </aside>
-        ) : configOpen ? (
-          <DocumentSetForm
-            ref={formRef}
-            notes={formNotes}
-            initialSet={set}
-            availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
-            onSave={(value) => void handleSaveDocumentSet(value)}
-          />
         ) : null}
       </div>
 
@@ -1044,6 +1032,23 @@ export function DocumentSetDetail({
         <AttemptHistoryList attempts={publishData.attempts} />
       </section>
       </div>
+
+      <Modal
+        className="doc-set-config-modal"
+        open={configOpen}
+        title="Cấu hình bộ tài liệu"
+        width={620}
+        onCancel={() => setConfigOpen(false)}
+        footer={null}
+      >
+        <DocumentSetForm
+          ref={formRef}
+          notes={formNotes}
+          initialSet={set}
+          availableSets={allSets.filter((candidate) => candidate.id !== set.id)}
+          onSave={(value) => void handleSaveDocumentSet(value)}
+        />
+      </Modal>
 
       {/* Confirmation modal before rebuild per D-21 */}
       <Modal
