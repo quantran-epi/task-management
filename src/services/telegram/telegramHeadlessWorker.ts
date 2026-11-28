@@ -33,6 +33,7 @@ import type {
   TelegramConflictEvent,
   TelegramDataScope,
   TelegramBroadcastResult,
+  TelegramWhitelistUser,
 } from './telegramTypes';
 import { isTauriApp } from '../../utils/timerPopout';
 import { getNineRouterConfig, getNineRouterApiKey } from '../ai/nineRouterTokenService';
@@ -55,6 +56,34 @@ import {
 } from '../ai/mcpClient';
 
 export const TELEGRAM_MAX_MESSAGE_LENGTH = 4000; // Telegram hard limit is 4096, buffer to 4000
+
+/**
+ * Telegram identity is stable across chats; `chatId` is only a reply address.
+ * Whitelist rows are keyed by Telegram user id when enrolled as a device, so all
+ * authorization/quota reads must resolve by identity first. Legacy rows without
+ * `telegramUserId` still resolve by the incoming chat id.
+ */
+export async function resolveTelegramCaller(
+  identity: string,
+  chatId: string,
+  db: TaskPlannerDatabase = defaultDb
+): Promise<TelegramWhitelistUser | undefined> {
+  return (await findWhitelistByIdentity(identity, db)) ?? (await getWhitelistUser(chatId, db));
+}
+
+/**
+ * Refund a consumed turn at most once per inbound turn. The admin exemption and
+ * every refusal/error path share this helper so a turn is never charged twice.
+ */
+function createQuotaRefunder(chatId: string, db: TaskPlannerDatabase) {
+  let refunded = false;
+  return async () => {
+    if (refunded) return;
+    refunded = true;
+    await refundQuota(chatId, db);
+  };
+}
+
 
 export async function sendTelegramDirectMessage(
   token: string,
@@ -658,33 +687,37 @@ export async function notifyAdminsOnInboundMessage(
   event: TelegramInboundEvent,
   botToken: string,
   db: TaskPlannerDatabase,
-  sendDirectFn: (token: string, chatId: string, text: string) => Promise<void>
+  sendDirectFn: (token: string, chatId: string, text: string) => Promise<void>,
+  caller?: TelegramWhitelistUser
 ): Promise<void> {
   if (!botToken || !botToken.trim()) return;
 
   try {
     const whitelist = await getWhitelist(db);
-    const caller = whitelist.find((u) => u.chatId === event.chat_id);
+    const resolvedCaller = caller ?? whitelist.find((u) => u.chatId === event.chat_id);
 
     // If caller is an active admin, don't send self-notification
-    if (caller?.isAdmin && caller.status === 'active') {
+    if (resolvedCaller?.isAdmin && resolvedCaller.status === 'active') {
       return;
     }
 
     const activeAdmins = whitelist.filter(
-      (u) => u.isAdmin && u.status === 'active' && u.chatId !== event.chat_id
+      (u) =>
+        u.isAdmin &&
+        u.status === 'active' &&
+        u.chatId !== (resolvedCaller?.chatId ?? event.chat_id)
     );
 
     if (activeAdmins.length === 0) {
       return;
     }
 
-    const isFirstTime = !caller;
+    const isFirstTime = !resolvedCaller;
     let statusBadge = '🆕 Người dùng mới - Chờ duyệt (Pending)';
-    if (caller) {
-      if (caller.status === 'active') {
+    if (resolvedCaller) {
+      if (resolvedCaller.status === 'active') {
         statusBadge = '✅ Đang hoạt động (Active)';
-      } else if (caller.status === 'blocked') {
+      } else if (resolvedCaller.status === 'blocked') {
         statusBadge = '⛔ Đã bị khóa (Blocked)';
       } else {
         statusBadge = '⏳ Đang chờ duyệt (Pending)';
@@ -743,6 +776,12 @@ export async function processTelegramInboundMessage(
   const rawIdentity = event.fromUserId ?? event.from_id;
   const rawIdentityText = rawIdentity === undefined || rawIdentity === null ? '' : String(rawIdentity).trim();
   const identity = rawIdentityText || chat_id;
+  // Account state (quota/admin/scope/history) follows the stable Telegram identity.
+  // The inbound chat id remains the reply address; no row auto-move is performed.
+  const callerRow = await resolveTelegramCaller(identity, chat_id, db);
+  const accountChatId = callerRow?.chatId ?? chat_id;
+  const refundConsumedTurn = createQuotaRefunder(accountChatId, db);
+  let quotaConsumed = false;
 
   // Deduplicate incoming update_id
   if (update_id && processedUpdateIds.has(update_id)) {
@@ -794,13 +833,13 @@ export async function processTelegramInboundMessage(
   const sendDirect = sendDirectFn || sendTelegramDirectMessage;
 
   // Notify all active admins about incoming message from non-admin users
-  await notifyAdminsOnInboundMessage(event, botToken, db, sendDirect);
+  await notifyAdminsOnInboundMessage(event, botToken, db, sendDirect, callerRow);
 
   const trimmedText = (text || '').trim();
   const lowerText = trimmedText.toLowerCase();
 
   // Step 0: Check for Admin multi-step conversation or admin commands
-  const adminResult = await handleAdminCommand(chat_id, trimmedText, db);
+  const adminResult = await handleAdminCommand(accountChatId, trimmedText, db);
   if (adminResult.handled) {
     if (adminResult.replyText) {
       const htmlReply = markdownToTelegramHtml(adminResult.replyText);
@@ -832,8 +871,8 @@ export async function processTelegramInboundMessage(
   }
 
   // Step 0b: Check if Admin is in an active pending mutation confirmation/adjustment flow
-  const pendingMutation = getPendingMutation(chat_id);
-  const callerUser = await getWhitelistUser(chat_id, db);
+  const pendingMutation = getPendingMutation(accountChatId);
+  const callerUser = callerRow;
   if (pendingMutation && callerUser?.isAdmin && callerUser.status === 'active') {
     // 1. Affirmative Confirmation ("OK", "Xác nhận", "Đồng ý", etc.)
     if (isConfirmationMessage(trimmedText)) {
@@ -850,7 +889,7 @@ export async function processTelegramInboundMessage(
           parsedResult = { message: rawResult };
         }
 
-        clearPendingMutation(chat_id);
+        clearPendingMutation(accountChatId);
 
         let replyMd = '';
         if (parsedResult.error) {
@@ -881,7 +920,7 @@ export async function processTelegramInboundMessage(
         );
         return;
       } catch (err: any) {
-        clearPendingMutation(chat_id);
+        clearPendingMutation(accountChatId);
         const errMsg = `❌ **Lỗi khi thực thi thao tác:** ${err?.message || String(err)}`;
         await sendReply(botToken, chat_id, markdownToTelegramHtml(errMsg), message_id);
         return;
@@ -890,7 +929,7 @@ export async function processTelegramInboundMessage(
 
     // 2. Cancellation ("Hủy", "Cancel", "Bỏ qua", etc.)
     if (isCancellationMessage(trimmedText)) {
-      clearPendingMutation(chat_id);
+      clearPendingMutation(accountChatId);
       const cancelMd = `🚫 **Đã hủy thao tác.** Không có dữ liệu nào trong TaskMate bị thay đổi.`;
       const htmlReply = markdownToTelegramHtml(cancelMd);
       await sendReply(botToken, chat_id, htmlReply, message_id);
@@ -1018,7 +1057,7 @@ export async function processTelegramInboundMessage(
 
   // Step 1: Whitelist & Authorization Check
   if (isSlashCommand) {
-    const cmdAccess = await checkAndConsumeCommandQuota(chat_id, db);
+    const cmdAccess = await checkAndConsumeCommandQuota(accountChatId, db);
     if (!cmdAccess.allowed) {
       if (cmdAccess.reason === 'not_whitelisted') {
         await handleUnauthorizedUser();
@@ -1149,7 +1188,7 @@ export async function processTelegramInboundMessage(
     }
 
     if (lowerText === '/reset' || lowerText === '/clear') {
-      await resetTelegramUserSession(chat_id, db);
+      await resetTelegramUserSession(accountChatId, db);
       const graceNote = cmdAccess.isOverQuota
         ? `\n\n⚠️ *(Bạn đã hết hạn mức tin nhắn chính, còn ${cmdAccess.overQuotaCommandsRemaining ?? 0}/3 lượt lệnh hôm nay)*`
         : '';
@@ -1219,7 +1258,8 @@ export async function processTelegramInboundMessage(
   }
 
   // Regular chat message: check and consume quota
-  const quota = await checkAndConsumeQuota(chat_id, db);
+  const quota = await checkAndConsumeQuota(accountChatId, db);
+  quotaConsumed = quota.allowed;
 
   if (!quota.allowed) {
     if (quota.reason === 'not_whitelisted') {
@@ -1317,7 +1357,7 @@ export async function processTelegramInboundMessage(
 
   let chatHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   if (historyTurns > 0) {
-    chatHistory = await getTelegramChatHistory(chat_id, historyTurns, user.sessionResetAt, db);
+    chatHistory = await getTelegramChatHistory(accountChatId, historyTurns, user.sessionResetAt, db);
   }
 
   // Step 5: Intent routing via LLM (matching AI Chat Drawer architecture)
@@ -1422,8 +1462,8 @@ export async function processTelegramInboundMessage(
       return;
     }
 
-    // User is Admin: exempt from quota, refund any deducted turn
-    await refundQuota(chat_id, db);
+    // User is Admin: exempt from quota, refund the turn deducted for this message.
+    await refundConsumedTurn();
 
     const scoped = await resolveScopedContext('full', trimmedText, db);
     let contextText = scoped.contextText;
@@ -1645,7 +1685,7 @@ export async function processTelegramInboundMessage(
   try {
     const turnResult = await runTelegramChatTurn(
       {
-        chatId: chat_id,
+        chatId: accountChatId,
         text: trimmedText,
         dataScope,
         history: chatHistory,
@@ -1668,6 +1708,7 @@ export async function processTelegramInboundMessage(
     }
   } catch (aiErr: any) {
     console.error('[telegramWorker] AI generation error:', aiErr);
+    await refundConsumedTurn();
     rawAiResponse = aiErr?.name === 'AbortError' || turnController.signal.aborted
       ? '⏱️ *(Đã hết thời gian xử lý. Vui lòng thử lại với yêu cầu ngắn hơn.)*'
       : `❌ Lỗi khi xử lý yêu cầu AI: ${aiErr?.message || 'Không thể kết nối đến máy chủ AI'}`;
@@ -1710,6 +1751,16 @@ export async function processTelegramInboundMessage(
     },
     db
   );
+  } catch (err) {
+    // A turn charged before generation must not be lost when generation fails.
+    if (quotaConsumed) {
+      try {
+        await refundConsumedTurn();
+      } catch (refundErr) {
+        console.warn('[telegramWorker] Failed to refund consumed quota:', refundErr);
+      }
+    }
+    throw err;
   } finally {
     clearTimeout(deadlineTimer);
   }
