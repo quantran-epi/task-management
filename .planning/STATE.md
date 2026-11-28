@@ -199,6 +199,7 @@ Progress: [██████████] 100%
 | 261128-dlj | Task insight: 2 Card riêng Links/Nhắc nhở, bảng link tên+URL, modal riêng, Popconfirm, QuickReminderModal | 2026-11-28 | 7c327a05, 6ff40a90 | Verified (Chrome) | [261128-dlj-apply-cr-detail-link-and-reminder-standa](./quick/261128-dlj-apply-cr-detail-link-and-reminder-standa/) |
 | 261128-eb6 | Command Deck layout cho CR detail và task insight: mission header, progress rail, grid 2.4fr/1fr, dark-mode token fix | 2026-11-28 | eef54006, 6001f719 | Verified (Chrome light/dark) | [261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai](./quick/261128-eb6-p-design-command-deck-duy-t-v-o-cr-detai/) |
 | 261128-fqs | Dark-mode Capacity Planner/TaskLists/splash/AI office explorer + tasklist redesign baseline | 2026-11-28 | 80276409, c51ec8ad, 5f362408, e474c098, a83eba75, e064c4b0, 3e96cd1b | Verified | [261128-fqs-check-fix-capacity-planner-page-dark-mod](./quick/261128-fqs-check-fix-capacity-planner-page-dark-mod/) |
+| 261128-ffo | Dark mode mục lục doc editor và status bar báo trạng thật (Knowledge liveness + GitHub sync) | 2026-11-28 | 47867416, b547dc5d, 3d769261 | Verified (Chrome + scoped tests) | [261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-](./quick/261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-/) |
 
 ## Accumulated Context
 
