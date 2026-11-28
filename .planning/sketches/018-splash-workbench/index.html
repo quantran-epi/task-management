@@ -96,7 +96,7 @@
         <div class="title">TaskMate</div>
         <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
         <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
-        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
         <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
       </div>
     </div>
@@ -112,7 +112,7 @@
         <div class="title">TaskMate</div>
         <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
         <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
-        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
         <div class="statusbar"><span class="led"></span><span>INDEXEDDB</span><span>LOCAL SQLITE</span><span class="spacer">v1.6 · OFFLINE</span></div>
         <div class="footer" style="bottom:38px"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
       </div>
@@ -129,7 +129,7 @@
             <div><h1>TaskMate</h1><div class="sub">Plan work. Stay clear. Stay local.</div></div>
           </div>
           <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
-          <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+          <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động</span></div><span class="pct" data-pct>15%</span></div>
           <div class="checkline"><span class="ok">✓</span><span>Dữ liệu local · không yêu cầu tài khoản hay mạng</span></div>
           <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
         </div>
@@ -147,10 +147,10 @@
 
 <script>
 const STEPS = [
-  ['Đang khởi động TaskMate...',15],
-  ['Đang tải cấu hình IndexedDB & Lưu trữ cục bộ...',45],
-  ['Đang chuẩn bị không gian làm việc...',80],
-  ['Sẵn sàng làm việc!',100],
+  ['Đang khởi động',15],
+  ['Đang tải dữ liệu cục bộ',45],
+  ['Đang chuẩn bị giao diện',80],
+  ['Sẵn sàng',100],
 ];
 const variantIds=['a','b','c'];
 const activeVariant=()=>variantIds.find(id=>document.getElementById('variant-'+id).classList.contains('active'));
