@@ -2,7 +2,7 @@
 sketch: 018
 name: splash-workbench
 question: "Splash screen TaskMate nên giữ chất workbench tối giản, kỹ thuật mà vẫn đủ cảm giác 'đang khởi động'?"
-winner: null
+winner: E
 tags: [splash, boot, workbench, dark, ant-design]
 ---
 

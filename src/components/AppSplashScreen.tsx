@@ -8,10 +8,10 @@ export interface AppSplashScreenProps {
 }
 
 const BOOT_STEPS = [
-  'Đang khởi động TaskMate Workbench...',
-  'Đang tải cấu hình IndexedDB & Lưu trữ cục bộ...',
-  'Khởi tạo mô hình JetBrains Islands Engine...',
-  'Sẵn sàng làm việc!',
+  'Đang khởi động',
+  'Đang tải dữ liệu cục bộ',
+  'Đang chuẩn bị giao diện',
+  'Sẵn sàng',
 ];
 
 export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
@@ -61,11 +61,11 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
 
       <div className="tm-splash__brand">
         <div className="tm-splash__mark">
-          <TaskMateLogo size={76} />
+          <TaskMateLogo size={56} />
         </div>
 
         <div className="tm-splash__title">TaskMate</div>
-        <div className="tm-splash__eyebrow">IntelliJ Islands Workbench</div>
+        <div className="tm-splash__eyebrow">Plan work. Stay clear. Stay local.</div>
 
         <div className="tm-splash__progress">
           <div
@@ -74,9 +74,12 @@ export const AppSplashScreen: React.FC<AppSplashScreenProps> = ({
           />
         </div>
 
-        <div className="tm-splash__step">
-          <span className="tm-splash__step-dot" />
-          <span>{BOOT_STEPS[currentStepIndex]}</span>
+        <div className="tm-splash__progress-meta">
+          <div className="tm-splash__step">
+            <span className="tm-splash__step-dot" />
+            <span className="tm-splash__step-text">{BOOT_STEPS[currentStepIndex]}</span>
+          </div>
+          <span className="tm-splash__percent">{progress}%</span>
         </div>
       </div>
 

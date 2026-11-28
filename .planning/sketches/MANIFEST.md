@@ -29,4 +29,4 @@ Workbench gọn, mật độ cao, dùng token Ant Design 6 / TaskMate hiện có
 | 015 | ssh-file-picker | Chuẩn hoá chọn tệp SSH theo folder-picker của SSH Remote Explorer nhưng pick multiple files — bố cục/multi-select nào rõ nhất? | A — Two-column · VS Code faithful | chat, ssh, file-picker, multi-select, standalone, ant-design, consistency |
 | 016 | doc-set-inspector-redesign | Thiết kế lại toàn màn hình Bộ tài liệu với right section không dồn control: đâu là cấu trúc đúng? | A — Inspector tách bạch | doc-set, inspector, modal, layout, workbench |
 | 017 | tasklist-command-deck | Redesign toàn bộ trang Danh sách tác vụ — cấu trúc bảng/row nào giúp quét nhanh mà vẫn giữ thao tác hàng loạt? | A — Dense Table | task-list, command-deck, table, density, workbench, ant-design |
-| 018 | splash-workbench | Splash screen TaskMate nên giữ chất workbench tối giản, kỹ thuật mà vẫn đủ cảm giác 'đang khởi động'? | null | splash, boot, workbench, dark, ant-design |
+| 018 | splash-workbench | Splash screen TaskMate nên giữ chất workbench tối giản, kỹ thuật mà vẫn đủ cảm giác 'đang khởi động'? | E | splash, boot, workbench, dark, ant-design |

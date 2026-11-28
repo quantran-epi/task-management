@@ -11,7 +11,8 @@
   user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: #f7fbff;
-  background: color-mix(in srgb, var(--accent, #2f62d8) 18%, #0a1626);
+  background: radial-gradient(ellipse 80% 80% at 50% 0%, rgba(112, 96, 214, 0.22) 0%, transparent 62%),
+    linear-gradient(180deg, #12141f 0%, #1b1c2b 52%, #101522 100%);
   opacity: 1;
   transform: scale(1);
   transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1),
@@ -25,16 +26,14 @@
 
 .tm-splash__ambient {
   position: absolute;
-  width: 520px;
-  height: 520px;
+  top: -140px;
+  left: 50%;
+  width: min(720px, 100vw);
+  height: 360px;
+  transform: translateX(-50%);
   border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--accent, #2f62d8) 32%, transparent) 0%,
-    color-mix(in srgb, var(--info, #1677ff) 18%, transparent) 50%,
-    transparent 85%
-  );
-  filter: blur(45px);
+  background: radial-gradient(ellipse, rgba(108, 92, 231, 0.2), transparent 72%);
+  filter: blur(50px);
   pointer-events: none;
 }
 
@@ -58,6 +57,15 @@
 }
 
 .tm-splash__mark {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border: 1px solid #3a3a58;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #22243a, #151626);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   margin-bottom: 24px;
   animation: tm-splash-settle 0.45s ease-out 1 both;
 }
@@ -75,48 +83,66 @@
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #b8c7dc;
+  color: var(--tm-muted, #8fa3bd);
   margin-bottom: 32px;
+  white-space: nowrap;
 }
 
 .tm-splash__progress {
   width: 280px;
   height: 4px;
-  border-radius: 2px;
-  background: color-mix(in srgb, #f7fbff 12%, transparent);
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
   overflow: hidden;
   position: relative;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .tm-splash__progress-fill {
   height: 100%;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    var(--accent, #2f62d8) 0%,
-    var(--info, #1677ff) 100%
-  );
+  border-radius: 99px;
+  background: linear-gradient(90deg, #6c5ce7 0%, #2f62d8 70%, #13c2c2 100%);
   transition: width 0.25s linear;
+}
+
+.tm-splash__progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 280px;
+  max-width: min(90%, 520px);
+  font-size: 12px;
+  color: var(--tm-muted, #8fa3bd);
 }
 
 .tm-splash__step {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 18px;
-  font-size: 12px;
-  color: #b8c7dc;
-  text-align: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
 }
 
 .tm-splash__step-dot {
   display: inline-block;
+  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--info, #1677ff);
+  background: #8b7cf6;
+  box-shadow: 0 0 0 4px rgba(139, 124, 246, 0.16);
+}
+
+.tm-splash__step-text,
+.tm-splash__percent {
+  white-space: nowrap;
+}
+
+.tm-splash__percent {
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #f7fbff;
 }
 
 .tm-splash__footer {
@@ -125,11 +151,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   text-align: center;
+  width: 100%;
+  padding: 0 16px;
   font-size: 11px;
   letter-spacing: 0.02em;
-  color: #8fa3bd;
+  color: var(--tm-muted, #8fa3bd);
+}
+
+.tm-splash__footer > div {
+  white-space: nowrap;
 }
 
 .tm-splash__footer-author {

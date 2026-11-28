@@ -28,20 +28,27 @@ describe('AppSplashScreen', () => {
 
   it('advances the four boot steps at 15/45/80/100 percent', () => {
     const { container } = render(<AppSplashScreen minDuration={MIN_DURATION} />);
-    expect(screen.getByText('Đang khởi động TaskMate Workbench...')).toBeTruthy();
+    expect(screen.getByText('Đang khởi động')).toBeTruthy();
     expect(progressWidth(container)).toBe('15%');
 
     advance(MIN_DURATION * 0.3);
-    expect(screen.getByText('Đang tải cấu hình IndexedDB & Lưu trữ cục bộ...')).toBeTruthy();
+    expect(screen.getByText('Đang tải dữ liệu cục bộ')).toBeTruthy();
     expect(progressWidth(container)).toBe('45%');
 
     advance(MIN_DURATION * 0.35);
-    expect(screen.getByText('Khởi tạo mô hình JetBrains Islands Engine...')).toBeTruthy();
+    expect(screen.getByText('Đang chuẩn bị giao diện')).toBeTruthy();
     expect(progressWidth(container)).toBe('80%');
 
     advance(MIN_DURATION * 0.25);
-    expect(screen.getByText('Sẵn sàng làm việc!')).toBeTruthy();
+    expect(screen.getByText('Sẵn sàng')).toBeTruthy();
     expect(progressWidth(container)).toBe('100%');
+  });
+
+  it('shows the English tagline and percent without IntelliJ branding', () => {
+    const { container } = render(<AppSplashScreen minDuration={MIN_DURATION} />);
+    expect(screen.getByText('Plan work. Stay clear. Stay local.')).toBeTruthy();
+    expect(screen.getByText('15%')).toBeTruthy();
+    expect(container.textContent).not.toMatch(/IntelliJ|Islands|Workbench/);
   });
 
   it('calls onReady exactly once after minDuration + 350ms fade', () => {
