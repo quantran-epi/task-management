@@ -7,7 +7,7 @@
 | Hash | Nội dung |
 |------|----------|
 | `5244a3c6` | `feat(261128-ipr): make CR task table full width and stack secondary cards in two columns` |
-| `92acadf0` | `refactor(261128-ipr): move secondary grid CSS into dedicated stylesheet` |
+| `ed6a5eea` | `refactor(261128-ipr): move secondary grid CSS into dedicated stylesheet` |
 
 ## Chi tiết
 
