@@ -1,5 +1,23 @@
 import type { ChatGeneratedFile, ChatTokenUsage } from '../../../types/models';
-import type { ChatTurnToolEvent } from './chatTurnRuntime';
+import type { ChatTurnStatus, ChatTurnToolEvent } from './chatTurnRuntime';
+import { ACTIVE_AI_STATUSES } from '../../../services/ai/aiTurnManager';
+
+/**
+ * Status the chat widget paints. The send prelude must show 'preparing' even when the
+ * previous turn left the runtime in a terminal status ('complete'/'error'/'aborted'),
+ * not only 'idle' — otherwise turn 2+ has no indicator until runtime.start() publishes.
+ */
+export function turnStatusForPaint(
+  runtimeStatus: ChatTurnStatus | undefined,
+  runtimeRunning: boolean,
+  preludeActive: boolean
+): ChatTurnStatus {
+  const status = runtimeStatus ?? 'idle';
+  if (preludeActive && !runtimeRunning && !ACTIVE_AI_STATUSES.includes(status)) {
+    return 'preparing';
+  }
+  return status;
+}
 
 export type TabRuntimeStatus =
   | 'idle'

@@ -125,7 +125,7 @@ import {
   deleteChatTab,
 } from '../../db/repositories/chatTabRepo';
 import type { ChatTab } from '../../types/models';
-import type { TabRuntimePatch, TabRuntimeStatus } from './runtime/tabTypes';
+import { turnStatusForPaint, type TabRuntimePatch, type TabRuntimeStatus } from './runtime/tabTypes';
 import { stageLabelFor } from './runtime/useChatTurn';
 import { aiTurnManager, ACTIVE_AI_STATUSES } from '../../services/ai/aiTurnManager';
 import { cancelToolCall } from '../../services/sshService';
@@ -2442,10 +2442,11 @@ ${systemInstruction.trim() ? `\nBelow is the ground-truth context of the current
           messages={messages}
           db={db}
           turn={{
-            status:
-              preludeTabs[activeTabId] && (activeTurnRuntime?.getStatus() ?? 'idle') === 'idle'
-                ? 'preparing'
-                : activeTurnRuntime?.getStatus() ?? 'idle',
+            status: turnStatusForPaint(
+              activeTurnRuntime?.getStatus(),
+              activeTurnRuntime?.isRunning() ?? false,
+              Boolean(preludeTabs[activeTabId])
+            ),
             streamingText: activeRuntime?.streamingText ?? '',
             streamingStatusLabel: activeRuntime?.streamingStatus ?? null,
             toolLimitRounds: activeTurnRuntime?.getToolLimitRounds() ?? null,

@@ -98,4 +98,40 @@ describe('aiTurnManager', () => {
     aiTurnManager.updateTurn('tab-sub', { streamingText: 'text' });
     expect(subscriber).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps startedAt stable when a host re-registers on each tool-call status', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-28T00:00:00.000Z'));
+    const base = { scopeKey: 'global', title: 'Tool loop', abort: vi.fn() };
+
+    aiTurnManager.registerTurn({ id: 'tab-loop', ...base, status: 'preparing', streamingStatusLabel: 'Chuẩn bị' });
+    const startedAt = aiTurnManager.getTurn('tab-loop')?.startedAt;
+
+    vi.setSystemTime(new Date('2026-11-28T00:02:00.000Z'));
+    aiTurnManager.registerTurn({ id: 'tab-loop', ...base, status: 'tool', streamingStatusLabel: 'Truy xuất công cụ' });
+    vi.setSystemTime(new Date('2026-11-28T00:05:00.000Z'));
+    aiTurnManager.registerTurn({ id: 'tab-loop', ...base, status: 'tool', streamingStatusLabel: 'Truy xuất công cụ' });
+
+    // Elapsed keeps growing across tool calls instead of resetting with each 'tool' publish.
+    expect(aiTurnManager.getTurn('tab-loop')?.startedAt).toBe(startedAt);
+    vi.useRealTimers();
+  });
+
+  it('fresh turn reuses the id after finish starts a new clock, not the stale one', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-28T00:00:00.000Z'));
+    aiTurnManager.registerTurn({
+      id: 'tab-reuse', scopeKey: 'global', title: 'First', status: 'preparing', streamingStatusLabel: null, abort: vi.fn(),
+    });
+    const firstStart = aiTurnManager.getTurn('tab-reuse')?.startedAt;
+
+    aiTurnManager.finishTurn('tab-reuse', 'complete');
+    vi.setSystemTime(new Date('2026-11-28T00:10:00.000Z'));
+    aiTurnManager.registerTurn({
+      id: 'tab-reuse', scopeKey: 'global', title: 'Second', status: 'preparing', streamingStatusLabel: null, abort: vi.fn(),
+    });
+
+    expect(aiTurnManager.getTurn('tab-reuse')?.startedAt).toBeGreaterThan(firstStart!);
+    vi.useRealTimers();
+  });
 });

@@ -69,11 +69,17 @@ export class AiTurnManager {
     toolEvents?: ChatTurnToolEvent[];
     streamingText?: string;
   }) {
+    // Hosts re-register the same id on every status publish (e.g. 'tool' per tool call).
+    // Reuse the clock only while that id is still ACTIVELY running: a finished entry is
+    // kept for 800ms to let the UI observe its terminal state, and a new turn arriving in
+    // that window must start a fresh clock instead of inheriting the old turn's elapsed.
+    const existing = this.turns.get(turn.id);
+    const live = existing && ACTIVE_AI_STATUSES.includes(existing.status) ? existing : undefined;
     const fullTurn: ActiveAiTurn = {
       ...turn,
-      streamingText: turn.streamingText ?? '',
-      toolEvents: turn.toolEvents ?? [],
-      startedAt: turn.startedAt ?? Date.now(),
+      streamingText: turn.streamingText ?? live?.streamingText ?? '',
+      toolEvents: turn.toolEvents ?? live?.toolEvents ?? [],
+      startedAt: turn.startedAt ?? live?.startedAt ?? Date.now(),
     };
     this.turns.set(turn.id, fullTurn);
     this.updateCacheAndNotify();
