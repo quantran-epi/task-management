@@ -142,6 +142,10 @@ describe('assertNoLegacyTables — envelope-stage legacy rejection (D-49)', () =
     expect(() => mod.assertNoLegacyTables({ tables: { milestones: [] } })).toThrow(LEGACY_MESSAGE);
   });
 
+  it('does not reject the new crMilestones table (Phase 52 D-07)', () => {
+    expect(() => mod.assertNoLegacyTables({ tables: { crMilestones: [] } })).not.toThrow();
+  });
+
   it('does not throw for a version-11 payload', () => {
     expect(() =>
       mod.assertNoLegacyTables({ tables: { tasks: [], systems: [], changeRequests: [] } })

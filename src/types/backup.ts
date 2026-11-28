@@ -19,6 +19,7 @@ import type {
   TelegramWhitelistUser,
   System,
   ChangeRequest,
+  CrMilestone,
 } from './models';
 import type {
   AiEmployee,
@@ -67,6 +68,8 @@ export interface BackupTableData {
   telegramWhitelist?: TelegramWhitelistUser[];
   systems?: System[];
   changeRequests?: ChangeRequest[];
+  /** Phase 52 D-07: optional so v14 payloads stay type-valid before normalization. */
+  crMilestones?: CrMilestone[];
   aiEmployees?: AiEmployee[];
   aiLeads?: AiLead[];
   aiSkills?: AiSkill[];
@@ -103,6 +106,7 @@ export interface BackupTableCounts {
   telegramWhitelist?: number;
   systems?: number;
   changeRequests?: number;
+  crMilestones?: number;
   aiEmployees?: number;
   aiLeads?: number;
   aiSkills?: number;

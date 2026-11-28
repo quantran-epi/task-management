@@ -31,6 +31,7 @@ import {
   BackupTelegramWhitelistUserSchema,
   BackupSystemRecordSchema,
   BackupChangeRequestRecordSchema,
+  BackupCrMilestoneRecordSchema,
   BackupAiEmployeeRecordSchema,
   BackupAiLeadRecordSchema,
   BackupAiSkillRecordSchema,
@@ -223,11 +224,15 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   // v13 → v14: normalize link fields before per-table validation. The envelope recorded
   // below is rewritten to v14 so the restored data is exported in the unified shape.
   const legacyLinks = typeof candidate.schemaVersion === 'number' && candidate.schemaVersion < 14;
+  // D-07: a v14 payload predates the crMilestones table. Inject an empty one so restore
+  // clears local milestones (no data to preserve) rather than rejecting the backup.
+  const legacyMilestones = typeof candidate.schemaVersion === 'number' && candidate.schemaVersion < 15 && rawTables.crMilestones === undefined;
   const normalizedTasks = legacyLinks ? normalizeLegacyLinks(rawTables.tasks ?? []) : rawTables.tasks ?? [];
   const normalizedChangeRequests = legacyLinks
     ? normalizeLegacyLinks(rawTables.changeRequests ?? [])
     : rawTables.changeRequests ?? [];
   const tasks = validateTable('tasks', BackupTaskRecordSchema, normalizedTasks);
+  const crMilestones = validateTable('crMilestones', BackupCrMilestoneRecordSchema, legacyMilestones ? [] : rawTables.crMilestones ?? []);
   const capacityRules = validateTable('capacityRules', BackupCapacityRuleRecordSchema, rawTables.capacityRules ?? []);
   const capacityOverrides = validateTable('capacityOverrides', BackupCapacityOverrideRecordSchema, rawTables.capacityOverrides ?? []);
   const plannedAllocations = validateTable('plannedAllocations', BackupPlannedAllocationRecordSchema, rawTables.plannedAllocations ?? []);
@@ -339,6 +344,20 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
   }
 
   // Stage 3: Referential integrity checks
+  const milestoneIds = new Set(crMilestones.map((m) => m.id));
+  const milestoneById = new Map(crMilestones.map((m) => [m.id, m]));
+  tasks.forEach((task) => {
+    if (task.milestoneId === undefined) return;
+    const milestone = milestoneById.get(task.milestoneId);
+    if (!milestone || milestone.crId !== task.crId) {
+      errors.push({
+        table: 'tasks',
+        recordId: task.id,
+        field: 'milestoneId',
+        message: `Task references milestoneId "${task.milestoneId}" that does not belong to crId "${task.crId}"`,
+      });
+    }
+  });
   const taskIds = new Set(tasks.map((t) => t.id));
   const threadIds = new Set((chatThreads || []).map((thread) => thread.id));
   const threadById = new Map((chatThreads || []).map((thread) => [thread.id, thread]));
@@ -396,6 +415,13 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
             recordId: n.id,
             field: 'entityId',
             message: `Note references systemId "${n.entityId}" not found in systems`,
+          });
+        } else if (n.entityType === 'crMilestone' && !milestoneIds.has(n.entityId)) {
+          errors.push({
+            table: 'notes',
+            recordId: n.id,
+            field: 'entityId',
+            message: `Note references crMilestone "${n.entityId}" not found in crMilestones`,
           });
         }
       }
@@ -758,6 +784,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityRules: capacityRules as BackupEnvelope['tables']['capacityRules'],
       capacityOverrides: capacityOverrides as BackupEnvelope['tables']['capacityOverrides'],
       plannedAllocations: plannedAllocations as BackupEnvelope['tables']['plannedAllocations'],
+      ...({ crMilestones: crMilestones as NonNullable<BackupEnvelope['tables']['crMilestones']> }),
       ...(workSessions !== undefined ? { workSessions } : {}),
       ...(notes !== undefined ? { notes } : {}),
       ...(noteAttachments !== undefined ? { noteAttachments } : {}),
@@ -792,6 +819,7 @@ export function validateBackupPayload(raw: unknown): BackupValidationResult {
       capacityRules: capacityRules.length,
       capacityOverrides: capacityOverrides.length,
       plannedAllocations: plannedAllocations.length,
+      crMilestones: crMilestones.length,
       ...(workSessions !== undefined ? { workSessions: workSessions.length } : {}),
       ...(notes !== undefined ? { notes: notes.length } : {}),
       ...(noteAttachments !== undefined ? { noteAttachments: noteAttachments.length } : {}),

@@ -102,11 +102,99 @@ describe('validateBackupPayload', () => {
     expect(result.errors.some((e) => e.field === 'app')).toBe(true);
   });
 
-  // QRN-05: v13 → v14 normalizes legacy link fields; the current envelope is v14.
-  it('normalizes v13 link fields and pins the current envelope at v14', () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(14);
+  // QRN-05: v13 → v14 normalizes legacy link fields; the current envelope is now v15.
+  it('normalizes v13 link fields and pins the current envelope at v15', () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(15);
     const v13 = { ...validPayload, schemaVersion: 13 };
     expect(validateBackupPayload(v13).valid).toBe(true);
+  });
+
+  describe('Phase 52 D-07 — crMilestones in backup v15', () => {
+    const CR_ID = '22222222-2222-4222-8222-222222222222';
+    const OTHER_CR_ID = '77777777-7777-4777-8777-777777777777';
+    const MILESTONE_ID = '88888888-8888-4888-8888-888888888888';
+    const NOW = '2026-09-27T10:00:00.000Z';
+    const milestone = {
+      id: MILESTONE_ID,
+      crId: CR_ID,
+      name: 'Triển khai',
+      targetDate: '2026-10-01',
+      createdAt: NOW,
+      updatedAt: NOW,
+    };
+
+    const withMilestone = (tables: Record<string, unknown>) => ({
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        changeRequests: [
+          ...validPayload.tables.changeRequests,
+          { ...validPayload.tables.changeRequests[0], id: OTHER_CR_ID, code: 'CR-BETA', name: 'CR Beta' },
+        ],
+        tasks: [
+          {
+            ...validPayload.tables.tasks[0],
+            milestoneId: MILESTONE_ID,
+          },
+        ],
+        ...tables,
+      },
+    });
+
+    it('accepts a v15 milestone linked to its own CR task', () => {
+      const result = validateBackupPayload(withMilestone({ crMilestones: [milestone] }));
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.envelope?.tables.crMilestones).toEqual([milestone]);
+      expect(result.envelope?.counts.crMilestones).toBe(1);
+    });
+
+    it('normalizes a v14 payload without crMilestones instead of rejecting it', () => {
+      const result = validateBackupPayload({ ...validPayload, schemaVersion: 14 });
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+      expect(result.envelope?.schemaVersion).toBe(15);
+      expect(result.envelope?.tables.crMilestones).toEqual([]);
+      expect(result.envelope?.counts.crMilestones).toBe(0);
+    });
+
+    it('rejects a task whose milestoneId belongs to another CR', () => {
+      const badTask = {
+        ...validPayload.tables.tasks[0],
+        id: '99999999-9999-4999-8999-999999999999',
+        crId: OTHER_CR_ID,
+        milestoneId: MILESTONE_ID,
+      };
+      const result = validateBackupPayload({
+        ...validPayload,
+        tables: { ...validPayload.tables, tasks: [badTask], crMilestones: [milestone] },
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'tasks' && e.field === 'milestoneId')).toBe(true);
+    });
+
+    it('rejects a note whose crMilestone entityId is dangling', () => {
+      const result = validateBackupPayload({
+        ...validPayload,
+        tables: {
+          ...validPayload.tables,
+          crMilestones: [],
+          notes: [
+            {
+              id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+              entityType: 'crMilestone',
+              entityId: MILESTONE_ID,
+              body: 'note',
+              isPinned: false,
+              createdAt: NOW,
+              updatedAt: NOW,
+            },
+          ],
+        },
+      });
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.table === 'notes' && e.field === 'entityId')).toBe(true);
+    });
   });
 
   it('rejects payloads with future/newer schemaVersion', () => {

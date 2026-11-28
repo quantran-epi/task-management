@@ -67,6 +67,7 @@ export const BackupTaskRecordSchema = z.object({
   id: uuidSchema,
   crId: uuidSchema,
   systemId: uuidSchema.optional(),
+  milestoneId: uuidSchema.optional(),
   name: z.string().trim().min(1, 'Name is required').max(120, 'Name must be 120 characters or less'),
   description: z.string().optional(),
   deadline: calendarDateSchema.optional(),
@@ -148,7 +149,7 @@ export const BackupNoteRecordSchema = z.object({
   parentId: z.string().optional(),
   tags: z.array(z.string()).optional(),
   slug: z.string().optional(),
-  entityType: z.enum(['task', 'cr', 'system']).optional(),
+  entityType: z.enum(['task', 'cr', 'system', 'crMilestone']).optional(),
   entityId: uuidSchema.optional(),
   title: z.string().trim().max(120, 'Title must be 120 characters or less').optional(),
   body: z.string().max(50000, 'Body must be 50000 characters or less'),
@@ -891,6 +892,16 @@ export const BackupTeamReadCursorRecordSchema = z.strictObject({
   updatedAt: z.string(),
 });
 
+/** Phase 52 D-07: CR milestone rows travel in the v15 envelope. */
+export const BackupCrMilestoneRecordSchema = z.object({
+  id: uuidSchema,
+  crId: uuidSchema,
+  name: z.string().trim().min(1).max(120),
+  targetDate: calendarDateSchema.optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 /**
  * D-49: the current backup envelope contract.
  *
@@ -900,8 +911,11 @@ export const BackupTeamReadCursorRecordSchema = z.strictObject({
  * `validateBackup`'s `schemaVersion < CURRENT` branch and make it unrestorable for nothing.
  * A bump is only warranted when a field becomes required or its meaning changes — and then
  * it needs a `13 → N` normalization step, not an outright reject.
+ *
+ * Phase 52: v15 adds the `crMilestones` table; v14 payloads are normalized to it in
+ * `validateBackup` so they stay restorable.
  */
-export const BACKUP_SCHEMA_VERSION = 14 as const;
+export const BACKUP_SCHEMA_VERSION = 15 as const;
 
 export const BackupEnvelopeSchema = z.object({
   app: z.literal('personal-task-planner'),
