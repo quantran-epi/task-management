@@ -140,6 +140,29 @@ export const namedLinkSchema = z.object({
 /** Single source of truth for the link URL rule in Ant Design form validators. */
 export const isValidLinkUrl = (value: unknown): boolean => linkSchema.safeParse(value).success;
 
+/** Git repo URL allowlist — separate from linkSchema, which also accepts local paths/UUIDs. */
+export function isGitRepoUrl(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 500 || /\s/.test(trimmed)) return false;
+  if (/^(https?|ssh|git):\/\//i.test(trimmed)) {
+    try {
+      return Boolean(new URL(trimmed).hostname);
+    } catch {
+      return false;
+    }
+  }
+  return /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~/-]+$/.test(trimmed);
+}
+
+export const isValidGitRepoUrl = isGitRepoUrl;
+export const gitRepoUrlSchema = z
+  .string()
+  .trim()
+  .refine(isGitRepoUrl, {
+    message: 'Link git phải là https://, http://, ssh://, git:// hoặc git@host:owner/repo.git',
+  });
+
 // Phase 31.1: System & ChangeRequest Schemas (ENT-SYS-01, ENT-CR-01)
 // Phase 261116-e64: types are user-extensible — bounded regex, not a fixed enum.
 // The runtime label/color list lives in the `system_type_options` settings row.
@@ -193,6 +216,8 @@ function refineSystemShape(
     parentId?: string | null | undefined;
     sshConfigId?: string | null | undefined;
     remoteRepoPath?: string | null | undefined;
+    gitSourceUrl?: string | undefined;
+    gitOpsUrl?: string | undefined;
     defaultBaseBranch?: string | null | undefined;
   },
   ctx: z.RefinementCtx
@@ -216,6 +241,8 @@ export const SystemInputSchema = z
     description: z.string().optional(),
     sshConfigId: uuidSchema.optional(),
     remoteRepoPath: remoteRepoPathSchema.optional(),
+    gitSourceUrl: gitRepoUrlSchema.optional(),
+    gitOpsUrl: gitRepoUrlSchema.optional(),
     defaultBaseBranch: z.string().optional(),
   })
   .superRefine(refineSystemShape);
@@ -229,6 +256,8 @@ export const SystemUpdateSchema = z
     description: z.string().optional(),
     sshConfigId: uuidSchema.optional().nullable(),
     remoteRepoPath: remoteRepoPathSchema.optional().nullable(),
+    gitSourceUrl: gitRepoUrlSchema.optional(),
+    gitOpsUrl: gitRepoUrlSchema.optional(),
     defaultBaseBranch: z.string().optional().nullable(),
   })
   .superRefine(refineSystemShape);

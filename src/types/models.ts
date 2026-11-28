@@ -54,7 +54,10 @@ export interface System {
   type: SystemType;
   description?: string;
   sshConfigId?: string; // Foreign key referencing SshConfigRecord
-  remoteRepoPath?: string; // Remote filesystem git repository path
+  remoteRepoPath?: string; // Remote filesystem git repository path (SSH path used by runGitCommand)
+  // Metadata links for opening the repo in a browser/SSH client — NOT the remoteRepoPath binding.
+  gitSourceUrl?: string; // Source code repository URL
+  gitOpsUrl?: string; // GitOps/configuration repository URL
   defaultBaseBranch?: string; // Default target branch (e.g. main, develop)
   createdAt: string; // ISO string
   updatedAt: string; // ISO string

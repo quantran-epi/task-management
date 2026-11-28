@@ -90,6 +90,48 @@ describe('validateBackupPayload', () => {
     expect(result.envelope?.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
 
+  describe('System git links — trust boundary backup', () => {
+    const withSystemLinks = (gitSourceUrl: string, gitOpsUrl?: string) => ({
+      ...validPayload,
+      tables: {
+        ...validPayload.tables,
+        systems: [
+          {
+            ...validPayload.tables.systems[0],
+            gitSourceUrl,
+            ...(gitOpsUrl !== undefined ? { gitOpsUrl } : {}),
+          },
+        ],
+      },
+    });
+
+    it('accepts both valid git links on a system row', () => {
+      const result = validateBackupPayload(
+        withSystemLinks(
+          'https://github.com/acme/svc.git',
+          'git@github.com:acme/gitops.git'
+        )
+      );
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it('rejects a dangerous git link on a system row before restore', () => {
+      const result = validateBackupPayload(withSystemLinks('javascript:alert(1)'));
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => e.table === 'systems' && e.field === 'gitSourceUrl')
+      ).toBe(true);
+      expect(result.envelope).toBeUndefined();
+    });
+
+    it('still accepts a legacy system row with no git link fields', () => {
+      const result = validateBackupPayload(validPayload);
+      expect(result.valid).toBe(true);
+      expect(result.envelope?.tables.systems?.[0]?.gitSourceUrl).toBeUndefined();
+    });
+  });
+
   it('rejects non-object or null payloads', () => {
     expect(validateBackupPayload(null).valid).toBe(false);
     expect(validateBackupPayload('string').valid).toBe(false);

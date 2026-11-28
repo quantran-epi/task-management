@@ -21,6 +21,8 @@ type SystemShape = Pick<System, 'type'> & {
   parentId?: string | null | undefined;
   sshConfigId?: string | null | undefined;
   remoteRepoPath?: string | null | undefined;
+  gitSourceUrl?: string | null | undefined;
+  gitOpsUrl?: string | null | undefined;
   defaultBaseBranch?: string | null | undefined;
 };
 
@@ -95,6 +97,8 @@ export async function createSystem(
   if (validated.description !== undefined) system.description = validated.description;
   if (validated.sshConfigId !== undefined) system.sshConfigId = validated.sshConfigId;
   if (validated.remoteRepoPath !== undefined) system.remoteRepoPath = validated.remoteRepoPath;
+  if (validated.gitSourceUrl !== undefined) system.gitSourceUrl = validated.gitSourceUrl;
+  if (validated.gitOpsUrl !== undefined) system.gitOpsUrl = validated.gitOpsUrl;
   if (validated.defaultBaseBranch !== undefined) system.defaultBaseBranch = validated.defaultBaseBranch;
 
   await db.systems.add(system);
@@ -133,6 +137,14 @@ export async function updateSystem(
   if ('remoteRepoPath' in patch) {
     if (validated.remoteRepoPath) updated.remoteRepoPath = validated.remoteRepoPath;
     else delete updated.remoteRepoPath;
+  }
+  if ('gitSourceUrl' in patch) {
+    if (validated.gitSourceUrl) updated.gitSourceUrl = validated.gitSourceUrl;
+    else delete updated.gitSourceUrl;
+  }
+  if ('gitOpsUrl' in patch) {
+    if (validated.gitOpsUrl) updated.gitOpsUrl = validated.gitOpsUrl;
+    else delete updated.gitOpsUrl;
   }
   if ('defaultBaseBranch' in patch) {
     if (validated.defaultBaseBranch) updated.defaultBaseBranch = validated.defaultBaseBranch;
