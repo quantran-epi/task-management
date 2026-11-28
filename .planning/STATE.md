@@ -50,6 +50,7 @@ Last activity: 2026-11-28 - Completed quick task 261128-cpo: CR detail có nút 
 Last activity: 2026-11-28 - Completed quick task 261128-d1m: CR detail bố trí nút thêm nhắc nhở cạnh tiêu đề block; mỗi link/reminder có sửa (mở modal CR) và xoá (confirm + patch qua repository).
 Last activity: 2026-11-28 - Completed quick task 261128-dlj: task insight dùng bảng link tên+URL, thêm/sửa link qua modal riêng, xoá link Popconfirm và section nhắc nhở với QuickReminderModal.
 Last activity: 2026-11-28 - Completed quick task 261128-fvp: redesign Bộ tài liệu theo sketch 016A — inspector chỉ-đọc, form cấu hình trong modal 620px, row action đổi tên/sao chép/xoá khỏi bộ; Chrome light/dark + scoped tests verified.
+Last activity: 2026-11-28 - Completed quick task 261128-gna: System có 2 link git (source code + gitops), validate URL chặn credential/backslash, SCP link mở đúng HTTPS; review fixes + Chrome light/dark + 75 scoped tests passed.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -202,6 +203,7 @@ Progress: [██████████] 100%
 | 261128-fqs | Dark-mode Capacity Planner/TaskLists/splash/AI office explorer + tasklist redesign baseline | 2026-11-28 | 80276409, c51ec8ad, 5f362408, e474c098, a83eba75, e064c4b0, 3e96cd1b | Verified | [261128-fqs-check-fix-capacity-planner-page-dark-mod](./quick/261128-fqs-check-fix-capacity-planner-page-dark-mod/) |
 | 261128-ffo | Dark mode mục lục doc editor và status bar báo trạng thật (Knowledge liveness + GitHub sync) | 2026-11-28 | 47867416, b547dc5d, 3d769261 | Verified (Chrome + scoped tests) | [261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-](./quick/261128-ffo-s-a-dark-mode-m-c-l-c-doc-editor-v-task-/) |
 | 261128-fvp | Redesign màn hình Bộ tài liệu theo sketch 016A: inspector chỉ-đọc, config modal 620px, row action sửa/xoá nhanh | 2026-11-28 | 736b4046, 39ce124c, b6ceacd5 | Verified (Chrome light/dark + scoped tests) | [261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i](./quick/261128-fvp-thi-t-k-l-i-right-section-m-n-h-nh-b-t-i/) |
+| 261128-gna | System gắn 2 link git riêng biệt (source code + gitops), validate chung, form/detail/table + backup | 2026-11-28 | 8a546b7a, 5ddd01da, dd6a07f5 | Reviewed + verified (Chrome light/dark + scoped tests) | [261128-gna-m-r-ng-schema-system-g-n-1-link-git](./quick/261128-gna-m-r-ng-schema-system-g-n-1-link-git/) |
 
 ## Accumulated Context
 
