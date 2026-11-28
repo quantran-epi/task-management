@@ -194,7 +194,7 @@ Progress: [██████████] 100%
 | 261128-09x | Trung lập harness AI: prompt không ép tool, payload chọn theo intent, lỗi stream tools báo rõ, debug đếm tool theo tên | 2026-11-28 | c1a0bc77, 9e914784, 0f58b370, 433e9d2b | Reviewed + verified | [261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-](./quick/261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-/) |
 | 261128-cpo | CR detail: nút thêm nhắc nhở nhanh qua QuickReminderModal target CR, ô lọc task dùng SearchInput chuẩn | 2026-11-28 | 9a84ca54, bf737582 | Reviewed + verified (Chrome light/dark) | [261128-cpo-fix-cr-detail-reminder-quick-create-butt](./quick/261128-cpo-fix-cr-detail-reminder-quick-create-butt/) |
 | 261128-d1m | CR detail: hành động chuẩn TaskMate — nút thêm căn phải, bảng link tên+URL cắt bớt, sửa link qua modal riêng, xoá link qua Popconfirm | 2026-11-28 | 8ae5eb85, f8780806, 18720c19, d99a6fd1, 791ce77c | Verified (Chrome) | [261128-d1m-move-cr-detail-quick-reminder-button-int](./quick/261128-d1m-move-cr-detail-quick-reminder-button-int/) |
-| 261128-dlj | Task insight: bảng link tên+URL, thêm/sửa link qua modal riêng, xoá Popconfirm, section nhắc nhở | 2026-11-28 | 7c327a05 | Verified (Chrome) | [261128-dlj-apply-cr-detail-link-and-reminder-standa](./quick/261128-dlj-apply-cr-detail-link-and-reminder-standa/) |
+| 261128-dlj | Task insight: 2 Card riêng Links/Nhắc nhở, bảng link tên+URL, modal riêng, Popconfirm, QuickReminderModal | 2026-11-28 | 7c327a05, 6ff40a90 | Verified (Chrome) | [261128-dlj-apply-cr-detail-link-and-reminder-standa](./quick/261128-dlj-apply-cr-detail-link-and-reminder-standa/) |
 
 ## Accumulated Context
 
