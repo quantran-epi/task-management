@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sketch 018 — TaskMate Splash</title>
+<link rel="stylesheet" href="../themes/default.css">
+<style>
+  :root {
+    --tm-ink:#0a0f18;
+    --tm-ink-2:#101827;
+    --tm-ink-line:#1e2a3d;
+    --tm-ink-muted:#8fa3bd;
+    --tm-ink-text:#f7fbff;
+    --tm-accent:#2f62d8;
+    --tm-info:#1677ff;
+    --tm-teal:#13c2c2;
+    --tm-grad:radial-gradient(ellipse 80% 60% at 50% 38%,rgba(47,98,216,.28) 0%,rgba(22,119,255,.14) 42%,transparent 78%),linear-gradient(160deg,#0a1220 0%,#101a2c 46%,#0a1b22 100%);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:#e9edf3;color:var(--color-text);font-family:var(--font-sans);font-size:var(--text-base)}
+  button{font:inherit}
+  #variant-nav{position:fixed;top:0;left:0;right:0;z-index:9998;background:var(--color-surface);border-bottom:1px solid var(--color-border);padding:8px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .variant-tab{background:transparent;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:5px 10px;cursor:pointer;color:var(--color-text-muted);transition:all .15s ease}
+  .variant-tab:hover{border-color:var(--color-primary);color:var(--color-primary)}
+  .variant-tab.active{background:var(--color-primary);color:#fff;border-color:var(--color-primary)}
+  .hint{margin-left:auto;color:var(--color-text-tertiary);font-size:var(--text-xs)}
+  .stage{margin:56px auto 0;max-width:1280px;padding:24px 16px 60px}
+  .variant{display:none}
+  .variant.active{display:block}
+  .frame{position:relative;min-height:620px;border:1px solid var(--color-border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-md);background:var(--tm-ink)}
+  .frame[data-w="375"]{max-width:375px;margin:0 auto}
+  .frame[data-w="768"]{max-width:768px;margin:0 auto}
+  .frame[data-w="1280"]{max-width:none}
+  .frame::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(transparent 0,transparent calc(100% - 1px),rgba(255,255,255,.03) 100%);background-size:100% 32px}
+  .splash{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;user-select:none;color:var(--tm-ink-text);opacity:1;transform:scale(1);transition:opacity .35s cubic-bezier(.4,0,.2,1),transform .35s cubic-bezier(.4,0,.2,1);background:var(--tm-grad)}
+  .splash.fading{opacity:0;transform:scale(1.02)}
+  .ambient{position:absolute;border-radius:50%;filter:blur(50px);pointer-events:none}
+  .mark{position:relative;width:76px;height:76px;border-radius:20px;background:linear-gradient(145deg,#18233a,#0d1524);border:1px solid #263a5c;display:grid;place-items:center;box-shadow:0 18px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);animation:settle .45s ease-out 1 both}
+  .mark svg{width:46px;height:46px}
+  .title{position:relative;margin-top:24px;font-size:26px;font-weight:800;letter-spacing:.02em;color:var(--tm-ink-text)}
+  .eyebrow{position:relative;margin-top:4px;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--tm-ink-muted)}
+  .progress{position:relative;width:280px;max-width:70%;height:4px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:32px}
+  .fill{height:100%;background:linear-gradient(90deg,var(--tm-accent),var(--tm-info) 60%,var(--tm-teal));transition:width .25s linear}
+  .progress-meta{position:relative;width:280px;max-width:min(90%,520px);display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;font-size:12px;color:var(--tm-ink-muted)}
+  .step{display:flex;align-items:center;gap:8px;min-width:0;white-space:nowrap}
+  .step-dot{width:6px;height:6px;border-radius:50%;background:var(--tm-info);box-shadow:0 0 0 4px rgba(22,119,255,.16);flex:none}
+  [data-step],.footer>div{white-space:nowrap}
+  .pct{font-family:var(--font-mono);color:var(--tm-ink-text);font-variant-numeric:tabular-nums}
+  .footer{position:absolute;bottom:24px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;letter-spacing:.02em;color:var(--tm-ink-muted);text-align:center;padding:0 16px}
+  .author{font-size:10px;color:#b8c7dc}
+  .rail{position:absolute;inset:0 auto 0 0;width:248px;background:#0d1420;border-right:1px solid var(--tm-ink-line);padding:18px 14px;display:flex;flex-direction:column;gap:10px}
+  .rail-brand{display:flex;align-items:center;gap:10px;color:var(--tm-ink-text);font-weight:700;font-size:13px}
+  .rail-brand .mini{width:28px;height:28px;border-radius:8px;border:1px solid #263a5c;display:grid;place-items:center;background:#18233a}
+  .rail-brand .mini svg{width:18px;height:18px}
+  .rail-item{padding:8px 10px;border:1px solid transparent;border-radius:var(--radius-sm);font-size:12px;color:var(--tm-ink-muted)}
+  .rail-item.on{background:#152238;border-color:#263a5c;color:var(--tm-ink-text)}
+  .rail-foot{margin-top:auto;font-size:10px;color:#6e829e}
+  .statusbar{position:absolute;bottom:0;left:0;right:0;height:26px;background:#0d1420;border-top:1px solid var(--tm-ink-line);display:flex;align-items:center;gap:14px;padding:0 14px;color:#8fa3bd;font-size:10px;font-family:var(--font-mono)}
+  .statusbar .spacer{margin-left:auto}
+  .statusbar .led{width:6px;height:6px;border-radius:50%;background:var(--tm-teal);box-shadow:0 0 8px var(--tm-teal)}
+  .track-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid var(--tm-ink-line);border-radius:50%;pointer-events:none}
+  .card{position:relative;width:min(420px,80%);padding:24px 28px;border:1px solid #263a5c;border-radius:var(--radius-lg);background:linear-gradient(180deg,rgba(20,30,48,.94),rgba(12,19,31,.96));box-shadow:var(--shadow-lg),inset 0 1px 0 rgba(255,255,255,.05);text-align:left}
+  .card-top{display:flex;align-items:center;gap:14px}
+  .card .mark{margin:0;width:56px;height:56px;border-radius:14px;animation:none}
+  .card .mark svg{width:34px;height:34px}
+  .card h1{margin:0;font-size:22px;letter-spacing:.01em}
+  .card .sub{margin-top:2px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--tm-ink-muted)}
+  .card .progress,.card .progress-meta{width:100%;max-width:none;margin-left:0}
+  .card .progress{margin-top:26px}
+  .card .footer{position:static;margin-top:22px;align-items:flex-start}
+  .checkline{display:flex;align-items:center;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--tm-ink-line);font-size:11px;color:var(--tm-ink-muted)}
+  .checkline .ok{width:16px;height:16px;border-radius:50%;background:rgba(47,158,110,.18);color:#79d7ad;display:grid;place-items:center;font-size:10px;flex:none}
+  @keyframes settle{from{opacity:0;transform:translateY(6px) scale(.96)}to{opacity:1;transform:none}}
+  #sketch-tools{position:fixed;bottom:12px;right:12px;z-index:9999;font-family:var(--font-sans);font-size:12px;background:rgba(0,0,0,.72);color:#fff;padding:8px 12px;border-radius:8px;opacity:.42;transition:opacity .2s;display:flex;gap:8px;align-items:center}
+  #sketch-tools:hover{opacity:1}
+  #sketch-tools select,#sketch-tools button{background:#263043;color:#fff;border:1px solid #48546b;border-radius:4px;height:24px;cursor:pointer}
+  .annotation{position:fixed;pointer-events:none;background:#111827;color:#fff;font:11px var(--font-mono);padding:3px 6px;border-radius:4px;z-index:10000;display:none}
+  @media (prefers-reduced-motion:reduce){.splash,.fill,.variant-tab,.mark{animation:none;transition:none}}
+</style>
+</head>
+<body>
+<div id="variant-nav">
+  <button class="variant-tab active" data-v="a">A: Centered Mark ★ Recommended</button>
+  <button class="variant-tab" data-v="b">B: Workbench Rail</button>
+  <button class="variant-tab" data-v="c">C: Boot Card</button>
+  <span class="hint">Nhấn "Replay" để xem lại motion · đổi viewport ở góc phải</span>
+</div>
+
+<div class="stage">
+  <section id="variant-a" class="variant active">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash>
+        <div class="ambient" style="width:720px;height:360px;top:-160px;background:radial-gradient(ellipse,rgba(47,98,216,.18),transparent 70%)"></div>
+        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+        <div class="title">TaskMate</div>
+        <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
+        <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-b" class="variant">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash style="background:var(--tm-grad)">
+        <div class="ambient" style="width:640px;height:320px;left:-180px;top:-120px;background:radial-gradient(ellipse,rgba(19,194,194,.14),transparent 70%)"></div>
+        <div class="track-bg" style="width:420px;height:420px"></div>
+        <div class="track-bg" style="width:280px;height:280px;border-style:dashed;opacity:.6"></div>
+        <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+        <div class="title">TaskMate</div>
+        <div class="eyebrow">Plan work. Stay clear. Stay local.</div>
+        <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
+        <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+        <div class="statusbar"><span class="led"></span><span>INDEXEDDB</span><span>LOCAL SQLITE</span><span class="spacer">v1.6 · OFFLINE</span></div>
+        <div class="footer" style="bottom:38px"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="variant-c" class="variant">
+    <div class="frame" data-w="1280">
+      <div class="splash" data-splash>
+        <div class="ambient" style="width:560px;height:560px;background:radial-gradient(ellipse,rgba(47,98,216,.16),transparent 75%)"></div>
+        <div class="card">
+          <div class="card-top">
+            <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#9dc0ff" stroke-width="1.6"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5h7M17.5 14v7"/></svg></div>
+            <div><h1>TaskMate</h1><div class="sub">Plan work. Stay clear. Stay local.</div></div>
+          </div>
+          <div class="progress"><div class="fill" data-fill style="width:15%"></div></div>
+          <div class="progress-meta"><div class="step"><span class="step-dot"></span><span data-step>Đang khởi động TaskMate...</span></div><span class="pct" data-pct>15%</span></div>
+          <div class="checkline"><span class="ok">✓</span><span>Dữ liệu local · không yêu cầu tài khoản hay mạng</span></div>
+          <div class="footer"><div>Private & Offline-First &bull; Personal Workload Planner</div><div class="author">Developed by Quan Tran Duc</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="sketch-tools">
+  <button data-role="replay" title="Phát lại splash">Replay</button>
+  <button data-w="375">Phone</button><button data-w="768">Tablet</button><button data-w="1280">Full</button>
+  <button id="ann-btn">Annotation: off</button>
+</div>
+<div class="annotation" id="annotation"></div>
+
+<script>
+const STEPS = [
+  ['Đang khởi động TaskMate...',15],
+  ['Đang tải cấu hình IndexedDB & Lưu trữ cục bộ...',45],
+  ['Đang chuẩn bị không gian làm việc...',80],
+  ['Sẵn sàng làm việc!',100],
+];
+const variantIds=['a','b','c'];
+const activeVariant=()=>variantIds.find(id=>document.getElementById('variant-'+id).classList.contains('active'));
+let timers=[];
+function clearTimers(){timers.forEach(clearTimeout);timers=[]}
+function play(){
+  clearTimers();
+  const scope=document.getElementById('variant-'+activeVariant());
+  const splash=scope.querySelector('[data-splash]');
+  const stepEl=scope.querySelector('[data-step]');
+  const pctEl=scope.querySelector('[data-pct]');
+  const fill=scope.querySelector('[data-fill]');
+  splash.classList.remove('fading');
+  [0,.3,.65,.9].forEach((t,i)=>timers.push(setTimeout(()=>{
+    stepEl.textContent=STEPS[i][0];fill.style.width=STEPS[i][1]+'%';pctEl.textContent=STEPS[i][1]+'%';
+  },t*1800)));
+  timers.push(setTimeout(()=>splash.classList.add('fading'),1800));
+  timers.push(setTimeout(()=>play(),2400));
+}
+function showVariant(id){
+  variantIds.forEach(v=>document.getElementById('variant-'+v).classList.toggle('active',v===id));
+  document.querySelectorAll('.variant-tab').forEach(t=>t.classList.toggle('active',t.dataset.v===id));
+  play();
+}
+document.querySelectorAll('.variant-tab').forEach(t=>t.addEventListener('click',()=>showVariant(t.dataset.v)));
+document.querySelector('[data-role="replay"]').addEventListener('click',play);
+document.querySelectorAll('#sketch-tools [data-w]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.frame').forEach(f=>f.dataset.w=b.dataset.w);
+}));
+const ann=document.getElementById('annotation');
+let annOn=false;
+document.getElementById('ann-btn').addEventListener('click',e=>{
+  annOn=!annOn;e.target.textContent='Annotation: '+(annOn?'on':'off');
+});
+document.addEventListener('mousemove',e=>{
+  if(!annOn){ann.style.display='none';return}
+  const el=e.target.closest('.mark,.title,.eyebrow,.progress,.footer,.card,.statusbar,.rail');
+  if(!el){ann.style.display='none';return}
+  const cs=getComputedStyle(el);
+  ann.textContent=el.className.split(' ')[0]+' · '+(cs.fontSize||'')+' · '+(cs.color||'')+' · radius '+(cs.borderRadius||'');
+  ann.style.display='block';ann.style.left=Math.min(e.clientX+12,innerWidth-250)+'px';ann.style.top=(e.clientY+14)+'px';
+});
+play();
+</script>
+</body>
+</html>
