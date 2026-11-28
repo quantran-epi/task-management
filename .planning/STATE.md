@@ -1,21 +1,19 @@
 ---
-gsd_state_version: "1.0"
+gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Design System & UI Consistency
-current_phase: 51
-current_phase_name: taskmate-chat-standalone
-status: complete
-stopped_at: Phase 51 complete
-last_updated: "2026-11-27T16:20:54Z"
-last_activity: 2026-11-27
-last_activity_desc: "Completed quick task 261127-mmz: PGID scan keeps partial bytes across wakeups, accepts only complete line/EOF, bounded UTF-8-safe pending diagnostic"
-state_head: d2be1fd326fae105799cb0dfb0e20e3602f9fa48
+status: completed
+stopped_at: Phase 52 UI-SPEC approved
+last_updated: "2026-11-28T02:49:47.845Z"
+last_activity: "2026-11-26 - Completed quick task 261126-qag: AI doc read investigation and SSH remote attach design for standalone chat."
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 18
   completed_plans: 18
   percent: 100
+current_phase: 51
+current_phase_name: taskmate-chat-standalone
 ---
 
 # Project State: TaskMate — Milestone v1.5
@@ -48,6 +46,7 @@ Last activity: 2026-11-27 - Completed quick task 261127-ts3: inline quick create
 Last activity: 2026-11-27 - Completed quick task 261127-uoi: linked system section riêng trên task insight; click-through mở tab system_detail canonical; review + Chrome light/dark verified.
 Last activity: 2026-11-28 - Completed quick task 261128-cpo: CR detail có nút thêm nhắc nhở nhanh qua QuickReminderModal target CR và ô lọc task dùng SearchInput chuẩn.
 Last activity: 2026-11-28 - Completed quick task 261128-d1m: CR detail bố trí nút thêm nhắc nhở cạnh tiêu đề block; mỗi link/reminder có sửa (mở modal CR) và xoá (confirm + patch qua repository).
+Last activity: 2026-11-28 - Completed quick task 261128-dlj: task insight dùng bảng link tên+URL, thêm/sửa link qua modal riêng, xoá link Popconfirm và section nhắc nhở với QuickReminderModal.
 
 ## Session Continuity: Phase 28 replan (isolated worktree, 2026-11-17)
 
@@ -76,9 +75,9 @@ Verification: 392 focused tests pass (9 files), `tsc --noEmit` clean. Full suite
 
 ## Session Continuity
 
-Last session: 2026-11-25T15:47:32.730Z
-Stopped at: Phase 51 context gathered
-Resume file: .planning/phases/51-taskmate-chat-standalone-b-n-c-i-tauri-ri-ng-m-th-ng-ai-chat/51-CONTEXT.md
+Last session: 2026-11-28T02:49:47.838Z
+Stopped at: Phase 52 UI-SPEC approved
+Resume file: .planning/phases/52-cr-milestones-t-ng-m-c-tri-n-khai-gi-a-cr-v-task-milestoneid/52-UI-SPEC.md
 
 Progress: [██████████] 100%
 
@@ -195,6 +194,7 @@ Progress: [██████████] 100%
 | 261128-09x | Trung lập harness AI: prompt không ép tool, payload chọn theo intent, lỗi stream tools báo rõ, debug đếm tool theo tên | 2026-11-28 | c1a0bc77, 9e914784, 0f58b370, 433e9d2b | Reviewed + verified | [261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-](./quick/261128-09x-ch-nh-harness-ai-taskmate-th-nh-trung-l-/) |
 | 261128-cpo | CR detail: nút thêm nhắc nhở nhanh qua QuickReminderModal target CR, ô lọc task dùng SearchInput chuẩn | 2026-11-28 | 9a84ca54, bf737582 | Reviewed + verified (Chrome light/dark) | [261128-cpo-fix-cr-detail-reminder-quick-create-butt](./quick/261128-cpo-fix-cr-detail-reminder-quick-create-butt/) |
 | 261128-d1m | CR detail: hành động chuẩn TaskMate — nút thêm căn phải, bảng link tên+URL cắt bớt, sửa link qua modal riêng, xoá link qua Popconfirm | 2026-11-28 | 8ae5eb85, f8780806, 18720c19, d99a6fd1, 791ce77c | Verified (Chrome) | [261128-d1m-move-cr-detail-quick-reminder-button-int](./quick/261128-d1m-move-cr-detail-quick-reminder-button-int/) |
+| 261128-dlj | Task insight: bảng link tên+URL, thêm/sửa link qua modal riêng, xoá Popconfirm, section nhắc nhở | 2026-11-28 | 7c327a05 | Verified (Chrome) | [261128-dlj-apply-cr-detail-link-and-reminder-standa](./quick/261128-dlj-apply-cr-detail-link-and-reminder-standa/) |
 
 ## Accumulated Context
 
