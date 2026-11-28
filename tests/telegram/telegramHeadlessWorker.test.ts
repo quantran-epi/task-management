@@ -20,6 +20,12 @@ import {
 } from '../../src/services/telegram/telegramSettingsService';
 import { getTodayDateString } from '../../src/utils/date';
 import type { TelegramInboundEvent } from '../../src/services/telegram/telegramTypes';
+import {
+  setPendingMutation,
+  getPendingMutation,
+  clearAllPendingMutationsForTesting,
+} from '../../src/services/telegram/telegramMutationSession';
+import * as aiTools from '../../src/services/ai/aiTools';
 
 import {
   setNineRouterApiKey,
@@ -72,6 +78,7 @@ describe('Telegram Headless Worker', () => {
     await testDb.open();
     clearTelegramProcessedUpdateIdsForTesting();
     clearNineRouterMemoryCache();
+    clearAllPendingMutationsForTesting();
     mockRouteIntent.mockReset();
     mockRouteIntent.mockResolvedValue({
       intent: 'query_taskmate',
@@ -93,6 +100,8 @@ describe('Telegram Headless Worker', () => {
   afterEach(async () => {
     clearTelegramProcessedUpdateIdsForTesting();
     clearNineRouterMemoryCache();
+    clearAllPendingMutationsForTesting();
+    vi.restoreAllMocks();
     await testDb.delete();
   });
 
@@ -1642,6 +1651,111 @@ describe('Telegram Headless Worker', () => {
       expect(replies[0]).toContain('Thẻ CARD-123 đã bị khóa thành công');
       executeSpy.mockRestore();
       discoverSpy.mockRestore();
+    });
+
+    it('keeps identity-bound pending safe when another identity confirms or cancels in the same chat', async () => {
+      await setNineRouterApiKey('test-key', testDb);
+      await upsertWhitelistUser(
+        {
+          chatId: 'shared_admin_chat',
+          telegramUserId: 'user_a',
+          name: 'Admin A',
+          status: 'active',
+          isAdmin: true,
+          dataScope: 'full',
+          dailyLimit: 50,
+        },
+        testDb
+      );
+
+      const draftArgs = { name: 'Draft của A' };
+      expect(
+        setPendingMutation(
+          {
+            chatId: 'shared_admin_chat',
+            toolName: 'create_task',
+            args: draftArgs,
+            summary: 'Tạo tác vụ cho A',
+            createdAt: Date.now(),
+            chatHistory: [],
+            identity: 'user_a',
+          },
+          { identity: 'user_a' }
+        )
+      ).toBe(true);
+
+      const replies: string[] = [];
+      const mockSendReply = vi.fn(async (_t: string, _c: string, text: string) => {
+        replies.push(text);
+      });
+      const mockSendAction = vi.fn(async () => {});
+      const executeSpy = vi.spyOn(aiTools, 'executeAiTool').mockResolvedValue(
+        JSON.stringify({ success: true, message: 'Đã tạo' })
+      );
+
+      // Identity B in the same chat cannot confirm A's draft.
+      await processTelegramInboundMessage(
+        {
+          update_id: 301,
+          message_id: 1101,
+          chat_id: 'shared_admin_chat',
+          fromUserId: 'user_b',
+          from_name: 'User B',
+          text: 'OK',
+          date: 1234700,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+      expect(executeSpy).not.toHaveBeenCalled();
+      expect(replies.at(-1)).toContain('thuộc về người dùng khác');
+      expect(getPendingMutation('shared_admin_chat', { identity: 'user_a' })?.args).toEqual(
+        draftArgs
+      );
+
+      // Identity B cannot cancel A's draft either.
+      await processTelegramInboundMessage(
+        {
+          update_id: 302,
+          message_id: 1102,
+          chat_id: 'shared_admin_chat',
+          fromUserId: 'user_b',
+          from_name: 'User B',
+          text: 'Hủy',
+          date: 1234701,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+      expect(executeSpy).not.toHaveBeenCalled();
+      expect(replies.at(-1)).not.toContain('Đã hủy thao tác');
+      expect(getPendingMutation('shared_admin_chat', { identity: 'user_a' })?.args).toEqual(
+        draftArgs
+      );
+
+      // Identity A confirms the exact previewed args; draft is cleared only now.
+      await processTelegramInboundMessage(
+        {
+          update_id: 303,
+          message_id: 1103,
+          chat_id: 'shared_admin_chat',
+          fromUserId: 'user_a',
+          from_name: 'Admin A',
+          text: 'OK',
+          date: 1234702,
+        },
+        'test_token',
+        testDb,
+        mockSendReply,
+        mockSendAction
+      );
+      expect(executeSpy).toHaveBeenCalledTimes(1);
+      expect(executeSpy).toHaveBeenCalledWith('create_task', draftArgs, testDb);
+      expect(getPendingMutation('shared_admin_chat')).toBeUndefined();
     });
   });
 

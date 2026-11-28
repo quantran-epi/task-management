@@ -19,6 +19,7 @@ import { buildPolicyPayload } from './telegramDevicePolicy';
 import {
   getPendingMutation,
   clearPendingMutation,
+  pendingMutationKey,
   isConfirmationMessage,
   isCancellationMessage,
   executeAdminMutationTurn,
@@ -893,18 +894,59 @@ export async function processTelegramInboundMessage(
     return;
   }
 
-  // Step 0b: Check if Admin is in an active pending mutation confirmation/adjustment flow
-  const pendingMutation = getPendingMutation(accountChatId);
+  // Step 0b: Check if Admin is in an active pending mutation confirmation/adjustment flow.
+  // Identity owns the draft; chat_id is only the reply/account address.
+  const pendingMutation = getPendingMutation(accountChatId, { identity });
   const callerUser = callerRow;
+  const ownershipRefusalMd =
+    '⚠️ **Không thể xác nhận hoặc hủy thao tác này**\n\nThao tác đang chờ xác nhận thuộc về người dùng khác. Thao tác đó vẫn giữ nguyên; hãy gửi lại yêu cầu của bạn nếu muốn tạo thao tác riêng.';
+  const sendOwnershipRefusal = async () => {
+    await sendReply(botToken, chat_id, markdownToTelegramHtml(ownershipRefusalMd), message_id);
+    await logTelegramSession(
+      {
+        chatId: chat_id,
+        userName: from_name,
+        userMessage: text,
+        aiResponse: ownershipRefusalMd,
+        dataScopeUsed: 'full',
+        tokenCount: 0,
+      },
+      db
+    );
+  };
+
+  // A draft owned by another identity must not be confirmed or cleared from this chat.
+  const foreignPending = pendingMutation ? undefined : getPendingMutation(accountChatId);
+  if (
+    foreignPending &&
+    callerUser?.isAdmin &&
+    callerUser.status === 'active' &&
+    (isConfirmationMessage(trimmedText) || isCancellationMessage(trimmedText))
+  ) {
+    await sendOwnershipRefusal();
+    return;
+  }
+
   if (pendingMutation && callerUser?.isAdmin && callerUser.status === 'active') {
+    const mutationKey = pendingMutationKey(pendingMutation);
+    const withExpectedKey = { identity, expectedKey: mutationKey };
     // 1. Affirmative Confirmation ("OK", "Xác nhận", "Đồng ý", etc.)
     if (isConfirmationMessage(trimmedText)) {
+      // Re-fetch the exact previewed draft immediately before executing. No match = no write.
+      const confirmedMutation = getPendingMutation(accountChatId, { identity, key: mutationKey });
+      if (!confirmedMutation) {
+        await sendOwnershipRefusal();
+        return;
+      }
       try {
-        const rawResult = pendingMutation.isMcp
-          ? await executeDynamicMcpTool(pendingMutation.toolName, pendingMutation.args, db, {
-              allowMutation: true,
-            })
-          : await executeAiTool(pendingMutation.toolName, pendingMutation.args, db);
+        const rawResult = confirmedMutation.isMcp
+          ? await executeDynamicMcpTool(
+              confirmedMutation.toolName,
+              confirmedMutation.args,
+              db,
+              { allowMutation: true }
+            )
+          : await executeAiTool(confirmedMutation.toolName, confirmedMutation.args, db);
         let parsedResult: any = {};
         try {
           parsedResult = JSON.parse(rawResult);
@@ -912,7 +954,7 @@ export async function processTelegramInboundMessage(
           parsedResult = { message: rawResult };
         }
 
-        clearPendingMutation(accountChatId);
+        clearPendingMutation(accountChatId, { identity, key: mutationKey });
 
         let replyMd = '';
         if (parsedResult.error) {
@@ -921,7 +963,7 @@ export async function processTelegramInboundMessage(
           replyMd = [
             `✅ **Đã thực hiện thành công!**`,
             ``,
-            `👉 **${pendingMutation.summary}**`,
+            `👉 **${confirmedMutation.summary}**`,
             parsedResult.message ? `\n_${parsedResult.message}_` : '',
           ]
             .filter(Boolean)
@@ -943,7 +985,7 @@ export async function processTelegramInboundMessage(
         );
         return;
       } catch (err: any) {
-        clearPendingMutation(accountChatId);
+        clearPendingMutation(accountChatId, { identity, key: mutationKey });
         const errMsg = `❌ **Lỗi khi thực thi thao tác:** ${err?.message || String(err)}`;
         await sendReply(botToken, chat_id, markdownToTelegramHtml(errMsg), message_id);
         return;
@@ -952,7 +994,11 @@ export async function processTelegramInboundMessage(
 
     // 2. Cancellation ("Hủy", "Cancel", "Bỏ qua", etc.)
     if (isCancellationMessage(trimmedText)) {
-      clearPendingMutation(accountChatId);
+      const cleared = clearPendingMutation(accountChatId, { identity, key: mutationKey });
+      if (!cleared) {
+        await sendOwnershipRefusal();
+        return;
+      }
       const cancelMd = `🚫 **Đã hủy thao tác.** Không có dữ liệu nào trong TaskMate bị thay đổi.`;
       const htmlReply = markdownToTelegramHtml(cancelMd);
       await sendReply(botToken, chat_id, htmlReply, message_id);
@@ -989,6 +1035,9 @@ export async function processTelegramInboundMessage(
         apiKey,
         db,
         existingPending: pendingMutation,
+        // expectedKey is the identity/key binding checked against the current draft
+        // inside the session; the session type only declares identity explicitly.
+        ...withExpectedKey,
         contextText: scoped.contextText,
       });
 
@@ -1542,6 +1591,7 @@ export async function processTelegramInboundMessage(
       aiConfig: { endpoint: aiConfig.endpoint, defaultModel: effectiveModel },
       apiKey,
       db,
+      identity,
       contextText,
     });
 
