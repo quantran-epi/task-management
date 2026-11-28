@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
+import { readFileSync } from 'node:fs';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TaskPlannerDatabase } from '../../db';
@@ -7,6 +8,7 @@ import { computeSha256, createDocumentSet, normalizeMarkdownForHash } from '../.
 import type { Note, PublishAttemptCache } from '../../types/models';
 import { DocSetLibrary } from '../DocSetLibrary';
 import { DocumentSetDetail } from '../DocumentSetDetail';
+import { DocumentSetForm } from '../../components/knowledge/DocumentSetForm';
 import { ThemeAppHolder } from '../../components/ui';
 
 // jsdom không có layout engine: điều khiển width qua ResizeObserver để test layout narrow/wide.
@@ -90,6 +92,11 @@ describe('DocumentSetDetail published detection (WR-02)', () => {
     const rows = documents.querySelectorAll('[role="option"]');
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.length).toBeLessThanOrEqual(25);
+    const toolbar = documents.querySelector('.doc-set-docs-toolbar') as HTMLElement;
+    const listPane = documents.querySelector('.doc-set-docs-list') as HTMLElement;
+    expect(toolbar.style.position).toBe('sticky');
+    expect(listPane.style.minHeight).toBe('0px');
+    expect(listPane.style.gap).toContain('var(--gap-8)');
     expect(document.body.textContent).not.toContain('Nội dung bí mật');
     expect(documents.querySelector('[data-testid="doc-set-filter-count"]')?.textContent).toBe('60 / 60');
 
@@ -331,6 +338,7 @@ describe('doc-set layout ở center hẹp/rộng', () => {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
     expect(documents.querySelector('aside')).not.toBeInTheDocument();
+    expect(documents.style.minHeight).toBe('160px');
 
     const firstRow = documents.querySelector('[data-testid^="doc-row-"]') as HTMLElement;
     const selectedTitle = firstRow.getAttribute('aria-label');
@@ -343,6 +351,60 @@ describe('doc-set layout ở center hẹp/rộng', () => {
 
     await setObservedWidth('doc-set-detail', 900);
     await waitFor(() => expect(documents.querySelector('aside')).toBeInTheDocument());
+  });
+});
+
+describe('doc-set form membership/picker giữ DOM bounded', () => {
+  afterEach(cleanup);
+
+  it('giữ số row virtualized và toggle checkbox/picker không đụng state handler', async () => {
+    const notes: Note[] = Array.from({ length: 60 }, (_, index) => ({
+      id: `33333333-4444-4555-8666-${String(index + 1).padStart(12, '0')}`,
+      title: `Form doc ${index + 1}`,
+      body: 'hidden body',
+      type: 'document',
+      isPinned: false,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index + 1)).toISOString(),
+    }));
+    const memberIds = notes.map((note) => note.id);
+    const formSet = {
+      id: '44444444-5555-4666-8777-000000000001',
+      name: 'Bộ form lớn',
+      documentIds: memberIds,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      scope: { domain: 'General', environment: null, version: null },
+      aliases: [],
+      relations: [],
+      isBase: true,
+      presentationRevision: 0,
+      preset: 'Chung' as const,
+    };
+
+    await act(async () => {
+      render(<DocumentSetForm notes={notes} initialSet={formSet} onSave={() => {}} />);
+    });
+
+    const memberRows = document.querySelectorAll('[data-testid^="member-"]');
+    expect(memberRows.length).toBeGreaterThan(0);
+    expect(memberRows.length).toBeLessThanOrEqual(25);
+    expect((memberRows[0] as HTMLElement).className).toContain('doc-set-member-item');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm tài liệu' }));
+    const picker = (await screen.findByLabelText('Danh sách tài liệu để chọn')) as HTMLElement;
+    expect(picker.querySelectorAll('.doc-set-pick-row').length).toBeLessThanOrEqual(25);
+    const checkbox = screen.getByLabelText('Form doc 1') as HTMLInputElement;
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+    expect((screen.getByLabelText('Form doc 1') as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('CSS scoped giữ inspector tách bạch bằng token', () => {
+    const css = readFileSync('src/styles/workbench-tokens.css', 'utf8');
+    expect(css).toMatch(/\.doc-set-inspector\s*\{[^}]*width:\s*260px[^}]*flex-shrink:\s*0/s);
+    expect(css).toMatch(/\.doc-set-docs-toolbar\s*\{[^}]*flex-shrink:\s*0/s);
+    expect(css).toMatch(/\.doc-set-pick-row\s*\{[^}]*min-width:\s*0/s);
   });
 });
 

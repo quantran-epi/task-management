@@ -878,7 +878,7 @@ export function DocumentSetDetail({
       )}
 
       {/* Docs list owns the viewport: graph/history fold into a compact pane below. */}
-      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: '1 1 auto', minHeight: 0, minWidth: 0, gap: 12 }}>
+      <div data-testid="doc-set-documents" style={{ display: 'flex', flex: '1 1 auto', minHeight: 160, minWidth: 0, gap: 12 }}>
         <div className="doc-set-docs-list" style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           <div className="doc-set-docs-toolbar" style={{ position: 'sticky', top: 0, zIndex: 5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border, var(--ant-color-border))', background: 'var(--bg-elev)' }}>
             <SearchInput
