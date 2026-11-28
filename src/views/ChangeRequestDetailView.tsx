@@ -335,41 +335,38 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       body: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--gap-8)' }}>
           {stats.linkCount > 0 ? (
-            <Space size={8} wrap>
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--border)', borderRadius: 'var(--radius-control)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px', borderBottom: '1px solid var(--border)', ...mutedStyle, fontSize: 'var(--font-size-xs)' }}>
+                <span style={{ width: 160, flexShrink: 0 }}>Tên</span>
+                <span style={{ flex: 1, minWidth: 0 }}>Đường dẫn</span>
+                <span style={{ width: 56, flexShrink: 0 }} />
+              </div>
               {(cr.links ?? []).map((link, idx) => (
-                <div key={`${idx}-${link.url}`} style={{ display: 'inline-flex' }}>
+                <div key={`${idx}-${link.url}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-8)', padding: '4px 8px' }}>
+                  <Text ellipsis style={{ width: 160, flexShrink: 0, fontSize: 'var(--font-size-small)' }} title={link.name || link.url}>
+                    {link.name || '—'}
+                  </Text>
                   <Button
                     type="link"
                     size="small"
-                    style={{ padding: 0, height: 'auto' }}
+                    style={{ flex: 1, minWidth: 0, padding: 0, height: 'auto', justifyContent: 'flex-start', fontFamily: 'monospace' }}
                     title={link.url}
                     icon={isLocalPath(link.url) ? <FolderOpenOutlined /> : <LinkOutlined />}
                     onClick={(e) => void openDocumentLink(link.url, { quickClaude: e.altKey, notify: (kind, text, extra) => message[kind]({ content: text, ...(extra ?? {}) }), confirm: (cfg) => modal.confirm(cfg) })}
                   >
-                    {link.name || link.url}
+                    <Text ellipsis style={{ fontSize: 'var(--font-size-small)' }}>{link.url}</Text>
                   </Button>
-                  <Tooltip title="Sửa liên kết">
-                    <Button
-                      type="text"
-                      size="small"
-                      aria-label="Sửa liên kết"
-                      icon={<EditOutlined />}
-                      onClick={() => setEditModalOpen(true)}
-                    />
-                  </Tooltip>
-                  <Tooltip title="Xóa liên kết">
-                    <Button
-                      type="text"
-                      danger
-                      size="small"
-                      aria-label="Xóa liên kết"
-                      icon={<DeleteOutlined />}
-                      onClick={() => handleRemoveLink(idx)}
-                    />
-                  </Tooltip>
+                  <Space size={0} style={{ width: 56, flexShrink: 0 }}>
+                    <Tooltip title="Sửa liên kết">
+                      <Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => setEditModalOpen(true)} />
+                    </Tooltip>
+                    <Tooltip title="Xóa liên kết">
+                      <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} onClick={() => handleRemoveLink(idx)} />
+                    </Tooltip>
+                  </Space>
                 </div>
               ))}
-            </Space>
+            </div>
           ) : (
             <span style={mutedStyle}>Chưa có</span>
           )}
