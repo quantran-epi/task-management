@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Button, Dropdown, Empty, Input, Modal, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
+import { Button, Dropdown, Empty, Input, Modal, Popconfirm, SearchInput, Select, Space, Table, Tag, Tooltip, useMessage, useTaskMateModal, Text, Title } from '../components/ui';
 import { BranchesOutlined, BugOutlined, DeleteOutlined, EditOutlined, FolderOpenOutlined, LinkOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, ThunderboltOutlined, ToolOutlined } from '../components/ui/icon';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db as defaultDb, type TaskPlannerDatabase } from '../db';
@@ -79,6 +79,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
   const [linkName, setLinkName] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [editingLinkIndex, setEditingLinkIndex] = useState<number | null>(null);
   const [crReminderModalOpen, setCrReminderModalOpen] = useState(false);
   // Set by TaskDrawer's onSave so closing after a save never deletes the real task.
   const taskSavedRef = useRef(false);
@@ -212,24 +213,13 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     });
   };
 
-  const handleRemoveLink = (index: number) => {
-    const link = cr.links?.[index];
-    if (!link) return;
-    modal.confirm({
-      title: 'Xóa liên kết',
-      content: `Xóa liên kết '${link.name || link.url}'?`,
-      okText: 'Xóa',
-      okType: 'danger',
-      cancelText: 'Hủy',
-      onOk: async () => {
-        try {
-          await updateChangeRequest(cr.id, { links: (cr.links ?? []).filter((_, i) => i !== index) }, db);
-          message.success('Đã xóa liên kết');
-        } catch {
-          message.error('Không thể xóa liên kết');
-        }
-      },
-    });
+  const handleRemoveLink = async (index: number) => {
+    try {
+      await updateChangeRequest(cr.id, { links: (cr.links ?? []).filter((_, i) => i !== index) }, db);
+      message.success('Đã xóa liên kết');
+    } catch {
+      message.error('Không thể xóa liên kết');
+    }
   };
 
   const handleRemoveReminder = (reminderId: string) => {
@@ -254,7 +244,15 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
     });
   };
 
-  const handleAddLink = async () => {
+  const openLinkEditor = (index: number | null) => {
+    const link = index === null ? undefined : cr.links?.[index];
+    setLinkName(link?.name ?? '');
+    setLinkUrl(link?.url ?? '');
+    setEditingLinkIndex(index);
+    setLinkModalOpen(true);
+  };
+
+  const handleSaveLink = async () => {
     const trimmed = linkUrl.trim();
     if (!trimmed || !isValidLinkUrl(trimmed)) {
       message.error('URL không hợp lệ');
@@ -264,14 +262,24 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       message.error('Tên liên kết tối đa 80 ký tự');
       return;
     }
+    const payload = { name: linkName.trim(), url: trimmed };
     try {
-      await appendChangeRequestLink(cr.id, { name: linkName.trim(), url: trimmed }, db);
-      message.success('Đã thêm liên kết');
+      if (editingLinkIndex === null) {
+        await appendChangeRequestLink(cr.id, payload, db);
+      } else {
+        await updateChangeRequest(
+          cr.id,
+          { links: (cr.links ?? []).map((link, i) => (i === editingLinkIndex ? payload : link)) },
+          db
+        );
+      }
+      message.success(editingLinkIndex === null ? 'Đã thêm liên kết' : 'Đã cập nhật liên kết');
       setLinkName('');
       setLinkUrl('');
+      setEditingLinkIndex(null);
       setLinkModalOpen(false);
     } catch {
-      message.error('Không thể thêm liên kết');
+      message.error(editingLinkIndex === null ? 'Không thể thêm liên kết' : 'Không thể cập nhật liên kết');
     }
   };
 
@@ -328,7 +336,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
       header: 'Links',
       count: stats.linkCount,
       action: (
-        <Button data-testid="cr-detail-link-add" size="small" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)}>
+        <Button data-testid="cr-detail-link-add" size="small" icon={<PlusOutlined />} onClick={() => openLinkEditor(null)}>
           Thêm link
         </Button>
       ),
@@ -358,11 +366,17 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
                   </Button>
                   <Space size={0} style={{ width: 56, flexShrink: 0 }}>
                     <Tooltip title="Sửa liên kết">
-                      <Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => setEditModalOpen(true)} />
+                      <Button type="text" size="small" aria-label="Sửa liên kết" icon={<EditOutlined />} onClick={() => openLinkEditor(idx)} />
                     </Tooltip>
-                    <Tooltip title="Xóa liên kết">
-                      <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} onClick={() => handleRemoveLink(idx)} />
-                    </Tooltip>
+                    <Popconfirm
+                      title="Xóa liên kết này?"
+                      okText="Xóa"
+                      cancelText="Hủy"
+                      okButtonProps={{ danger: true }}
+                      onConfirm={() => void handleRemoveLink(idx)}
+                    >
+                      <Button type="text" danger size="small" aria-label="Xóa liên kết" icon={<DeleteOutlined />} />
+                    </Popconfirm>
                   </Space>
                 </div>
               ))}
@@ -452,12 +466,12 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
         />
       )}
       <Modal
-        title="Thêm liên kết"
+        title={editingLinkIndex === null ? 'Thêm liên kết' : 'Sửa liên kết'}
         open={linkModalOpen}
         footer={
           <Space>
             <Button onClick={() => setLinkModalOpen(false)}>Hủy</Button>
-            <Button type="primary" onClick={() => void handleAddLink()}>Thêm link</Button>
+            <Button type="primary" onClick={() => void handleSaveLink()}>{editingLinkIndex === null ? 'Thêm link' : 'Lưu'}</Button>
           </Space>
         }
         onCancel={() => setLinkModalOpen(false)}
@@ -476,7 +490,7 @@ export const ChangeRequestDetailView: React.FC<ChangeRequestDetailViewProps> = (
             placeholder="URL"
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
-            onPressEnter={() => void handleAddLink()}
+            onPressEnter={() => void handleSaveLink()}
           />
         </Space>
       </Modal>
